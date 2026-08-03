@@ -176,6 +176,169 @@ export class IntegrationAllowlist {
   }
 }
 
+export type McpTransportErrorCode =
+  | 'MCP_SERVER_NOT_ALLOWED'
+  | 'MCP_TOOL_NOT_ALLOWED'
+  | 'MCP_ENV_NOT_ALLOWED'
+  | 'MCP_MESSAGE_TOO_LARGE'
+  | 'MCP_MESSAGE_INVALID'
+  | 'MCP_RESPONSE_ID_MISMATCH'
+  | 'MCP_REMOTE_ERROR'
+  | 'MCP_TIMEOUT'
+  | 'MCP_ABORTED'
+  | 'MCP_CHANNEL_UNAVAILABLE';
+
+export class McpTransportError extends Error {
+  constructor(readonly code: McpTransportErrorCode, message = safeTransportMessage(code)) {
+    super(message);
+    this.name = 'McpTransportError';
+  }
+}
+
+export interface McpJsonRpcRequest {
+  readonly jsonrpc: '2.0';
+  readonly id: string;
+  readonly method: string;
+  readonly params?: unknown;
+}
+
+export interface McpJsonRpcError {
+  readonly code: number;
+  readonly message: string;
+  readonly data?: unknown;
+}
+
+export interface McpJsonRpcResponse {
+  readonly jsonrpc: '2.0';
+  readonly id: string | number;
+  readonly result?: unknown;
+  readonly error?: McpJsonRpcError;
+}
+
+export interface McpChannel {
+  request(payload: Uint8Array, signal: AbortSignal): Promise<Uint8Array>;
+  close(): Promise<void>;
+}
+
+export interface McpChannelOpenRequest {
+  readonly manifest: McpServerManifest;
+  readonly env: Readonly<Record<string, string>>;
+  readonly signal: AbortSignal;
+}
+
+export interface McpChannelFactory {
+  open(request: McpChannelOpenRequest): Promise<McpChannel>;
+}
+
+export interface McpTransportClientOptions {
+  readonly allowlist: IntegrationAllowlist;
+  readonly channelFactory: McpChannelFactory;
+  readonly env?: Readonly<Record<string, string>>;
+  readonly maxMessageBytes?: number;
+  readonly timeoutMs?: number;
+}
+
+const DEFAULT_MCP_MESSAGE_BYTES = 128 * 1024;
+const DEFAULT_MCP_TIMEOUT_MS = 30_000;
+let requestSequence = 0;
+
+export function encodeMcpJsonRpcRequest(request: McpJsonRpcRequest, maxBytes = DEFAULT_MCP_MESSAGE_BYTES): Uint8Array {
+  if (!isValidRequest(request)) throw new McpTransportError('MCP_MESSAGE_INVALID');
+  const encoded = new TextEncoder().encode(JSON.stringify(request));
+  if (encoded.byteLength > maxBytes) throw new McpTransportError('MCP_MESSAGE_TOO_LARGE');
+  return encoded;
+}
+
+export function decodeMcpJsonRpcResponse(payload: Uint8Array, maxBytes = DEFAULT_MCP_MESSAGE_BYTES): McpJsonRpcResponse {
+  if (payload.byteLength > maxBytes) throw new McpTransportError('MCP_MESSAGE_TOO_LARGE');
+  let value: unknown;
+  try {
+    value = JSON.parse(new TextDecoder().decode(payload)) as unknown;
+  } catch {
+    throw new McpTransportError('MCP_MESSAGE_INVALID');
+  }
+  if (!isValidResponse(value)) throw new McpTransportError('MCP_MESSAGE_INVALID');
+  return value;
+}
+
+/**
+ * A bounded, one-shot MCP caller. The channel is always closed before the
+ * promise settles; concrete stdio/HTTP channels are intentionally injected.
+ */
+export class McpTransportClient {
+  private readonly allowlist: IntegrationAllowlist;
+  private readonly channelFactory: McpChannelFactory;
+  private readonly env: Readonly<Record<string, string>>;
+  private readonly maxMessageBytes: number;
+  private readonly timeoutMs: number;
+
+  constructor(private readonly manifest: McpServerManifest, options: McpTransportClientOptions) {
+    this.allowlist = options.allowlist;
+    this.channelFactory = options.channelFactory;
+    this.env = Object.freeze({ ...(options.env ?? {}) });
+    this.maxMessageBytes = positiveLimit(options.maxMessageBytes, DEFAULT_MCP_MESSAGE_BYTES);
+    this.timeoutMs = positiveLimit(options.timeoutMs, DEFAULT_MCP_TIMEOUT_MS);
+    const declared = new Set(manifest.envAllowlist);
+    if (Object.keys(this.env).some((key) => !declared.has(key))) throw new McpTransportError('MCP_ENV_NOT_ALLOWED');
+  }
+
+  async callTool(toolId: string, toolVersion: string, input: unknown, signal?: AbortSignal): Promise<unknown> {
+    if (!this.allowlist.allowsMcpServer(this.manifest)) throw new McpTransportError('MCP_SERVER_NOT_ALLOWED');
+    const tool = this.manifest.tools.find((entry) => entry.id === toolId && entry.version === toolVersion);
+    if (!tool || !this.allowlist.publicTools(this.manifest).some((entry) => entry.id === toolId && entry.version === toolVersion)) {
+      throw new McpTransportError('MCP_TOOL_NOT_ALLOWED');
+    }
+    const request: McpJsonRpcRequest = {
+      jsonrpc: '2.0',
+      id: `mcp-${++requestSequence}`,
+      method: 'tools/call',
+      params: { name: tool.id, arguments: input },
+    };
+    const payload = encodeMcpJsonRpcRequest(request, this.maxMessageBytes);
+    const controller = new AbortController();
+    let timedOut = false;
+    const onAbort = (): void => controller.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) controller.abort();
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.timeoutMs);
+    let channel: McpChannel | undefined;
+    try {
+      if (controller.signal.aborted) throw new McpTransportError(signal?.aborted ? 'MCP_ABORTED' : 'MCP_TIMEOUT');
+      try {
+        channel = await this.channelFactory.open({ manifest: this.manifest, env: this.env, signal: controller.signal });
+      } catch {
+        if (timedOut) throw new McpTransportError('MCP_TIMEOUT');
+        if (signal?.aborted) throw new McpTransportError('MCP_ABORTED');
+        throw new McpTransportError('MCP_CHANNEL_UNAVAILABLE');
+      }
+      if (controller.signal.aborted) {
+        if (timedOut) throw new McpTransportError('MCP_TIMEOUT');
+        throw new McpTransportError('MCP_ABORTED');
+      }
+      let responseBytes: Uint8Array;
+      try {
+        responseBytes = await channel.request(payload, controller.signal);
+      } catch (error) {
+        if (error instanceof McpTransportError) throw error;
+        if (timedOut) throw new McpTransportError('MCP_TIMEOUT');
+        if (signal?.aborted) throw new McpTransportError('MCP_ABORTED');
+        throw new McpTransportError('MCP_CHANNEL_UNAVAILABLE');
+      }
+      const response = decodeMcpJsonRpcResponse(responseBytes, this.maxMessageBytes);
+      if (response.id !== request.id) throw new McpTransportError('MCP_RESPONSE_ID_MISMATCH');
+      if (response.error) throw new McpTransportError('MCP_REMOTE_ERROR');
+      return response.result;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      await channel?.close().catch(() => undefined);
+    }
+  }
+}
+
 export function manifestReference(id: string, version: string): string {
   return `${id}@${version}`;
 }
@@ -387,4 +550,39 @@ function freezeMcpManifest(manifest: McpServerManifest): McpServerManifest {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function positiveLimit(value: number | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isSafeInteger(value) || value <= 0) throw new McpTransportError('MCP_MESSAGE_INVALID');
+  return value;
+}
+
+function isValidRequest(value: unknown): value is McpJsonRpcRequest {
+  return isRecord(value) && value.jsonrpc === '2.0' && typeof value.id === 'string' && value.id.length > 0 && typeof value.method === 'string' && value.method.length > 0;
+}
+
+function isValidResponse(value: unknown): value is McpJsonRpcResponse {
+  if (!isRecord(value) || value.jsonrpc !== '2.0' || (typeof value.id !== 'string' && typeof value.id !== 'number')) return false;
+  if (!('result' in value) && !('error' in value)) return false;
+  if ('error' in value && value.error !== undefined) {
+    if (!isRecord(value.error) || typeof value.error.code !== 'number' || !Number.isSafeInteger(value.error.code) || typeof value.error.message !== 'string') return false;
+  }
+  return true;
+}
+
+function safeTransportMessage(code: McpTransportErrorCode): string {
+  const messages: Record<McpTransportErrorCode, string> = {
+    MCP_SERVER_NOT_ALLOWED: 'The MCP server is not allowlisted.',
+    MCP_TOOL_NOT_ALLOWED: 'The MCP tool is not allowlisted.',
+    MCP_ENV_NOT_ALLOWED: 'The MCP environment is not allowlisted.',
+    MCP_MESSAGE_TOO_LARGE: 'The MCP message exceeds its byte limit.',
+    MCP_MESSAGE_INVALID: 'The MCP message is invalid.',
+    MCP_RESPONSE_ID_MISMATCH: 'The MCP response id did not match the request.',
+    MCP_REMOTE_ERROR: 'The MCP server returned an error.',
+    MCP_TIMEOUT: 'The MCP request timed out.',
+    MCP_ABORTED: 'The MCP request was cancelled.',
+    MCP_CHANNEL_UNAVAILABLE: 'The MCP transport is unavailable.',
+  };
+  return messages[code];
 }

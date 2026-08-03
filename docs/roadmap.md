@@ -35,6 +35,13 @@
 审计事件。审批续接 API、MCP/Skill 真实 transport 和默认 shell/container wiring
 继续后置。
 
+## Spec 19：MCP transport boundary（当前）
+
+在 manifest/allowlist 之上增加 one-shot JSON-RPC transport client：连接器必须显式
+注入，严格限制 server/tool/version、env key、消息大小、请求超时和 response id。
+stdio/HTTP 仅共享 channel contract；本阶段不启动子进程、不发网络请求，后续再接
+sandbox、approval 和 scheduler。
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。
