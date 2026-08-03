@@ -154,3 +154,8 @@ read-only slice. The Web console now enables only bounded `git.status`,
 the daemon captures a workspace root per run and never exposes host Git to
 untrusted or external-sandbox runs. Git write/patch operations, a paginated
 diff/log explorer, and remote operations remain later milestones.
+
+Spec 33 adds the first presentation slice for those results: the Web Run
+Console shows bounded `tool.output` cards from the existing SSE stream, with
+safe text rendering and low-resource display limits. Pagination, highlighting,
+search/export, and inline review remain deferred.

@@ -27,7 +27,7 @@ Workspace 设置已经改为下拉选择和明确的添加/删除向导。添加
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、digest 固定的 external shell wiring 和响应式 Web/PWA 控制台已经实现并通过测试。MCP/Skill 激活、ACME 自动化、Git 写入/patch 和完整审批/diff UI 仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring 和响应式 Web/PWA 控制台已经实现并通过测试。MCP/Skill 激活、ACME 自动化、Git 写入/patch 和完整审批/diff UI 仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -129,7 +129,7 @@ packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **19 个 workspace package、185 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **19 个 workspace package、187 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 
@@ -144,7 +144,7 @@ packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 
 - 更完整的 external sandbox/VM adapter、资源限制与持久化；
 - Skill/MCP manifest 和 secret-safe 工具 allowlist；
-- diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
+- 分页/高亮 diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
 - ACME/certificate manager、Tailscale/SSH transport adapter；
 - 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
 

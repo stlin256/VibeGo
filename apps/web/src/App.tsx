@@ -253,6 +253,69 @@ function clampLimit(key: keyof RunProfile['limits'], value: string): number {
   return Math.min(maximum, Math.max(1, Math.floor(parsed)));
 }
 
+const MAX_TOOL_OUTPUT_CARDS = 24;
+const MAX_TOOL_OUTPUT_DISPLAY_BYTES = 128 * 1024;
+
+interface ToolOutputView {
+  readonly seq: number;
+  readonly callId: string;
+  readonly toolId: string;
+  readonly bytes: number;
+  readonly truncated: boolean;
+  readonly content: string;
+}
+
+function ToolOutputInspector({ events }: { events: readonly StoredEvent[] }): JSX.Element | null {
+  const outputs = collectToolOutputs(events);
+  if (outputs.length === 0) return null;
+  return <section className="tool-output-list" aria-label="Tool outputs"><div className="eyebrow">TOOL OUTPUTS</div>{outputs.map((output) => <details className="tool-output-card" key={`${output.seq}-${output.callId}`}><summary><span>{output.toolId}</span><span>{output.bytes} bytes{output.truncated ? ' · server truncated' : ''}{output.content.length < output.bytes ? ' · display truncated' : ''}</span></summary><pre>{output.content}</pre></details>)}</section>;
+}
+
+function collectToolOutputs(events: readonly StoredEvent[]): ToolOutputView[] {
+  const toolIds = new Map<string, string>();
+  const outputs: ToolOutputView[] = [];
+  for (const event of events) {
+    const payload = asRecord(event.payload);
+    if (!payload) continue;
+    const callId = typeof payload.callId === 'string' ? payload.callId : undefined;
+    const toolId = typeof payload.toolId === 'string' ? payload.toolId : undefined;
+    if ((event.type === 'tool.requested' || event.type === 'tool.started') && callId && toolId) toolIds.set(callId, toolId);
+    if (event.type !== 'tool.output' || !callId || typeof payload.content !== 'string') continue;
+    const rawBytes = payload.bytes;
+    const bytes = typeof rawBytes === 'number' && Number.isSafeInteger(rawBytes) && rawBytes >= 0 ? rawBytes : new TextEncoder().encode(payload.content).byteLength;
+    const truncated = payload.truncated === true;
+    outputs.push({ seq: event.seq, callId, toolId: toolIds.get(callId) ?? toolId ?? 'Tool output', bytes, truncated, content: truncateToolOutput(formatToolOutput(payload.content)) });
+  }
+  return outputs.slice(-MAX_TOOL_OUTPUT_CARDS);
+}
+
+function formatToolOutput(content: string): string {
+  try {
+    const parsed: unknown = JSON.parse(content);
+    const record = asRecord(parsed);
+    if (record && (typeof record.stdout === 'string' || typeof record.stderr === 'string')) {
+      const sections: string[] = [];
+      if (typeof record.stdout === 'string' && record.stdout.length > 0) sections.push(record.stdout);
+      if (typeof record.stderr === 'string' && record.stderr.length > 0) sections.push(`[stderr]\n${record.stderr}`);
+      if (typeof record.exitCode === 'number') sections.push(`[exit code: ${record.exitCode}]`);
+      return sections.join('\n');
+    }
+    return typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2) ?? content;
+  } catch {
+    return content;
+  }
+}
+
+function truncateToolOutput(value: string): string {
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.byteLength <= MAX_TOOL_OUTPUT_DISPLAY_BYTES) return value;
+  return `${new TextDecoder().decode(encoded.slice(0, MAX_TOOL_OUTPUT_DISPLAY_BYTES))}\n… [display truncated]`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
 function RunConsole({ run, events, onCancel, onApprove, onRetry }: { run: RunSnapshot; events: readonly StoredEvent[]; onCancel: (() => void) | undefined; onApprove: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; onRetry: (() => void) | undefined }): JSX.Element {
-  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div><div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <div className="recovery-card"><div><div className="eyebrow">RECOVERY REQUIRED</div><strong>This run stopped safely after a daemon restart.</strong><p className="muted">Retry creates a new run from the original safety policy; interrupted tool calls are never replayed.</p></div><button type="button" onClick={onRetry}>Retry as new run</button></div>}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <div className="approval-card" key={approval.approvalId}><div><div className="eyebrow">APPROVAL REQUIRED</div><strong>{approval.toolId}@{approval.toolVersion}</strong><p className="muted">{approval.risk} · {approval.argumentBytes} bytes · expires {new Date(approval.expiresAt).toLocaleTimeString()}</p>{approval.details && <p className="muted">sandbox: {approval.details.sandboxProvider ?? run.config.sandbox.mode}{approval.details.network ? ` · network: ${approval.details.network}` : ''}{approval.details.sandboxImageDigest ? ` · image: ${approval.details.sandboxImageDigest}` : ''}</p>}</div><div className="approval-actions"><button type="button" onClick={() => onApprove?.(approval.approvalId, 'allow')}>Allow</button><button className="cancel-button" type="button" onClick={() => onApprove?.(approval.approvalId, 'deny')}>Deny</button></div></div>)}<pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list">{events.map((event) => <div className="event-row" key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{event.type}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <button className="cancel-button" type="button" onClick={onCancel}>请求取消</button>}</section>;
+  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div><div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <div className="recovery-card"><div><div className="eyebrow">RECOVERY REQUIRED</div><strong>This run stopped safely after a daemon restart.</strong><p className="muted">Retry creates a new run from the original safety policy; interrupted tool calls are never replayed.</p></div><button type="button" onClick={onRetry}>Retry as new run</button></div>}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <div className="approval-card" key={approval.approvalId}><div><div className="eyebrow">APPROVAL REQUIRED</div><strong>{approval.toolId}@{approval.toolVersion}</strong><p className="muted">{approval.risk} · {approval.argumentBytes} bytes · expires {new Date(approval.expiresAt).toLocaleTimeString()}</p>{approval.details && <p className="muted">sandbox: {approval.details.sandboxProvider ?? run.config.sandbox.mode}{approval.details.network ? ` · network: ${approval.details.network}` : ''}{approval.details.sandboxImageDigest ? ` · image: ${approval.details.sandboxImageDigest}` : ''}</p>}</div><div className="approval-actions"><button type="button" onClick={() => onApprove?.(approval.approvalId, 'allow')}>Allow</button><button className="cancel-button" type="button" onClick={() => onApprove?.(approval.approvalId, 'deny')}>Deny</button></div></div>)}<ToolOutputInspector events={events} /><pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list">{events.map((event) => <div className="event-row" key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{event.type}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <button className="cancel-button" type="button" onClick={onCancel}>请求取消</button>}</section>;
 }

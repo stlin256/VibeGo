@@ -60,6 +60,11 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .run-metrics div { display: grid; gap: 4px; border: 1px solid #263650; border-radius: 10px; padding: 10px; }
 .run-metrics span { color: #6f86a7; font-size: 11px; } .run-metrics strong { overflow-wrap: anywhere; font-size: 13px; }
 .output-view { min-height: 180px; max-height: 420px; overflow: auto; margin: 0; border-radius: 12px; padding: 14px; color: #cbe4ff; background: #08111d; white-space: pre-wrap; word-break: break-word; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.tool-output-list { display: grid; gap: 8px; margin-bottom: 14px; }
+.tool-output-card { border: 1px solid #263650; border-radius: 10px; background: #0a1424; }
+.tool-output-card summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; padding: 10px 12px; color: #cbe4ff; font-size: 12px; }
+.tool-output-card summary span:last-child { color: #6f86a7; text-align: right; }
+.tool-output-card pre { max-height: 300px; overflow: auto; margin: 0; border-top: 1px solid #263650; padding: 12px; color: #afc2e8; white-space: pre-wrap; word-break: break-word; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .approval-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(184 243 108 / 52%); border-radius: 12px; padding: 14px; background: rgb(184 243 108 / 8%); }
 .recovery-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(255 190 92 / 58%); border-radius: 12px; padding: 14px; background: rgb(255 190 92 / 9%); }
 .recovery-card p { margin: 5px 0 0; font-size: 12px; }

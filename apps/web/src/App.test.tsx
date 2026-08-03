@@ -79,6 +79,29 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\Users');
   });
 
+  it('renders bounded Git tool output as safe text without exposing an absolute path', () => {
+    const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } };
+    const root = 'C:\\private\\workspace';
+    const events = [
+      { version: 1 as const, id: 'e1', seq: 1, runId: 'run_git', type: 'tool.requested', at: '2026-08-03T00:00:00.000Z', payload: { callId: 'call_git', toolId: 'git.diff' } },
+      { version: 1 as const, id: 'e2', seq: 2, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:01.000Z', payload: { callId: 'call_git', bytes: 24, truncated: false, content: JSON.stringify({ exitCode: 0, stdout: `changed [workspace]`, stderr: '' }) } },
+    ];
+    const html = renderToStaticMarkup(<App health={health} run={{ version: 1, runId: 'run_git', status: 'executing', config: {} as never, lastEventSeq: 2, output: '', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} events={events} />);
+    expect(html).toContain('TOOL OUTPUTS');
+    expect(html).toContain('git.diff');
+    expect(html).toContain('changed [workspace]');
+    expect(html).not.toContain(root);
+  });
+
+  it('ignores malformed tool events and caps the rendered output cards', () => {
+    const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } };
+    const events = Array.from({ length: 30 }, (_, index) => ({ version: 1 as const, id: `e${index}`, seq: index + 1, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:00.000Z', payload: index === 29 ? { callId: 'bad', content: '<img src=x onerror=alert(1)>' } : { callId: `call-${index}`, bytes: 4, content: 'safe' } }));
+    const html = renderToStaticMarkup(<App health={health} run={{ version: 1, runId: 'run_git', status: 'executing', config: {} as never, lastEventSeq: 30, output: '', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} events={events} />);
+    expect(html.match(/class="tool-output-card"/gu)?.length).toBe(24);
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<img src=x');
+  });
+
   it('renders certificate metadata and safe missing-TLS guidance', () => {
     const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'https-lan', tlsRequired: true, boundAddresses: ['0.0.0.0'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } };
     const withStatus = renderToStaticMarkup(<App health={health} certificateStatus={{ subject: 'CN=dev.example.test', issuer: 'CN=Test CA', validFrom: '2026-01-01T00:00:00.000Z', validTo: '2030-01-01T00:00:00.000Z', daysRemaining: 1000, fingerprint256: 'AA:BB:CC', subjectAltNames: ['dev.example.test'] }} />);

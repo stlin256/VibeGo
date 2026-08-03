@@ -47,7 +47,7 @@ The core loop is deliberately small:
 | Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
-| Web | React 19 + TypeScript + Vite responsive console with pairing, guided run settings, model onboarding, retry/recovery, approval cards, cancel, metrics, and fetch-based SSE |
+| Web | React 19 + TypeScript + Vite responsive console with pairing, guided run settings, model onboarding, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
 
 ## Quick start
 
@@ -157,7 +157,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **19 workspace packages and 185 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **19 workspace packages and 187 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 
@@ -173,7 +173,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - deeper external sandbox/VM adapters with resource limits and persistence;
 - Git write/patch operations and a dedicated paginated diff/log explorer;
 - Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
-- diff/log/approval views and Playwright desktop/tablet/mobile flows;
+- paginated/highlighted diff/log/approval views and Playwright desktop/tablet/mobile flows;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 
