@@ -201,7 +201,7 @@ async function handleRequest(
     return;
   }
 
-  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|cancel))?$/.exec(pathname);
+  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel))?$/.exec(pathname);
   if (!runMatch) {
     writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
     return;
@@ -227,6 +227,28 @@ async function handleRequest(
       return;
     }
     writeJson(response, 202, { runId, status: outcome === 'accepted' ? 'cancelling' : 'terminal' });
+    return;
+  }
+  if (subresource === 'approve') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isApprovalInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'approvalId and decision are required.' } });
+      return;
+    }
+    const outcome = options.runManager.approve(runId, input.approvalId, input.decision);
+    if (outcome === 'run-not-found') {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'approval request not found.' } });
+      return;
+    }
+    if (outcome !== 'accepted') {
+      writeJson(response, 409, { error: { code: 'CONFLICT', message: 'approval request is no longer pending.' } });
+      return;
+    }
+    writeJson(response, 202, { runId, approvalId: input.approvalId, status: 'accepted' });
     return;
   }
   if (request.method !== 'GET') {
@@ -275,6 +297,10 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
 
 function isPairingInput(value: unknown): value is { code: string } {
   return typeof value === 'object' && value !== null && 'code' in value && typeof value.code === 'string' && value.code.length > 0 && value.code.length <= 64;
+}
+
+function isApprovalInput(value: unknown): value is { approvalId: string; decision: 'allow' | 'deny' } {
+  return typeof value === 'object' && value !== null && 'approvalId' in value && typeof value.approvalId === 'string' && /^[A-Za-z0-9_-]{8,128}$/u.test(value.approvalId) && 'decision' in value && (value.decision === 'allow' || value.decision === 'deny');
 }
 
 function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {

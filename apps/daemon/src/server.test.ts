@@ -1,7 +1,8 @@
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider, type ModelRequest } from '@ready4vibe/contracts';
+import { InMemoryApprovalBroker } from '@ready4vibe/agent';
 import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
@@ -50,6 +51,22 @@ function makeRunServer(provider: FakeModelProvider, bodyLimitBytes?: number) {
   return { manager, server };
 }
 
+class ApprovalModelProvider implements ModelProvider {
+  readonly id = 'approval-model';
+  readonly capabilities = { streaming: true, toolCalls: true, structuredOutput: true } as const;
+  private turn = 0;
+
+  async *stream(_request: ModelRequest, _signal: AbortSignal): AsyncIterable<ModelEvent> {
+    if (this.turn++ === 0) {
+      yield { type: 'tool-call-delta', callId: 'server-approval', name: 'write', argumentsChunk: '{}' };
+      yield { type: 'completed', finishReason: 'tool-calls' };
+      return;
+    }
+    yield { type: 'text-delta', text: 'approved' };
+    yield { type: 'completed', finishReason: 'stop' };
+  }
+}
+
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(async (server) => {
     if (server.listening) {
@@ -60,6 +77,32 @@ afterEach(async () => {
 });
 
 describe('daemon health server', () => {
+  it('accepts a single approval decision and resumes the waiting run', async () => {
+    const provider = new ApprovalModelProvider();
+    let approved = false;
+    const runtime = {
+      descriptors: [{ name: 'write', id: 'test.write', version: '1.0.0', risk: 'write' as const, summary: 'Write' }],
+      execute: async () => {
+        if (!approved) throw Object.assign(new Error('prompt'), { code: 'APPROVAL_REQUIRED' });
+        return { output: { ok: true } };
+      },
+      approve: async () => { approved = true; },
+    };
+    const manager = new RunManager({ eventStore: new InMemoryEventStore(), scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime, approvalBroker: new InMemoryApprovalBroker({ timeoutMs: 2_000 }) });
+    const server = createDaemonServer({ runManager: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const started = await manager.start({ ...runConfig('workspace-approval'), limits: { ...runConfig('workspace-approval').limits, maxTurns: 2 } });
+    await vi.waitFor(() => expect(manager.snapshot(started.runId).then((snapshot) => snapshot?.approvals)).resolves.toHaveLength(1));
+    const pending = (await manager.snapshot(started.runId))!.approvals[0]!;
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/runs/${started.runId}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approvalId: pending.approvalId, decision: 'allow' }) });
+    expect(response.status).toBe(202);
+    await vi.waitFor(() => expect(manager.completion(started.runId)?.status).toBe('completed'));
+    expect((await manager.snapshot(started.runId))?.output).toBe('approved');
+    const repeated = await fetch(`http://127.0.0.1:${port}/api/v1/runs/${started.runId}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approvalId: pending.approvalId, decision: 'deny' }) });
+    expect(repeated.status).toBe(409);
+  });
+
   it('keeps tools opt-in while forwarding an explicitly injected runtime', async () => {
     const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
     const runtime = {

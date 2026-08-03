@@ -24,6 +24,22 @@ describe('ApiClient', () => {
     expect(client.hasSession()).toBe(false);
   });
 
+  it('posts approval decisions in the body without putting credentials in the URL', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      if (input.endsWith('/pairing/complete')) return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 2_000 });
+      return response({ runId: 'run_1', approvalId: 'ap_1', status: 'accepted' }, 202);
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    await client.completePairing('PAIR');
+    await expect(client.approveRun('run_1', 'ap_1', 'allow')).resolves.toMatchObject({ status: 'accepted' });
+    expect(calls[1]?.input).toBe('http://daemon/api/v1/runs/run_1/approve');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ approvalId: 'ap_1', decision: 'allow' }));
+    expect(calls[1]?.init?.headers).toMatchObject({ Authorization: 'Bearer access', 'X-CSRF-Token': 'csrf' });
+    expect(calls[1]?.input).not.toContain('access');
+  });
+
   it('parses SSE frames, ignores heartbeat/invalid data and stops at terminal event', async () => {
     expect(parseSseFrame(': heartbeat')).toBeUndefined();
     expect(parseSseFrame('id: 4\nevent: model.delta\ndata: {"version":1,"id":"e4","seq":4,"runId":"run_1","type":"model.delta","at":"now","payload":{}}')).toMatchObject({ seq: 4, type: 'model.delta' });

@@ -13,6 +13,9 @@ import {
   type SchedulerRequest,
 } from '@ready4vibe/contracts';
 import { Scheduler, SchedulerCancelledError } from '@ready4vibe/scheduler';
+import { ApprovalBrokerError, type ApprovalBroker, type ApprovalRequest, type ApprovalResolution } from './approval.js';
+
+export * from './approval.js';
 
 export interface AgentRunRequest {
   config: RunConfig;
@@ -34,6 +37,7 @@ export interface AgentLoopOptions {
   scheduler: Scheduler;
   modelProvider: ModelProvider;
   toolRuntime?: ToolRuntime;
+  approvalBroker?: ApprovalBroker;
 }
 
 export type AgentToolRisk = 'read' | 'write' | 'destructive' | 'network';
@@ -65,6 +69,7 @@ export interface ToolRuntimeResult {
 export interface ToolRuntime {
   readonly descriptors: readonly AgentToolDescriptor[];
   execute(request: ToolRuntimeRequest): Promise<ToolRuntimeResult>;
+  approve?(request: ToolRuntimeRequest, ttlMs: number): Promise<void>;
 }
 
 export class AgentLoop {
@@ -286,8 +291,9 @@ const messages: unknown[] = [...contextResult.messages];
 
         const toolResults: Array<{ call: PendingToolCall; descriptor: AgentToolDescriptor; content: string }> = [];
         for (const call of calls.values()) {
-          const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal);
+          const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal, transition);
           if (toolResult.failure) {
+            if (controller.signal.aborted) return await cancel('user-cancelled-during-tool');
             controller.abort();
             return await fail(toolResult.failure.code, toolResult.failure.message, false);
           }
@@ -345,6 +351,7 @@ const messages: unknown[] = [...contextResult.messages];
     call: PendingToolCall,
     config: RunConfig,
     signal: AbortSignal,
+    transition: (next: RunStatus, reason?: string) => Promise<void>,
   ): Promise<{ descriptor: AgentToolDescriptor; content: string; failure?: undefined } | { failure: { code: string; message: string } }> {
     const runtime = this.options.toolRuntime;
     if (!runtime) return { failure: { code: 'TOOLS_UNAVAILABLE', message: 'Tool calls are not enabled for this run.' } };
@@ -367,49 +374,115 @@ const messages: unknown[] = [...contextResult.messages];
       return { failure: { code: 'TOOL_INPUT_INVALID', message: 'The tool arguments were not valid JSON.' } };
     }
 
-    await this.append(runId, 'tool.started', 'tool', turnId, {
-      callId: call.callId,
-      toolId: descriptor.id,
-      toolVersion: descriptor.version,
-      risk: descriptor.risk,
-    });
-    try {
-      const result = await runtime.execute({ runId, turnId, callId: call.callId, descriptor, input, config, signal });
-      const serialized = serializeToolOutput(result.output, config.limits.maxOutputBytes);
-      await this.append(runId, 'tool.output', 'tool', turnId, {
-        callId: call.callId,
-        content: serialized.content,
-        bytes: serialized.bytes,
-        truncated: serialized.truncated,
-      });
-      await this.append(runId, 'tool.completed', 'tool', turnId, {
+    const runtimeRequest: ToolRuntimeRequest = { runId, turnId, callId: call.callId, descriptor, input, config, signal };
+    let attempt = 0;
+    while (true) {
+      await this.append(runId, 'tool.started', 'tool', turnId, {
         callId: call.callId,
         toolId: descriptor.id,
         toolVersion: descriptor.version,
-        success: true,
-        bytes: serialized.bytes,
-        truncated: serialized.truncated,
+        risk: descriptor.risk,
+        attempt: attempt + 1,
       });
-      return { descriptor, content: serialized.content };
-    } catch (error) {
-      const failure = safeToolFailure(error);
-      if (failure.code === 'APPROVAL_REQUIRED') {
-        await this.append(runId, 'approval.required', 'policy', turnId, {
-          approvalId: `ap_${uuidv7()}`,
+      try {
+        const result = await runtime.execute(runtimeRequest);
+        const serialized = serializeToolOutput(result.output, config.limits.maxOutputBytes);
+        await this.append(runId, 'tool.output', 'tool', turnId, {
+          callId: call.callId,
+          content: serialized.content,
+          bytes: serialized.bytes,
+          truncated: serialized.truncated,
+        });
+        await this.append(runId, 'tool.completed', 'tool', turnId, {
           callId: call.callId,
           toolId: descriptor.id,
           toolVersion: descriptor.version,
-          reasonCode: failure.code,
+          success: true,
+          attempt: attempt + 1,
+          bytes: serialized.bytes,
+          truncated: serialized.truncated,
         });
+        return { descriptor, content: serialized.content };
+      } catch (error) {
+        const failure = safeToolFailure(error);
+        if (failure.code === 'APPROVAL_REQUIRED' && attempt === 0 && runtime.approve && this.options.approvalBroker) {
+          const approvalId = `ap_${uuidv7()}`;
+          const createdAt = Date.now();
+          const approval: ApprovalRequest = {
+            approvalId,
+            runId,
+            turnId,
+            callId: call.callId,
+            toolId: descriptor.id,
+            toolVersion: descriptor.version,
+            risk: descriptor.risk,
+            argumentBytes: Buffer.byteLength(call.argumentsText),
+            createdAt,
+            expiresAt: createdAt + this.options.approvalBroker.timeoutMs,
+          };
+          const decisionPromise = this.options.approvalBroker.waitForDecision(approval, signal);
+          await this.append(runId, 'approval.required', 'policy', turnId, {
+            approvalId,
+            callId: call.callId,
+            toolId: descriptor.id,
+            toolVersion: descriptor.version,
+            risk: descriptor.risk,
+            argumentBytes: approval.argumentBytes,
+            expiresAt: new Date(approval.expiresAt).toISOString(),
+          });
+          await transition('waiting-approval', 'user-approval-required');
+          let decision: ApprovalResolution;
+          try {
+            decision = await decisionPromise;
+          } catch (waitError) {
+            if (signal.aborted || waitError instanceof ApprovalBrokerError && waitError.code === 'CANCELLED') {
+              return { failure: { code: 'APPROVAL_CANCELLED', message: 'The approval wait was cancelled.' } };
+            }
+            return { failure: { code: 'APPROVAL_BROKER_FAILED', message: 'The approval request could not continue.' } };
+          }
+          if (decision === 'expired') {
+            await this.append(runId, 'approval.expired', 'policy', turnId, { approvalId, callId: call.callId, toolId: descriptor.id, toolVersion: descriptor.version });
+            await this.append(runId, 'tool.completed', 'tool', turnId, { callId: call.callId, toolId: descriptor.id, toolVersion: descriptor.version, success: false, code: 'APPROVAL_EXPIRED', attempt: attempt + 1 });
+            return { failure: { code: 'APPROVAL_EXPIRED', message: 'The approval request expired.' } };
+          }
+          await this.append(runId, 'approval.decided', 'policy', turnId, { approvalId, callId: call.callId, decision });
+          if (decision === 'deny') {
+            await this.append(runId, 'tool.completed', 'tool', turnId, { callId: call.callId, toolId: descriptor.id, toolVersion: descriptor.version, success: false, code: 'APPROVAL_DENIED', attempt: attempt + 1 });
+            return { failure: { code: 'APPROVAL_DENIED', message: 'The tool request was denied.' } };
+          }
+          await transition('executing', 'approval-granted');
+          try {
+            await runtime.approve(runtimeRequest, this.options.approvalBroker.timeoutMs);
+          } catch (approvalError) {
+            const approvalFailure = safeToolFailure(approvalError);
+            await this.append(runId, 'tool.completed', 'tool', turnId, { callId: call.callId, toolId: descriptor.id, toolVersion: descriptor.version, success: false, code: approvalFailure.code, attempt: attempt + 1 });
+            return { failure: approvalFailure };
+          }
+          attempt += 1;
+          continue;
+        }
+        if (failure.code === 'APPROVAL_REQUIRED') {
+          const approvalId = `ap_${uuidv7()}`;
+          await this.append(runId, 'approval.required', 'policy', turnId, {
+            approvalId,
+            callId: call.callId,
+            toolId: descriptor.id,
+            toolVersion: descriptor.version,
+            risk: descriptor.risk,
+            argumentBytes: Buffer.byteLength(call.argumentsText),
+            reasonCode: failure.code,
+          });
+        }
+        await this.append(runId, 'tool.completed', 'tool', turnId, {
+          callId: call.callId,
+          toolId: descriptor.id,
+          toolVersion: descriptor.version,
+          success: false,
+          code: failure.code,
+          attempt: attempt + 1,
+        });
+        return { failure };
       }
-      await this.append(runId, 'tool.completed', 'tool', turnId, {
-        callId: call.callId,
-        toolId: descriptor.id,
-        toolVersion: descriptor.version,
-        success: false,
-        code: failure.code,
-      });
-      return { failure };
     }
   }
 
@@ -464,6 +537,10 @@ function safeToolFailure(error: unknown): { code: string; message: string } {
   const code = isRecord(error) && typeof error.code === 'string' ? error.code : 'TOOL_FAILED';
   const messages: Record<string, string> = {
     APPROVAL_REQUIRED: 'User approval is required for this tool.',
+    APPROVAL_DENIED: 'The tool request was denied.',
+    APPROVAL_EXPIRED: 'The approval request expired.',
+    APPROVAL_CANCELLED: 'The approval wait was cancelled.',
+    APPROVAL_BROKER_FAILED: 'The approval request could not continue.',
     TOOL_FORBIDDEN: 'The tool request is forbidden.',
     SANDBOX_UNAVAILABLE: 'The requested sandbox is unavailable.',
     TOOL_EXECUTION_UNAVAILABLE: 'The tool execution provider is unavailable.',

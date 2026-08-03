@@ -36,6 +36,7 @@ function RuntimeApp(): JSX.Element {
         setEvents((current) => current.some((item) => item.seq === event.seq) ? current : [...current, event]);
         if (event.type === 'model.delta') setRun((current) => current ? { ...current, output: `${current.output}${readTextDelta(event.payload)}`, lastEventSeq: event.seq } : current);
         else setRun((current) => current ? { ...current, lastEventSeq: event.seq } : current);
+        if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired') setRun(await client.getRun(started.runId));
         if (event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled') setRun(await client.getRun(started.runId));
       }
     } catch (reason) { setError(safeError(reason)); }
@@ -46,7 +47,12 @@ function RuntimeApp(): JSX.Element {
     try { await client.cancel(run.runId); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onPair={pair} onCreateRun={createRun} onCancel={cancel} />;
+  const approve = async (approvalId: string, decision: 'allow' | 'deny'): Promise<void> => {
+    if (!run) return;
+    try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
+  };
+
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} />;
 }
 
 function readTextDelta(payload: unknown): string {

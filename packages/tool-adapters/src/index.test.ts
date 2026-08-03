@@ -247,6 +247,31 @@ describe('ToolExecutorRuntime', () => {
     }
   });
 
+  it('approves through the same runtime intent and then allows one executor call', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const value = registry();
+      const handler = { id: 'filesystem.write', version: '1.0.0', execute: vi.fn(async () => ({ ok: true })) };
+      const handlers = new ToolHandlerRegistry();
+      handlers.register(handler);
+      const executor = new ToolExecutor({ registry: value, approvalPolicy: new ApprovalPolicy(value), sandboxResolver: new SandboxResolver(), handlers });
+      const runtime = new ToolExecutorRuntime({
+        registry: value,
+        executor,
+        resolveWorkspaceRoot: () => root,
+        createIntent: (request) => intent({ toolId: request.descriptor.id, toolVersion: request.descriptor.version, risk: request.descriptor.risk, sandboxMode: 'workspace-write', path: 'new.txt' }),
+        createSandboxRequest: (request) => sandboxFor(intent({ toolId: request.descriptor.id, toolVersion: request.descriptor.version, risk: request.descriptor.risk, sandboxMode: 'workspace-write' })),
+      });
+      const descriptor = runtime.descriptors.find((entry) => entry.id === 'filesystem.write')!;
+      const request = { runId: 'run-1', turnId: 'turn-1', callId: 'call-1', descriptor, input: { path: 'new.txt', content: 'x' }, config: {} as never, signal: new AbortController().signal };
+      await runtime.approve(request, 1_000);
+      await expect(runtime.execute(request)).resolves.toEqual({ output: { ok: true } });
+      expect(handler.execute).toHaveBeenCalledOnce();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('passes an already-aborted signal through the executor boundary', async () => {
     const root = await temporaryWorkspace();
     try {

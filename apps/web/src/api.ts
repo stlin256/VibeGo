@@ -28,8 +28,22 @@ export interface RunSnapshot {
   config: RunConfigInput;
   lastEventSeq: number;
   output: string;
+  approvals?: readonly ApprovalSummary[];
   final?: { summary: string; exitReason: string };
   scheduler: { queuePosition: number | null; activeRunCount: number; workspaceLease: string | null };
+}
+
+export interface ApprovalSummary {
+  approvalId: string;
+  runId: string;
+  turnId: string;
+  callId: string;
+  toolId: string;
+  toolVersion: string;
+  risk: 'read' | 'write' | 'destructive' | 'network';
+  argumentBytes: number;
+  createdAt: number;
+  expiresAt: number;
 }
 
 export interface StoredEvent {
@@ -100,6 +114,13 @@ export class ApiClient {
 
   async cancel(runId: string): Promise<{ runId: string; status: string }> {
     return this.request(`/api/v1/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' });
+  }
+
+  async approveRun(runId: string, approvalId: string, decision: 'allow' | 'deny'): Promise<{ runId: string; approvalId: string; status: string }> {
+    return this.request(`/api/v1/runs/${encodeURIComponent(runId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ approvalId, decision }),
+    });
   }
 
   async *streamEvents(runId: string, after = 0, signal?: AbortSignal): AsyncGenerator<StoredEvent> {

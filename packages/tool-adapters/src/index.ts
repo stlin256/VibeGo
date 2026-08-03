@@ -83,6 +83,13 @@ export interface ToolExecutorOptions {
 export class ToolExecutor {
   constructor(private readonly options: ToolExecutorOptions) {}
 
+  approve(request: ToolExecutionRequest, ttlMs: number): void {
+    const descriptor = this.options.registry.get(request.intent.toolId, request.intent.toolVersion);
+    if (!descriptor || descriptor.risk !== request.intent.risk) throw new ToolAdapterError('TOOL_FORBIDDEN', 'The requested tool is not available.');
+    const evaluation = this.options.approvalPolicy.approve(request.intent, ttlMs);
+    if (evaluation.decision !== 'allow') throw new ToolAdapterError('APPROVAL_REQUIRED', 'User approval is required for this tool.');
+  }
+
   async execute(request: ToolExecutionRequest, signal?: AbortSignal): Promise<unknown> {
     const descriptor = this.options.registry.get(request.intent.toolId, request.intent.toolVersion);
     if (!descriptor) throw new ToolAdapterError('TOOL_FORBIDDEN', 'The requested tool is not available.');
@@ -183,6 +190,21 @@ export class ToolExecutorRuntime implements ToolRuntime {
       input: request.input,
     }, request.signal);
     return { output };
+  }
+
+  async approve(request: ToolRuntimeRequest, ttlMs: number): Promise<void> {
+    const descriptor = this.byName.get(request.descriptor.name);
+    if (!descriptor || descriptor.id !== request.descriptor.id || descriptor.version !== request.descriptor.version) {
+      throw new ToolAdapterError('TOOL_FORBIDDEN');
+    }
+    const workspaceRoot = this.options.resolveWorkspaceRoot(request);
+    if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    this.options.executor.approve({
+      workspaceRoot,
+      intent: this.options.createIntent({ ...request, descriptor }),
+      sandbox: this.options.createSandboxRequest({ ...request, descriptor }),
+      input: request.input,
+    }, ttlMs);
   }
 }
 

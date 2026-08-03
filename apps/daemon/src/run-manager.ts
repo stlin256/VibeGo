@@ -1,6 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { parseRunConfig, type EventStore, type ModelProvider, type RunConfig, type RunStatus, type SchedulerPolicy, type StoredEvent } from '@ready4vibe/contracts';
-import { AgentLoop, type AgentRunResult, type ToolRuntime } from '@ready4vibe/agent';
+import { AgentLoop, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ToolRuntime } from '@ready4vibe/agent';
 import { Scheduler } from '@ready4vibe/scheduler';
 
 export type RunEventListener = (event: StoredEvent) => void;
@@ -12,6 +12,7 @@ export interface RunSnapshot {
   config: RunConfig;
   lastEventSeq: number;
   output: string;
+  approvals: readonly ApprovalRequest[];
   final?: {
     summary: string;
     exitReason: string;
@@ -27,6 +28,7 @@ export interface RunManagerOptions {
   eventStore: EventStore;
   modelProvider: ModelProvider;
   toolRuntime?: ToolRuntime;
+  approvalBroker?: ApprovalBroker;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
 }
@@ -34,6 +36,7 @@ export interface RunManagerOptions {
 export class RunManager {
   readonly eventStore: ObservableEventStore;
   readonly scheduler: Scheduler;
+  readonly approvalBroker: ApprovalBroker;
   private readonly agentLoop: AgentLoop;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
@@ -47,11 +50,13 @@ export class RunManager {
       maxExternalSandboxes: 1,
       workspaceWriteMode: 'exclusive',
     });
+    this.approvalBroker = options.approvalBroker ?? new InMemoryApprovalBroker();
     this.agentLoop = new AgentLoop({
       eventStore: this.eventStore,
       scheduler: this.scheduler,
       modelProvider: options.modelProvider,
       ...(options.toolRuntime ? { toolRuntime: options.toolRuntime } : {}),
+      approvalBroker: this.approvalBroker,
     });
   }
 
@@ -106,6 +111,7 @@ export class RunManager {
       config,
       lastEventSeq: events.at(-1)?.seq ?? 0,
       output,
+      approvals: this.approvalBroker.pending(runId),
       ...(final ? { final } : {}),
       scheduler: {
         queuePosition: queued.indexOf(runId) >= 0 ? queued.indexOf(runId) + 1 : null,
@@ -123,6 +129,12 @@ export class RunManager {
     if (!controller) return 'already-terminal';
     controller.abort();
     return 'accepted';
+  }
+
+  approve(runId: string, approvalId: string, decision: ApprovalDecision): ApprovalDecisionResult | 'run-not-found' {
+    if (!this.eventStore.lastSeq(runId)) return 'run-not-found';
+    const result = this.approvalBroker.decide(approvalId, decision, runId);
+    return result === 'not-found' ? 'run-not-found' : result;
   }
 
   subscribe(runId: string, listener: RunEventListener): () => void {

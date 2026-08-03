@@ -38,6 +38,10 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .run-metrics div { display: grid; gap: 4px; border: 1px solid #263650; border-radius: 10px; padding: 10px; }
 .run-metrics span { color: #6f86a7; font-size: 11px; } .run-metrics strong { overflow-wrap: anywhere; font-size: 13px; }
 .output-view { min-height: 180px; max-height: 420px; overflow: auto; margin: 0; border-radius: 12px; padding: 14px; color: #cbe4ff; background: #08111d; white-space: pre-wrap; word-break: break-word; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.approval-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(184 243 108 / 52%); border-radius: 12px; padding: 14px; background: rgb(184 243 108 / 8%); }
+.approval-card p { margin: 5px 0 0; font-size: 12px; }
+.approval-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.approval-actions .cancel-button { margin-top: 0; }
 .event-list { display: grid; gap: 2px; margin-top: 14px; max-height: 190px; overflow: auto; }
 .event-row { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; padding: 8px 4px; color: #95a9c3; font-size: 12px; }
 .event-row span:nth-child(2) { color: #c4d2e5; overflow-wrap: anywhere; } .event-row time { color: #6f86a7; }
@@ -45,4 +49,5 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .cancel-button:hover { background: #321d27; }
 @media (max-width: 780px) { .app-shell { padding-top: 12px; } .content-grid { grid-template-columns: 1fr; } .sidebar { grid-template-columns: 1fr 1fr; } .connection-panel { grid-column: 1 / -1; } .safety-panel { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .sidebar { grid-template-columns: 1fr; } .connection-panel, .safety-panel { grid-column: auto; } .composer-footer, .run-header { align-items: stretch; flex-direction: column; } .composer-footer button { width: 100%; } .run-metrics { grid-template-columns: repeat(2, 1fr); } .topbar { margin-bottom: 16px; } }
+@media (max-width: 520px) { .approval-card { align-items: stretch; flex-direction: column; } .approval-actions button { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }

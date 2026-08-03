@@ -1,6 +1,6 @@
 # HTTP/SSE API 合约
 
-**状态：Accepted（v1 设计；`/health`、基础 run API/SSE 已实现，其余端点尚未实现）**
+**状态：Accepted（v1；`/health`、run API/SSE 与单用户 approval continuation 已实现，workspace/diff/certificate 管理端点仍后置）**
 
 Base path 为 `/api/v1`。所有请求/响应为 UTF-8 JSON；错误使用统一 envelope。生产远程访问必须使用 HTTPS 或可信隧道。
 
@@ -92,7 +92,7 @@ run 状态响应还应包含 `scheduler.queuePosition`、`scheduler.activeRunCou
 }
 ```
 
-事件类型：`run.created`、`run.started`、`turn.started`、`model.delta`、`model.completed`、`tool.requested`、`approval.required`、`approval.decided`、`tool.started`、`tool.output`、`tool.completed`、`context.compacted`、`diff.updated`、`run.completed`、`run.failed`、`run.cancelled`、`run.needs_recovery`。
+事件类型：`run.created`、`run.started`、`turn.started`、`model.delta`、`model.completed`、`tool.requested`、`approval.required`、`approval.decided`、`approval.expired`、`tool.started`、`tool.output`、`tool.completed`、`context.compacted`、`diff.updated`、`run.completed`、`run.failed`、`run.cancelled`、`run.needs_recovery`。
 
 ## SSE 续传规则
 

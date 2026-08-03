@@ -48,6 +48,12 @@ sandbox、approval 和 scheduler。
 request 和 workspace root。三类解析器都必须显式注入，确保 path/command/network
 能够参与 approval cache key；daemon 默认不创建 bridge。
 
+## Spec 21：Approval continuation（当前）
+
+将 `approval.required` 变成可续接的单用户闭环：内存 broker、120 秒过期、allow/deny
+一次性决策、AgentLoop 原地重试工具、`POST /runs/:runId/approve` 和 Web 审批卡片。
+无 broker/runtime approval 能力时继续 fail-closed；重启恢复与持久化审批后置。
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

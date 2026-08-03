@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider } from '@ready4vibe/contracts';
 import type { ContextItem } from '@ready4vibe/context';
 import { AgentLoop } from './index.js';
+import { InMemoryApprovalBroker } from './approval.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
@@ -233,6 +234,70 @@ describe('AgentLoop', () => {
     expect(result).toMatchObject({ status: 'failed' });
     expect(events.map((event) => event.type)).toContain('approval.required');
     expect(events.at(-1)?.payload).toMatchObject({ code: 'APPROVAL_REQUIRED' });
+  });
+
+  it('waits for allow, approves the same runtime intent, and retries the tool in place', async () => {
+    const provider = new SequenceModelProvider([
+      [{ type: 'tool-call-delta', callId: 'approve-once', name: 'write', argumentsChunk: '{}' }, { type: 'completed', finishReason: 'tool-calls' }],
+      [{ type: 'text-delta', text: 'saved' }, { type: 'completed', finishReason: 'stop' }],
+    ]);
+    const eventStore = new InMemoryEventStore();
+    const broker = new InMemoryApprovalBroker({ timeoutMs: 2_000 });
+    let approved = false;
+    const runtime = {
+      descriptors: [{ name: 'write', id: 'test.write', version: '1.0.0', risk: 'write' as const, summary: 'Write' }],
+      execute: vi.fn(async () => {
+        if (!approved) throw Object.assign(new Error('prompt'), { code: 'APPROVAL_REQUIRED' });
+        return { output: { ok: true } };
+      }),
+      approve: vi.fn(async () => { approved = true; }),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime, approvalBroker: broker });
+    const running = loop.run({ runId: 'run_approval_allow', config: config({ limits: { ...config().limits, maxTurns: 2 } }) });
+    await vi.waitFor(() => expect(broker.pending()).toHaveLength(1));
+    const approvalId = broker.pending()[0]!.approvalId;
+    expect((await eventStore.read('run_approval_allow')).map((event) => event.type)).toContain('approval.required');
+    expect(broker.decide(approvalId, 'allow', 'run_approval_allow')).toBe('accepted');
+    await expect(running).resolves.toMatchObject({ status: 'completed', output: 'saved' });
+    expect(runtime.approve).toHaveBeenCalledOnce();
+    expect(runtime.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails a denied approval without retrying the tool', async () => {
+    const provider = new SequenceModelProvider([[{ type: 'tool-call-delta', callId: 'deny-once', name: 'write', argumentsChunk: '{}' }, { type: 'completed', finishReason: 'tool-calls' }]]);
+    const eventStore = new InMemoryEventStore();
+    const broker = new InMemoryApprovalBroker({ timeoutMs: 2_000 });
+    const runtime = {
+      descriptors: [{ name: 'write', id: 'test.write', version: '1.0.0', risk: 'write' as const, summary: 'Write' }],
+      execute: vi.fn(async () => { throw Object.assign(new Error('prompt'), { code: 'APPROVAL_REQUIRED' }); }),
+      approve: vi.fn(async () => undefined),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime, approvalBroker: broker });
+    const running = loop.run({ runId: 'run_approval_deny', config: config() });
+    await vi.waitFor(() => expect(broker.pending()).toHaveLength(1));
+    expect(broker.decide(broker.pending()[0]!.approvalId, 'deny', 'run_approval_deny')).toBe('accepted');
+    await expect(running).resolves.toMatchObject({ status: 'failed' });
+    expect((await eventStore.read('run_approval_deny')).at(-1)?.payload).toMatchObject({ code: 'APPROVAL_DENIED' });
+    expect(runtime.execute).toHaveBeenCalledOnce();
+    expect(runtime.approve).not.toHaveBeenCalled();
+  });
+
+  it('cancels while waiting for approval and removes the pending request', async () => {
+    const provider = new SequenceModelProvider([[{ type: 'tool-call-delta', callId: 'cancel-approval', name: 'write', argumentsChunk: '{}' }, { type: 'completed', finishReason: 'tool-calls' }]]);
+    const eventStore = new InMemoryEventStore();
+    const broker = new InMemoryApprovalBroker({ timeoutMs: 2_000 });
+    const runtime = {
+      descriptors: [{ name: 'write', id: 'test.write', version: '1.0.0', risk: 'write' as const, summary: 'Write' }],
+      execute: vi.fn(async () => { throw Object.assign(new Error('prompt'), { code: 'APPROVAL_REQUIRED' }); }),
+      approve: vi.fn(async () => undefined),
+    };
+    const controller = new AbortController();
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime, approvalBroker: broker });
+    const running = loop.run({ runId: 'run_approval_cancel', signal: controller.signal, config: config() });
+    await vi.waitFor(() => expect(broker.pending()).toHaveLength(1));
+    controller.abort();
+    await expect(running).resolves.toMatchObject({ status: 'cancelled' });
+    expect(broker.pending()).toEqual([]);
   });
 
   it('enforces maxToolCalls before executing a batch', async () => {
