@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
-import { useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { useEffect, useState } from 'react';
+import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -18,11 +18,20 @@ export interface AppProps {
   onResetProfile?: () => void;
   certificateStatus?: CertificateStatus;
   certificateStatusUnavailable?: boolean;
+  modelSettings?: ModelSettingsStatus;
+  modelSettingsUnavailable?: boolean;
+  onConfigureModel?: (input: ModelSettingsInput) => Promise<void> | void;
+  onClearModelSettings?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
+  const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
+  const [modelApiKey, setModelApiKey] = useState('');
+  useEffect(() => {
+    if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
+  }, [modelSettings?.baseUrl]);
   const connected = health?.auth.pairingRequired === false;
   const submitPairing = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -33,6 +42,16 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     if (message.trim()) {
       onCreateRun?.(message.trim());
       setMessage('');
+    }
+  };
+  const submitModelSettings = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!modelApiKey) return;
+    try {
+      await onConfigureModel?.({ provider: 'openai-compatible', baseUrl: modelBaseUrl, apiKey: modelApiKey, model: profile.model.name });
+      setModelApiKey('');
+    } catch {
+      // The parent renders a safe error; keep the field for an intentional retry.
     }
   };
   const updateProfile = (patch: Partial<RunProfile>): void => onProfileChange?.({ ...profile, ...patch });
@@ -60,6 +79,18 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
               <label>Workspace id<input value={profile.workspaceId} onChange={(event) => updateProfile({ workspaceId: event.target.value })} /></label>
               <label>Model provider<input value={profile.model.provider} onChange={(event) => updateProfile({ model: { ...profile.model, provider: event.target.value } })} /></label>
               <label>Model name<input value={profile.model.name} onChange={(event) => updateProfile({ model: { ...profile.model, name: event.target.value } })} /></label>
+              <div className="model-setup" aria-label="Model provider setup">
+                <div className="eyebrow">MODEL ACCESS</div>
+                {modelSettingsUnavailable ? <p className="muted">Model setup is unavailable until the daemon exposes the authenticated settings adapter.</p> : <>
+                  <p className="muted">{modelSettings?.configured ? `Configured via ${modelSettings.source}. The key is held by the daemon and is never shown here.` : 'Set up a provider here; no .env or YAML editing is required.'}</p>
+                  {modelSettings?.configured && <p className="muted">{modelSettings.providerId} · {modelSettings.baseUrl ?? 'URL hidden'}{modelSettings.modelName ? ` · ${modelSettings.modelName}` : ''}</p>}
+                  <form onSubmit={(event) => { void submitModelSettings(event); }}>
+                    <label>Provider URL<input type="url" value={modelBaseUrl} onChange={(event) => setModelBaseUrl(event.target.value)} placeholder="https://api.deepseek.com" autoComplete="url" /></label>
+                    <label>API key<input type="password" value={modelApiKey} onChange={(event) => setModelApiKey(event.target.value)} placeholder={modelSettings?.configured ? 'Enter a replacement key' : 'Paste once; never stored in browser'} autoComplete="new-password" /></label>
+                    <div className="inline-actions"><button type="submit" disabled={!modelApiKey}>Save provider</button>{modelSettings?.configured && <button className="cancel-button" type="button" onClick={() => { void (async () => { await onClearModelSettings?.(); setModelApiKey(''); })(); }}>Clear daemon key</button>}</div>
+                  </form>
+                </>}
+              </div>
               <label>Task trust<select value={profile.taskTrust} onChange={(event) => updateProfile({ taskTrust: event.target.value as RunProfile['taskTrust'] })}><option value="trusted-workspace">Trusted workspace</option><option value="untrusted-content">Untrusted content</option></select></label>
               <label>Sandbox<select value={profile.sandbox.mode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">Read-only</option><option value="workspace-write">Workspace write</option><option value="external-sandbox">External sandbox</option></select></label>
               <label>Network<select value={'network' in profile.sandbox ? profile.sandbox.network : 'restricted'} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, network: event.target.value as 'restricted' | 'enabled' } as RunProfile['sandbox'] })}><option value="restricted">Restricted</option><option value="enabled">Enabled</option></select></label>

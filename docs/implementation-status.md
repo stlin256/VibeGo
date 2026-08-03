@@ -38,8 +38,8 @@
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（18 个 workspace package）；
-- `pnpm test`：通过，146 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 5、skill-mcp 10、daemon 20、web 15；Vitest 按 package 输出）；
-- Spec 27 增加 3 项 Web 存储测试，当前总计 146 个测试（Web 15）；
+- `pnpm test`：通过，153 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 5、skill-mcp 10、daemon 24、web 17；Vitest 按 package 输出）；
+- Spec 27 增加 3 项 Web 存储测试，形成 Spec 28 之前的 146 项基线（Web 15）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -74,3 +74,16 @@ The Web runtime now loads the validated non-secret run profile from a
 versioned browser preference key, saves edits through a controlled adapter,
 and clears the key before restoring conservative defaults. Web coverage is
 now 15 tests; storage failures never block the UI.
+
+## Spec 28 design note (2026-08-03)
+
+The next module is documented in `docs/specs/28-model-provider-onboarding.md`.
+It moves provider setup into the authenticated Web settings flow while keeping
+the MVP secret store process-memory only; OS keyring persistence is a future
+adapter and no API key will enter browser storage or durable events.
+
+Spec 28 is now implemented: the daemon exposes secret-free model status plus
+authenticated configure/clear actions, new runs use an atomically switched
+provider, and the Web Model Access card never persists the key. Verification
+adds 4 daemon tests, 1 Web API test, 1 Web render test, and 1 model-provider
+URL safety test.

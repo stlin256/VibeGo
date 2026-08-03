@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -13,6 +13,8 @@ function RuntimeApp(): JSX.Element {
   const [profile, setProfile] = useState<RunProfile>(() => loadRunProfile());
   const [certificateStatus, setCertificateStatus] = useState<CertificateStatus>();
   const [certificateStatusUnavailable, setCertificateStatusUnavailable] = useState(false);
+  const [modelSettings, setModelSettings] = useState<ModelSettingsStatus>();
+  const [modelSettingsUnavailable, setModelSettingsUnavailable] = useState(false);
 
   useEffect(() => {
     saveRunProfile(profile);
@@ -28,10 +30,23 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshModelSettings = async (): Promise<void> => {
+    try {
+      setModelSettings(await client.modelSettings());
+      setModelSettingsUnavailable(false);
+    } catch (reason) {
+      setModelSettings(undefined);
+      setModelSettingsUnavailable(isModelSettingsUnavailable(reason));
+    }
+  };
+
   useEffect(() => {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
-      if (!nextHealth.auth.pairingRequired) void refreshCertificateStatus();
+      if (!nextHealth.auth.pairingRequired) {
+        void refreshCertificateStatus();
+        void refreshModelSettings();
+      }
     }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
 
@@ -41,6 +56,7 @@ function RuntimeApp(): JSX.Element {
       setError(undefined);
       setHealth(await client.health());
       await refreshCertificateStatus();
+      await refreshModelSettings();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -83,12 +99,31 @@ function RuntimeApp(): JSX.Element {
     try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
   };
 
+  const configureModel = async (input: ModelSettingsInput): Promise<void> => {
+    try {
+      const status = await client.configureModel(input);
+      setModelSettings(status);
+      setModelSettingsUnavailable(false);
+      setProfile((current) => ({ ...current, model: { provider: input.provider, name: input.model } }));
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const clearModelSettings = async (): Promise<void> => {
+    try {
+      const status = await client.clearModelSettings();
+      setModelSettings(status);
+      setModelSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); }
+  };
+
   const resetProfile = (): void => {
     resetRunProfile();
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -102,6 +137,10 @@ function safeError(reason: unknown): string {
 
 function isCertificateStatusUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'CERTIFICATE_STATUS_UNAVAILABLE';
+}
+
+function isModelSettingsUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'MODEL_SETTINGS_UNAVAILABLE';
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><RuntimeApp /></StrictMode>);

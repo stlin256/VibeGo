@@ -1,5 +1,13 @@
 # VibeGo / ready4vibe 中文说明
 
+## 模型配置向导
+
+Web 控制台的 Settings 面板现在包含 Model Access 向导：输入 OpenAI-compatible
+服务地址、模型名和 API key 即可完成配置，不需要编辑 `.env` 或 YAML。API key
+只通过已认证连接发送到 daemon，成功后会清空浏览器输入框，仅保留在 daemon
+进程内存中；它不会写入 localStorage、事件、日志或 URL。daemon 重启后会再次
+提示配置，后续再接入 Windows Credential Manager 等系统密钥存储。
+
 <p align="center">
   <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
 </p>

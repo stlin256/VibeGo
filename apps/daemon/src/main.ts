@@ -6,7 +6,7 @@ import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certifica
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore } from '@ready4vibe/storage';
-import { createModelProvider } from './model-config.js';
+import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { resolveDaemonTransport } from './transport-config.js';
 
@@ -28,10 +28,11 @@ const port = parsePort(process.env.READY4VIBE_PORT ?? '8787');
 const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
-const modelProvider = createModelProvider();
+const modelSettings = new InMemoryModelSettingsManager();
 const runManager = new RunManager({
   eventStore,
-  modelProvider,
+  modelProvider: modelSettings.provider,
+  modelProviderForRun: () => modelSettings.provider.snapshot(),
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {
@@ -47,6 +48,7 @@ const server = createDaemonServer({
   storageKind: 'sqlite',
   runManager,
   ...(certificateStatus ? { certificateStatus } : {}),
+  modelSettings,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 

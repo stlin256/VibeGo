@@ -104,6 +104,23 @@ describe('ApiClient', () => {
     expect(calls).toEqual(['/api/v1/certificates/status']);
   });
 
+  it('configures model access through an authenticated body and exposes only safe status', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      if (init?.method === 'POST') return response({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' });
+      return response({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    });
+    await expect(client.configureModel({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' })).resolves.toMatchObject({ configured: true });
+    await client.modelSettings();
+    await client.clearModelSettings();
+    expect(calls[0]?.input).toBe('/api/v1/settings/model');
+    expect(calls[0]?.init?.body).toContain('test-secret');
+    expect(calls[0]?.input).not.toContain('test-secret');
+    expect(calls[1]?.init?.method).toBe('GET');
+    expect(calls[2]?.init?.method).toBe('DELETE');
+  });
+
   it('parses SSE frames, ignores heartbeat/invalid data and stops at terminal event', async () => {
     expect(parseSseFrame(': heartbeat')).toBeUndefined();
     expect(parseSseFrame('id: 4\nevent: model.delta\ndata: {"version":1,"id":"e4","seq":4,"runId":"run_1","type":"model.delta","at":"now","payload":{}}')).toMatchObject({ seq: 4, type: 'model.delta' });

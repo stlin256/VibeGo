@@ -23,6 +23,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && options.allowInsecureHttp === true)) {
       throw new Error('OpenAI-compatible provider requires HTTPS unless allowInsecureHttp is explicit');
     }
+    if (url.username || url.password || url.hash || url.search) {
+      throw new Error('OpenAI-compatible provider URL must not contain credentials, query parameters, or fragments');
+    }
     this.id = options.id;
     this.endpoint = `${url.toString().replace(/\/$/, '')}/chat/completions`;
     this.apiKey = options.apiKey;

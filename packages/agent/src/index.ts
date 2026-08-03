@@ -23,6 +23,8 @@ export interface AgentRunRequest {
   priority?: SchedulerRequest['priority'];
   signal?: AbortSignal;
   contextItems?: readonly ContextItem[];
+  /** Provider captured for this run; when omitted the loop default is used. */
+  modelProvider?: ModelProvider;
 }
 
 export interface AgentRunResult {
@@ -77,6 +79,7 @@ export class AgentLoop {
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const config = parseRunConfig(request.config);
+    const modelProvider = request.modelProvider ?? this.options.modelProvider;
     const runId = request.runId ?? `run_${uuidv7()}`;
     const correlationId = `corr_${uuidv7()}`;
     let status: RunStatus = 'created';
@@ -165,7 +168,7 @@ export class AgentLoop {
       await transition('planning');
 const messages: unknown[] = [...contextResult.messages];
       const toolRuntime = this.options.toolRuntime;
-      const modelTools = this.options.modelProvider.capabilities.toolCalls && toolRuntime
+      const modelTools = modelProvider.capabilities.toolCalls && toolRuntime
         ? toolRuntime.descriptors.map(toModelTool)
         : [];
       let turnIndex = 0;
@@ -199,7 +202,7 @@ const messages: unknown[] = [...contextResult.messages];
         let turnText = '';
         const calls = new Map<string, PendingToolCall>();
         try {
-          for await (const event of this.options.modelProvider.stream(modelRequest, controller.signal)) {
+          for await (const event of modelProvider.stream(modelRequest, controller.signal)) {
             if (controller.signal.aborted) return await cancel('user-cancelled-during-model');
             if (event.type === 'text-delta') {
               const nextOutput = output + event.text;
@@ -280,7 +283,7 @@ const messages: unknown[] = [...contextResult.messages];
           return result('completed');
         }
 
-        if (!toolRuntime || !this.options.modelProvider.capabilities.toolCalls) {
+        if (!toolRuntime || !modelProvider.capabilities.toolCalls) {
           controller.abort();
           return await fail('TOOLS_UNAVAILABLE', 'Tool calls are not enabled for this run.', false);
         }

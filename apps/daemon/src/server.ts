@@ -3,6 +3,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateStatus } from '@ready4vibe/certificates';
+import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager } from './run-manager.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
@@ -26,6 +27,7 @@ export interface DaemonServerOptions {
   bodyLimitBytes?: number;
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
+  modelSettings?: ModelSettingsManager;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -39,6 +41,7 @@ interface ResolvedDaemonServerOptions {
   runManager?: RunManager;
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
+  modelSettings?: ModelSettingsManager;
 }
 
 export interface HealthResponse {
@@ -84,6 +87,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.runManager ? { runManager: options.runManager } : {}),
     ...(options.tls ? { tls: options.tls } : {}),
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
+    ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -192,6 +196,40 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateStatus);
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/model') {
+    if (!options.modelSettings) {
+      writeJson(response, 503, { error: { code: 'MODEL_SETTINGS_UNAVAILABLE', message: 'Model settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.modelSettings.status());
+      return;
+    }
+    if (request.method === 'DELETE') {
+      writeJson(response, 200, options.modelSettings.clear());
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET, POST, or DELETE required' } }, { Allow: 'GET, POST, DELETE' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isModelSettingsInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Provider, HTTPS base URL, model, and API key are required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, options.modelSettings.configure(input));
+    } catch (error) {
+      if (error instanceof ModelSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
@@ -344,6 +382,14 @@ function isApprovalInput(value: unknown): value is { approvalId: string; decisio
 
 function isRetryInput(value: unknown): value is { confirmation: 'retry-as-new-run' } {
   return typeof value === 'object' && value !== null && 'confirmation' in value && value.confirmation === 'retry-as-new-run';
+}
+
+function isModelSettingsInput(value: unknown): value is ModelSettingsInput {
+  return typeof value === 'object' && value !== null
+    && 'provider' in value && value.provider === 'openai-compatible'
+    && 'baseUrl' in value && typeof value.baseUrl === 'string'
+    && 'apiKey' in value && typeof value.apiKey === 'string'
+    && 'model' in value && typeof value.model === 'string';
 }
 
 function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {

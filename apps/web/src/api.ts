@@ -155,6 +155,21 @@ export interface CertificateStatus {
   subjectAltNames: readonly string[];
 }
 
+export interface ModelSettingsStatus {
+  configured: boolean;
+  providerId: string;
+  baseUrl: string | null;
+  modelName: string | null;
+  source: 'environment' | 'web-memory' | 'unconfigured';
+}
+
+export interface ModelSettingsInput {
+  provider: 'openai-compatible';
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
 export interface StoredEvent {
   version: 1;
   id: string;
@@ -205,6 +220,18 @@ export class ApiClient {
 
   async certificateStatus(): Promise<CertificateStatus> {
     return this.request<CertificateStatus>('/api/v1/certificates/status', { method: 'GET' });
+  }
+
+  async modelSettings(): Promise<ModelSettingsStatus> {
+    return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'GET' });
+  }
+
+  async configureModel(input: ModelSettingsInput): Promise<ModelSettingsStatus> {
+    return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async clearModelSettings(): Promise<ModelSettingsStatus> {
+    return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'DELETE' });
   }
 
   async completePairing(code: string): Promise<PairingResult> {

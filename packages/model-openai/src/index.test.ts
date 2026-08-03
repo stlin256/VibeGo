@@ -70,6 +70,11 @@ describe('OpenAICompatibleProvider', () => {
     expect(() => new OpenAICompatibleProvider({ id: 'local', baseUrl: 'http://127.0.0.1:8080', apiKey: 'x', allowInsecureHttp: true })).not.toThrow();
   });
 
+  it('rejects provider URLs that could carry credentials or secret query parameters', () => {
+    expect(() => new OpenAICompatibleProvider({ id: 'local', baseUrl: 'https://user:pass@example.test', apiKey: 'x' })).toThrow('must not contain credentials');
+    expect(() => new OpenAICompatibleProvider({ id: 'local', baseUrl: 'https://example.test?api_key=leak', apiKey: 'x' })).toThrow('must not contain credentials');
+  });
+
   it('turns malformed stream JSON into a safe error', async () => {
     const provider = new OpenAICompatibleProvider({
       id: 'deepseek',

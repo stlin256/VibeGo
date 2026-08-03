@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createModelProvider } from './model-config.js';
+import { createModelProvider, InMemoryModelSettingsManager, ModelSettingsError } from './model-config.js';
 
 describe('daemon model configuration', () => {
   it('uses a safe unconfigured provider without an API key', async () => {
@@ -23,5 +23,31 @@ describe('daemon model configuration', () => {
     });
     expect(provider.id).toBe('openai-compatible');
     expect(JSON.stringify({ id: provider.id, capabilities: provider.capabilities })).not.toContain('test-secret');
+  });
+
+  it('configures and clears a provider through a secret-free status boundary', () => {
+    const manager = new InMemoryModelSettingsManager({});
+    expect(manager.status()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    const status = manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    expect(status).toEqual({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' });
+    expect(JSON.stringify(status)).not.toContain('test-secret');
+    expect(manager.provider.id).toBe('openai-compatible');
+    expect(manager.clear()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    expect(manager.provider.id).toBe('unconfigured');
+  });
+
+  it('rejects unsafe input without replacing the active provider', () => {
+    const manager = new InMemoryModelSettingsManager({});
+    expect(() => manager.configure({ provider: 'openai-compatible', baseUrl: 'http://example.test', apiKey: 'key', model: 'model' })).toThrowError(new ModelSettingsError('INVALID_BASE_URL', 'Provider URL must use HTTPS without credentials or query parameters.'));
+    expect(() => manager.configure({ provider: 'openai-compatible', baseUrl: 'https://example.test', apiKey: '', model: 'model' })).toThrowError(new ModelSettingsError('INVALID_API_KEY', 'The provider key is invalid.'));
+    expect(manager.status().source).toBe('unconfigured');
+  });
+
+  it('provides stable provider snapshots for in-flight runs', () => {
+    const manager = new InMemoryModelSettingsManager({});
+    const before = manager.provider.snapshot();
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    expect(before.id).toBe('unconfigured');
+    expect(manager.provider.snapshot().id).toBe('openai-compatible');
   });
 });

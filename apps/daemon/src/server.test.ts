@@ -8,6 +8,7 @@ import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
 import { RunManager } from './run-manager.js';
+import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
@@ -341,5 +342,28 @@ describe('daemon health server', () => {
     const allowed = await fetch(`${base}/api/v1/runs/run_missing`, { headers: { authorization: `Bearer ${session.accessToken}` } });
     expect(allowed.status).toBe(503);
     expect(await allowed.json()).toMatchObject({ error: { code: 'RUNS_UNAVAILABLE' } });
+  });
+
+  it('serves and mutates model settings without returning the provider key', async () => {
+    const modelSettings = new InMemoryModelSettingsManager({});
+    const server = createDaemonServer({ modelSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/model`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    const configured = await fetch(base, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' }),
+    });
+    const configuredBody = await configured.text();
+    expect(configured.status).toBe(200);
+    expect(configuredBody).not.toContain('test-secret');
+    expect(JSON.parse(configuredBody)).toMatchObject({ configured: true, source: 'web-memory', providerId: 'openai-compatible' });
+    const cleared = await fetch(base, { method: 'DELETE' });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ configured: false, source: 'unconfigured' });
   });
 });
