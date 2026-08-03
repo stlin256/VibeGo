@@ -50,7 +50,7 @@ packages/
   sandbox/                # workspace 与 OS/Docker 隔离适配器
   mcp/                    # MCP client、server 配置和工具映射
   skills/                 # Skill manifest、加载、校验和作用域
-  storage/                # SQLite、事件日志、运行快照
+  storage/                # SQLite、事件日志、运行快照、daemon settings
   workspaces/             # 安全 workspace id → daemon-machine root registry
   ui/                     # 可复用 React 组件、设计 token
   testkit/                # fake model、fake tools、event assertions
@@ -82,6 +82,8 @@ docs/
 - 事件日志采用大小/时间保留策略；输出有字节上限，避免内存无限增长。
 - Goal projection 可从独立 `goal_events` replay；它是派生数据，不替代 `run_events`，
   也不要求常驻队列或第二套 scheduler。
+- `daemon_settings` 只保存经过版本化校验的本地非 secret 设置，不是事件流；它与
+  `run_events`、`goal_events` 分表，不能承载凭据或 Goal 状态。
 
 ## 可扩展点
 
@@ -91,7 +93,9 @@ docs/
 - `ContextSource`：Git、文件索引、问题单、用户提供资料；
 - `ApprovalPolicy`：默认策略、项目规则、一次性临时授权；
 - `Transport`：本地 HTTP、反向代理、未来 ACP/CLI 适配。
-- `WorkspaceRegistry`：单用户 id/label 到 daemon-machine root 的安全映射；未来可替换为持久化或 SSH/Tailscale 远端 adapter。
+- `WorkspaceRegistry`：单用户 id/label 到 daemon-machine root 的安全映射；Spec 36 通过注入的 SQLite settings adapter 持久化非 secret 映射，未来仍可替换为 SSH/Tailscale 远端 adapter。
+- `apps/web`：React/Vite console 采用 Spec 37 的 width + aspect-ratio 响应式策略；设备类别不进入 daemon 或浏览器持久化状态。
+- `apps/web`：按 Spec 38 采用 conversation-first 壳层（workspace rail、conversation、context rail）；设置是内存态的认证抽屉，Goal/Approval/Run 仍消费现有 API 与 SSE。
 - `GoalControl`：跨 run 的目标状态、Gate、Evidence、handoff 和 governed admission；
   只能在 daemon application service 层与 `RunManager` 协作，不能被 AgentLoop 直接依赖。
 

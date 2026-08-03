@@ -137,8 +137,10 @@ panel replaces the free-form workspace id field with a selector and an explicit
 add/remove flow. Status and events never return absolute paths; new runs reject
 unknown ids and capture the selected root for the lifetime of the run.
 
-The first slice is process-memory only. Durable settings, native remote-browser
-directory pickers, and Git/diff tools remain separate milestones.
+The first slice established the process-memory API boundary. Spec 36 now adds
+durable non-secret settings through a separate SQLite adapter; native
+remote-browser directory pickers remain deferred, while Git/diff tools are
+tracked as separate milestones.
 
 ## 暂缓决策
 
@@ -187,3 +189,52 @@ prompt；不增加 Goal SSE、轮询、scheduler、写操作或 governed admissi
 interactive run 回归单测通过；`pnpm typecheck`、`pnpm test`、`pnpm diff:check`
 通过并完成独立 Git 提交。Goal 创建、Todo claim、Gate resolve 和 Phase 2 admission
 继续后置。
+
+## Spec 36：Durable non-secret workspace settings（已实现）
+
+详见 [Spec 36](specs/36-durable-workspace-settings.md) 和
+[ADR 0005](adr/0005-durable-daemon-settings-boundary.md)。本阶段让现有 Web
+workspace selector 在 daemon 重启后保留自定义 id/label/path 映射，使用 SQLite
+中独立的 `daemon_settings` 表和 `BEGIN IMMEDIATE` 写入。路径只存在于 daemon
+本地设置/运行时，不返回 API、不进入浏览器、事件、SSE 或 Goal state；模型 API key
+和证书私钥继续排除在持久化之外。
+
+退出条件已满足：settings store、workspace restore/rollback、daemon wiring 和
+重启测试通过；`run_events`、`goal_events`、AgentLoop、RunManager、Scheduler、
+Approval 和 Sandbox 行为不变。模型 API key、证书私钥和 Goal 状态仍不进入该表。
+
+## Spec 37：Ratio-first responsive Web experience（已实现）
+
+详见 [Spec 37](specs/37-ratio-responsive-ui.md) 和
+[ADR 0006](adr/0006-ratio-first-responsive-web.md)。本阶段将现有 React 控制台
+从 width-only 断点升级为 width + aspect-ratio 双轴布局策略，分别覆盖横屏/竖屏
+桌面、普通手机、折叠屏封面与展开态、阔折叠/三折叠和平板；CSS 不使用
+UA/device sniffing，按 width + aspect-ratio 选择保守布局。视觉截图仅作为本地
+开发辅助，不纳入仓库验收物。
+
+## Spec 38：Conversation-first Web shell（已实现）
+
+详见 [Spec 38](specs/38-conversation-first-web-shell.md) 和
+[ADR 0007](adr/0007-codex-like-conversation-first-web.md)。在不复制 Codex
+源码的前提下，将日常操作改为 workspace rail、conversation column、context
+rail 三块层次；设置保留为认证抽屉/Sheet，连接、沙箱和 guardrail 摘要归入
+context rail，Goal、审批、恢复和 run 事件继续由现有权威 API/SSE 提供。宽屏
+网格使用可收缩中央列和有界右栏，避免 Goal 或顶栏在边缘被裁切；前端验收以
+React smoke test、CSS contract test 和可用性为准。
+
+当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
+新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
+
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Draft）
+
+详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
+[ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
+TencentDB Agent Memory 独立 sidecar + ready4vibe 原生 `AgentMemoryProvider` + Web
+开关 + GitHub 上游自动构建/切换/回滚。`off` 模式保持现有行为，`memory-core` 是首选
+MVP；`proxy` 与 `full-stack` 后置。TencentDB 只负责长期记忆和知识派生层，Goal/
+Todo/Gate/Evidence、run/approval/sandbox/scheduler 仍由 ready4vibe 作为事实源。
+
+实现顺序为：contract/Noop → MemoryCore recall/write-back → Web Settings/status →
+Supervisor current/previous revision 和候选健康检查 → Proxy → Knowledge。upstream
+更新采用候选 worktree 构建和蓝绿式切换，不做运行中 Node 热替换；构建或 health 失败
+保留当前版本，普通 Web 和 run 不因记忆服务不可用而中断。

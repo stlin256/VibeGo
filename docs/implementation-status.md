@@ -33,21 +33,22 @@
 25. `apps/web` 已按 `docs/specs/25-configuration-onboarding.md` 实现首个非 secret 运行 profile 与响应式设置面板，替代硬编码的 run 配置；
 26. `apps/web` 已按 `docs/specs/26-settings-certificate-guidance.md` 在设置/引导界面展示安全 TLS 元数据和缺失证书提示，不上传或回显私钥；
 27. `apps/web` 已按 `docs/specs/27-profile-persistence.md` 实现版本化非 secret 运行 profile 持久化：启动加载、编辑自动保存、显式重置和存储失败安全回退；pairing/token、模型凭据、证书材料与事件 payload 均不写入浏览器存储；
-28. `packages/workspaces` 与 `apps/daemon` 已按 `docs/specs/31-workspace-registry.md` 实现单用户、进程内 workspace 映射；Web 设置提供安全列表、添加和删除向导；运行时不回退到 default，filesystem/shell 均按 run 捕获 workspace root；
+28. `packages/workspaces` 与 `apps/daemon` 已按 `docs/specs/31-workspace-registry.md` 实现单用户 workspace 映射；Web 设置提供安全列表、添加和删除向导；运行时不回退到 default，filesystem/shell 均按 run 捕获 workspace root；Spec 36 通过独立 `daemon_settings` 表提供非 secret 重启恢复；
 29. `packages/tool-adapters` 与 `apps/daemon` 已按 `docs/specs/32-guided-git-readonly-tools.md` 实现独立 Git 只读开关：仅注册 status/diff/log，固定 argv、最小环境、超时/输出上限、取消与路径脱敏均受测试覆盖；不可信或 external-sandbox run 不获得主机 Git runtime；
 30. `apps/web` 已按 `docs/specs/33-guided-tool-output-inspector.md` 实现受限 tool-output inspector：仅消费现有 SSE tool.output 事件，最多显示 24 个卡片、每卡片最多 128 KiB，安全渲染 Git 文本，不新增执行权限或持久化；
 31. `packages/contracts` 与 `packages/goal-control` 已按 `docs/specs/34-goal-control-plane-loopx-integration.md` 实现 Phase 0：版本化 Goal/Todo/Gate/Evidence/Handoff/Event/Projection/Decision/Binding schema、privacy scan、内存 goal event store、canonical fingerprint、projection replay、最小 `shouldRun`、并发 claim/stale revision 门禁和 validated-writeback guard；不接入 daemon 默认 run admission，也不执行模型/工具/shell/filesystem/Git/MCP/sandbox；
 32. `packages/storage` 已实现 Phase 1 `SqliteGoalEventStore`：独立 `goal_events` 表、goal-local `appendSequence`、`BEGIN IMMEDIATE`、eventId no-op/conflict、批量原子回滚、重启恢复、cursor/list 和并发 writer 测试；不修改现有 `run_events` 表；
 33. `apps/daemon` 已接入可选 Goal event store 的只读投影组合：受现有 auth/CSRF/Origin 门禁保护的 `GET /api/v1/goals`、`GET /api/v1/goals/:goalId` 和 bounded JSON replay；投影由 `GoalProjectionBuilder` 重放，API 剥离 `claimTokenHash`，不提供 Goal 写 API 或默认 run admission；
 34. `apps/web` 的 Goal 只读投影切片按 `docs/specs/35-goal-web-readonly-projection.md` 接入现有 `ApiClient` 和 React 控制台：只消费一次 `GET /api/v1/goals`，支持 loading/unavailable/empty/ready、显式 refresh 和终态刷新；不写 Goal、不增加第二条 SSE/轮询、不把响应写入浏览器存储，也不改变 interactive run composer；
-35. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+35. `packages/storage`、`packages/workspaces` 与 `apps/daemon` 按 `docs/specs/36-durable-workspace-settings.md` 增加独立、版本化的 `daemon_settings` adapter：workspace id/label/root 可安全恢复，写失败回滚，公共状态不暴露路径；不持久化 API key，不修改 `run_events`/`goal_events` 或默认 run admission；
+36. `apps/web` 已按 `docs/specs/37-ratio-responsive-ui.md` 与 `docs/specs/38-conversation-first-web-shell.md` 实现 ratio-first、Codex-like conversation-first 壳层：对话/运行时间线优先，composer 在底部；New task 一键清空草稿并聚焦输入；设置为认证抽屉，Goal/连接/guardrail 为可收起上下文；CSS 不使用 UA/device sniffing，视觉截图不纳入仓库。
+37. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，206 个测试全部通过（contracts 8、goal-control 11、storage 12、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 40、web 28；Vitest 按 package 输出）；
-- Spec 31 增加 workspace registry 4 项、daemon 3 项、Web 2 项测试；Spec 32 再增加 tool-adapters 2 项、daemon 4 项、Web 2 项；Spec 33 增加 Web 2 项；当前 Web 共 28 项；
-- `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
+- `pnpm test`：通过，233 个测试全部通过（contracts 8、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 49、web 36；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；
+- `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
 - Node 22 会对 `node:sqlite` 输出 ExperimentalWarning；MVP 选择它是为了避免 native addon 和常驻数据库服务，后续可按 Node LTS 稳定性评估 adapter 替换。
@@ -125,11 +126,12 @@ runtime settings remain deferred.
 The daemon now exposes a secret-free authenticated workspace registry. The Web
 Settings panel uses a selector plus explicit add/remove guidance; users never
 need to edit a config file. A submitted daemon-machine path is retained only in
-the process and is never returned in status, events, SSE, logs, or browser
-storage. Filesystem and external-shell runtimes resolve the selected workspace
-at run start, and unknown ids fail closed without falling back to `default`.
-The registry is intentionally process-memory only until a durable non-secret
-settings adapter is designed.
+daemon-local runtime/settings and is never returned in status, events, SSE, logs,
+or browser storage. Filesystem and external-shell runtimes resolve the selected
+workspace at run start, and unknown ids fail closed without falling back to
+`default`. Spec 36 adds a bounded, versioned SQLite settings adapter for the
+non-secret registration snapshot; it does not persist model credentials or
+change run/Goal event authorities.
 
 ## Spec 32 implementation note (2026-08-03)
 
@@ -163,8 +165,11 @@ hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
 The verification baseline before the Web projection slice was 20 workspace packages
-and 213 passing tests. The current verification is 20 workspace packages and 218
-passing tests (Web 33, daemon 45). The Web slice adds only a read-only projection
+and 206 passing tests. The current verification is 20 workspace packages and 233
+passing tests (Web 36, daemon 49, storage 17, workspaces 7). Specs 36–38 add
+durable non-secret workspace settings, ratio-first layout contracts, and the
+conversation-first composer/focus contract; screenshot files are not part of the
+repository.
 client/component and regression tests; it keeps SQLite `goal_events` and the daemon
 list/detail/replay API as the authority. Goal write APIs, Web Goal actions, LoopX
 import/export, and governed admission remain later phases. Existing unbound

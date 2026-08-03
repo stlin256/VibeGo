@@ -88,8 +88,8 @@ Settings 还提供显式的 Filesystem tools 开关。开启后仅注册受路�
 不要求手动编辑配置文件，且 shell 没有主机回退路径。
 
 Workspace 设置使用下拉选择和明确的添加/删除向导。添加路径指 daemon 所在机器
-上的目录，必须由用户确认；路径只保留在 daemon 进程内，不会回显到状态、事件、
-日志或浏览器存储，未知 workspace 也不会静默回退到 `default`。
+上的目录，必须由用户确认；路径只保留在 daemon 的非 secret 设置与运行时内，不会
+回显到状态、事件、日志或浏览器存储，未知 workspace 也不会静默回退到 `default`。
 
 ## LAN 与公网访问边界
 
@@ -131,7 +131,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、206 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、233 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 

@@ -44,7 +44,7 @@ The core loop is deliberately small:
 | Context | Source-labelled context manager with budget/compaction boundaries |
 | Safety | Untrusted-task external-sandbox requirement, path/argv guards, approval policy metadata |
 | Tools | Guarded filesystem read/write, opt-in Git status/diff/log reads, plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled |
-| Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, and per-run root snapshots |
+| Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, daemon-local non-secret persistence, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
 | Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
@@ -86,9 +86,9 @@ Git read-only toggle exposes only bounded `git.status`, `git.diff`, and `git.log
 for trusted host-workspace runs; commits, remotes, patch writes, and arbitrary
 Git flags are not registered.
 Workspace setup replaces the free-form workspace id with a guided selector and
-an explicit add/remove flow. Added paths are on the daemon machine and remain
-process-memory only; they are never echoed into status, events, logs, or browser
-storage. Docker/Podman capability probing and digest-pinned external shell are
+an explicit add/remove flow. Added paths are on the daemon machine and are
+persisted only as a validated, non-secret daemon setting; they are never echoed
+into status, events, logs, or browser storage. Docker/Podman capability probing and digest-pinned external shell are
 also enabled from this Settings panel, without hand-edited configuration files.
 
 ## LAN and public-access boundary
@@ -159,7 +159,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 206 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 233 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 

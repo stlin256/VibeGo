@@ -166,6 +166,23 @@ interface EventStore {
 
 事件 payload 需通过 `contracts` schema 验证；事务顺序是“写事件/快照 → 提交 → 广播”。事件保留和敏感字段脱敏策略见安全 ADR。
 
+### Daemon settings
+
+```ts
+interface SettingsStore {
+  get<T = unknown>(namespace: string, key: string): T | undefined;
+  set(namespace: string, key: string, value: unknown): void;
+  delete(namespace: string, key: string): void;
+  close(): void;
+}
+```
+
+Settings are versioned, bounded JSON in a separate `daemon_settings` table;
+they are not `run_events` or `goal_events` and cannot be used to influence
+run admission implicitly. The generic adapter rejects secret-shaped fields;
+workspace persistence is the first explicit local adapter and keeps roots out
+of all public projections.
+
 ## Goal Control（Phase 0/1）
 
 Goal Control 是 daemon application service 层的可选控制平面，不是第二个
