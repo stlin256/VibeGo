@@ -1,6 +1,6 @@
 # 分阶段路线图
 
-**状态：Accepted（文档阶段已完成；阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest 与 Sandbox runtime plan MVP 已落地）**
+**状态：Accepted（文档阶段已完成；阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest 与 Sandbox runtime plan/CLI runner MVP 已落地）**
 
 每个阶段都是一个可回滚的 Git 提交或小提交组。完成条件包含：代码、单元测试、文档更新、验证命令和已知限制。
 
@@ -12,7 +12,7 @@
 | 3 | 模型与上下文 | OpenAI-compatible adapter、流式 delta、预算和压缩、上下文来源标签 | provider contract + replay fixture + token budget/injection tests |
 | 4 | 工具与审批 | filesystem/patch/git/shell、风险分类、审批 UI API、审计 | 路径穿越、命令注入、超时、拒绝等安全测试通过 |
 | 4.5 | LAN TLS | 证书文件解析、HTTPS listener、HTTP/HTTPS health 标识 | LAN 默认无证书 fail-closed；证书/私钥校验与 daemon 测试通过（已完成） |
-| 5 | 沙箱 | host-restricted adapter、Docker/Podman 命令计划、资源限制 | 命令计划与 resolver 隔离强度测试通过（已完成）；真实 runtime adapter 后置 |
+| 5 | 沙箱 | host-restricted adapter、Docker/Podman 命令计划与受控 CLI runner、资源限制 | plan/resolver/runner 隔离强度测试通过（已完成）；daemon 默认不 wiring |
 | 6 | Skill/MCP | 严格 manifest loader、stdio/HTTP transport 边界、工具 allowlist | manifest/allowlist MVP 已完成；真实连接器仍需断连、secret 泄漏与审批集成测试 |
 | 7 | Web/PWA | React 多端布局、SSE resume、pairing/run console/cancel MVP | Web typecheck/build、API/SSE 单测和 React smoke test 通过；Playwright desktop/tablet/mobile、diff/log/approval 深化后置 |
 | 8 | 低资源与硬化 | 运行时指标、事件保留、速率限制、备份/导出 | 达到 `product-brief.md` 的目标，报告实测数据 |
@@ -22,7 +22,7 @@
 
 `contracts → fake-model loop → event storage → API/SSE → web read-only view → policy/approval → real tools → sandbox → MCP/Skills`。
 
-当前已完成 `contracts → testkit → in-memory event storage → scheduler → SQLite EventStore → daemon /health → fake-model loop → run API/SSE → ContextManager/provider → agent 接入 → ToolRegistry/ApprovalPolicy → sandbox/execution 安全边界 → tool adapter → auth/transport 门禁 → Web/PWA MVP → LAN TLS MVP → Skill/MCP manifest/allowlist MVP → Sandbox runtime 命令计划 MVP`；随后接真实 Docker/Podman adapter、ACME/certificate manager adapter 与 UI 深化。
+当前已完成 `contracts → testkit → in-memory event storage → scheduler → SQLite EventStore → daemon /health → fake-model loop → run API/SSE → ContextManager/provider → agent 接入 → ToolRegistry/ApprovalPolicy → sandbox/execution 安全边界 → tool adapter → auth/transport 门禁 → Web/PWA MVP → LAN TLS MVP → Skill/MCP manifest/allowlist MVP → Sandbox runtime 命令计划/CLI runner MVP`；随后接 daemon wiring、ACME/certificate manager adapter 与 UI 深化。
 
 这样早期就能证明“远程观察和可恢复”主路径，同时把危险工具放在经过测试的边界之后。
 

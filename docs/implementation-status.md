@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Phase 1/2 实施基线，Web/PWA、LAN TLS、Skill/MCP manifest 与 Sandbox runtime plan MVP 已通过）**
+**状态：Accepted（Phase 1/2 实施基线，Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime plan 与 CLI runner MVP 已通过）**
 
 ## 当前实施范围
 
@@ -23,12 +23,13 @@
 15. `packages/certificates` 与 daemon HTTPS listener 已按 `docs/specs/14-certificates-tls.md` 实现环境变量解析、PEM 读取/校验、LAN 默认 TLS fail-closed 和 HTTP/HTTPS health 标识；
 16. `packages/skill-mcp` 已按 `docs/specs/15-skill-mcp-manifests.md` 实现严格 Skill/MCP manifest 解析、stdio/HTTP transport 边界、secret-safe 检查和默认 deny 工具投影；不启动子进程或网络；
 17. `packages/sandbox-runtime` 已按 `docs/specs/16-sandbox-runtime.md` 实现 Docker/Podman argv 计划、digest 镜像策略、网络/资源/挂载限制和无 runner fail-closed；不启动主机进程；
-18. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → tool-adapters → auth → certificates → skill-mcp → sandbox-runtime → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+18. `packages/sandbox-runtime` 已按 `docs/specs/17-sandbox-cli-runner.md` 实现显式注入的 Docker/Podman CLI runner：shell:false、最小 env、timeout/abort、output cap 和稳定启动错误；daemon 默认不 wiring；
+19. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（18 个 workspace package）；
-- `pnpm test`：通过，107 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 9、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 5、tool-adapters 9、auth 5、certificates 3、skill-mcp 5、daemon 14、web 5；Vitest 按 package 输出）；
+- `pnpm test`：通过，111 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 9、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 9、auth 5、certificates 3、skill-mcp 5、daemon 14、web 5；Vitest 按 package 输出）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -38,7 +39,7 @@
 
 - 不调用真实模型、网络、MCP、Skill 或 shell；
 - 不修改用户 workspace、Git、系统设置或证书；
-- 不实现 ACME 自动签发、Windows 证书存储、真实 Docker/Podman/VM 进程启动、MCP/Skill 外部连接或完整审批/diff UI；Sandbox runtime 当前只生成已验证命令计划，Web/PWA MVP 已提供 API/SSE 控制台，但仍不替代 daemon 安全边界；
+- 不实现 ACME 自动签发、Windows 证书存储、VM runtime、MCP/Skill 外部连接或完整审批/diff UI；Sandbox runtime 已提供显式注入的 CLI runner，但 daemon 默认不 wiring、不自动启动容器；Web/PWA MVP 已提供 API/SSE 控制台，但仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
 - 不把 fake model 的行为当作真实 provider 能力。

@@ -1,9 +1,13 @@
 import { resolve } from 'node:path';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import {
   ExternalSandboxExecutor,
   SandboxRuntimeError,
   buildContainerLaunchPlan,
+  ContainerCliRunner,
+  type SpawnFunction,
   type SandboxLaunchRequest,
 } from './index.js';
 
@@ -64,11 +68,75 @@ describe('external sandbox runtime plan', () => {
     const executor = new ExternalSandboxExecutor({
       run: async (plan) => {
         calls.push([...plan.argv]);
-        return { exitCode: 0, stdout: 'ok', stderr: '', truncated: false };
+        return { exitCode: 0, stdout: 'ok', stderr: '', truncated: false, timedOut: false, cancelled: false };
       },
     });
     await expect(executor.execute(request())).resolves.toMatchObject({ exitCode: 0, stdout: 'ok' });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain(digestImage);
   });
+
+  it('uses shell:false, windowsHide, and a minimal environment for the CLI', async () => {
+    const child = new FakeChild();
+    let captured: { command: string; args: string[]; options: Record<string, unknown> } | undefined;
+    const spawn = ((command, args, options) => {
+      captured = { command, args, options: options as Record<string, unknown> };
+      return child.asChildProcess();
+    }) as SpawnFunction;
+    const runner = new ContainerCliRunner({ spawn, baseEnv: { PATH: 'safe-path', SystemRoot: 'C:\\Windows', LEAK: 'no' } });
+    const pending = runner.run(buildContainerLaunchPlan(request()));
+    child.stdout.write('stdout');
+    child.stderr.write('stderr');
+    child.emit('close', 0);
+    await expect(pending).resolves.toMatchObject({ exitCode: 0, stdout: 'stdout', stderr: 'stderr', timedOut: false, cancelled: false });
+    expect(captured).toMatchObject({ command: 'docker', options: { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: 'safe-path', SystemRoot: 'C:\\Windows', NODE_ENV: 'test' } } });
+    expect(captured?.args).toContain('--env');
+    expect(captured?.args).toContain('NODE_ENV');
+    expect(captured?.options.env).not.toHaveProperty('LEAK');
+  });
+
+  it('terminates and marks output truncation when the combined cap is exceeded', async () => {
+    const child = new FakeChild();
+    const runner = new ContainerCliRunner({ spawn: (() => child.asChildProcess()) as SpawnFunction });
+    const pending = runner.run(buildContainerLaunchPlan(request({ limits: { maxOutputBytes: 4, timeoutMs: 1_000 } })));
+    child.stdout.write('123456');
+    await expect(pending).resolves.toMatchObject({ stdout: '1234', truncated: true, timedOut: false, cancelled: false });
+    expect(child.killed).toBe(true);
+  });
+
+  it('marks timeout and AbortSignal cancellation separately', async () => {
+    const timeoutChild = new FakeChild();
+    const timeoutRunner = new ContainerCliRunner({ spawn: (() => timeoutChild.asChildProcess()) as SpawnFunction });
+    await expect(timeoutRunner.run(buildContainerLaunchPlan(request({ limits: { timeoutMs: 1 } })))).resolves.toMatchObject({ timedOut: true, cancelled: false });
+    expect(timeoutChild.killed).toBe(true);
+
+    const abortChild = new FakeChild();
+    const abortRunner = new ContainerCliRunner({ spawn: (() => abortChild.asChildProcess()) as SpawnFunction });
+    const controller = new AbortController();
+    const pending = abortRunner.run(buildContainerLaunchPlan(request({ limits: { timeoutMs: 1_000 } })), controller.signal);
+    controller.abort();
+    await expect(pending).resolves.toMatchObject({ timedOut: false, cancelled: true });
+    expect(abortChild.killed).toBe(true);
+  });
+
+  it('maps synchronous CLI startup failure to a secret-free stable error', async () => {
+    const runner = new ContainerCliRunner({ spawn: (() => { throw new Error('private key leaked'); }) as SpawnFunction });
+    await expect(runner.run(buildContainerLaunchPlan(request()))).rejects.toEqual(new SandboxRuntimeError('PROCESS_START_FAILED', 'Sandbox process could not be started.'));
+  });
 });
+
+class FakeChild extends EventEmitter {
+  readonly stdout = new PassThrough();
+  readonly stderr = new PassThrough();
+  killed = false;
+
+  kill(): boolean {
+    this.killed = true;
+    queueMicrotask(() => this.emit('close', null));
+    return true;
+  }
+
+  asChildProcess(): import('node:child_process').ChildProcess {
+    return this as unknown as import('node:child_process').ChildProcess;
+  }
+}

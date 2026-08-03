@@ -1,4 +1,5 @@
 import { isAbsolute, parse, relative, resolve, sep } from 'node:path';
+import { spawn as defaultSpawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { ArgvGuard, ArgvGuardError } from '@ready4vibe/execution';
 
 export type ContainerRuntime = 'docker' | 'podman';
@@ -16,7 +17,8 @@ export type SandboxRuntimeErrorCode =
   | 'ENV_INVALID'
   | 'NETWORK_INVALID'
   | 'RESOURCE_INVALID'
-  | 'MOUNT_PATH_INVALID';
+  | 'MOUNT_PATH_INVALID'
+  | 'PROCESS_START_FAILED';
 
 export class SandboxRuntimeError extends Error {
   constructor(readonly code: SandboxRuntimeErrorCode, message = 'The sandbox runtime request was rejected.') {
@@ -54,14 +56,23 @@ export interface SandboxLaunchPlan {
 }
 
 export interface SandboxExecutionResult {
-  readonly exitCode: number;
+  readonly exitCode: number | null;
   readonly stdout: string;
   readonly stderr: string;
   readonly truncated: boolean;
+  readonly timedOut: boolean;
+  readonly cancelled: boolean;
 }
 
 export interface SandboxProcessRunner {
   run(plan: SandboxLaunchPlan, signal?: AbortSignal): Promise<SandboxExecutionResult>;
+}
+
+export type SpawnFunction = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
+
+export interface ContainerCliRunnerOptions {
+  readonly spawn?: SpawnFunction;
+  readonly baseEnv?: Readonly<Record<string, string | undefined>>;
 }
 
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$/u;
@@ -121,6 +132,125 @@ export class ExternalSandboxExecutor {
     const plan = buildContainerLaunchPlan(request);
     if (!this.runner) throw new SandboxRuntimeError('RUNTIME_UNAVAILABLE', 'No sandbox process runner is configured.');
     return this.runner.run(plan, signal);
+  }
+}
+
+/** Executes a previously validated plan without a shell and with a minimal environment. */
+export class ContainerCliRunner implements SandboxProcessRunner {
+  private readonly spawn: SpawnFunction;
+  private readonly baseEnv: Readonly<Record<string, string | undefined>>;
+
+  constructor(options: ContainerCliRunnerOptions = {}) {
+    this.spawn = options.spawn ?? ((command, args, spawnOptions) => defaultSpawn(command, args, spawnOptions));
+    this.baseEnv = options.baseEnv ?? process.env;
+  }
+
+  run(plan: SandboxLaunchPlan, signal?: AbortSignal): Promise<SandboxExecutionResult> {
+    const executable = plan.argv[0];
+    if (!executable) return Promise.reject(new SandboxRuntimeError('PROCESS_START_FAILED', 'Sandbox process could not be started.'));
+    const args = [...plan.argv.slice(1)];
+    const env = this.minimalEnv(plan.env);
+    return new Promise((resolveResult, reject) => {
+      let child: ChildProcess;
+      try {
+        child = this.spawn(executable, args, {
+          shell: false,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env,
+        });
+      } catch {
+        reject(new SandboxRuntimeError('PROCESS_START_FAILED', 'Sandbox process could not be started.'));
+        return;
+      }
+
+      const stdout: Buffer[] = [];
+      const stderr: Buffer[] = [];
+      let outputBytes = 0;
+      let truncated = false;
+      let timedOut = false;
+      let cancelled = false;
+      let settled = false;
+      let timer: NodeJS.Timeout | undefined;
+
+      const terminate = (): void => {
+        if (settled) return;
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // The close event still settles the promise if the process already exited.
+        }
+      };
+      const append = (target: Buffer[], value: unknown): void => {
+        if (settled) return;
+        const chunk = Buffer.isBuffer(value) ? value : Buffer.from(String(value), 'utf8');
+        const remaining = plan.limits.maxOutputBytes - outputBytes;
+        if (remaining <= 0) {
+          truncated = true;
+          terminate();
+          return;
+        }
+        if (chunk.byteLength > remaining) {
+          target.push(chunk.subarray(0, remaining));
+          outputBytes += remaining;
+          truncated = true;
+          terminate();
+          return;
+        }
+        target.push(chunk);
+        outputBytes += chunk.byteLength;
+      };
+      const settle = (exitCode: number | null): void => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', onAbort);
+        resolveResult({
+          exitCode,
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: Buffer.concat(stderr).toString('utf8'),
+          truncated,
+          timedOut,
+          cancelled,
+        });
+      };
+      const onAbort = (): void => {
+        if (settled) return;
+        cancelled = true;
+        terminate();
+      };
+
+      child.stdout?.on('data', (chunk: Buffer | string) => append(stdout, chunk));
+      child.stderr?.on('data', (chunk: Buffer | string) => append(stderr, chunk));
+      child.once('error', () => {
+        if (!settled) {
+          settled = true;
+          if (timer) clearTimeout(timer);
+          if (signal) signal.removeEventListener('abort', onAbort);
+          reject(new SandboxRuntimeError('PROCESS_START_FAILED', 'Sandbox process could not be started.'));
+        }
+      });
+      child.once('close', (exitCode: number | null) => settle(exitCode));
+      if (signal) {
+        if (signal.aborted) onAbort();
+        else signal.addEventListener('abort', onAbort, { once: true });
+      }
+      timer = setTimeout(() => {
+        if (settled) return;
+        timedOut = true;
+        terminate();
+      }, plan.limits.timeoutMs);
+    });
+  }
+
+  private minimalEnv(planEnv: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    const pathValue = this.baseEnv.PATH;
+    const systemRoot = this.baseEnv.SystemRoot;
+    if (pathValue !== undefined) env.PATH = pathValue;
+    if (systemRoot !== undefined) env.SystemRoot = systemRoot;
+    for (const [key, value] of Object.entries(planEnv)) env[key] = value;
+    return env;
   }
 }
 

@@ -123,7 +123,7 @@ packages/
   policy/       approval decisions and risk metadata
   sandbox/      external-sandbox resolver and input guards
   execution/    path/argv verification primitives
-  sandbox-runtime/ Docker/Podman command plans and fail-closed runner boundary
+  sandbox-runtime/ Docker/Podman command plans and fail-closed CLI runner boundary
   tool-adapters/ filesystem/shell executor adapters
   auth/         pairing, token, Origin/CSRF, and transport gate
   certificates/ PEM pair resolution and TLS validation
@@ -133,7 +133,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **18 workspace packages and 107 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **18 workspace packages and 111 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 
