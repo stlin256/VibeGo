@@ -117,11 +117,15 @@ sandbox, and multi-workspace mapping remain separate fail-closed milestones.
 The authenticated settings API, Web toggle, per-run runtime snapshot, and
 guarded adapter tests are now implemented.
 
-## Spec 30: External shell and sandbox runtime (next)
+## Spec 30: Guided external shell and sandbox runtime (design)
 
-Connect shell execution only through an explicit Docker/Podman runtime and
-workspace registry. The next slice must keep mutable image tags, host fallback,
-network access, and process spawning fail-closed, with no default shell runner.
+The design is recorded in `docs/specs/30-external-shell-sandbox-wiring.md`.
+The next implementation will expose Docker/Podman capability probing and an
+explicit Web enablement flow, then connect `shell.exec` only to the selected
+external sandbox. Digest-pinned images, restricted network, bounded resources,
+approval continuation, no host fallback, and per-run runtime snapshots are
+mandatory. Mutable tags, VM providers, image pulls, and persistence remain
+deferred.
 
 ## 暂缓决策
 

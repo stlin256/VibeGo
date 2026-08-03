@@ -10,7 +10,8 @@ Web 控制台的 Settings 面板现在包含 Model Access 向导：输入 OpenAI
 
 Settings 还提供显式的“Filesystem tools”开关。开启后仅注册受路径守卫、
 审批和输出上限约束的文件读写工具；shell、Git、MCP、网络和外部 sandbox
-不会被隐式启用。
+不会被隐式启用。下一阶段会在同一个设置界面引导 Docker/Podman 探测和
+固定 digest 的外部 shell 配置，不要求手动编辑配置文件。
 
 <p align="center">
   <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />

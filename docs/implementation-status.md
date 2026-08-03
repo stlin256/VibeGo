@@ -100,3 +100,13 @@ Spec 29 is now implemented: the daemon starts with filesystem tools disabled,
 the authenticated Web toggle enables only bounded read/write adapters, and
 new runs capture a stable runtime snapshot. Shell, external sandbox, and
 non-default workspace execution remain deferred to Spec 30.
+
+## Spec 30 design note (2026-08-03)
+
+The next module is specified in
+`docs/specs/30-external-shell-sandbox-wiring.md`. It will add a guided,
+authenticated Web flow for probing and explicitly enabling Docker/Podman
+external sandbox execution. Shell remains disabled by default, requires a
+digest-pinned image and bounded resources, has no host fallback, and keeps
+restricted network as the default. Runtime settings remain process-memory
+only until a later persistence/keyring decision.

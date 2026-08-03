@@ -79,7 +79,9 @@ guidance without asking the user to paste or upload a private key.
 
 The same Settings panel has an explicit Filesystem tools toggle. It exposes
 only bounded read/write adapters for the daemon workspace; writes still use the
-approval flow, and shell/Git/MCP/network tools are not silently enabled.
+approval flow, and shell/Git/MCP/network tools are not silently enabled. The
+next guided setup adds Docker/Podman capability probing and digest-pinned
+external shell without requiring hand-edited configuration files.
 
 ## LAN and public-access boundary
 
