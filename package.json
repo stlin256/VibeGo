@@ -1,0 +1,21 @@
+{
+  "name": "ready4vibe",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @ready4vibe/contracts build && pnpm --filter @ready4vibe/storage build && pnpm --filter @ready4vibe/scheduler build && pnpm --filter @ready4vibe/testkit build",
+    "typecheck": "pnpm build && pnpm --filter \"@ready4vibe/*\" typecheck",
+    "test": "pnpm build && pnpm --filter \"@ready4vibe/*\" test",
+    "test:coverage": "pnpm build && pnpm --filter \"@ready4vibe/*\" test -- --coverage",
+    "diff:check": "git diff --check"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "typescript": "5.8.3",
+    "vitest": "3.2.4"
+  }
+}

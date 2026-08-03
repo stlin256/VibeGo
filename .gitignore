@@ -1,5 +1,6 @@
 .research/
 node_modules/
+.pnpm-store/
 dist/
 coverage/
 .turbo/
@@ -16,4 +17,3 @@ Thumbs.db
 .ready4vibe/
 data/
 tmp/
-
