@@ -59,6 +59,9 @@ importers:
       '@ready4vibe/tools':
         specifier: workspace:*
         version: link:../../packages/tools
+      '@ready4vibe/workspaces':
+        specifier: workspace:*
+        version: link:../../packages/workspaces
       uuid:
         specifier: 11.1.0
         version: 11.1.0
@@ -197,6 +200,15 @@ importers:
         version: link:../tools
 
   packages/tools: {}
+
+  packages/workspaces:
+    devDependencies:
+      '@types/node':
+        specifier: 22.15.30
+        version: 22.15.30
+      vitest:
+        specifier: 3.2.4
+        version: 3.2.4(@types/node@22.15.30)
 
 packages:
 

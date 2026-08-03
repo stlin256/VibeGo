@@ -31,6 +31,10 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .model-setup form { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
 .tool-setup { grid-column: 1 / -1; display: grid; gap: 8px; border-top: 1px solid #263650; padding-top: 14px; }
 .tool-setup p { margin: 0; font-size: 12px; }
+.workspace-setup { grid-column: 1 / -1; display: grid; gap: 8px; border-top: 1px solid #263650; padding-top: 14px; }
+.workspace-setup p { margin: 0; font-size: 12px; }
+.workspace-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #263650; padding-top: 8px; color: #c4d2e5; font-size: 12px; }
+.workspace-row .cancel-button { margin-top: 0; min-height: 36px; padding: 0 12px; }
 .toggle-row { display: flex; align-items: center; gap: 9px; color: #d7e1ef; font-size: 13px; }
 .toggle-row input { width: 18px; height: 18px; accent-color: var(--vibego-lime); }
 .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }

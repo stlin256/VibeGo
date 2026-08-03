@@ -1,5 +1,5 @@
 import { readFile as defaultReadFile, stat as defaultStat, writeFile as defaultWriteFile } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { ToolRuntime, ToolRuntimeRequest } from '@ready4vibe/agent';
 import type { RunConfig } from '@ready4vibe/contracts';
 import { PathGuard } from '@ready4vibe/execution';
@@ -15,6 +15,7 @@ import {
   type FileSystemAdapterFileSystem,
 } from '@ready4vibe/tool-adapters';
 import { ToolRegistry } from '@ready4vibe/tools';
+import { InMemoryWorkspaceRegistry, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 
 export interface ToolSettingsStatus {
   filesystemEnabled: boolean;
@@ -30,22 +31,20 @@ export interface ToolSettingsManager {
 
 export class InMemoryToolSettingsManager implements ToolSettingsManager {
   private enabled = false;
-  private readonly runtime: ToolExecutorRuntime;
-  private readonly workspaceRoot: string;
-  private readonly workspaceLabel: string;
+  private readonly workspaceRegistry: WorkspaceRegistry;
 
-  constructor(workspaceRoot = process.cwd()) {
-    this.workspaceRoot = resolve(workspaceRoot);
-    const label = basename(this.workspaceRoot);
-    this.workspaceLabel = label || 'workspace';
-    this.runtime = createFilesystemRuntime(this.workspaceRoot);
+  constructor(workspaceRootOrRegistry: string | WorkspaceRegistry = process.cwd()) {
+    this.workspaceRegistry = typeof workspaceRootOrRegistry === 'string'
+      ? new InMemoryWorkspaceRegistry({ defaultRoot: resolve(workspaceRootOrRegistry) })
+      : workspaceRootOrRegistry;
   }
 
   status(): ToolSettingsStatus {
+    const defaultWorkspace = this.workspaceRegistry.status().workspaces.find((workspace) => workspace.id === 'default');
     return {
       filesystemEnabled: this.enabled,
-      workspaceLabel: this.workspaceLabel,
-      availableTools: this.enabled ? this.runtime.descriptors.map((descriptor) => `${descriptor.id}@${descriptor.version}`) : [],
+      workspaceLabel: defaultWorkspace?.label ?? 'workspace',
+      availableTools: this.enabled ? ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] : [],
     };
   }
 
@@ -55,8 +54,10 @@ export class InMemoryToolSettingsManager implements ToolSettingsManager {
     return this.status();
   }
 
-  runtimeForRun(_config?: RunConfig): ToolRuntime | undefined {
-    return this.enabled ? this.runtime : undefined;
+  runtimeForRun(config?: RunConfig): ToolRuntime | undefined {
+    if (!this.enabled) return undefined;
+    const workspaceRoot = this.workspaceRegistry.resolveRoot(config?.workspaceId ?? 'default');
+    return workspaceRoot ? createFilesystemRuntime(workspaceRoot, config?.workspaceId ?? 'default') : undefined;
   }
 }
 
@@ -98,7 +99,7 @@ export class ToolSettingsError extends Error {
   }
 }
 
-function createFilesystemRuntime(workspaceRoot: string): ToolExecutorRuntime {
+function createFilesystemRuntime(workspaceRoot: string, workspaceId: string): ToolExecutorRuntime {
   const registry = new ToolRegistry();
   registry.register({
     id: 'filesystem.read',
@@ -132,7 +133,7 @@ function createFilesystemRuntime(workspaceRoot: string): ToolExecutorRuntime {
     registry,
     executor,
     resolveWorkspaceRoot: (request) => {
-      if (request.config.workspaceId !== 'default') throw new ToolAdapterError('TOOL_INPUT_INVALID');
+      if (request.config.workspaceId !== workspaceId) throw new ToolAdapterError('TOOL_INPUT_INVALID');
       return workspaceRoot;
     },
     createIntent: (request) => createIntent(request),

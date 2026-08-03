@@ -178,6 +178,18 @@ export interface ToolSettingsStatus {
   availableTools: readonly string[];
 }
 
+export interface WorkspaceStatus {
+  id: string;
+  label: string;
+  isDefault: boolean;
+  canRemove: boolean;
+  capabilities: { filesystem: true; externalSandbox: true };
+}
+
+export interface WorkspaceRegistryStatus {
+  workspaces: readonly WorkspaceStatus[];
+}
+
 export interface SandboxResourceSettings {
   maxMemoryBytes: number;
   maxCpuMillis: number;
@@ -267,6 +279,18 @@ export class ApiClient {
 
   async setFilesystemToolsEnabled(filesystemEnabled: boolean): Promise<ToolSettingsStatus> {
     return this.request<ToolSettingsStatus>('/api/v1/settings/tools', { method: 'POST', body: JSON.stringify({ filesystemEnabled }) });
+  }
+
+  async workspaces(): Promise<WorkspaceRegistryStatus> {
+    return this.request<WorkspaceRegistryStatus>('/api/v1/workspaces', { method: 'GET' });
+  }
+
+  async addWorkspace(input: { id: string; path: string; label?: string }): Promise<WorkspaceRegistryStatus> {
+    return this.request<WorkspaceRegistryStatus>('/api/v1/workspaces', { method: 'POST', body: JSON.stringify({ ...input, confirmation: 'add-workspace' }) });
+  }
+
+  async removeWorkspace(id: string): Promise<WorkspaceRegistryStatus> {
+    return this.request<WorkspaceRegistryStatus>(`/api/v1/workspaces/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   async sandboxSettings(): Promise<SandboxSettingsStatus> {

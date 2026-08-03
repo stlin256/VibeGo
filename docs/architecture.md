@@ -1,6 +1,6 @@
 # 总体架构
 
-**状态：Accepted（文档阶段）**
+**状态：Accepted（实现基线；workspace registry、Web 设置和显式 tool runtime 已落地）**
 
 ## 分层
 
@@ -24,7 +24,7 @@ flowchart LR
 
 ## 进程模型
 
-- `apps/daemon`：Node.js 单进程；负责 API、任务调度、harness、存储和默认工具。
+- `apps/daemon`：Node.js 单进程；负责 API、任务调度、harness、存储、workspace registry 和显式启用的工具 runtime。
 - `apps/web`：React/Vite 静态构建；开发时独立运行，生产时由 daemon 静态托管或由反代托管。
 - 可选 `sandbox-worker`：仅在启用 Docker/VM/平台隔离时出现；MVP 不强制常驻。
 - 模型服务、MCP server、Docker/VM 均是外部进程，不进入 daemon 的核心内存模型。
@@ -47,6 +47,7 @@ packages/
   mcp/                    # MCP client、server 配置和工具映射
   skills/                 # Skill manifest、加载、校验和作用域
   storage/                # SQLite、事件日志、运行快照
+  workspaces/             # 安全 workspace id → daemon-machine root registry
   ui/                     # 可复用 React 组件、设计 token
   testkit/                # fake model、fake tools、event assertions
 docs/
@@ -57,7 +58,7 @@ docs/
 ## 关键数据流
 
 1. `POST /runs` 创建 immutable run 配置和初始用户消息。
-2. Orchestrator 载入 workspace、Skill、工具清单和历史上下文，生成 bounded model request。
+2. Orchestrator 通过 workspace registry 载入选定 workspace、Skill、工具清单和历史上下文，生成 bounded model request；root 在 run 开始时捕获。
 3. Model 返回文本或 tool call；每个 tool call 先进入 `ApprovalPolicy`。
 4. 执行器在 sandbox 中执行，写入 `tool.started/output/completed` 事件和审计记录。
 5. Context Manager 只追加新事件；超过预算时创建压缩摘要并保留原始事件引用。
@@ -80,5 +81,6 @@ docs/
 - `ContextSource`：Git、文件索引、问题单、用户提供资料；
 - `ApprovalPolicy`：默认策略、项目规则、一次性临时授权；
 - `Transport`：本地 HTTP、反向代理、未来 ACP/CLI 适配。
+- `WorkspaceRegistry`：单用户 id/label 到 daemon-machine root 的安全映射；未来可替换为持久化或 SSH/Tailscale 远端 adapter。
 
 扩展点必须通过版本化接口和 contract tests；不能通过 import 应用内部实现来“顺手接入”。

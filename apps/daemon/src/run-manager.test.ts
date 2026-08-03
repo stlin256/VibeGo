@@ -3,7 +3,7 @@ import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
-import { RunManager } from './run-manager.js';
+import { RunManager, RunManagerError } from './run-manager.js';
 
 const config = {
   workspaceId: 'workspace-recovery',
@@ -70,5 +70,17 @@ describe('RunManager restart recovery', () => {
 
     await expect(runManager.recoverAfterRestart()).resolves.toEqual({ marked: 0, skipped: 1 });
     expect((await eventStore.read('run_done')).some((item) => item.type === 'run.needs_recovery')).toBe(false);
+  });
+
+  it('rejects an unknown workspace before queueing a run', async () => {
+    const eventStore = new InMemoryEventStore();
+    const runManager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }),
+      workspaceExists: (workspaceId) => workspaceId === 'workspace-ok',
+    });
+    await expect(runManager.start(config)).rejects.toBeInstanceOf(RunManagerError);
+    expect(eventStore.listRunIds()).toEqual([]);
   });
 });

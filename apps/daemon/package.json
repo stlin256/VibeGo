@@ -29,6 +29,7 @@
     "@ready4vibe/storage": "workspace:*",
     "@ready4vibe/tool-adapters": "workspace:*",
     "@ready4vibe/tools": "workspace:*",
+    "@ready4vibe/workspaces": "workspace:*",
     "uuid": "11.1.0"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 # HTTP/SSE API 合约
 
-**状态：Accepted（v1；`/health`、run API/SSE 与单用户 approval continuation 已实现，workspace/diff/certificate 管理端点仍后置）**
+**状态：Accepted（v1；`/health`、run API/SSE、单用户 approval continuation 与 workspace registry MVP 已实现/在本 spec 落地）**
 
 Base path 为 `/api/v1`。所有请求/响应为 UTF-8 JSON；错误使用统一 envelope。生产远程访问必须使用 HTTPS 或可信隧道。
 
@@ -20,7 +20,9 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | `GET` | `/health` | 进程、版本、存储和 sandbox 能力摘要；不返回 secret |
-| `GET` | `/workspaces` | 列出允许的 workspace |
+| `GET` | `/workspaces` | 列出允许的 workspace（仅返回 id、label 和安全能力摘要） |
+| `POST` | `/workspaces` | 通过 Web 设置向导添加 daemon 机器上的 workspace 映射；路径不回显 |
+| `DELETE` | `/workspaces/:id` | 删除非 `default` workspace 映射 |
 | `GET` | `/tools` | 当前策略下可见工具和风险元数据 |
 | `POST` | `/runs` | 创建并排队一个 run |
 | `GET` | `/runs` | 分页查询 run 摘要 |
@@ -37,6 +39,32 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 | `POST` | `/certificates/rotate` | 轮换 managed/self-signed 或未来 ACME 证书 |
 
 服务端 health/capability 响应必须包含 `transport.kind`、`transport.tlsRequired`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
+
+## Workspace registry
+
+`GET /api/v1/workspaces` returns only safe metadata:
+
+```json
+{
+  "workspaces": [
+    {
+      "id": "default",
+      "label": "ready4vibe",
+      "isDefault": true,
+      "canRemove": false,
+      "capabilities": { "filesystem": true, "externalSandbox": true }
+    }
+  ]
+}
+```
+
+`POST /api/v1/workspaces` accepts `{ "id", "path", "label?",
+"confirmation": "add-workspace" }`. `path` is a daemon-machine directory
+used only in process memory to construct guarded runtimes; it is never echoed in
+the response or written to events, SSE, logs, or browser storage. IDs must match
+`[a-z0-9][a-z0-9_-]{0,63}` and `default` is protected. `DELETE
+/api/v1/workspaces/:id` removes only non-default entries. Unknown IDs fail
+closed and run creation never falls back to `default`.
 
 run 状态响应还应包含 `scheduler.queuePosition`、`scheduler.activeRunCount`、`scheduler.workspaceLease` 和 `scheduler.blockedReason`；这些字段用于解释并发排队，不授予客户端绕过调度器的能力。
 
@@ -70,7 +98,7 @@ run 状态响应还应包含 `scheduler.queuePosition`、`scheduler.activeRunCou
 }
 ```
 
-错误 code 至少包括：`AUTH_REQUIRED`、`FORBIDDEN`、`NOT_FOUND`、`INVALID_REQUEST`、`CONFLICT`、`RATE_LIMITED`、`APPROVAL_REQUIRED`、`SANDBOX_UNAVAILABLE`、`RUN_NOT_ACTIVE`、`INTERNAL_ERROR`。`details` 只允许 safe details。
+错误 code 至少包括：`AUTH_REQUIRED`、`FORBIDDEN`、`NOT_FOUND`、`INVALID_REQUEST`、`CONFLICT`、`RATE_LIMITED`、`APPROVAL_REQUIRED`、`SANDBOX_UNAVAILABLE`、`WORKSPACE_NOT_FOUND`、`WORKSPACE_DUPLICATE`、`WORKSPACE_PROTECTED`、`RUN_NOT_ACTIVE`、`INTERNAL_ERROR`。`details` 只允许 safe details。
 
 ## Run 事件
 

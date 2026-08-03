@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { App } from './App.js';
+import { DEFAULT_RUN_PROFILE } from './api.js';
 
 describe('web console shell', () => {
   it('renders a pairing-first surface with responsive semantic controls', () => {
@@ -15,7 +16,7 @@ describe('web console shell', () => {
   it('renders the non-secret run settings onboarding surface', () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain('Run profile');
-    expect(html).toContain('Workspace id');
+    expect(html).toContain('WORKSPACES');
     expect(html).toContain('Model provider');
     expect(html).toContain('Reset conservative defaults');
     expect(html).toContain('Max context bytes');
@@ -44,6 +45,15 @@ describe('web console shell', () => {
     expect(html).toContain('Enable external shell');
     expect(html).toContain('no host shell fallback');
     expect(html).not.toContain('C:\\Users');
+  });
+
+  it('renders a guided workspace selector and add/remove controls without echoing paths', () => {
+    const html = renderToStaticMarkup(<App profile={{ ...DEFAULT_RUN_PROFILE, workspaceId: 'repo-a' }} workspaces={{ workspaces: [{ id: 'default', label: 'ready4vibe', isDefault: true, canRemove: false, capabilities: { filesystem: true, externalSandbox: true } }, { id: 'repo-a', label: 'Project A', isDefault: false, canRemove: true, capabilities: { filesystem: true, externalSandbox: true } }] }} onAddWorkspace={() => undefined} onRemoveWorkspace={() => undefined} />);
+    expect(html).toContain('Workspace<select');
+    expect(html).toContain('Add workspace');
+    expect(html).toContain('Remove');
+    expect(html).toContain('Added paths are on the daemon machine');
+    expect(html).not.toContain('C:\\work\\project-a');
   });
 
   it('renders safe sandbox metadata on an approval card', () => {

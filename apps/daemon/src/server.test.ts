@@ -1,5 +1,8 @@
 import { once } from 'node:events';
+import { mkdtemp, rm } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider, type ModelRequest } from '@ready4vibe/contracts';
 import { InMemoryApprovalBroker } from '@ready4vibe/agent';
@@ -12,6 +15,7 @@ import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { InMemoryToolSettingsManager } from './tool-settings.js';
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
+import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -370,19 +374,24 @@ describe('daemon health server', () => {
   });
 
   it('serves explicit filesystem tool settings without exposing the workspace path', async () => {
-    const toolSettings = new InMemoryToolSettingsManager('C:\\Users\\example\\workspace');
-    const server = createDaemonServer({ toolSettings });
-    servers.push(server);
-    const port = await listen(server);
-    const base = `http://127.0.0.1:${port}/api/v1/settings/tools`;
-    const initial = await fetch(base);
-    expect(initial.status).toBe(200);
-    const initialBody = await initial.text();
-    expect(initialBody).not.toContain('C:\\Users\\example');
-    expect(JSON.parse(initialBody)).toMatchObject({ filesystemEnabled: false, availableTools: [] });
-    const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ filesystemEnabled: true }) });
-    expect(enabled.status).toBe(200);
-    expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-tool-settings-'));
+    try {
+      const toolSettings = new InMemoryToolSettingsManager(root);
+      const server = createDaemonServer({ toolSettings });
+      servers.push(server);
+      const port = await listen(server);
+      const base = `http://127.0.0.1:${port}/api/v1/settings/tools`;
+      const initial = await fetch(base);
+      expect(initial.status).toBe(200);
+      const initialBody = await initial.text();
+      expect(initialBody).not.toContain(root);
+      expect(JSON.parse(initialBody)).toMatchObject({ filesystemEnabled: false, availableTools: [] });
+      const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ filesystemEnabled: true }) });
+      expect(enabled.status).toBe(200);
+      expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('keeps external sandbox probing and enablement explicit and secret-free', async () => {
@@ -402,5 +411,47 @@ describe('daemon health server', () => {
     expect(enabled.status).toBe(200);
     expect(enabledBody).not.toContain('C:\\Users');
     expect(JSON.parse(enabledBody)).toMatchObject({ enabled: true, provider: 'docker', imageDigest: expect.stringContaining('@sha256:') });
+  });
+
+  it('guides workspace registration without returning daemon paths and rejects unknown runs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-workspaces-'));
+    try {
+      const registry = new InMemoryWorkspaceRegistry({ defaultRoot: root });
+      const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+      const manager = new RunManager({ eventStore: new InMemoryEventStore(), scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, workspaceExists: (workspaceId) => registry.resolveRoot(workspaceId) !== undefined });
+      const server = createDaemonServer({ runManager: manager, workspaceRegistry: registry });
+      servers.push(server);
+      const port = await listen(server);
+      const base = `http://127.0.0.1:${port}`;
+
+      const initial = await fetch(`${base}/api/v1/workspaces`);
+      const initialBody = await initial.text();
+      expect(initial.status).toBe(200);
+      expect(initialBody).not.toContain(root);
+      expect(JSON.parse(initialBody)).toMatchObject({ workspaces: [{ id: 'default', canRemove: false }] });
+
+      const missingConfirmation = await fetch(`${base}/api/v1/workspaces`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'repo-a', path: root }) });
+      expect(missingConfirmation.status).toBe(400);
+      const added = await fetch(`${base}/api/v1/workspaces`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'repo-a', label: 'Project A', path: root, confirmation: 'add-workspace' }) });
+      const addedBody = await added.text();
+      expect(added.status).toBe(200);
+      expect(addedBody).not.toContain(root);
+      expect(JSON.parse(addedBody)).toMatchObject({ workspaces: expect.arrayContaining([expect.objectContaining({ id: 'repo-a', label: 'Project A', canRemove: true })]) });
+
+      const duplicate = await fetch(`${base}/api/v1/workspaces`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'repo-a', path: root, confirmation: 'add-workspace' }) });
+      expect(duplicate.status).toBe(409);
+      const unknownRun = await fetch(`${base}/api/v1/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(runConfig('missing')) });
+      expect(unknownRun.status).toBe(400);
+      expect(await unknownRun.json()).toMatchObject({ error: { code: 'WORKSPACE_NOT_FOUND' } });
+
+      const removed = await fetch(`${base}/api/v1/workspaces/repo-a`, { method: 'DELETE' });
+      expect(removed.status).toBe(200);
+      expect((await removed.json()).workspaces).toHaveLength(1);
+      const protectedDefault = await fetch(`${base}/api/v1/workspaces/default`, { method: 'DELETE' });
+      expect(protectedDefault.status).toBe(409);
+      expect(await protectedDefault.json()).toMatchObject({ error: { code: 'WORKSPACE_PROTECTED' } });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

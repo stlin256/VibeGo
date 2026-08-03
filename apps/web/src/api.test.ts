@@ -133,6 +133,21 @@ describe('ApiClient', () => {
     expect(calls[1]?.init?.body).toBe(JSON.stringify({ filesystemEnabled: true }));
   });
 
+  it('uses guided workspace endpoints and never stores the daemon path', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ workspaces: [{ id: 'default', label: 'workspace', isDefault: true, canRemove: false, capabilities: { filesystem: true, externalSandbox: true } }] });
+    });
+    await client.workspaces();
+    await client.addWorkspace({ id: 'repo-a', path: 'C:\\work\\repo-a', label: 'Repo A' });
+    await client.removeWorkspace('repo-a');
+    expect(calls[0]?.input).toBe('/api/v1/workspaces');
+    expect(calls[1]?.init?.body).toContain('C:\\\\work\\\\repo-a');
+    expect(calls[1]?.input).not.toContain('C:\\work\\repo-a');
+    expect(calls[2]?.input).toBe('/api/v1/workspaces/repo-a');
+  });
+
   it('probes and configures external sandbox settings through guided endpoints', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
 
 const config = (overrides: Record<string, unknown> = {}) => ({
@@ -49,6 +50,24 @@ describe('daemon filesystem tool settings', () => {
       const write = runtime.descriptors.find((descriptor) => descriptor.id === 'filesystem.write')!;
       await expect(runtime.execute({ runId: 'run-1', turnId: 'turn-1', callId: 'call-3', descriptor: write, input: { path: 'new.txt', content: 'x' }, config: config({ sandbox: { mode: 'workspace-write', writableRoots: ['.'], network: 'restricted' } }), signal: new AbortController().signal })).rejects.toMatchObject({ code: 'APPROVAL_REQUIRED' });
       await expect(runtime.execute({ runId: 'run-1', turnId: 'turn-1', callId: 'call-4', descriptor: read, input: { path: 'note.txt' }, config: config({ taskTrust: 'untrusted-content' }), signal: new AbortController().signal })).rejects.toMatchObject({ code: 'TOOL_FORBIDDEN' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('captures a selected registry root for a run and does not fall back after removal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-daemon-workspace-'));
+    try {
+      await writeFile(join(root, 'note.txt'), 'workspace-b');
+      const registry = new InMemoryWorkspaceRegistry({ defaultRoot: root });
+      registry.add({ id: 'repo-b', path: root, label: 'Workspace B' });
+      const manager = new InMemoryToolSettingsManager(registry);
+      manager.setFilesystemEnabled(true);
+      const runtime = manager.runtimeForRun(config({ workspaceId: 'repo-b' }))!;
+      registry.remove('repo-b');
+      const read = runtime.descriptors.find((descriptor) => descriptor.id === 'filesystem.read')!;
+      await expect(runtime.execute({ runId: 'run-2', turnId: 'turn-2', callId: 'call-1', descriptor: read, input: { path: 'note.txt' }, config: config({ workspaceId: 'repo-b' }), signal: new AbortController().signal })).resolves.toMatchObject({ output: { content: 'workspace-b' } });
+      expect(manager.runtimeForRun(config({ workspaceId: 'repo-b' }))).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

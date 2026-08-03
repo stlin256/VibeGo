@@ -68,15 +68,13 @@ describe('guided external sandbox settings', () => {
     expect(manager.runtimeForRun(config({ sandbox: { mode: 'read-only', network: 'restricted' } }))).toBeUndefined();
   });
 
-  it('keeps untrusted host fallback disabled and rejects a non-default workspace', async () => {
+  it('keeps untrusted host fallback disabled and rejects an unknown workspace', async () => {
     const manager = new InMemorySandboxSettingsManager({ probe: { probe: async () => ({ detected: true, healthy: true }) } });
     await manager.probe('docker');
     await manager.configure({ provider: 'docker', imageDigest: digest, network: 'restricted', resources: {}, enabled: true });
     expect(manager.runtimeForRun(config({ taskTrust: 'untrusted-content', sandbox: { mode: 'read-only', network: 'restricted' } }))).toBeUndefined();
     expect(manager.runtimeForRun(config({ sandbox: { mode: 'external-sandbox', provider: 'docker', network: 'enabled' } }))).toBeUndefined();
-    const runtime = manager.runtimeForRun(config({ workspaceId: 'other' }));
-    expect(runtime).toBeDefined();
-    await expect(runtime!.execute({ runId: 'run', turnId: 'turn', callId: 'call', descriptor: runtime!.descriptors[0]!, input: { argv: ['node'] }, config: config({ workspaceId: 'other' }), signal: new AbortController().signal })).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    expect(manager.runtimeForRun(config({ workspaceId: 'other' }))).toBeUndefined();
   });
 });
 

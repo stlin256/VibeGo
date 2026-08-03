@@ -11,6 +11,7 @@ import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { resolveDaemonTransport } from './transport-config.js';
+import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -30,14 +31,16 @@ const port = parsePort(process.env.READY4VIBE_PORT ?? '8787');
 const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
+const workspaceRegistry = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
 const modelSettings = new InMemoryModelSettingsManager();
-const toolSettings = new InMemoryToolSettingsManager();
-const sandboxSettings = new InMemorySandboxSettingsManager();
+const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
+const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry });
 const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
   toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
+  workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {
@@ -56,6 +59,7 @@ const server = createDaemonServer({
   modelSettings,
   toolSettings,
   sandboxSettings,
+  workspaceRegistry,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 

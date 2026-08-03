@@ -24,6 +24,7 @@ import {
   type ProcessRunner,
 } from '@ready4vibe/tool-adapters';
 import { ToolRegistry } from '@ready4vibe/tools';
+import { InMemoryWorkspaceRegistry, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 
 export type ExternalSandboxProvider = 'docker' | 'podman';
 
@@ -73,6 +74,7 @@ export interface SandboxRuntimeProbe {
 
 export interface SandboxSettingsOptions {
   workspaceRoot?: string;
+  workspaceRegistry?: WorkspaceRegistry;
   probe?: SandboxRuntimeProbe;
   processRunner?: SandboxProcessRunner;
 }
@@ -109,14 +111,14 @@ const RESOURCE_CEILINGS: SandboxResourceSettings = {
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./_-]*@sha256:[a-f0-9]{64}$/u;
 
 export class InMemorySandboxSettingsManager implements SandboxSettingsManager {
-  private readonly workspaceRoot: string;
+  private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly probeRunner: SandboxRuntimeProbe;
   private readonly processRunner: SandboxProcessRunner;
   private lastProbe: { provider: ExternalSandboxProvider; result: SandboxProbeResult } | undefined;
   private config: { provider: ExternalSandboxProvider; imageDigest: string; network: SandboxNetwork; resources: SandboxResourceSettings; enabled: boolean } | undefined;
 
   constructor(options: SandboxSettingsOptions = {}) {
-    this.workspaceRoot = resolve(options.workspaceRoot ?? process.cwd());
+    this.workspaceRegistry = options.workspaceRegistry ?? new InMemoryWorkspaceRegistry({ defaultRoot: resolve(options.workspaceRoot ?? process.cwd()) });
     this.probeRunner = options.probe ?? new ChildProcessSandboxProbe();
     this.processRunner = options.processRunner ?? new ContainerCliRunner();
   }
@@ -163,7 +165,9 @@ export class InMemorySandboxSettingsManager implements SandboxSettingsManager {
     if (!settings?.enabled || !this.lastProbe?.result.healthy || config.sandbox.mode !== 'external-sandbox') return undefined;
     if (config.sandbox.provider !== settings.provider) return undefined;
     if (settings.network === 'restricted' && config.sandbox.network === 'enabled') return undefined;
-    return createShellRuntime(this.workspaceRoot, settings, config, this.processRunner);
+    const workspaceRoot = this.workspaceRegistry.resolveRoot(config.workspaceId);
+    if (!workspaceRoot) return undefined;
+    return createShellRuntime(workspaceRoot, config.workspaceId, settings, config, this.processRunner);
   }
 }
 
@@ -203,7 +207,7 @@ export class ChildProcessSandboxProbe implements SandboxRuntimeProbe {
   }
 }
 
-function createShellRuntime(workspaceRoot: string, settings: { provider: ExternalSandboxProvider; imageDigest: string; network: SandboxNetwork; resources: SandboxResourceSettings }, config: RunConfig, processRunner: SandboxProcessRunner): ToolRuntime {
+function createShellRuntime(workspaceRoot: string, workspaceId: string, settings: { provider: ExternalSandboxProvider; imageDigest: string; network: SandboxNetwork; resources: SandboxResourceSettings }, config: RunConfig, processRunner: SandboxProcessRunner): ToolRuntime {
   const registry = new ToolRegistry();
   registry.register({
     id: 'shell.exec',
@@ -223,7 +227,7 @@ function createShellRuntime(workspaceRoot: string, settings: { provider: Externa
   return new ToolExecutorRuntime({
     registry,
     executor,
-    resolveWorkspaceRoot: (request) => { if (request.config.workspaceId !== 'default') throw new ToolAdapterError('TOOL_INPUT_INVALID'); return workspaceRoot; },
+    resolveWorkspaceRoot: (request) => { if (request.config.workspaceId !== workspaceId) throw new ToolAdapterError('TOOL_INPUT_INVALID'); return workspaceRoot; },
     createIntent: (request) => createIntent(request),
     createSandboxRequest: (request) => createSandboxRequest(request.config, settings),
     approvalDetails: () => ({ sandboxProvider: settings.provider, sandboxImageDigest: settings.imageDigest, network: config.sandbox.mode === 'external-sandbox' ? config.sandbox.network : 'restricted' }),

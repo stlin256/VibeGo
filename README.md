@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, and responsive Web/PWA run console are implemented and tested. Real external sandbox runtimes, MCP/Skill execution, ACME automation, and the full approval/diff UI are intentionally staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. MCP/Skill activation, ACME automation, and the full approval/diff UI remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -44,6 +44,7 @@ The core loop is deliberately small:
 | Context | Source-labelled context manager with budget/compaction boundaries |
 | Safety | Untrusted-task external-sandbox requirement, path/argv guards, approval policy metadata |
 | Tools | Guarded filesystem read/write plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled |
+| Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
 | Web | React 19 + TypeScript + Vite responsive console with pairing, guided run settings, model onboarding, retry/recovery, approval cards, cancel, metrics, and fetch-based SSE |
@@ -79,9 +80,12 @@ guidance without asking the user to paste or upload a private key.
 
 The same Settings panel has an explicit Filesystem tools toggle. It exposes
 only bounded read/write adapters for the daemon workspace; writes still use the
-approval flow, and shell/Git/MCP/network tools are not silently enabled. The
-next guided setup adds Docker/Podman capability probing and digest-pinned
-external shell without requiring hand-edited configuration files.
+approval flow, and shell/Git/MCP/network tools are not silently enabled.
+Workspace setup replaces the free-form workspace id with a guided selector and
+an explicit add/remove flow. Added paths are on the daemon machine and remain
+process-memory only; they are never echoed into status, events, logs, or browser
+storage. Docker/Podman capability probing and digest-pinned external shell are
+also enabled from this Settings panel, without hand-edited configuration files.
 
 ## LAN and public-access boundary
 
@@ -141,6 +145,7 @@ packages/
   execution/    path/argv verification primitives
   sandbox-runtime/ Docker/Podman command plans and fail-closed CLI runner boundary
   tool-adapters/ filesystem/shell executor adapters
+  workspaces/    safe single-user workspace id to daemon-root registry
   auth/         pairing, token, Origin/CSRF, and transport gate
   certificates/ PEM pair resolution and TLS validation
   skill-mcp/    strict Skill/MCP manifests and default-deny tool projection
@@ -149,7 +154,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **18 workspace packages and 169 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **19 workspace packages and 177 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 
@@ -162,7 +167,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 
 ## Roadmap highlights
 
-- real external sandbox runtime with resource limits;
+- deeper external sandbox/VM adapters with resource limits and persistence;
 - Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
 - diff/log/approval views and Playwright desktop/tablet/mobile flows;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;

@@ -13,6 +13,10 @@ Settings 还提供显式的“Filesystem tools”开关。开启后仅注册受�
 不会被隐式启用。设置界面现在也会引导 Docker/Podman 探测和固定 digest
 的外部 shell 配置，不要求手动编辑配置文件；shell 没有主机回退路径。
 
+Workspace 设置已经改为下拉选择和明确的添加/删除向导。添加路径指 daemon
+所在机器上的目录，必须由用户确认；路径只保留在 daemon 进程内，不会回显到
+状态、事件、日志或浏览器存储，未知 workspace 也不会静默回退到 `default`。
+
 <p align="center">
   <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
 </p>
@@ -21,7 +25,7 @@ Settings 还提供显式的“Filesystem tools”开关。开启后仅注册受�
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP 和响应式 Web/PWA 控制台已经实现并通过测试。真实外部 sandbox runtime、MCP/Skill 执行、ACME 自动化和完整审批/diff UI 按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、digest 固定的 external shell wiring 和响应式 Web/PWA 控制台已经实现并通过测试。MCP/Skill 激活、ACME 自动化和完整审批/diff UI 仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -57,9 +61,10 @@ flowchart LR
 | 上下文 | 带来源标签的上下文管理、预算/压缩边界 |
 | 安全 | 不可信任务必须 external sandbox、路径/argv 守卫、审批策略元数据 |
 | 工具 | filesystem/shell 适配器和统一 executor；默认不启用主机执行 |
+| Workspace | 单用户 workspace registry、下拉选择、明确添加/删除确认和 per-run 根目录快照 |
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
-| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、引导式非 secret 运行设置、审批卡片、恢复重试、取消、指标和 SSE |
+| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式非 secret 运行设置、审批卡片、恢复重试、取消、指标和 SSE |
 
 ## 快速开始
 
@@ -115,13 +120,14 @@ packages/contracts / storage / scheduler
 packages/agent / context / model-openai
 packages/policy / sandbox / execution / tool-adapters
 packages/sandbox-runtime  Docker/Podman 命令计划与 fail-closed CLI runner 边界
+packages/workspaces      单用户 workspace id 到 daemon 根目录的安全 registry
 packages/auth / certificates / testkit
 packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 ```
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **18 个 workspace package、111 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **19 个 workspace package、177 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 
@@ -134,7 +140,7 @@ packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 
 ## 后续路线
 
-- 真实 external sandbox runtime 与资源限制；
+- 更完整的 external sandbox/VM adapter、资源限制与持久化；
 - Skill/MCP manifest 和 secret-safe 工具 allowlist；
 - diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
 - ACME/certificate manager、Tailscale/SSH transport adapter；

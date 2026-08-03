@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -19,6 +19,8 @@ function RuntimeApp(): JSX.Element {
   const [toolSettingsUnavailable, setToolSettingsUnavailable] = useState(false);
   const [sandboxSettings, setSandboxSettings] = useState<SandboxSettingsStatus>();
   const [sandboxSettingsUnavailable, setSandboxSettingsUnavailable] = useState(false);
+  const [workspaces, setWorkspaces] = useState<WorkspaceRegistryStatus>();
+  const [workspacesUnavailable, setWorkspacesUnavailable] = useState(false);
 
   useEffect(() => {
     saveRunProfile(profile);
@@ -64,6 +66,16 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshWorkspaces = async (): Promise<void> => {
+    try {
+      setWorkspaces(await client.workspaces());
+      setWorkspacesUnavailable(false);
+    } catch (reason) {
+      setWorkspaces(undefined);
+      setWorkspacesUnavailable(isWorkspacesUnavailable(reason));
+    }
+  };
+
   useEffect(() => {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
@@ -72,6 +84,7 @@ function RuntimeApp(): JSX.Element {
         void refreshModelSettings();
         void refreshToolSettings();
         void refreshSandboxSettings();
+        void refreshWorkspaces();
       }
     }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
@@ -85,6 +98,7 @@ function RuntimeApp(): JSX.Element {
       await refreshModelSettings();
       await refreshToolSettings();
       await refreshSandboxSettings();
+      await refreshWorkspaces();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -170,12 +184,33 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
 
+  const addWorkspace = async (input: { id: string; path: string; label?: string }): Promise<void> => {
+    try {
+      setWorkspaces(await client.addWorkspace(input));
+      setWorkspacesUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const removeWorkspace = async (workspaceId: string): Promise<void> => {
+    try {
+      const next = await client.removeWorkspace(workspaceId);
+      setWorkspaces(next);
+      setWorkspacesUnavailable(false);
+      if (profile.workspaceId === workspaceId) {
+        const fallback = next.workspaces.find((workspace) => workspace.isDefault) ?? next.workspaces[0];
+        if (fallback) setProfile((current) => ({ ...current, workspaceId: fallback.id }));
+      }
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
   const resetProfile = (): void => {
     resetRunProfile();
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -201,6 +236,10 @@ function isToolSettingsUnavailable(reason: unknown): boolean {
 
 function isSandboxSettingsUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'SANDBOX_SETTINGS_UNAVAILABLE';
+}
+
+function isWorkspacesUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'WORKSPACES_UNAVAILABLE';
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><RuntimeApp /></StrictMode>);

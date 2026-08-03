@@ -33,6 +33,14 @@ export interface RunManagerOptions {
   approvalBroker?: ApprovalBroker;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
+  workspaceExists?: (workspaceId: string) => boolean;
+}
+
+export class RunManagerError extends Error {
+  constructor(readonly code: 'WORKSPACE_NOT_FOUND', message: string) {
+    super(message);
+    this.name = 'RunManagerError';
+  }
 }
 
 export class RunManager {
@@ -42,6 +50,7 @@ export class RunManager {
   private readonly agentLoop: AgentLoop;
   private readonly modelProviderForRun: () => ModelProvider;
   private readonly toolRuntimeForRun: (config: RunConfig) => ToolRuntime | undefined;
+  private readonly workspaceExists: (workspaceId: string) => boolean;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
@@ -49,6 +58,7 @@ export class RunManager {
     this.eventStore = new ObservableEventStore(options.eventStore);
     this.modelProviderForRun = options.modelProviderForRun ?? (() => options.modelProvider);
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
+    this.workspaceExists = options.workspaceExists ?? (() => true);
     this.scheduler = options.scheduler ?? new Scheduler(options.schedulerPolicy ?? {
       maxActiveRuns: 2,
       maxActiveModelCalls: 2,
@@ -68,6 +78,7 @@ export class RunManager {
 
   async start(input: unknown): Promise<{ runId: string; status: 'queued' }> {
     const config = parseRunConfig(input);
+    if (!this.workspaceExists(config.workspaceId)) throw new RunManagerError('WORKSPACE_NOT_FOUND', 'Workspace was not found.');
     const runId = `run_${uuidv7()}`;
     const controller = new AbortController();
     this.controllers.set(runId, controller);

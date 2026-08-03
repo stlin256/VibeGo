@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -29,9 +29,13 @@ export interface AppProps {
   sandboxSettingsUnavailable?: boolean;
   onProbeSandbox?: (provider: 'docker' | 'podman') => Promise<void> | void;
   onSetSandboxSettings?: (input: { provider: 'docker' | 'podman'; imageDigest: string; network: 'restricted' | 'enabled'; resources: SandboxSettingsStatus['resources']; enabled: boolean }) => Promise<void> | void;
+  workspaces?: WorkspaceRegistryStatus;
+  workspacesUnavailable?: boolean;
+  onAddWorkspace?: (input: { id: string; path: string; label?: string }) => Promise<void> | void;
+  onRemoveWorkspace?: (id: string) => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
@@ -41,6 +45,11 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [sandboxImageDigest, setSandboxImageDigest] = useState('');
   const [sandboxNetwork, setSandboxNetwork] = useState<'restricted' | 'enabled'>('restricted');
   const [sandboxBusy, setSandboxBusy] = useState(false);
+  const [workspaceIdInput, setWorkspaceIdInput] = useState('');
+  const [workspaceLabelInput, setWorkspaceLabelInput] = useState('');
+  const [workspacePathInput, setWorkspacePathInput] = useState('');
+  const [workspaceConfirmed, setWorkspaceConfirmed] = useState(false);
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
   }, [modelSettings?.baseUrl]);
@@ -87,6 +96,30 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     try { await onSetSandboxSettings({ provider: sandboxProvider, imageDigest: sandboxImageDigest, network: sandboxNetwork, resources: sandboxSettings.resources, enabled }); } catch { /* Parent renders a safe error. */ } finally { setSandboxBusy(false); }
   };
   const updateProfile = (patch: Partial<RunProfile>): void => onProfileChange?.({ ...profile, ...patch });
+  useEffect(() => {
+    if (!workspaces || workspaces.workspaces.some((workspace) => workspace.id === profile.workspaceId)) return;
+    const fallback = workspaces.workspaces.find((workspace) => workspace.isDefault) ?? workspaces.workspaces[0];
+    if (fallback) updateProfile({ workspaceId: fallback.id });
+  }, [profile.workspaceId, workspaces]);
+  const addWorkspace = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!onAddWorkspace || !workspaceIdInput.trim() || !workspacePathInput.trim() || !workspaceConfirmed) return;
+    setWorkspaceBusy(true);
+    try {
+      await onAddWorkspace({ id: workspaceIdInput.trim(), path: workspacePathInput.trim(), ...(workspaceLabelInput.trim() ? { label: workspaceLabelInput.trim() } : {}) });
+      setWorkspaceIdInput('');
+      setWorkspaceLabelInput('');
+      setWorkspacePathInput('');
+      setWorkspaceConfirmed(false);
+    } catch {
+      // Parent renders a safe error and keeps the form for an intentional retry.
+    } finally { setWorkspaceBusy(false); }
+  };
+  const removeWorkspace = async (id: string): Promise<void> => {
+    if (!onRemoveWorkspace) return;
+    setWorkspaceBusy(true);
+    try { await onRemoveWorkspace(id); } catch { /* Parent renders a safe error. */ } finally { setWorkspaceBusy(false); }
+  };
   const updateLimit = (key: keyof RunProfile['limits'], value: string): void => onProfileChange?.({ ...profile, limits: { ...profile.limits, [key]: clampLimit(key, value) } });
   const updateSandboxMode = (mode: RunProfile['sandbox']['mode']): void => {
     const network = 'network' in profile.sandbox && profile.sandbox.network ? profile.sandbox.network : 'restricted';
@@ -108,7 +141,21 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
             <h2>Run profile</h2>
             <p className="muted">Configure this run from the console; no config file editing is required.</p>
             <div className="settings-grid">
-              <label>Workspace id<input value={profile.workspaceId} onChange={(event) => updateProfile({ workspaceId: event.target.value })} /></label>
+              <div className="workspace-setup" aria-label="Workspace setup">
+                <div className="eyebrow">WORKSPACES</div>
+                {workspacesUnavailable ? <p className="muted">Workspace setup is unavailable until the daemon exposes the authenticated registry.</p> : workspaces ? <>
+                  <label>Workspace<select value={profile.workspaceId} disabled={workspaceBusy} onChange={(event) => updateProfile({ workspaceId: event.target.value })}>{workspaces.workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.label} · {workspace.id}{workspace.isDefault ? ' · default' : ''}</option>)}</select></label>
+                  <p className="muted">Added paths are on the daemon machine. The path is used only by the daemon and is never shown in status, events, or browser storage.</p>
+                  {onAddWorkspace && <form onSubmit={(event) => { void addWorkspace(event); }}>
+                    <label>Workspace id<input value={workspaceIdInput} disabled={workspaceBusy} onChange={(event) => setWorkspaceIdInput(event.target.value)} placeholder="project-a" autoComplete="off" /></label>
+                    <label>Friendly label<input value={workspaceLabelInput} disabled={workspaceBusy} onChange={(event) => setWorkspaceLabelInput(event.target.value)} placeholder="Project A" autoComplete="off" /></label>
+                    <label>Path on daemon machine<input value={workspacePathInput} disabled={workspaceBusy} onChange={(event) => setWorkspacePathInput(event.target.value)} placeholder="C:\\work\\project-a" autoComplete="off" /></label>
+                    <label className="toggle-row"><input type="checkbox" checked={workspaceConfirmed} disabled={workspaceBusy} onChange={(event) => setWorkspaceConfirmed(event.target.checked)} /><span>I understand this grants guarded tools access to that directory.</span></label>
+                    <button type="submit" disabled={workspaceBusy || !workspaceIdInput.trim() || !workspacePathInput.trim() || !workspaceConfirmed}>Add workspace</button>
+                  </form>}
+                  {workspaces.workspaces.filter((workspace) => workspace.canRemove).map((workspace) => <div className="workspace-row" key={workspace.id}><span>{workspace.label} · {workspace.id}</span><button className="cancel-button" type="button" disabled={workspaceBusy} onClick={() => { void removeWorkspace(workspace.id); }}>Remove</button></div>)}
+                </> : <p className="muted">Pair with the daemon to configure workspaces.</p>}
+              </div>
               <label>Model provider<input value={profile.model.provider} onChange={(event) => updateProfile({ model: { ...profile.model, provider: event.target.value } })} /></label>
               <label>Model name<input value={profile.model.name} onChange={(event) => updateProfile({ model: { ...profile.model, name: event.target.value } })} /></label>
               <div className="model-setup" aria-label="Model provider setup">

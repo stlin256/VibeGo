@@ -3,8 +3,9 @@ import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateStatus } from '@ready4vibe/certificates';
+import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
-import { RunManager } from './run-manager.js';
+import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
 
@@ -32,6 +33,7 @@ export interface DaemonServerOptions {
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
+  workspaceRegistry?: WorkspaceRegistry;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -48,6 +50,7 @@ interface ResolvedDaemonServerOptions {
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
+  workspaceRegistry?: WorkspaceRegistry;
 }
 
 export interface HealthResponse {
@@ -96,6 +99,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
+    ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -103,6 +107,10 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       if (response.headersSent || response.writableEnded) return;
       if (error instanceof RequestError) {
         writeJson(response, error.statusCode, { error: { code: error.code, message: error.safeMessage } });
+        return;
+      }
+      if (error instanceof RunManagerError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
         return;
       }
       writeJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } });
@@ -204,6 +212,64 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateStatus);
+    return;
+  }
+
+  if (pathname === '/api/v1/workspaces') {
+    if (!options.workspaceRegistry) {
+      writeJson(response, 503, { error: { code: 'WORKSPACES_UNAVAILABLE', message: 'Workspace registry is unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.workspaceRegistry.status());
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST required' } }, { Allow: 'GET, POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isWorkspaceAddInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Workspace id, daemon path, and explicit confirmation are required.' } });
+      return;
+    }
+    try {
+      options.workspaceRegistry.add({ id: input.id, path: input.path, ...(input.label ? { label: input.label } : {}) });
+      writeJson(response, 200, options.workspaceRegistry.status());
+    } catch (error) {
+      if (error instanceof WorkspaceRegistryError) {
+        const status = error.code === 'WORKSPACE_DUPLICATE' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  const workspaceDeleteMatch = /^\/api\/v1\/workspaces\/([^/]+)$/u.exec(pathname);
+  if (workspaceDeleteMatch) {
+    if (!options.workspaceRegistry) {
+      writeJson(response, 503, { error: { code: 'WORKSPACES_UNAVAILABLE', message: 'Workspace registry is unavailable.' } });
+      return;
+    }
+    if (request.method !== 'DELETE') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'DELETE required' } }, { Allow: 'DELETE' });
+      return;
+    }
+    let workspaceId: string;
+    try { workspaceId = decodeURIComponent(workspaceDeleteMatch[1] ?? ''); } catch { workspaceId = ''; }
+    try {
+      options.workspaceRegistry.remove(workspaceId);
+      writeJson(response, 200, options.workspaceRegistry.status());
+    } catch (error) {
+      if (error instanceof WorkspaceRegistryError) {
+        const status = error.code === 'WORKSPACE_NOT_FOUND' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
@@ -343,6 +409,10 @@ async function handleRequest(
     } catch (error) {
       if (isValidationError(error)) {
         writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'RunConfig validation failed.' } });
+        return;
+      }
+      if (error instanceof RunManagerError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
         return;
       }
       throw error;
@@ -498,6 +568,11 @@ function isSandboxSettingsInput(value: unknown): value is SandboxSettingsInput {
   if (typeof value !== 'object' || value === null || !('provider' in value) || (value.provider !== 'docker' && value.provider !== 'podman') || !('imageDigest' in value) || typeof value.imageDigest !== 'string' || !('network' in value) || (value.network !== 'restricted' && value.network !== 'enabled') || !('enabled' in value) || typeof value.enabled !== 'boolean') return false;
   if (!('resources' in value) || typeof value.resources !== 'object' || value.resources === null || Array.isArray(value.resources)) return false;
   return Object.values(value.resources).every((entry) => typeof entry === 'number' && Number.isSafeInteger(entry) && entry > 0);
+}
+
+function isWorkspaceAddInput(value: unknown): value is { id: string; path: string; label?: string; confirmation: 'add-workspace' } {
+  if (typeof value !== 'object' || value === null || !('id' in value) || typeof value.id !== 'string' || !('path' in value) || typeof value.path !== 'string' || !('confirmation' in value) || value.confirmation !== 'add-workspace') return false;
+  return !('label' in value) || value.label === undefined || typeof value.label === 'string';
 }
 
 function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {

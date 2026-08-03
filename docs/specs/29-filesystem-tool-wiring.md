@@ -18,10 +18,9 @@ shell execution, external sandboxes, and unsupported workspace mappings.
 - Enabling the setting exposes only `filesystem.read@1.0.0` and
   `filesystem.write@1.0.0`. Shell, Git, MCP, Skill, network, and destructive
   host tools are not registered by this slice.
-- The default workspace root is the daemon's explicitly captured working
-  directory and is represented in status by a basename label only. Tool calls
-  are accepted only for `workspaceId=default` until a workspace registry is
-  implemented; other IDs fail safely without revealing absolute paths.
+- The workspace root comes from the daemon's captured workspace registry and is
+  represented in status by a safe label only. Unknown workspace ids fail
+  safely without revealing absolute paths; there is no fallback to `default`.
 - Every call still passes through `ToolExecutorRuntime`, `ToolRegistry`,
   `ApprovalPolicy`, `SandboxResolver`, and `PathGuard`. Read-only reads are
   allowed by policy; writes require the existing approval continuation. An
@@ -76,5 +75,6 @@ not written to the non-secret run profile so reset semantics remain separate.
 - `RunManager` and `AgentLoop` capture per-run runtime snapshots, while the Web
   toggle, API, path/approval, untrusted fallback, and secret-free status tests
   cover the user-visible boundary.
-- Shell, Git, MCP/Skill, network, external sandbox, and non-default workspace
-  execution remain unregistered in this slice.
+- Shell, Git, MCP/Skill, network, and external sandbox tools remain unregistered
+  in this slice; non-default workspace mapping is supplied by Spec 31 and is
+  captured per run.
