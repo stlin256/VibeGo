@@ -32,8 +32,11 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 | `GET` | `/runs/:runId/diff` | 获取受限 diff 摘要/分页内容 |
 | `POST` | `/pairing/start` | 仅本机启动一次性配对流程 |
 | `POST` | `/pairing/complete` | 兑换配对码，返回 token（只显示一次） |
+| `GET` | `/certificates` | 返回证书来源、SAN、指纹、有效期和 TLS 状态（不返回私钥） |
+| `POST` | `/certificates/import` | 仅 loopback 管理端导入用户提供的证书文件路径 |
+| `POST` | `/certificates/rotate` | 轮换 managed/self-signed 或未来 ACME 证书 |
 
-服务端 health/capability 响应必须包含 `transport.kind`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
+服务端 health/capability 响应必须包含 `transport.kind`、`transport.tlsRequired`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
 
 ## 创建 run 请求
 

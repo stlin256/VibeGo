@@ -145,14 +145,14 @@ skill/
 
 ```ts
 interface RemoteTransport {
-  readonly kind: 'lan-http' | 'tailscale' | 'ssh-stdio';
+  readonly kind: 'lan-http' | 'tailscale' | 'ssh-stdio' | 'public-https';
   start(handler: ApiHandler, signal: AbortSignal): Promise<void>;
   peerIdentity(request: IncomingRequest): Promise<PeerIdentity>;
   close(): Promise<void>;
 }
 ```
 
-MVP 只实现 LAN HTTP；Tailscale/SSH 适配器之后复用 API、事件、认证和审批合约，不允许通过 transport 绕过 sandbox 或 policy。
+MVP 只实现 LAN HTTPS/HTTP（HTTP 需要显式关闭 TLS）；Tailscale/SSH 适配器之后复用 API、事件、认证和审批合约。`public-https` 作为后续 transport，永远要求有效证书和完整认证，不允许通过 transport 绕过 sandbox 或 policy。
 
 ## Storage 与 EventLog
 

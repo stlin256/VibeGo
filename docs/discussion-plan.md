@@ -20,13 +20,13 @@
 ## 默认假设（可被讨论推翻）
 
 - 首版只支持一个本地 daemon 和一个用户会话；
-- 默认 loopback，用户显式开启后允许 LAN；Tailscale/SSH 先只保留 transport port；
+- 默认 loopback，用户显式开启后允许 LAN；TLS 默认强制但可显式关闭，公网 transport 永远强制 TLS；证书管理先做状态/导入/轮换接口，ACME 后续实现；
 - Node.js 22 + TypeScript，React/Vite 静态 PWA；
 - SQLite/file event store，不引入 Redis/Postgres；
 - OpenAI-compatible provider 作为第一实现，真实模型之前先用 fake model；
 - 可信任务使用受限 workspace-write；不可信任务需要可验证 external sandbox；
-- 自动审批参考 Codex：确定性 allow/prompt/forbidden + 精确 session key；写文件和网络只在明确规则/批准范围内无感；R4 默认拒绝；
-- 每个模块先文档、再 failing test、再实现、再测量和提交。
+- 自动审批参考 Codex：MVP 只实现确定性 allow/prompt/forbidden + 精确 session key；Guardian-like reviewer 只留后续接口；写文件和网络只在明确规则/批准范围内无感；R4 默认拒绝；
+- 规则持久化使用 JSON schema；Codex 风格文本规则编译器后置；每个模块先文档、再 failing test、再实现、再测量和提交。
 
 ## 每次讨论的输出模板
 
@@ -41,4 +41,4 @@
 需更新的文档与 Git 提交：
 ```
 
-下一步转入第 2 项“运行时与仓库骨架”；在实现前仍需逐条确认 Spec 01 的 sandbox mode、LAN pairing 和批准 key 细节。
+Spec 02 已建立为 Draft。下一步先讨论其中的 ID、EventStore、并发和 recovery 取舍，再转入第 2 项“运行时与仓库骨架”。

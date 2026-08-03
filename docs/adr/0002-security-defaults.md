@@ -15,8 +15,9 @@
 2. 首版允许显式 `--listen lan` 开启局域网访问；只绑定用户选择的私网接口/CIDR，不允许无提示绑定 `0.0.0.0`，不自动 UPnP/端口映射。
 3. LAN 不是可信边界：首次访问使用一次性配对码；配对后发放随机 refresh token 和短期 access token，token 只存 hash，并支持轮换/撤销。
 4. 默认只接受已配对 Origin；CORS allowlist、Origin 校验、CSRF 防护、速率限制和失败退避由 daemon 负责。
-5. MVP 实现 `LanHttpTransport`，但 API/事件只依赖 `RemoteTransport` port；未来 `TailscaleTransport`、`SshStdioTransport` 复用同一认证和权限模型。
-6. 推荐通过 HTTPS 反代、Tailscale/WireGuard 或 SSH 隧道使用；产品不自带公网穿透服务。
+5. LAN 和未来公网 transport 默认强制 HTTPS；用户可以显式关闭 TLS，但 `public-https` 永远不接受明文。MVP 提供证书状态/导入/轮换接口，未来再增加 ACME 自动续期。
+6. MVP 实现 `LanHttpTransport`，但 API/事件只依赖 `RemoteTransport` port；未来 `TailscaleTransport`、`SshStdioTransport` 复用同一认证和权限模型。
+7. 推荐通过 HTTPS 反代、Tailscale/WireGuard 或 SSH 隧道使用；产品不自带公网穿透服务。
 7. SSE、WebSocket 和所有写 API 都需要认证；日志、URL、异常不得输出 token。
 
 ## 审批策略
@@ -40,7 +41,7 @@
 
 可信 workspace 默认 `workspace-write + restricted network`；不可信 Skill/MCP/仓库默认必须 `external-sandbox`。若机器没有可验证的 external sandbox，UI 阻止任务创建并解释原因，不静默降级到主机执行。
 
-详细的 Codex-like rule、session grant、network approval 和自动审查流程见 [Spec 01](../specs/01-sandbox-approval.md)。
+详细的 Codex-like rule、session grant、network approval、证书和自动审查流程见 [Spec 01](../specs/01-sandbox-approval.md)。
 
 ## Secret 与数据处理
 

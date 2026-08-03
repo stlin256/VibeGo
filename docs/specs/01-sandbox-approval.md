@@ -89,7 +89,7 @@ type AskForApproval =
 
 ### 3.2 ExecPolicy
 
-采用独立的、版本化的 prefix-rule 数据模型，而不是把任意表达式直接交给 shell：
+采用独立的、版本化的 prefix-rule 数据模型，而不是把任意表达式直接交给 shell。MVP 的持久化格式是 JSON schema；Codex 风格文本规则编译器属于后续适配器，不进入第一版执行路径：
 
 ```ts
 type RuleDecision = 'allow' | 'prompt' | 'forbidden';
@@ -106,6 +106,18 @@ interface HostExecutable {
   name: string;
   absolutePaths: string[];
 }
+
+interface PolicyDocumentFile {
+  version: 1;
+  workspaceId: string;
+  rules: PrefixRule[];
+  hostExecutables: HostExecutable[];
+  networkRules: NetworkRule[];
+}
+
+interface LoadedPolicyDocument extends PolicyDocumentFile {
+  revision: string; // canonical JSON hash, computed by the loader
+}
 ```
 
 评估算法：
@@ -117,7 +129,29 @@ interface HostExecutable {
 5. `forbidden` 不可被一次批准、会话批准或网络规则覆盖；只能由用户修改规则文件后重新运行。
 6. `matchExamples/notMatchExamples` 在规则加载时执行，作为规则自身的单元测试。
 
-默认规则至少覆盖：提权、编码命令、删除/覆盖、任意解释器执行、修改系统服务/防火墙、推送受保护分支、任意外部网络上传。允许规则必须绑定 workspace、工具版本和参数约束。
+默认规则至少覆盖：提权、编码命令、删除/覆盖、任意解释器执行、修改系统服务/防火墙、推送受保护分支、任意外部网络上传。允许规则必须绑定 workspace、工具版本和参数约束。`LoadedPolicyDocument.revision` 为规范化 JSON 的 hash；直接编辑规则文件会使旧 grant 失效。
+
+示例文件：
+
+```json
+{
+  "version": 1,
+  "workspaceId": "ws_01",
+  "rules": [
+    {
+      "pattern": ["git", "status"],
+      "decision": "allow",
+      "justification": "只读仓库状态",
+      "matchExamples": [["git", "status"]],
+      "notMatchExamples": [["git", "reset", "--hard"]]
+    }
+  ],
+  "hostExecutables": [],
+  "networkRules": []
+}
+```
+
+Schema 校验、revision 计算和 `matchExamples/notMatchExamples` 验证在加载时完成；首版不解析 Starlark/任意脚本。
 
 ### 3.3 NetworkPolicy
 
@@ -184,9 +218,9 @@ interface ApprovalKey {
 
 Prefix rule、路径/网络 allowlist、sandbox capability 和 session cache 先做决定。R0/R1 的明确 allow 可以无感执行；R4 直接拒绝。
 
-### Layer B：自动审查器（可选）
+### Layer B：自动审查器（后续接口，MVP 不实现）
 
-当规则无法确定且动作不属于 R4，可把**结构化 action**提交给本地 Guardian provider：工具、argv、路径、网络目标、diff 摘要、sandbox 和用户目标。Guardian 只能返回 `allow-once | ask-user | deny`，不能修改规则、增加路径或读取 secret。
+未来当规则无法确定且动作不属于 R4，可把**结构化 action**提交给本地 Guardian provider：工具、argv、路径、网络目标、diff 摘要、sandbox 和用户目标。Guardian 只能返回 `allow-once | ask-user | deny`，不能修改规则、增加路径或读取 secret。MVP 只实现 Layer A + Layer C。
 
 - 超时、解析失败、输入不完整、provider 不可用：`deny` 或转人工，不回退到 allow；
 - Guardian 结果必须和 User decision 区分记录；
@@ -218,8 +252,29 @@ create run(taskTrust=untrusted-content)
 
 - 默认 `127.0.0.1`；`--listen lan` 才开启私网监听；
 - 绑定前枚举网卡和私网 CIDR，仅允许用户选择的接口；不允许 `0.0.0.0` 无提示；
-- 显示 LAN 地址、端口、配对状态、TLS 状态和当前 sandbox 能力；
+- LAN 默认强制 HTTPS；显式 `--allow-insecure-http` 只能用于 loopback/明确选择的私网场景，公网模式永远拒绝；
+- 显示 LAN 地址、端口、配对状态、TLS 状态、证书指纹和当前 sandbox 能力；
 - 本机 CLI 仍可通过 loopback 管理配对、撤销 token 和关闭 LAN。
+
+### 证书管理
+
+```ts
+type CertificateSource = 'managed-self-signed' | 'provided-files' | 'acme';
+
+interface CertificateManager {
+  inspect(): Promise<CertificateStatus>;
+  importProvided(input: { certificatePath: string; privateKeyPath: string }): Promise<void>;
+  rotate(source: CertificateSource): Promise<void>;
+  reload(): Promise<void>;
+}
+```
+
+- `managed-self-signed`：为局域网 IP/主机名生成证书，展示 fingerprint/有效期，私钥只存本机受限目录；
+- `provided-files`：用户导入 fullchain/key，启动时校验 SAN、有效期和权限，支持热加载；
+- `acme`：后续实现，支持 HTTP-01/DNS-01 provider，但不自动开端口、不自动修改 DNS/路由；
+- 证书过期前 30 天告警，轮换失败保持旧证书并告警；
+- 私钥不进入 API 响应、日志、事件、模型上下文或浏览器存储；
+- `public-https` 未来 transport 必须存在有效证书和 token/Origin/速率限制，不能用 `--allow-insecure-http` 绕过。
 
 ### 请求
 
@@ -263,7 +318,6 @@ Tailscale adapter 复用 API/auth/event contracts，可额外绑定 tailnet iden
 ### LAN
 
 - loopback 默认，LAN 未显式开启时拒绝；
-- 私网绑定 allowlist、Origin/CORS/CSRF、token 轮换、重放、速率限制；
+- 私网绑定 allowlist、TLS/证书状态、Origin/CORS/CSRF、token 轮换、重放、速率限制；
 - SSE 断线恢复不越权、不跨 run 泄露事件；
 - 未来 Tailscale/SSH transport 通过同一 contract test suite。
-
