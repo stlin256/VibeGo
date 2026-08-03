@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Phase 1/2 实施基线，Web/PWA MVP 已通过）**
+**状态：Accepted（Phase 1/2 实施基线，Web/PWA 与 LAN TLS MVP 已通过）**
 
 ## 当前实施范围
 
@@ -20,12 +20,13 @@
 12. `packages/tool-adapters`：filesystem/shell handler 与统一 ToolExecutor 已按 `docs/specs/11-tool-adapters.md` 实现；默认不启动主机进程；
 13. `packages/auth` 与 daemon transport gate：已按 `docs/specs/12-auth-transport.md` 实现单用户 pairing/token 和 LAN/TLS 门禁；证书/ACME adapter 后置；
 14. `apps/web`：已按 `docs/specs/13-web-pwa.md` 完成 React/TypeScript responsive run console MVP，包含 pairing、Bearer/CSRF、run composer、run console、cancel 和 fetch-based SSE resume；
-15. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → tool-adapters → auth → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+15. `packages/certificates` 与 daemon HTTPS listener 已按 `docs/specs/14-certificates-tls.md` 实现环境变量解析、PEM 读取/校验、LAN 默认 TLS fail-closed 和 HTTP/HTTPS health 标识；
+16. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → tool-adapters → auth → certificates → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
-- `pnpm typecheck`：通过（15 个 workspace package）；
-- `pnpm test`：通过，89 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 9、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、tool-adapters 9、auth 5、daemon 9、web 5；Vitest 按 package 输出）；
+- `pnpm typecheck`：通过（16 个 workspace package）；
+- `pnpm test`：通过，97 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 9、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、tool-adapters 9、auth 5、certificates 3、daemon 14、web 5；Vitest 按 package 输出）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -35,7 +36,7 @@
 
 - 不调用真实模型、网络、MCP、Skill 或 shell；
 - 不修改用户 workspace、Git、系统设置或证书；
-- 不实现公网证书/ACME 自动签发、真实外部 sandbox runtime 或完整审批/diff UI；Web/PWA MVP 已提供 API/SSE 控制台，但仍不替代 daemon 安全边界；
+- 不实现 ACME 自动签发、Windows 证书存储、真实外部 sandbox runtime 或完整审批/diff UI；Web/PWA MVP 已提供 API/SSE 控制台，但仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
 - 不把 fake model 的行为当作真实 provider 能力。
@@ -51,4 +52,4 @@
 - `pnpm test` 通过，覆盖合法/非法状态转移、并发排队、workspace lease、事件 seq、取消和资源释放；
 - `pnpm diff:check` 或等价检查无 whitespace 错误；
 - 文档中的实现状态、限制和命令与代码一致；
-- 完成后单独 Git 提交，再进入 certificate manager、external sandbox runtime 与 Web UI 的 diff/log/approval 深化。
+- 完成后单独 Git 提交，再进入 ACME/certificate manager adapter、external sandbox runtime 与 Web UI 的 diff/log/approval 深化。

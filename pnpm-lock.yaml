@@ -26,6 +26,9 @@ importers:
       '@ready4vibe/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@ready4vibe/certificates':
+        specifier: workspace:*
+        version: link:../../packages/certificates
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -91,6 +94,8 @@ importers:
         version: link:../testkit
 
   packages/auth: {}
+
+  packages/certificates: {}
 
   packages/context: {}
 

@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import { RunManager } from './run-manager.js';
@@ -7,6 +8,11 @@ export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
 export type DaemonHost = LoopbackHost | LanHost;
 export type StorageKind = 'sqlite' | 'memory';
+
+export interface DaemonTlsOptions {
+  cert: Buffer;
+  key: Buffer;
+}
 
 export interface DaemonServerOptions {
   host?: DaemonHost;
@@ -17,6 +23,7 @@ export interface DaemonServerOptions {
   storageStatus?: 'ready' | 'degraded';
   runManager?: RunManager;
   bodyLimitBytes?: number;
+  tls?: DaemonTlsOptions;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -28,6 +35,7 @@ interface ResolvedDaemonServerOptions {
   storageStatus: 'ready' | 'degraded';
   bodyLimitBytes: number;
   runManager?: RunManager;
+  tls?: DaemonTlsOptions;
 }
 
 export interface HealthResponse {
@@ -35,7 +43,7 @@ export interface HealthResponse {
   service: 'ready4vibe-daemon';
   version: string;
   transport: {
-    kind: 'http-loopback' | 'http-lan' | 'http-tailscale' | 'ssh';
+    kind: 'http-loopback' | 'https-loopback' | 'http-lan' | 'https-lan' | 'http-tailscale' | 'https-tailscale' | 'ssh';
     tlsRequired: boolean;
     boundAddresses: readonly DaemonHost[];
   };
@@ -71,9 +79,10 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     storageStatus: options.storageStatus ?? 'ready',
     bodyLimitBytes: options.bodyLimitBytes ?? 1024 * 1024,
     ...(options.runManager ? { runManager: options.runManager } : {}),
+    ...(options.tls ? { tls: options.tls } : {}),
   };
 
-  return createServer((request, response) => {
+  const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
     void handleRequest(request, response, resolved).catch((error: unknown) => {
       if (response.headersSent || response.writableEnded) return;
       if (error instanceof RequestError) {
@@ -82,7 +91,8 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       }
       writeJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } });
     });
-  });
+  };
+  return options.tls ? createHttpsServer(options.tls, requestListener) : createServer(requestListener);
 }
 
 export function isLoopbackHost(value: string): value is LoopbackHost {
@@ -238,7 +248,7 @@ function createHealthResponse(options: ResolvedDaemonServerOptions): HealthRespo
     service: 'ready4vibe-daemon',
     version: options.version,
     transport: {
-      kind: transportKind(options.transportMode),
+      kind: transportKind(options.transportMode, options.tls !== undefined),
       tlsRequired: authStatus?.tlsRequired ?? false,
       boundAddresses: [options.host],
     },
@@ -252,10 +262,10 @@ function createHealthResponse(options: ResolvedDaemonServerOptions): HealthRespo
   };
 }
 
-function transportKind(mode: TransportMode): HealthResponse['transport']['kind'] {
-  if (mode === 'loopback') return 'http-loopback';
-  if (mode === 'lan') return 'http-lan';
-  if (mode === 'tailscale') return 'http-tailscale';
+function transportKind(mode: TransportMode, tlsEnabled: boolean): HealthResponse['transport']['kind'] {
+  if (mode === 'loopback') return tlsEnabled ? 'https-loopback' : 'http-loopback';
+  if (mode === 'lan') return tlsEnabled ? 'https-lan' : 'http-lan';
+  if (mode === 'tailscale') return tlsEnabled ? 'https-tailscale' : 'http-tailscale';
   return 'ssh';
 }
 

@@ -1,26 +1,21 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
-import { AuthGate, type TransportMode } from '@ready4vibe/auth';
+import { AuthGate } from '@ready4vibe/auth';
+import { loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore } from '@ready4vibe/storage';
 import { createModelProvider } from './model-config.js';
-import { createDaemonServer, isLanHost, isLoopbackHost, type DaemonHost } from './server.js';
+import { createDaemonServer } from './server.js';
+import { resolveDaemonTransport } from './transport-config.js';
 
-const hostValue = process.env.READY4VIBE_HOST ?? '127.0.0.1';
-if (!isLoopbackHost(hostValue) && !isLanHost(hostValue)) {
-  throw new Error('READY4VIBE_HOST must be 127.0.0.1, ::1, 0.0.0.0 or ::');
+const transport = resolveDaemonTransport();
+const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
+if (tlsEnabled && !certificatePaths) {
+  throw new Error('TLS is enabled but certificate files are not configured; set READY4VIBE_TLS_CERT_FILE and READY4VIBE_TLS_KEY_FILE');
 }
-const host: DaemonHost = hostValue;
-const transportMode: TransportMode = isLoopbackHost(host) ? 'loopback' : 'lan';
-if (transportMode === 'lan' && process.env.READY4VIBE_ALLOW_LAN !== '1') {
-  throw new Error('LAN binding is disabled by default; set READY4VIBE_ALLOW_LAN=1 explicitly');
-}
-const tlsRequired = transportMode === 'lan' && process.env.READY4VIBE_ALLOW_INSECURE_LAN !== '1';
-if (tlsRequired) {
-  throw new Error('LAN TLS is required but HTTPS certificate wiring is not implemented yet; set READY4VIBE_ALLOW_INSECURE_LAN=1 only for explicit development use');
-}
+const tlsCredentials = tlsEnabled && certificatePaths ? loadTlsCredentials(certificatePaths) : undefined;
 const allowedOrigins = process.env.READY4VIBE_ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
 const authGate = new AuthGate({
   mode: transportMode,
@@ -38,11 +33,18 @@ const runManager = new RunManager({
   modelProvider,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
-const server = createDaemonServer({ host, transportMode, authGate, storageKind: 'sqlite', runManager });
+const server = createDaemonServer({
+  host,
+  transportMode,
+  authGate,
+  storageKind: 'sqlite',
+  runManager,
+  ...(tlsCredentials ? { tls: tlsCredentials } : {}),
+});
 
 server.listen(port, host, () => {
   const displayHost = host === '::1' ? `[${host}]` : host;
-  console.log(`ready4vibe daemon listening on http://${displayHost}:${port}`);
+  console.log(`ready4vibe daemon listening on ${tlsCredentials ? 'https' : 'http'}://${displayHost}:${port}`);
 });
 
 const shutdown = (): void => {

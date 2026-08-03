@@ -60,6 +60,10 @@ afterEach(async () => {
 });
 
 describe('daemon health server', () => {
+  it('rejects invalid TLS material before opening a listener', () => {
+    expect(() => createDaemonServer({ tls: { cert: Buffer.from('not a certificate'), key: Buffer.from('not a key') } })).toThrow();
+  });
+
   it('serves a secret-free health response on loopback', async () => {
     const server = createDaemonServer({ host: '127.0.0.1', storageKind: 'sqlite', version: 'test-version' });
     servers.push(server);
