@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -25,17 +25,30 @@ export interface AppProps {
   toolSettings?: ToolSettingsStatus;
   toolSettingsUnavailable?: boolean;
   onSetFilesystemToolsEnabled?: (enabled: boolean) => Promise<void> | void;
+  sandboxSettings?: SandboxSettingsStatus;
+  sandboxSettingsUnavailable?: boolean;
+  onProbeSandbox?: (provider: 'docker' | 'podman') => Promise<void> | void;
+  onSetSandboxSettings?: (input: { provider: 'docker' | 'podman'; imageDigest: string; network: 'restricted' | 'enabled'; resources: SandboxSettingsStatus['resources']; enabled: boolean }) => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
   const [modelApiKey, setModelApiKey] = useState('');
   const [toolToggleBusy, setToolToggleBusy] = useState(false);
+  const [sandboxProvider, setSandboxProvider] = useState<'docker' | 'podman'>('docker');
+  const [sandboxImageDigest, setSandboxImageDigest] = useState('');
+  const [sandboxNetwork, setSandboxNetwork] = useState<'restricted' | 'enabled'>('restricted');
+  const [sandboxBusy, setSandboxBusy] = useState(false);
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
   }, [modelSettings?.baseUrl]);
+  useEffect(() => {
+    if (sandboxSettings?.provider) setSandboxProvider(sandboxSettings.provider);
+    if (sandboxSettings?.imageDigest) setSandboxImageDigest(sandboxSettings.imageDigest);
+    if (sandboxSettings?.network) setSandboxNetwork(sandboxSettings.network);
+  }, [sandboxSettings?.provider, sandboxSettings?.imageDigest]);
   const connected = health?.auth.pairingRequired === false;
   const submitPairing = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -63,13 +76,23 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setToolToggleBusy(true);
     try { await onSetFilesystemToolsEnabled(enabled); } catch { /* Parent renders a safe error and keeps the previous toggle state. */ } finally { setToolToggleBusy(false); }
   };
+  const probeSandbox = async (): Promise<void> => {
+    if (!onProbeSandbox) return;
+    setSandboxBusy(true);
+    try { await onProbeSandbox(sandboxProvider); } catch { /* Parent renders a safe error. */ } finally { setSandboxBusy(false); }
+  };
+  const toggleSandbox = async (enabled: boolean): Promise<void> => {
+    if (!onSetSandboxSettings || !sandboxSettings) return;
+    setSandboxBusy(true);
+    try { await onSetSandboxSettings({ provider: sandboxProvider, imageDigest: sandboxImageDigest, network: sandboxNetwork, resources: sandboxSettings.resources, enabled }); } catch { /* Parent renders a safe error. */ } finally { setSandboxBusy(false); }
+  };
   const updateProfile = (patch: Partial<RunProfile>): void => onProfileChange?.({ ...profile, ...patch });
   const updateLimit = (key: keyof RunProfile['limits'], value: string): void => onProfileChange?.({ ...profile, limits: { ...profile.limits, [key]: clampLimit(key, value) } });
   const updateSandboxMode = (mode: RunProfile['sandbox']['mode']): void => {
     const network = 'network' in profile.sandbox && profile.sandbox.network ? profile.sandbox.network : 'restricted';
     if (mode === 'read-only') updateProfile({ sandbox: { mode, network } });
     else if (mode === 'workspace-write') updateProfile({ sandbox: { mode, network, writableRoots: 'writableRoots' in profile.sandbox && profile.sandbox.writableRoots.length > 0 ? profile.sandbox.writableRoots : ['.'] } });
-    else updateProfile({ sandbox: { mode, network, provider: 'provider' in profile.sandbox ? profile.sandbox.provider : 'docker' } });
+    else updateProfile({ sandbox: { mode, network, provider: 'provider' in profile.sandbox ? profile.sandbox.provider : 'docker', ...('writableRoots' in profile.sandbox && profile.sandbox.writableRoots ? { writableRoots: profile.sandbox.writableRoots } : {}) } });
   };
 
   return (
@@ -108,11 +131,21 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                   {toolSettings.availableTools.length > 0 && <p className="muted">Available: {toolSettings.availableTools.join(', ')}</p>}
                 </> : <p className="muted">Pair with the daemon to configure guarded filesystem tools.</p>}
               </div>
+              <div className="tool-setup" aria-label="External sandbox setup">
+                <div className="eyebrow">EXTERNAL SANDBOX</div>
+                {sandboxSettingsUnavailable ? <p className="muted">External sandbox settings are unavailable until the authenticated adapter is ready.</p> : sandboxSettings ? <>
+                  <p className="muted">Docker/Podman shell is off by default. Probe the runtime, then enable it explicitly; no host shell fallback exists.</p>
+                  <div className="inline-actions"><label>Provider<select value={sandboxProvider} disabled={sandboxBusy} onChange={(event) => setSandboxProvider(event.target.value as 'docker' | 'podman')}><option value="docker">Docker</option><option value="podman">Podman</option></select></label><label>Network<select value={sandboxNetwork} disabled={sandboxBusy} onChange={(event) => setSandboxNetwork(event.target.value as 'restricted' | 'enabled')}><option value="restricted">Restricted</option><option value="enabled">Enabled (warning)</option></select></label><button type="button" disabled={sandboxBusy} onClick={() => { void probeSandbox(); }}>Probe runtime</button></div>
+                  <label>Image digest<input value={sandboxImageDigest} disabled={sandboxBusy} onChange={(event) => setSandboxImageDigest(event.target.value)} placeholder="registry.example/agent@sha256:..." /></label>
+                  <p className="muted">Status: {sandboxSettings.detected ? (sandboxSettings.healthy ? `healthy${sandboxSettings.capabilities?.version ? ` · ${sandboxSettings.capabilities.version}` : ''}` : 'detected but unhealthy') : 'not probed'} · configured network: {sandboxNetwork} · {sandboxSettings.enabled ? 'enabled' : 'disabled'}</p>
+                  <button type="button" disabled={sandboxBusy || !sandboxSettings.healthy || !sandboxImageDigest} onClick={() => { void toggleSandbox(!sandboxSettings.enabled); }}>{sandboxSettings.enabled ? 'Disable external shell' : 'Enable external shell'}</button>
+                </> : <p className="muted">Pair with the daemon to configure external sandbox execution.</p>}
+              </div>
               <label>Task trust<select value={profile.taskTrust} onChange={(event) => updateProfile({ taskTrust: event.target.value as RunProfile['taskTrust'] })}><option value="trusted-workspace">Trusted workspace</option><option value="untrusted-content">Untrusted content</option></select></label>
               <label>Sandbox<select value={profile.sandbox.mode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">Read-only</option><option value="workspace-write">Workspace write</option><option value="external-sandbox">External sandbox</option></select></label>
               <label>Network<select value={'network' in profile.sandbox ? profile.sandbox.network : 'restricted'} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, network: event.target.value as 'restricted' | 'enabled' } as RunProfile['sandbox'] })}><option value="restricted">Restricted</option><option value="enabled">Enabled</option></select></label>
               {profile.sandbox.mode === 'workspace-write' && <label>Writable roots<input value={profile.sandbox.writableRoots?.join(', ') ?? ''} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, writableRoots: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) } })} /></label>}
-              {profile.sandbox.mode === 'external-sandbox' && <label>Runtime<select value={profile.sandbox.provider} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, provider: event.target.value as 'docker' | 'podman' | 'vm' } })}><option value="docker">Docker</option><option value="podman">Podman</option><option value="vm">VM</option></select></label>}
+              {profile.sandbox.mode === 'external-sandbox' && <><label>Runtime<select value={profile.sandbox.provider} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, provider: event.target.value as 'docker' | 'podman' | 'vm' } })}><option value="docker">Docker</option><option value="podman">Podman</option><option value="vm">VM</option></select></label><label>Sandbox writable roots<input value={profile.sandbox.writableRoots?.join(', ') ?? ''} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, writableRoots: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) } })} placeholder="src, tests" /></label></>}
               <label>Approval<select value={typeof profile.approval === 'string' ? profile.approval : 'on-request'} onChange={(event) => updateProfile({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">On request</option><option value="untrusted">Untrusted tasks</option><option value="never">Never (read-only only)</option></select></label>
               <label>Max turns<input type="number" min={1} max={50} value={profile.limits.maxTurns} onChange={(event) => updateLimit('maxTurns', event.target.value)} /></label>
               <label>Wall time (ms)<input type="number" min={1} max={1800000} value={profile.limits.maxWallTimeMs} onChange={(event) => updateLimit('maxWallTimeMs', event.target.value)} /></label>
@@ -157,5 +190,5 @@ function clampLimit(key: keyof RunProfile['limits'], value: string): number {
 }
 
 function RunConsole({ run, events, onCancel, onApprove, onRetry }: { run: RunSnapshot; events: readonly StoredEvent[]; onCancel: (() => void) | undefined; onApprove: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; onRetry: (() => void) | undefined }): JSX.Element {
-  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div><div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <div className="recovery-card"><div><div className="eyebrow">RECOVERY REQUIRED</div><strong>This run stopped safely after a daemon restart.</strong><p className="muted">Retry creates a new run from the original safety policy; interrupted tool calls are never replayed.</p></div><button type="button" onClick={onRetry}>Retry as new run</button></div>}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <div className="approval-card" key={approval.approvalId}><div><div className="eyebrow">APPROVAL REQUIRED</div><strong>{approval.toolId}@{approval.toolVersion}</strong><p className="muted">{approval.risk} · {approval.argumentBytes} bytes · expires {new Date(approval.expiresAt).toLocaleTimeString()}</p></div><div className="approval-actions"><button type="button" onClick={() => onApprove?.(approval.approvalId, 'allow')}>Allow</button><button className="cancel-button" type="button" onClick={() => onApprove?.(approval.approvalId, 'deny')}>Deny</button></div></div>)}<pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list">{events.map((event) => <div className="event-row" key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{event.type}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <button className="cancel-button" type="button" onClick={onCancel}>请求取消</button>}</section>;
+  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div><div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <div className="recovery-card"><div><div className="eyebrow">RECOVERY REQUIRED</div><strong>This run stopped safely after a daemon restart.</strong><p className="muted">Retry creates a new run from the original safety policy; interrupted tool calls are never replayed.</p></div><button type="button" onClick={onRetry}>Retry as new run</button></div>}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <div className="approval-card" key={approval.approvalId}><div><div className="eyebrow">APPROVAL REQUIRED</div><strong>{approval.toolId}@{approval.toolVersion}</strong><p className="muted">{approval.risk} · {approval.argumentBytes} bytes · expires {new Date(approval.expiresAt).toLocaleTimeString()}</p>{approval.details && <p className="muted">sandbox: {approval.details.sandboxProvider ?? run.config.sandbox.mode}{approval.details.network ? ` · network: ${approval.details.network}` : ''}{approval.details.sandboxImageDigest ? ` · image: ${approval.details.sandboxImageDigest}` : ''}</p>}</div><div className="approval-actions"><button type="button" onClick={() => onApprove?.(approval.approvalId, 'allow')}>Allow</button><button className="cancel-button" type="button" onClick={() => onApprove?.(approval.approvalId, 'deny')}>Deny</button></div></div>)}<pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list">{events.map((event) => <div className="event-row" key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{event.type}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <button className="cancel-button" type="button" onClick={onCancel}>请求取消</button>}</section>;
 }

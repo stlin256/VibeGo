@@ -19,6 +19,7 @@ function request(overrides: Partial<SandboxLaunchRequest> = {}): SandboxLaunchRe
     runtime: 'docker',
     image: digestImage,
     workspaceRoot,
+    workdir: 'src',
     writableRoots: [resolve(workspaceRoot, 'src')],
     network: 'restricted',
     command: ['node', 'run.mjs', '--mode', 'safe'],
@@ -38,6 +39,7 @@ describe('external sandbox runtime plan', () => {
       '--pids-limit', '128', '--network', 'none', '--memory', '536870912b', '--cpus', '1.5', '--env', 'NODE_ENV',
       digestImage, 'node', 'run.mjs', '--mode', 'safe',
     ]));
+    expect(plan.argv).toEqual(expect.arrayContaining(['--workdir', '/workspace/src']));
     expect(plan.argv.join(' ')).toContain(`dst=/workspace/${'src'},rw`);
     expect(plan.env).toEqual({ NODE_ENV: 'test' });
     expect(plan.limits).toEqual({ timeoutMs: 10_000, maxOutputBytes: 100_000 });
@@ -52,6 +54,7 @@ describe('external sandbox runtime plan', () => {
 
   it('rejects workspace escapes, broad roots, invalid argv, and unallowlisted env', () => {
     expect(() => buildContainerLaunchPlan(request({ workspaceRoot: resolve('/') }))).toThrowError(new SandboxRuntimeError('WORKSPACE_INVALID', 'Sandbox workspace root is too broad or cannot be mounted safely.'));
+    expect(() => buildContainerLaunchPlan(request({ workdir: '../outside' }))).toThrowError(new SandboxRuntimeError('WORKSPACE_INVALID', 'Sandbox working directory must remain inside the workspace.'));
     expect(() => buildContainerLaunchPlan(request({ writableRoots: [resolve(workspaceRoot, '..', 'outside')] }))).toThrowError(new SandboxRuntimeError('WRITABLE_ROOT_INVALID', 'Writable root must remain within the workspace.'));
     expect(() => buildContainerLaunchPlan(request({ command: ['sh', '-c', 'echo $HOME'] }))).toThrowError(new SandboxRuntimeError('ARGV_INVALID', 'Sandbox command contains disallowed process input.'));
     expect(() => buildContainerLaunchPlan(request({ env: { NODE_ENV: 'test', SECRET_TOKEN: 'x' } }))).toThrowError(new SandboxRuntimeError('ENV_NOT_ALLOWED', 'Sandbox environment key is not allowlisted.'));

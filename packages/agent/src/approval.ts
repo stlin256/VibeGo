@@ -2,6 +2,12 @@ export type ApprovalDecision = 'allow' | 'deny';
 export type ApprovalResolution = ApprovalDecision | 'expired';
 export type ApprovalDecisionResult = 'accepted' | 'not-found' | 'already-decided' | 'expired';
 
+export interface ApprovalDetails {
+  readonly sandboxProvider?: 'docker' | 'podman' | 'vm';
+  readonly sandboxImageDigest?: string;
+  readonly network?: 'restricted' | 'enabled';
+}
+
 export interface ApprovalRequest {
   readonly approvalId: string;
   readonly runId: string;
@@ -11,6 +17,7 @@ export interface ApprovalRequest {
   readonly toolVersion: string;
   readonly risk: 'read' | 'write' | 'destructive' | 'network';
   readonly argumentBytes: number;
+  readonly details?: ApprovalDetails;
   readonly createdAt: number;
   readonly expiresAt: number;
 }

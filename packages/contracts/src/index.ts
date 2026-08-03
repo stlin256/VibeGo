@@ -29,6 +29,7 @@ export const SandboxPolicySchema = z.discriminatedUnion('mode', [
     mode: z.literal('external-sandbox'),
     provider: z.enum(['docker', 'podman', 'vm']),
     network: z.enum(['restricted', 'enabled']),
+    writableRoots: z.array(z.string().min(1)).max(32).optional(),
   }),
   z.object({ mode: z.literal('danger-full-access'), enabledBy: z.literal('explicit-user-only') }),
 ]);

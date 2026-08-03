@@ -13,6 +13,7 @@ export interface ToolIntent {
   networkTarget?: string;
   taskTrust: TaskTrust;
   sandboxMode: ToolSandboxMode;
+  sandboxProvider?: 'docker' | 'podman' | 'vm';
   networkAccess: 'restricted' | 'enabled';
   approvalPolicy: ApprovalPolicyConfig;
   policyRevision: string;
@@ -64,6 +65,7 @@ export function createApprovalCacheKey(intent: ToolIntent): string {
     path: intent.path ?? null,
     networkTarget: intent.networkTarget ?? null,
     sandboxMode: intent.sandboxMode,
+    sandboxProvider: intent.sandboxProvider ?? null,
     policyRevision: intent.policyRevision,
   });
 }
@@ -101,7 +103,9 @@ export class ApprovalPolicy {
 
   private decisionForPolicy(intent: ToolIntent, cacheKey: string): PolicyEvaluation {
     if (intent.risk === 'read') return this.result('allow', 'READ_ONLY', cacheKey);
-    if (intent.risk === 'destructive') return this.result('forbidden', 'DESTRUCTIVE_OPERATION', cacheKey);
+    if (intent.risk === 'destructive' && (intent.sandboxMode !== 'external-sandbox' || !intent.sandboxProvider)) {
+      return this.result('forbidden', 'DESTRUCTIVE_OPERATION', cacheKey);
+    }
     if (intent.approvalPolicy === 'never') return this.result('forbidden', 'APPROVAL_DISABLED', cacheKey);
     if (typeof intent.approvalPolicy === 'object' && !intent.approvalPolicy.granular.permissionRequest) {
       return this.result('forbidden', 'PERMISSION_REQUEST_DISABLED', cacheKey);

@@ -31,6 +31,7 @@ describe('ApprovalPolicy', () => {
     expect(policy.evaluate(intent({ toolId: 'filesystem.read', risk: 'read', sandboxMode: 'workspace-write' })).decision).toBe('allow');
     expect(policy.evaluate(intent()).decision).toBe('prompt');
     expect(policy.evaluate(intent({ toolId: 'shell.exec', risk: 'destructive', sandboxMode: 'external-sandbox' })).decision).toBe('forbidden');
+    expect(policy.evaluate(intent({ toolId: 'shell.exec', risk: 'destructive', sandboxMode: 'external-sandbox', sandboxProvider: 'docker' })).decision).toBe('prompt');
   });
 
   it('requires external sandbox for untrusted content before other policy checks', () => {

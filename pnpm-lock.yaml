@@ -44,6 +44,9 @@ importers:
       '@ready4vibe/sandbox':
         specifier: workspace:*
         version: link:../../packages/sandbox
+      '@ready4vibe/sandbox-runtime':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-runtime
       '@ready4vibe/scheduler':
         specifier: workspace:*
         version: link:../../packages/scheduler

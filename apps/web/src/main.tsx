@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -17,6 +17,8 @@ function RuntimeApp(): JSX.Element {
   const [modelSettingsUnavailable, setModelSettingsUnavailable] = useState(false);
   const [toolSettings, setToolSettings] = useState<ToolSettingsStatus>();
   const [toolSettingsUnavailable, setToolSettingsUnavailable] = useState(false);
+  const [sandboxSettings, setSandboxSettings] = useState<SandboxSettingsStatus>();
+  const [sandboxSettingsUnavailable, setSandboxSettingsUnavailable] = useState(false);
 
   useEffect(() => {
     saveRunProfile(profile);
@@ -52,6 +54,16 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshSandboxSettings = async (): Promise<void> => {
+    try {
+      setSandboxSettings(await client.sandboxSettings());
+      setSandboxSettingsUnavailable(false);
+    } catch (reason) {
+      setSandboxSettings(undefined);
+      setSandboxSettingsUnavailable(isSandboxSettingsUnavailable(reason));
+    }
+  };
+
   useEffect(() => {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
@@ -59,6 +71,7 @@ function RuntimeApp(): JSX.Element {
         void refreshCertificateStatus();
         void refreshModelSettings();
         void refreshToolSettings();
+        void refreshSandboxSettings();
       }
     }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
@@ -71,6 +84,7 @@ function RuntimeApp(): JSX.Element {
       await refreshCertificateStatus();
       await refreshModelSettings();
       await refreshToolSettings();
+      await refreshSandboxSettings();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -140,12 +154,28 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
 
+  const probeSandbox = async (provider: 'docker' | 'podman'): Promise<void> => {
+    try {
+      setSandboxSettings(await client.probeSandbox(provider));
+      setSandboxSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const setSandboxSettingsFromWeb = async (input: { provider: 'docker' | 'podman'; imageDigest: string; network: 'restricted' | 'enabled'; resources: SandboxSettingsStatus['resources']; enabled: boolean }): Promise<void> => {
+    try {
+      setSandboxSettings(await client.setSandboxSettings(input));
+      setSandboxSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
   const resetProfile = (): void => {
     resetRunProfile();
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -167,6 +197,10 @@ function isModelSettingsUnavailable(reason: unknown): boolean {
 
 function isToolSettingsUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'TOOL_SETTINGS_UNAVAILABLE';
+}
+
+function isSandboxSettingsUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'SANDBOX_SETTINGS_UNAVAILABLE';
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><RuntimeApp /></StrictMode>);

@@ -13,7 +13,7 @@ import {
   type SchedulerRequest,
 } from '@ready4vibe/contracts';
 import { Scheduler, SchedulerCancelledError } from '@ready4vibe/scheduler';
-import { ApprovalBrokerError, type ApprovalBroker, type ApprovalRequest, type ApprovalResolution } from './approval.js';
+import { ApprovalBrokerError, type ApprovalBroker, type ApprovalDetails, type ApprovalRequest, type ApprovalResolution } from './approval.js';
 
 export * from './approval.js';
 
@@ -74,6 +74,7 @@ export interface ToolRuntime {
   readonly descriptors: readonly AgentToolDescriptor[];
   execute(request: ToolRuntimeRequest): Promise<ToolRuntimeResult>;
   approve?(request: ToolRuntimeRequest, ttlMs: number): Promise<void>;
+  approvalDetails?(request: ToolRuntimeRequest): ApprovalDetails | undefined;
 }
 
 export class AgentLoop {
@@ -410,6 +411,7 @@ const messages: unknown[] = [...contextResult.messages];
         return { descriptor, content: serialized.content };
       } catch (error) {
         const failure = safeToolFailure(error);
+        const approvalDetails = runtime.approvalDetails?.(runtimeRequest);
         if (failure.code === 'APPROVAL_REQUIRED' && attempt === 0 && runtime.approve && this.options.approvalBroker) {
           const approvalId = `ap_${uuidv7()}`;
           const createdAt = Date.now();
@@ -422,6 +424,7 @@ const messages: unknown[] = [...contextResult.messages];
             toolVersion: descriptor.version,
             risk: descriptor.risk,
             argumentBytes: Buffer.byteLength(call.argumentsText),
+            ...(approvalDetails ? { details: approvalDetails } : {}),
             createdAt,
             expiresAt: createdAt + this.options.approvalBroker.timeoutMs,
           };
@@ -433,6 +436,7 @@ const messages: unknown[] = [...contextResult.messages];
             toolVersion: descriptor.version,
             risk: descriptor.risk,
             argumentBytes: approval.argumentBytes,
+            ...(approval.details ? { details: approval.details } : {}),
             expiresAt: new Date(approval.expiresAt).toISOString(),
           });
           await transition('waiting-approval', 'user-approval-required');
@@ -476,6 +480,7 @@ const messages: unknown[] = [...contextResult.messages];
             risk: descriptor.risk,
             argumentBytes: Buffer.byteLength(call.argumentsText),
             reasonCode: failure.code,
+            ...(approvalDetails ? { details: approvalDetails } : {}),
           });
         }
         await this.append(runId, 'tool.completed', 'tool', turnId, {

@@ -9,6 +9,7 @@ import {
   validateExecutionLimits,
 } from '@ready4vibe/execution';
 import { ApprovalPolicy, type ToolIntent } from '@ready4vibe/policy';
+import type { ApprovalDetails } from '@ready4vibe/agent';
 import { SandboxResolver, SandboxUnavailableError, type ResolvedSandbox, type SandboxResolveRequest } from '@ready4vibe/sandbox';
 import { ToolRegistry, type ToolSandboxMode } from '@ready4vibe/tools';
 
@@ -144,6 +145,7 @@ export interface ToolExecutorRuntimeOptions {
   readonly resolveWorkspaceRoot: (request: ToolRuntimeRequest) => string;
   readonly createIntent: (request: ToolRuntimeRequest) => ToolIntent;
   readonly createSandboxRequest: (request: ToolRuntimeRequest) => SandboxResolveRequest;
+  readonly approvalDetails?: (request: ToolRuntimeRequest) => ApprovalDetails | undefined;
 }
 
 /**
@@ -205,6 +207,10 @@ export class ToolExecutorRuntime implements ToolRuntime {
       sandbox: this.options.createSandboxRequest({ ...request, descriptor }),
       input: request.input,
     }, ttlMs);
+  }
+
+  approvalDetails(request: ToolRuntimeRequest): ApprovalDetails | undefined {
+    return this.options.approvalDetails?.(request);
   }
 }
 

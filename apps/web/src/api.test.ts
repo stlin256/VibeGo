@@ -133,6 +133,19 @@ describe('ApiClient', () => {
     expect(calls[1]?.init?.body).toBe(JSON.stringify({ filesystemEnabled: true }));
   });
 
+  it('probes and configures external sandbox settings through guided endpoints', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ provider: 'docker', detected: true, healthy: true, enabled: init?.method === 'POST' && input.endsWith('/sandbox'), imageDigest: null, network: 'restricted', resources: { maxMemoryBytes: 1, maxCpuMillis: 1, maxPids: 1, timeoutMs: 1, maxOutputBytes: 1 }, capabilities: null });
+    });
+    await expect(client.sandboxSettings()).resolves.toMatchObject({ enabled: false });
+    await expect(client.probeSandbox('docker')).resolves.toMatchObject({ healthy: true });
+    await expect(client.setSandboxSettings({ provider: 'docker', imageDigest: `ghcr.io/example@sha256:${'a'.repeat(64)}`, network: 'restricted', resources: {}, enabled: true })).resolves.toMatchObject({ provider: 'docker' });
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/sandbox', '/api/v1/settings/sandbox/probe', '/api/v1/settings/sandbox']);
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ provider: 'docker' }));
+  });
+
   it('parses SSE frames, ignores heartbeat/invalid data and stops at terminal event', async () => {
     expect(parseSseFrame(': heartbeat')).toBeUndefined();
     expect(parseSseFrame('id: 4\nevent: model.delta\ndata: {"version":1,"id":"e4","seq":4,"runId":"run_1","type":"model.delta","at":"now","payload":{}}')).toMatchObject({ seq: 4, type: 'model.delta' });

@@ -29,7 +29,7 @@ export interface RunManagerOptions {
   modelProvider: ModelProvider;
   modelProviderForRun?: () => ModelProvider;
   toolRuntime?: ToolRuntime;
-  toolRuntimeForRun?: () => ToolRuntime | undefined;
+  toolRuntimeForRun?: (config: RunConfig) => ToolRuntime | undefined;
   approvalBroker?: ApprovalBroker;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
@@ -41,7 +41,7 @@ export class RunManager {
   readonly approvalBroker: ApprovalBroker;
   private readonly agentLoop: AgentLoop;
   private readonly modelProviderForRun: () => ModelProvider;
-  private readonly toolRuntimeForRun: () => ToolRuntime | undefined;
+  private readonly toolRuntimeForRun: (config: RunConfig) => ToolRuntime | undefined;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
@@ -71,7 +71,7 @@ export class RunManager {
     const runId = `run_${uuidv7()}`;
     const controller = new AbortController();
     this.controllers.set(runId, controller);
-    const capturedToolRuntime = this.toolRuntimeForRun();
+    const capturedToolRuntime = this.toolRuntimeForRun(config);
     const promise = this.agentLoop.run({
       runId,
       config,

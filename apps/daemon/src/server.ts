@@ -5,6 +5,7 @@ import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type T
 import type { CertificateStatus } from '@ready4vibe/certificates';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager } from './run-manager.js';
+import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
@@ -30,6 +31,7 @@ export interface DaemonServerOptions {
   certificateStatus?: CertificateStatus;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
+  sandboxSettings?: SandboxSettingsManager;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -45,6 +47,7 @@ interface ResolvedDaemonServerOptions {
   certificateStatus?: CertificateStatus;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
+  sandboxSettings?: SandboxSettingsManager;
 }
 
 export interface HealthResponse {
@@ -92,6 +95,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
+    ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -267,6 +271,62 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/sandbox') {
+    if (!options.sandboxSettings) {
+      writeJson(response, 503, { error: { code: 'SANDBOX_SETTINGS_UNAVAILABLE', message: 'Sandbox settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.sandboxSettings.status());
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST required' } }, { Allow: 'GET, POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isSandboxSettingsInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Validated sandbox settings are required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, await options.sandboxSettings.configure(input));
+    } catch (error) {
+      if (error instanceof SandboxSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/sandbox/probe') {
+    if (!options.sandboxSettings) {
+      writeJson(response, 503, { error: { code: 'SANDBOX_SETTINGS_UNAVAILABLE', message: 'Sandbox settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isSandboxProbeInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Docker or Podman provider is required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, await options.sandboxSettings.probe(input.provider));
+    } catch (error) {
+      if (error instanceof SandboxSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
   if (pathname === '/api/v1/runs') {
     if (request.method !== 'POST') {
       writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
@@ -428,6 +488,16 @@ function isModelSettingsInput(value: unknown): value is ModelSettingsInput {
 
 function isToolSettingsInput(value: unknown): value is { filesystemEnabled: boolean } {
   return typeof value === 'object' && value !== null && 'filesystemEnabled' in value && typeof value.filesystemEnabled === 'boolean';
+}
+
+function isSandboxProbeInput(value: unknown): value is { provider: 'docker' | 'podman' } {
+  return typeof value === 'object' && value !== null && 'provider' in value && (value.provider === 'docker' || value.provider === 'podman');
+}
+
+function isSandboxSettingsInput(value: unknown): value is SandboxSettingsInput {
+  if (typeof value !== 'object' || value === null || !('provider' in value) || (value.provider !== 'docker' && value.provider !== 'podman') || !('imageDigest' in value) || typeof value.imageDigest !== 'string' || !('network' in value) || (value.network !== 'restricted' && value.network !== 'enabled') || !('enabled' in value) || typeof value.enabled !== 'boolean') return false;
+  if (!('resources' in value) || typeof value.resources !== 'object' || value.resources === null || Array.isArray(value.resources)) return false;
+  return Object.values(value.resources).every((entry) => typeof entry === 'number' && Number.isSafeInteger(entry) && entry > 0);
 }
 
 function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {

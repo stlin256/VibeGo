@@ -11,6 +11,7 @@ import { RunManager } from './run-manager.js';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { InMemoryToolSettingsManager } from './tool-settings.js';
+import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -382,5 +383,24 @@ describe('daemon health server', () => {
     const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ filesystemEnabled: true }) });
     expect(enabled.status).toBe(200);
     expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+  });
+
+  it('keeps external sandbox probing and enablement explicit and secret-free', async () => {
+    const sandboxSettings = new InMemorySandboxSettingsManager({ probe: { probe: async () => ({ detected: true, healthy: true, version: 'test-runtime' }) }, processRunner: { run: async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false, timedOut: false, cancelled: false }) } });
+    const server = createDaemonServer({ sandboxSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/sandbox`;
+    expect(await (await fetch(base)).json()).toMatchObject({ enabled: false, detected: false, healthy: false, provider: null });
+    const rejected = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'docker', imageDigest: 'node:22', network: 'restricted', resources: {}, enabled: true }) });
+    expect(rejected.status).toBe(400);
+    const probe = await fetch(`${base}/probe`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'docker' }) });
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toMatchObject({ healthy: true, capabilities: { version: 'test-runtime' } });
+    const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'docker', imageDigest: `ghcr.io/ready4vibe/runner@sha256:${'a'.repeat(64)}`, network: 'restricted', resources: {}, enabled: true }) });
+    const enabledBody = await enabled.text();
+    expect(enabled.status).toBe(200);
+    expect(enabledBody).not.toContain('C:\\Users');
+    expect(JSON.parse(enabledBody)).toMatchObject({ enabled: true, provider: 'docker', imageDigest: expect.stringContaining('@sha256:') });
   });
 });

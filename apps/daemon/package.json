@@ -25,6 +25,7 @@
     "@ready4vibe/policy": "workspace:*",
     "@ready4vibe/sandbox": "workspace:*",
     "@ready4vibe/scheduler": "workspace:*",
+    "@ready4vibe/sandbox-runtime": "workspace:*",
     "@ready4vibe/storage": "workspace:*",
     "@ready4vibe/tool-adapters": "workspace:*",
     "@ready4vibe/tools": "workspace:*",

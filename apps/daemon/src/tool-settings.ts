@@ -25,7 +25,7 @@ export interface ToolSettingsStatus {
 export interface ToolSettingsManager {
   status(): ToolSettingsStatus;
   setFilesystemEnabled(enabled: boolean): ToolSettingsStatus;
-  runtimeForRun(): ToolRuntime | undefined;
+  runtimeForRun(config?: RunConfig): ToolRuntime | undefined;
 }
 
 export class InMemoryToolSettingsManager implements ToolSettingsManager {
@@ -55,9 +55,38 @@ export class InMemoryToolSettingsManager implements ToolSettingsManager {
     return this.status();
   }
 
-  runtimeForRun(): ToolRuntime | undefined {
+  runtimeForRun(_config?: RunConfig): ToolRuntime | undefined {
     return this.enabled ? this.runtime : undefined;
   }
+}
+
+/** Combines independently gated runtimes without exposing a shared mutable registry. */
+export function composeToolRuntimes(runtimes: readonly (ToolRuntime | undefined)[]): ToolRuntime | undefined {
+  const available = runtimes.filter((runtime): runtime is ToolRuntime => runtime !== undefined);
+  if (available.length === 0) return undefined;
+  if (available.length === 1) return available[0];
+  const byName = new Map<string, ToolRuntime>();
+  const descriptors = available.flatMap((runtime) => runtime.descriptors);
+  for (const runtime of available) {
+    for (const descriptor of runtime.descriptors) {
+      if (byName.has(descriptor.name)) throw new ToolSettingsError();
+      byName.set(descriptor.name, runtime);
+    }
+  }
+  return {
+    descriptors: Object.freeze([...descriptors]),
+    execute: async (request) => {
+      const runtime = byName.get(request.descriptor.name);
+      if (!runtime) throw new ToolSettingsError();
+      return runtime.execute(request);
+    },
+    approve: async (request, ttlMs) => {
+      const runtime = byName.get(request.descriptor.name);
+      if (!runtime?.approve) throw new ToolSettingsError();
+      return runtime.approve(request, ttlMs);
+    },
+    approvalDetails: (request) => byName.get(request.descriptor.name)?.approvalDetails?.(request),
+  };
 }
 
 export class ToolSettingsError extends Error {

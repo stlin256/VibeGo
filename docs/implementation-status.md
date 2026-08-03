@@ -38,7 +38,7 @@
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（18 个 workspace package）；
-- `pnpm test`：通过，158 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 5、skill-mcp 10、daemon 27、web 19；Vitest 按 package 输出）；
+- `pnpm test`：通过，169 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 5、skill-mcp 10、daemon 33、web 22；Vitest 按 package 输出）；
 - Spec 27 增加 3 项 Web 存储测试，形成 Spec 28 之前的 146 项基线（Web 15）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
@@ -98,15 +98,17 @@ fail-closed.
 
 Spec 29 is now implemented: the daemon starts with filesystem tools disabled,
 the authenticated Web toggle enables only bounded read/write adapters, and
-new runs capture a stable runtime snapshot. Shell, external sandbox, and
-non-default workspace execution remain deferred to Spec 30.
+new runs capture a stable runtime snapshot. Shell and external sandbox wiring
+are implemented in Spec 30; non-default workspace mapping remains deferred to
+a future workspace-registry milestone.
 
-## Spec 30 design note (2026-08-03)
+## Spec 30 implementation note (2026-08-03)
 
-The next module is specified in
-`docs/specs/30-external-shell-sandbox-wiring.md`. It will add a guided,
-authenticated Web flow for probing and explicitly enabling Docker/Podman
-external sandbox execution. Shell remains disabled by default, requires a
-digest-pinned image and bounded resources, has no host fallback, and keeps
-restricted network as the default. Runtime settings remain process-memory
-only until a later persistence/keyring decision.
+Spec 30 is now implemented as a first external-runtime slice. The daemon
+exposes authenticated probe/configure endpoints and the Web Settings panel
+guides Docker/Podman selection, digest validation, and explicit shell enablement
+without manual config-file editing. A healthy, digest-pinned runtime is required
+before `shell.exec` is registered; requests use the existing approval/policy
+boundary, bounded container runner, restricted-network default, and per-run
+runtime snapshot. Host shell fallback, image pulls, VM providers, and persistent
+runtime settings remain deferred.

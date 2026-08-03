@@ -96,6 +96,7 @@ function isSandboxProfile(value: unknown): value is RunProfile['sandbox'] {
   if (value.network !== 'restricted' && value.network !== 'enabled') return false;
   if (value.mode === 'workspace-write' && (!Array.isArray(value.writableRoots) || value.writableRoots.length === 0 || value.writableRoots.length > 32 || value.writableRoots.some((item) => typeof item !== 'string' || item.length === 0 || item.length > 512))) return false;
   if (value.mode === 'external-sandbox' && value.provider !== 'docker' && value.provider !== 'podman' && value.provider !== 'vm') return false;
+  if (value.mode === 'external-sandbox' && value.writableRoots !== undefined && (!Array.isArray(value.writableRoots) || value.writableRoots.length > 32 || value.writableRoots.some((item) => typeof item !== 'string' || item.length === 0 || item.length > 512))) return false;
   return true;
 }
 
@@ -141,6 +142,7 @@ export interface ApprovalSummary {
   toolVersion: string;
   risk: 'read' | 'write' | 'destructive' | 'network';
   argumentBytes: number;
+  details?: { sandboxProvider?: 'docker' | 'podman' | 'vm'; sandboxImageDigest?: string; network?: 'restricted' | 'enabled' };
   createdAt: number;
   expiresAt: number;
 }
@@ -174,6 +176,25 @@ export interface ToolSettingsStatus {
   filesystemEnabled: boolean;
   workspaceLabel: string;
   availableTools: readonly string[];
+}
+
+export interface SandboxResourceSettings {
+  maxMemoryBytes: number;
+  maxCpuMillis: number;
+  maxPids: number;
+  timeoutMs: number;
+  maxOutputBytes: number;
+}
+
+export interface SandboxSettingsStatus {
+  provider: 'docker' | 'podman' | null;
+  detected: boolean;
+  healthy: boolean;
+  enabled: boolean;
+  imageDigest: string | null;
+  network: 'restricted' | 'enabled';
+  resources: SandboxResourceSettings;
+  capabilities: { version: string; networkModes: readonly ('restricted' | 'enabled')[]; maxMemoryBytes: number; maxCpuMillis: number } | null;
 }
 
 export interface StoredEvent {
@@ -246,6 +267,18 @@ export class ApiClient {
 
   async setFilesystemToolsEnabled(filesystemEnabled: boolean): Promise<ToolSettingsStatus> {
     return this.request<ToolSettingsStatus>('/api/v1/settings/tools', { method: 'POST', body: JSON.stringify({ filesystemEnabled }) });
+  }
+
+  async sandboxSettings(): Promise<SandboxSettingsStatus> {
+    return this.request<SandboxSettingsStatus>('/api/v1/settings/sandbox', { method: 'GET' });
+  }
+
+  async probeSandbox(provider: 'docker' | 'podman'): Promise<SandboxSettingsStatus> {
+    return this.request<SandboxSettingsStatus>('/api/v1/settings/sandbox/probe', { method: 'POST', body: JSON.stringify({ provider }) });
+  }
+
+  async setSandboxSettings(input: { provider: 'docker' | 'podman'; imageDigest: string; network: 'restricted' | 'enabled'; resources: Partial<SandboxResourceSettings>; enabled: boolean }): Promise<SandboxSettingsStatus> {
+    return this.request<SandboxSettingsStatus>('/api/v1/settings/sandbox', { method: 'POST', body: JSON.stringify(input) });
   }
 
   async completePairing(code: string): Promise<PairingResult> {

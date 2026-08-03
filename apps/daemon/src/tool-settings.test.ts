@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { InMemoryToolSettingsManager } from './tool-settings.js';
+import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
 
 const config = (overrides: Record<string, unknown> = {}) => ({
   workspaceId: 'default',
@@ -52,5 +52,14 @@ describe('daemon filesystem tool settings', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('composes independent runtimes without merging their handlers', async () => {
+    const calls: string[] = [];
+    const first = { descriptors: [{ name: 'first', id: 'first', version: '1.0.0', risk: 'read' as const, summary: 'first' }], execute: async () => { calls.push('first'); return { output: 1 }; } };
+    const second = { descriptors: [{ name: 'second', id: 'second', version: '1.0.0', risk: 'read' as const, summary: 'second' }], execute: async () => { calls.push('second'); return { output: 2 }; } };
+    const runtime = composeToolRuntimes([first, second])!;
+    await expect(runtime.execute({ descriptor: runtime.descriptors[1]!, runId: 'run', turnId: 'turn', callId: 'call', input: {}, config: config(), signal: new AbortController().signal })).resolves.toEqual({ output: 2 });
+    expect(calls).toEqual(['second']);
   });
 });

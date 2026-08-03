@@ -1,6 +1,6 @@
 # Spec 30: Guided external shell and sandbox wiring
 
-Status: Design (implementation next)
+Status: Implemented (MVP slice)
 
 ## Goal
 
@@ -73,9 +73,10 @@ Authenticated endpoints:
 - `GET /api/v1/settings/sandbox` returns provider, `detected`, `healthy`,
   `enabled`, `imageDigest`, `network`, and bounded capabilities. It never
   returns command-line arguments, host paths, environment values, or secrets.
-- `POST /api/v1/settings/sandbox/probe` accepts `{ provider, imageDigest }`,
-  performs a bounded capability probe, and returns the same safe status. It
-  does not pull images or start a coding task.
+- `POST /api/v1/settings/sandbox/probe` accepts `{ provider }`, performs a
+  bounded capability probe, and returns the same safe status. It does not pull
+  images or start a coding task; the image digest is validated by the separate
+  configure request.
 - `POST /api/v1/settings/sandbox` accepts the validated non-secret settings
   (`provider`, `imageDigest`, `network`, resource selections, and
   `enabled`). Invalid or unavailable requests fail closed with stable error
@@ -124,3 +125,22 @@ runtime setting is accepted from query parameters.
 - Git/patch-specific tools, MCP/Skill transport activation, VM providers,
   image pulling or signing, multi-user policy, persistent credential/keyring
   storage, public access/Tailscale/SSH adapters, and a full diff/log explorer.
+
+## Implementation evidence (2026-08-03)
+
+- `InMemorySandboxSettingsManager` keeps external shell disabled until an
+  authenticated Web probe succeeds and the user enables a digest-pinned
+  provider. Runtime settings remain process-memory only.
+- `GET/POST /api/v1/settings/sandbox` and
+  `POST /api/v1/settings/sandbox/probe` expose only safe status metadata; the
+  React Settings panel provides provider, probe, digest, and enable/disable
+  controls without asking for config-file edits or host paths.
+- `shell.exec` is constructed per run only for the selected healthy provider.
+  It uses `ContainerCliRunner`, `SandboxResolver`, `ApprovalPolicy`,
+  `ArgvGuard`, `PathGuard`, bounded resources, and a digest-pinned image; host
+  process fallback is not registered.
+- External sandbox policy now accepts optional bounded `writableRoots`, and
+  the container planner maps a guarded working directory to `/workspace`.
+- Daemon, Web, policy, sandbox-runtime, API, approval, and secret-free status
+  tests cover the new boundary; tests inject fake probes/runners and never
+  start Docker/Podman or make model requests.

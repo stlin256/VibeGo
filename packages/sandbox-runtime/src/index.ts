@@ -40,6 +40,8 @@ export interface SandboxLaunchRequest {
   readonly image: string;
   readonly allowMutableImageTag?: boolean;
   readonly workspaceRoot: string;
+  /** Optional path inside the mounted workspace used as the container cwd. */
+  readonly workdir?: string;
   readonly writableRoots?: readonly string[];
   readonly network: SandboxNetwork;
   readonly command: readonly string[];
@@ -87,6 +89,7 @@ export function buildContainerLaunchPlan(request: SandboxLaunchRequest): Sandbox
   if (request.runtime === 'vm') throw new SandboxRuntimeError('RUNTIME_UNSUPPORTED', 'VM sandbox runtime is not wired yet.');
   assertImage(request.image, request.allowMutableImageTag === true);
   const workspaceRoot = assertWorkspaceRoot(request.workspaceRoot);
+  const workdir = assertWorkdir(workspaceRoot, request.workdir);
   const writableRoots = assertWritableRoots(workspaceRoot, request.writableRoots ?? []);
   const env = validateEnv(request.env ?? {}, request.envAllowlist ?? []);
   const command = validateCommand(request.command);
@@ -108,6 +111,7 @@ export function buildContainerLaunchPlan(request: SandboxLaunchRequest): Sandbox
     '--network',
     request.network === 'restricted' ? 'none' : 'bridge',
   ];
+  if (workdir) argv.push('--workdir', workdir);
   if (request.limits?.maxMemoryBytes !== undefined) argv.push('--memory', `${request.limits.maxMemoryBytes}b`);
   if (request.limits?.maxCpuMillis !== undefined) argv.push('--cpus', formatCpus(request.limits.maxCpuMillis));
   for (const key of Object.keys(env).sort()) argv.push('--env', key);
@@ -283,6 +287,19 @@ function assertWritableRoots(workspaceRoot: string, values: readonly string[]): 
     roots.add(root);
   }
   return roots;
+}
+
+function assertWorkdir(workspaceRoot: string, value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length === 0 || PATH_CONTROL.test(value) || isAbsolute(value)) {
+    throw new SandboxRuntimeError('WORKSPACE_INVALID', 'Sandbox working directory must remain inside the workspace.');
+  }
+  const candidate = resolve(workspaceRoot, value);
+  const rest = relative(workspaceRoot, candidate);
+  if (isAbsolute(rest) || rest === '..' || rest.startsWith(`..${sep}`)) {
+    throw new SandboxRuntimeError('WORKSPACE_INVALID', 'Sandbox working directory must remain inside the workspace.');
+  }
+  return `/workspace${rest ? `/${rest.split(sep).join('/')}` : ''}`;
 }
 
 function validateCommand(command: readonly string[]): readonly string[] {

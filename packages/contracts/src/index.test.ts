@@ -31,7 +31,7 @@ describe('harness contracts', () => {
     expect(() => RunConfigSchema.parse({
       ...validConfig,
       taskTrust: 'untrusted-content',
-      sandbox: { mode: 'external-sandbox', provider: 'docker', network: 'restricted' },
+      sandbox: { mode: 'external-sandbox', provider: 'docker', network: 'restricted', writableRoots: ['src'] },
     })).not.toThrow();
     expect(() => RunConfigSchema.parse({
       ...validConfig,
