@@ -33,6 +33,12 @@ const runManager = new RunManager({
   modelProvider,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
+try {
+  await runManager.recoverAfterRestart();
+} catch (error) {
+  eventStore.close();
+  throw error;
+}
 const server = createDaemonServer({
   host,
   transportMode,

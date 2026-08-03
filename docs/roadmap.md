@@ -26,7 +26,7 @@
 
 这样早期就能证明“远程观察和可恢复”主路径，同时把危险工具放在经过测试的边界之后。
 
-## Spec 18：AgentLoop/daemon tool wiring（当前）
+## Spec 18：AgentLoop/daemon tool wiring（已完成）
 
 把模型 tool-call delta 接入已存在的 ToolRegistry、ApprovalPolicy、SandboxResolver
 和 ToolExecutor。ToolRuntime 只允许显式注入；daemon 默认仍不启用主机工具。每次
@@ -35,24 +35,33 @@
 审计事件。审批续接 API、MCP/Skill 真实 transport 和默认 shell/container wiring
 继续后置。
 
-## Spec 19：MCP transport boundary（当前）
+## Spec 19：MCP transport boundary（已完成）
 
 在 manifest/allowlist 之上增加 one-shot JSON-RPC transport client：连接器必须显式
 注入，严格限制 server/tool/version、env key、消息大小、请求超时和 response id。
 stdio/HTTP 仅共享 channel contract；本阶段不启动子进程、不发网络请求，后续再接
 sandbox、approval 和 scheduler。
 
-## Spec 20：ToolExecutor runtime bridge（当前）
+## Spec 20：ToolExecutor runtime bridge（已完成）
 
 将 AgentLoop 的通用 ToolRuntime 请求转换为 ToolExecutor 所需的 intent、sandbox
 request 和 workspace root。三类解析器都必须显式注入，确保 path/command/network
 能够参与 approval cache key；daemon 默认不创建 bridge。
 
-## Spec 21：Approval continuation（当前）
+## Spec 21：Approval continuation（已完成）
 
 将 `approval.required` 变成可续接的单用户闭环：内存 broker、120 秒过期、allow/deny
 一次性决策、AgentLoop 原地重试工具、`POST /runs/:runId/approve` 和 Web 审批卡片。
 无 broker/runtime approval 能力时继续 fail-closed；重启恢复与持久化审批后置。
+
+## Spec 22: Daemon restart recovery guard (已完成)
+
+Durable SQLite events are scanned before the HTTP listener starts. Any run that
+does not have a terminal status is marked `needs-recovery` exactly once. The
+marker is deliberately metadata-only and never contains tool arguments,
+environment values, paths, or secrets. Approval waits are not restored and no
+operation is retried automatically; a later spec will add an explicit
+user-confirmed retry/new-run flow.
 
 ## 暂缓决策
 

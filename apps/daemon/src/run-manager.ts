@@ -89,6 +89,7 @@ export class RunManager {
     let final: RunSnapshot['final'];
     for (const event of events) {
       if (event.type === 'run.status' && isStatusPayload(event.payload)) status = event.payload.to;
+      if (event.type === 'run.needs_recovery') status = 'needs-recovery';
       if (event.type === 'model.delta' && isTextDeltaPayload(event.payload)) output += event.payload.text;
       if (event.type === 'run.completed' && isCompletedPayload(event.payload)) {
         final = { summary: event.payload.summary, exitReason: event.payload.exitReason };
@@ -98,6 +99,9 @@ export class RunManager {
       }
       if (event.type === 'run.cancelled' && isCancelledPayload(event.payload)) {
         final = { summary: 'Run cancelled by user.', exitReason: event.payload.reason };
+      }
+      if (event.type === 'run.needs_recovery' && isRecoveryPayload(event.payload)) {
+        final = { summary: 'Run requires recovery after daemon restart.', exitReason: event.payload.reason };
       }
     }
     const queued = this.scheduler.queuedRunIds();
@@ -119,6 +123,41 @@ export class RunManager {
         workspaceLease,
       },
     };
+  }
+
+  /**
+   * Mark interrupted runs before the daemon starts accepting requests. This is
+   * deliberately metadata-only: no approval, tool input, or execution state is
+   * restored and no unknown write is retried automatically.
+   */
+  async recoverAfterRestart(): Promise<{ marked: number; skipped: number }> {
+    let marked = 0;
+    let skipped = 0;
+    for (const runId of this.eventStore.listRunIds()) {
+      const events = await this.eventStore.read(runId);
+      const status = latestRunStatus(events);
+      if (isTerminal(status) || status === 'needs-recovery') {
+        skipped += 1;
+        continue;
+      }
+      const correlationId = `corr_${uuidv7()}`;
+      await this.eventStore.append({
+        runId,
+        type: 'run.status',
+        source: 'system',
+        correlationId,
+        payload: { from: status, to: 'needs-recovery', reason: 'daemon-restarted' },
+      });
+      await this.eventStore.append({
+        runId,
+        type: 'run.needs_recovery',
+        source: 'system',
+        correlationId,
+        payload: { previousStatus: status, reason: 'daemon-restarted' },
+      });
+      marked += 1;
+    }
+    return { marked, skipped };
   }
 
   async cancel(runId: string): Promise<'accepted' | 'already-terminal' | 'not-found'> {
@@ -171,6 +210,10 @@ export class ObservableEventStore implements EventStore {
     return this.delegate.read(runId, afterSeq);
   }
 
+  listRunIds(): readonly string[] {
+    return this.delegate.listRunIds();
+  }
+
   lastSeq(runId: string): number {
     return this.delegate.lastSeq(runId);
   }
@@ -216,4 +259,17 @@ function isFailedPayload(value: unknown): value is { safeMessage: string; code: 
 
 function isCancelledPayload(value: unknown): value is { reason: string } {
   return typeof value === 'object' && value !== null && 'reason' in value && typeof value.reason === 'string';
+}
+
+function isRecoveryPayload(value: unknown): value is { reason: 'daemon-restarted' } {
+  return typeof value === 'object' && value !== null && 'reason' in value && value.reason === 'daemon-restarted';
+}
+
+function latestRunStatus(events: readonly StoredEvent[]): RunStatus {
+  let status: RunStatus = 'created';
+  for (const event of events) {
+    if (event.type === 'run.status' && isStatusPayload(event.payload)) status = event.payload.to;
+    if (event.type === 'run.needs_recovery') status = 'needs-recovery';
+  }
+  return status;
 }

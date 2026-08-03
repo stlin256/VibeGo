@@ -36,6 +36,10 @@ export class InMemoryEventStore implements EventStore {
     return (this.events.get(runId) ?? []).filter((event) => event.seq > afterSeq) as StoredEvent<TPayload>[];
   }
 
+  listRunIds(): readonly string[] {
+    return Object.freeze([...this.events.keys()]);
+  }
+
   lastSeq(runId: string): number {
     return this.events.get(runId)?.at(-1)?.seq ?? 0;
   }
@@ -140,6 +144,14 @@ export class SqliteEventStore implements EventStore {
       `)
       .all(runId, afterSeq) as unknown as SqliteEventRow[];
     return rows.map((row) => this.fromRow<TPayload>(row));
+  }
+
+  listRunIds(): readonly string[] {
+    this.ensureOpen();
+    const rows = this.database
+      .prepare('SELECT run_id FROM run_events GROUP BY run_id ORDER BY MIN(seq) ASC, run_id ASC')
+      .all() as unknown as Array<{ run_id: string }>;
+    return Object.freeze(rows.map((row) => row.run_id));
   }
 
   lastSeq(runId: string): number {

@@ -41,6 +41,7 @@ describe('harness contracts', () => {
 
   it('enforces the run state machine', () => {
     expect(canTransition('created', 'queued')).toBe(true);
+    expect(canTransition('waiting-approval', 'needs-recovery')).toBe(true);
     expect(canTransition('completed', 'executing')).toBe(false);
     expect(() => assertTransition('queued', 'completed')).toThrow('invalid run transition');
   });

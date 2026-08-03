@@ -135,6 +135,7 @@ export interface EventStore {
   append<TPayload>(event: NewDomainEvent<TPayload>): Promise<StoredEvent<TPayload>>;
   appendBatch<TPayload>(events: readonly NewDomainEvent<TPayload>[]): Promise<StoredEvent<TPayload>[]>;
   read<TPayload = unknown>(runId: string, afterSeq?: number): Promise<StoredEvent<TPayload>[]>;
+  listRunIds(): readonly string[];
   lastSeq(runId: string): number;
 }
 
@@ -164,12 +165,12 @@ export interface ModelProvider {
 }
 
 const TRANSITIONS: Record<RunStatus, readonly RunStatus[]> = {
-  created: ['queued', 'failed'],
-  queued: ['planning', 'cancelling', 'failed'],
-  planning: ['executing', 'waiting-approval', 'cancelling', 'failed', 'timed-out'],
-  executing: ['planning', 'waiting-approval', 'cancelling', 'completed', 'failed', 'timed-out'],
-  'waiting-approval': ['executing', 'cancelling', 'failed', 'timed-out'],
-  cancelling: ['cancelled', 'failed'],
+  created: ['queued', 'failed', 'needs-recovery'],
+  queued: ['planning', 'cancelling', 'failed', 'needs-recovery'],
+  planning: ['executing', 'waiting-approval', 'cancelling', 'failed', 'timed-out', 'needs-recovery'],
+  executing: ['planning', 'waiting-approval', 'cancelling', 'completed', 'failed', 'timed-out', 'needs-recovery'],
+  'waiting-approval': ['executing', 'cancelling', 'failed', 'timed-out', 'needs-recovery'],
+  cancelling: ['cancelled', 'failed', 'needs-recovery'],
   completed: [],
   failed: [],
   cancelled: [],
@@ -190,4 +191,3 @@ export function assertTransition(from: RunStatus, to: RunStatus): void {
 export function parseRunConfig(input: unknown): RunConfig {
   return RunConfigSchema.parse(input);
 }
-

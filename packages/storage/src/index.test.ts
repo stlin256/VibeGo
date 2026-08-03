@@ -42,6 +42,15 @@ describe('InMemoryEventStore', () => {
     const events = await store.read('run_1', 1);
     expect(events.map((item) => item.type)).toEqual(['b', 'c']);
   });
+
+  it('lists distinct run ids in insertion order', async () => {
+    const store = new InMemoryEventStore();
+    await store.append(event('run_1', 'run.created'));
+    await store.append(event('run_2', 'run.created'));
+    await store.append(event('run_1', 'run.status'));
+
+    expect(store.listRunIds()).toEqual(['run_1', 'run_2']);
+  });
 });
 
 describe('SqliteEventStore', () => {
@@ -54,6 +63,7 @@ describe('SqliteEventStore', () => {
 
     const reopened = new SqliteEventStore(databasePath);
     await expect(reopened.read('run_sqlite')).resolves.toHaveLength(2);
+    expect(reopened.listRunIds()).toEqual(['run_sqlite']);
     expect(reopened.lastSeq('run_sqlite')).toBe(2);
     reopened.close();
     rmSync(databasePath, { force: true });

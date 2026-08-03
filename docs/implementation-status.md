@@ -25,14 +25,15 @@
 17. `packages/sandbox-runtime` 已按 `docs/specs/16-sandbox-runtime.md` 实现 Docker/Podman argv 计划、digest 镜像策略、网络/资源/挂载限制和无 runner fail-closed；不启动主机进程；
 18. `packages/sandbox-runtime` 已按 `docs/specs/17-sandbox-cli-runner.md` 实现显式注入的 Docker/Podman CLI runner：shell:false、最小 env、timeout/abort、output cap 和稳定启动错误；daemon 默认不 wiring；
 19. `packages/skill-mcp` 已按 `docs/specs/19-mcp-transport-boundary.md` 实现注入式 one-shot JSON-RPC channel：allowlist、env key、消息大小、timeout、取消、response id 和 close-on-error 均 fail-closed；不启动子进程或网络；
-20. `packages/tool-adapters` 正在实现 `ToolExecutorRuntime` bridge：workspace root、ToolIntent 和 SandboxResolveRequest 均为显式回调，实际执行仍统一经过 ToolExecutor；daemon 默认不创建 bridge；
+20. `packages/tool-adapters` 已按 `docs/specs/20-tool-executor-runtime.md` 实现 `ToolExecutorRuntime` bridge：workspace root、ToolIntent 和 SandboxResolveRequest 均为显式回调，实际执行仍统一经过 ToolExecutor；daemon 默认不创建 bridge；
 21. `packages/agent`、`apps/daemon` 与 `apps/web` 已按 `docs/specs/21-approval-continuation.md` 实现单用户内存审批 broker、allow/deny/expiry/cancel 续接、`POST /runs/:runId/approve` 和审批卡片；无 runtime approval 能力时仍 fail-closed；
-22. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+22. `packages/contracts`、`packages/storage` 与 `apps/daemon` 已按 `docs/specs/22-restart-recovery.md` 实现启动前扫描持久化 run、幂等写入 `needs-recovery`，不恢复审批或自动重试；
+23. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（18 个 workspace package）；
-- `pnpm test`：通过，131 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 20、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 3、skill-mcp 10、daemon 16、web 7；Vitest 按 package 输出）；
+- `pnpm test`：通过，134 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 3、skill-mcp 10、daemon 18、web 7；Vitest 按 package 输出）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
