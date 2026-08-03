@@ -1,4 +1,5 @@
 import { v7 as uuidv7 } from 'uuid';
+import { ContextBudgetError, ContextManager, type ContextItem } from '@ready4vibe/context';
 import {
   assertTransition,
   parseRunConfig,
@@ -18,6 +19,7 @@ export interface AgentRunRequest {
   runId?: string;
   priority?: SchedulerRequest['priority'];
   signal?: AbortSignal;
+  contextItems?: readonly ContextItem[];
 }
 
 export interface AgentRunResult {
@@ -83,6 +85,32 @@ export class AgentLoop {
 
     try {
       await this.append(runId, 'run.created', 'user', correlationId, { config });
+      let contextResult: ReturnType<ContextManager['build']>;
+      try {
+        const context = new ContextManager(config.limits.maxContextBytes, [
+          ...(request.contextItems ?? []),
+          {
+            id: `${runId}:user-message`,
+            source: 'user',
+            trust: 'trusted',
+            role: 'user',
+            content: config.userMessage,
+          },
+        ]);
+        contextResult = context.build();
+      } catch (error) {
+        if (error instanceof ContextBudgetError) {
+          return await fail('CONTEXT_BUDGET_EXCEEDED', 'The context exceeds the configured budget.', false);
+        }
+        throw error;
+      }
+      if (contextResult.compacted) {
+        await this.append(runId, 'context.compacted', 'orchestrator', correlationId, {
+          droppedCount: contextResult.droppedCount,
+          droppedItemIds: contextResult.droppedItemIds,
+          bytes: contextResult.bytes,
+        });
+      }
       await transition('queued');
       if (controller.signal.aborted) return await cancel('user-cancelled-while-queued');
 
@@ -104,7 +132,7 @@ export class AgentLoop {
 
       const modelRequest: ModelRequest = {
         model: config.model.name,
-        messages: [{ role: 'user', content: config.userMessage }],
+        messages: contextResult.messages,
         tools: [],
         budget: {
           maxInputTokens: config.limits.maxModelInputTokens,

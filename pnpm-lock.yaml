@@ -26,6 +26,9 @@ importers:
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ready4vibe/model-openai':
+        specifier: workspace:*
+        version: link:../../packages/model-openai
       '@ready4vibe/scheduler':
         specifier: workspace:*
         version: link:../../packages/scheduler
@@ -42,6 +45,9 @@ importers:
 
   packages/agent:
     dependencies:
+      '@ready4vibe/context':
+        specifier: workspace:*
+        version: link:../context
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../contracts

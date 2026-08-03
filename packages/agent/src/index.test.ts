@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import type { ContextItem } from '@ready4vibe/context';
 import { AgentLoop } from './index.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
@@ -131,5 +132,30 @@ describe('AgentLoop', () => {
     const result = await loop.run({ runId: 'run_tool_unavailable', config: config() });
     expect(result.status).toBe('failed');
     expect((await eventStore.read('run_tool_unavailable')).at(-1)?.payload).toMatchObject({ code: 'TOOLS_UNAVAILABLE' });
+  });
+
+  it('compacts context before requesting the model and records only safe metadata', async () => {
+    const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const eventStore = new InMemoryEventStore();
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider });
+    const oldItem: ContextItem = { id: 'old-history', source: 'model', trust: 'trusted', role: 'assistant', content: 'old '.repeat(100) };
+
+    const result = await loop.run({ runId: 'run_context_compact', contextItems: [oldItem], config: config({ limits: { ...config().limits, maxContextBytes: 40 } }) });
+    const events = await eventStore.read('run_context_compact');
+    expect(result.status).toBe('completed');
+    expect(events.map((event) => event.type)).toContain('context.compacted');
+    expect(provider.requests[0]?.messages).toEqual([{ role: 'user', content: 'say hello' }]);
+  });
+
+  it('fails before scheduling when protected context exceeds the budget', async () => {
+    const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
+    const eventStore = new InMemoryEventStore();
+    const loop = new AgentLoop({ eventStore, scheduler, modelProvider: provider });
+
+    const result = await loop.run({ runId: 'run_context_too_large', config: config({ limits: { ...config().limits, maxContextBytes: 2 } }) });
+    expect(result.status).toBe('failed');
+    expect(scheduler.activeCount()).toBe(0);
+    expect((await eventStore.read('run_context_too_large')).at(-1)?.payload).toMatchObject({ code: 'CONTEXT_BUDGET_EXCEEDED' });
   });
 });
