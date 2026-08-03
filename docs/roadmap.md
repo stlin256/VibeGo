@@ -7,7 +7,7 @@
 | 阶段 | 目标 | 主要交付物 | 退出条件 |
 | --- | --- | --- | --- |
 | 0 | 研究与边界 | 本文档集、ADR、调研记录 | 方案评审通过；不再存在未记录的“隐含核心决策” |
-| 1 | 工程骨架 | pnpm workspace、TS config、contracts、lint/test/CI | 空 daemon 可启动，`/health` 可测，所有包有 smoke test |
+| 1 | 工程骨架 | pnpm workspace、TS config、contracts、测试基础 | contracts、testkit、scheduler、storage 可 typecheck/test |
 | 2 | 可恢复 loop | fake model、run 状态机、事件日志、取消/超时、并发 scheduler | fake-model 集成测试覆盖正常、失败、取消、重连、并发和 workspace lease |
 | 3 | 模型与上下文 | OpenAI-compatible adapter、流式 delta、预算和压缩、上下文来源标签 | provider contract + replay fixture + token budget/injection tests |
 | 4 | 工具与审批 | filesystem/patch/git/shell、风险分类、审批 UI API、审计 | 路径穿越、命令注入、超时、拒绝等安全测试通过 |
@@ -20,6 +20,8 @@
 ## 推荐第一条实现链
 
 `contracts → fake-model loop → event storage → API/SSE → web read-only view → policy/approval → real tools → sandbox → MCP/Skills`。
+
+当前正在实现 `contracts → testkit → in-memory event storage → scheduler`，完成后再接 fake-model loop 和 SQLite。
 
 这样早期就能证明“远程观察和可恢复”主路径，同时把危险工具放在经过测试的边界之后。
 

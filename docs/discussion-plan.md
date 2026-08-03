@@ -42,4 +42,4 @@
 需更新的文档与 Git 提交：
 ```
 
-Spec 02 与 Spec 03 已建立为 Draft。下一步先讨论并发调度、模型协议、token 预算和上下文压缩取舍，再转入第 2 项“运行时与仓库骨架”。
+Spec 02 与 Spec 03 已建立为 Draft；并发默认已确认。当前进入第 2 项“运行时与仓库骨架”，先实现 contracts/testkit/scheduler/storage，再根据测试结果继续讨论 SQLite、模型协议和上下文压缩。
