@@ -26,6 +26,15 @@
 
 这样早期就能证明“远程观察和可恢复”主路径，同时把危险工具放在经过测试的边界之后。
 
+## Spec 18：AgentLoop/daemon tool wiring（当前）
+
+把模型 tool-call delta 接入已存在的 ToolRegistry、ApprovalPolicy、SandboxResolver
+和 ToolExecutor。ToolRuntime 只允许显式注入；daemon 默认仍不启用主机工具。每次
+调用都受 scheduler 的 toolProcesses 资源、run limits、沙箱和审批策略约束，并写入
+`tool.requested`、`approval.required`、`tool.started`、`tool.output`、`tool.completed`
+审计事件。审批续接 API、MCP/Skill 真实 transport 和默认 shell/container wiring
+继续后置。
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

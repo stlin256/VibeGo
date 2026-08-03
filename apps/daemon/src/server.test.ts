@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
@@ -60,6 +60,25 @@ afterEach(async () => {
 });
 
 describe('daemon health server', () => {
+  it('keeps tools opt-in while forwarding an explicitly injected runtime', async () => {
+    const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const runtime = {
+      descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo' }],
+      execute: vi.fn(async () => ({ output: 'unused' })),
+    };
+    const manager = new RunManager({
+      eventStore: new InMemoryEventStore(),
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: provider,
+      toolRuntime: runtime,
+    });
+
+    const { runId } = await manager.start(runConfig());
+    await vi.waitFor(() => expect(manager.completion(runId)?.status).toBe('completed'));
+    expect(provider.requests[0]?.tools).toEqual([expect.objectContaining({ type: 'function' })]);
+    expect(runtime.execute).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid TLS material before opening a listener', () => {
     expect(() => createDaemonServer({ tls: { cert: Buffer.from('not a certificate'), key: Buffer.from('not a key') } })).toThrow();
   });

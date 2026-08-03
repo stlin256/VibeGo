@@ -1,6 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { parseRunConfig, type EventStore, type ModelProvider, type RunConfig, type RunStatus, type SchedulerPolicy, type StoredEvent } from '@ready4vibe/contracts';
-import { AgentLoop, type AgentRunResult } from '@ready4vibe/agent';
+import { AgentLoop, type AgentRunResult, type ToolRuntime } from '@ready4vibe/agent';
 import { Scheduler } from '@ready4vibe/scheduler';
 
 export type RunEventListener = (event: StoredEvent) => void;
@@ -26,6 +26,7 @@ export interface RunSnapshot {
 export interface RunManagerOptions {
   eventStore: EventStore;
   modelProvider: ModelProvider;
+  toolRuntime?: ToolRuntime;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
 }
@@ -50,6 +51,7 @@ export class RunManager {
       eventStore: this.eventStore,
       scheduler: this.scheduler,
       modelProvider: options.modelProvider,
+      ...(options.toolRuntime ? { toolRuntime: options.toolRuntime } : {}),
     });
   }
 

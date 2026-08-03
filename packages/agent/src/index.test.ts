@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider } from '@ready4vibe/contracts';
 import type { ContextItem } from '@ready4vibe/context';
 import { AgentLoop } from './index.js';
 import { Scheduler } from '@ready4vibe/scheduler';
@@ -31,6 +31,19 @@ function makeLoop(provider: FakeModelProvider, policy = DEFAULT_SCHEDULER_POLICY
   return {
     loop: new AgentLoop({ eventStore: new InMemoryEventStore(), scheduler: new Scheduler(policy), modelProvider: provider }),
   };
+}
+
+class SequenceModelProvider implements ModelProvider {
+  readonly id = 'sequence-model';
+  readonly capabilities = { streaming: true, toolCalls: true, structuredOutput: true } as const;
+  readonly requests: Array<{ messages: readonly unknown[]; tools: readonly unknown[] }> = [];
+
+  constructor(private readonly scripts: readonly (readonly ModelEvent[])[]) {}
+
+  async *stream(request: { messages: readonly unknown[]; tools: readonly unknown[] }, _signal: AbortSignal): AsyncIterable<ModelEvent> {
+    this.requests.push(request);
+    for (const event of this.scripts[Math.min(this.requests.length - 1, this.scripts.length - 1)] ?? []) yield event;
+  }
 }
 
 describe('AgentLoop', () => {
@@ -157,5 +170,87 @@ describe('AgentLoop', () => {
     expect(result.status).toBe('failed');
     expect(scheduler.activeCount()).toBe(0);
     expect((await eventStore.read('run_context_too_large')).at(-1)?.payload).toMatchObject({ code: 'CONTEXT_BUDGET_EXCEEDED' });
+  });
+
+  it('passes public tool descriptors and continues with bounded tool output', async () => {
+    const provider = new SequenceModelProvider([
+      [
+        { type: 'tool-call-delta', callId: 'call-1', name: 'echo', argumentsChunk: '{"value":1}' },
+        { type: 'completed', finishReason: 'tool-calls' },
+      ],
+      [
+        { type: 'text-delta', text: 'done' },
+        { type: 'completed', finishReason: 'stop' },
+      ],
+    ]);
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo a value', inputSchema: { type: 'object' } }],
+      execute: vi.fn(async ({ input }: { input: unknown }) => ({ output: { received: input } })),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
+
+    const result = await loop.run({ runId: 'run_tool_round', config: config({ limits: { ...config().limits, maxTurns: 2 } }) });
+    const events = await eventStore.read('run_tool_round');
+    expect(result).toMatchObject({ status: 'completed', output: 'done' });
+    expect(runtime.execute).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', input: { value: 1 } }));
+    expect(provider.requests[0]?.tools).toEqual([expect.objectContaining({ type: 'function' })]);
+    expect(provider.requests[1]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'tool', tool_call_id: 'call-1' }),
+    ]));
+    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'tool.requested', 'tool.started', 'tool.output', 'tool.completed',
+    ]));
+  });
+
+  it('fails closed on malformed arguments and unknown tools without executing', async () => {
+    const provider = new SequenceModelProvider([[{ type: 'tool-call-delta', callId: 'bad', name: 'missing', argumentsChunk: '{' }, { type: 'completed', finishReason: 'tool-calls' }]]);
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo' }],
+      execute: vi.fn(async () => ({ output: 'never' })),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
+
+    const result = await loop.run({ runId: 'run_tool_invalid', config: config() });
+    const events = await eventStore.read('run_tool_invalid');
+    expect(result).toMatchObject({ status: 'failed' });
+    expect(events.at(-1)?.payload).toMatchObject({ code: 'TOOL_UNKNOWN' });
+    expect(runtime.execute).not.toHaveBeenCalled();
+  });
+
+  it('records approval.required and does not fabricate an approval', async () => {
+    const provider = new SequenceModelProvider([[{ type: 'tool-call-delta', callId: 'approve', name: 'write', argumentsChunk: '{}' }, { type: 'completed', finishReason: 'tool-calls' }]]);
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'write', id: 'test.write', version: '1.0.0', risk: 'write' as const, summary: 'Write' }],
+      execute: vi.fn(async () => { throw Object.assign(new Error('prompt'), { code: 'APPROVAL_REQUIRED' }); }),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
+
+    const result = await loop.run({ runId: 'run_tool_approval', config: config() });
+    const events = await eventStore.read('run_tool_approval');
+    expect(result).toMatchObject({ status: 'failed' });
+    expect(events.map((event) => event.type)).toContain('approval.required');
+    expect(events.at(-1)?.payload).toMatchObject({ code: 'APPROVAL_REQUIRED' });
+  });
+
+  it('enforces maxToolCalls before executing a batch', async () => {
+    const provider = new SequenceModelProvider([[
+      { type: 'tool-call-delta', callId: 'one', name: 'echo', argumentsChunk: '{}' },
+      { type: 'tool-call-delta', callId: 'two', name: 'echo', argumentsChunk: '{}' },
+      { type: 'completed', finishReason: 'tool-calls' },
+    ]]);
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo' }],
+      execute: vi.fn(async () => ({ output: 'never' })),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
+
+    const result = await loop.run({ runId: 'run_tool_limit', config: config({ limits: { ...config().limits, maxToolCalls: 1 } }) });
+    expect(result).toMatchObject({ status: 'failed' });
+    expect((await eventStore.read('run_tool_limit')).at(-1)?.payload).toMatchObject({ code: 'MAX_TOOL_CALLS_EXCEEDED' });
+    expect(runtime.execute).not.toHaveBeenCalled();
   });
 });
