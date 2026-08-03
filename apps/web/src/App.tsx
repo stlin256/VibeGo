@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useState } from 'react';
-import type { HealthResponse, RunSnapshot, StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -13,9 +13,12 @@ export interface AppProps {
   onCancel?: () => void;
   onApprove?: (approvalId: string, decision: 'allow' | 'deny') => void;
   onRetry?: () => void;
+  profile?: RunProfile;
+  onProfileChange?: (profile: RunProfile) => void;
+  onResetProfile?: () => void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const connected = health?.auth.pairingRequired === false;
@@ -30,6 +33,14 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
       setMessage('');
     }
   };
+  const updateProfile = (patch: Partial<RunProfile>): void => onProfileChange?.({ ...profile, ...patch });
+  const updateLimit = (key: keyof RunProfile['limits'], value: string): void => onProfileChange?.({ ...profile, limits: { ...profile.limits, [key]: clampLimit(key, value) } });
+  const updateSandboxMode = (mode: RunProfile['sandbox']['mode']): void => {
+    const network = 'network' in profile.sandbox && profile.sandbox.network ? profile.sandbox.network : 'restricted';
+    if (mode === 'read-only') updateProfile({ sandbox: { mode, network } });
+    else if (mode === 'workspace-write') updateProfile({ sandbox: { mode, network, writableRoots: 'writableRoots' in profile.sandbox && profile.sandbox.writableRoots.length > 0 ? profile.sandbox.writableRoots : ['.'] } });
+    else updateProfile({ sandbox: { mode, network, provider: 'provider' in profile.sandbox ? profile.sandbox.provider : 'docker' } });
+  };
 
   return (
     <main className="app-shell">
@@ -39,6 +50,30 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
       </header>
       <section className="content-grid">
         <aside className="sidebar" aria-label="连接与运行摘要">
+          <section className="panel settings-panel">
+            <div className="eyebrow">SETTINGS</div>
+            <h2>Run profile</h2>
+            <p className="muted">Configure this run from the console; no config file editing is required.</p>
+            <div className="settings-grid">
+              <label>Workspace id<input value={profile.workspaceId} onChange={(event) => updateProfile({ workspaceId: event.target.value })} /></label>
+              <label>Model provider<input value={profile.model.provider} onChange={(event) => updateProfile({ model: { ...profile.model, provider: event.target.value } })} /></label>
+              <label>Model name<input value={profile.model.name} onChange={(event) => updateProfile({ model: { ...profile.model, name: event.target.value } })} /></label>
+              <label>Task trust<select value={profile.taskTrust} onChange={(event) => updateProfile({ taskTrust: event.target.value as RunProfile['taskTrust'] })}><option value="trusted-workspace">Trusted workspace</option><option value="untrusted-content">Untrusted content</option></select></label>
+              <label>Sandbox<select value={profile.sandbox.mode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">Read-only</option><option value="workspace-write">Workspace write</option><option value="external-sandbox">External sandbox</option></select></label>
+              <label>Network<select value={'network' in profile.sandbox ? profile.sandbox.network : 'restricted'} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, network: event.target.value as 'restricted' | 'enabled' } as RunProfile['sandbox'] })}><option value="restricted">Restricted</option><option value="enabled">Enabled</option></select></label>
+              {profile.sandbox.mode === 'workspace-write' && <label>Writable roots<input value={profile.sandbox.writableRoots?.join(', ') ?? ''} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, writableRoots: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) } })} /></label>}
+              {profile.sandbox.mode === 'external-sandbox' && <label>Runtime<select value={profile.sandbox.provider} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, provider: event.target.value as 'docker' | 'podman' | 'vm' } })}><option value="docker">Docker</option><option value="podman">Podman</option><option value="vm">VM</option></select></label>}
+              <label>Approval<select value={typeof profile.approval === 'string' ? profile.approval : 'on-request'} onChange={(event) => updateProfile({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">On request</option><option value="untrusted">Untrusted tasks</option><option value="never">Never (read-only only)</option></select></label>
+              <label>Max turns<input type="number" min={1} max={50} value={profile.limits.maxTurns} onChange={(event) => updateLimit('maxTurns', event.target.value)} /></label>
+              <label>Wall time (ms)<input type="number" min={1} max={1800000} value={profile.limits.maxWallTimeMs} onChange={(event) => updateLimit('maxWallTimeMs', event.target.value)} /></label>
+              <label>Model input tokens<input type="number" min={1} value={profile.limits.maxModelInputTokens} onChange={(event) => updateLimit('maxModelInputTokens', event.target.value)} /></label>
+              <label>Model output tokens<input type="number" min={1} value={profile.limits.maxModelOutputTokens} onChange={(event) => updateLimit('maxModelOutputTokens', event.target.value)} /></label>
+              <label>Max tool calls<input type="number" min={1} max={200} value={profile.limits.maxToolCalls} onChange={(event) => updateLimit('maxToolCalls', event.target.value)} /></label>
+              <label>Max output bytes<input type="number" min={1} value={profile.limits.maxOutputBytes} onChange={(event) => updateLimit('maxOutputBytes', event.target.value)} /></label>
+              <label>Max context bytes<input type="number" min={1} value={profile.limits.maxContextBytes} onChange={(event) => updateLimit('maxContextBytes', event.target.value)} /></label>
+            </div>
+            <button className="reset-button" type="button" onClick={onResetProfile}>Reset conservative defaults</button>
+          </section>
           <section className="panel connection-panel">
             <div className="eyebrow">CONNECTION</div>
             <h1>连接你的本地工作区</h1>
@@ -58,6 +93,13 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
       </section>
     </main>
   );
+}
+
+function clampLimit(key: keyof RunProfile['limits'], value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  const maximum = key === 'maxTurns' ? 50 : key === 'maxWallTimeMs' ? 1_800_000 : key === 'maxToolCalls' ? 200 : Number.MAX_SAFE_INTEGER;
+  return Math.min(maximum, Math.max(1, Math.floor(parsed)));
 }
 
 function RunConsole({ run, events, onCancel, onApprove, onRetry }: { run: RunSnapshot; events: readonly StoredEvent[]; onCancel: (() => void) | undefined; onApprove: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; onRetry: (() => void) | undefined }): JSX.Element {

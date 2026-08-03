@@ -46,7 +46,7 @@ The core loop is deliberately small:
 | Tools | Filesystem and shell adapters behind a shared executor; host execution is not enabled by default |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
-| Web | React 19 + TypeScript + Vite responsive run console with pairing, run composer, cancel, metrics, and fetch-based SSE |
+| Web | React 19 + TypeScript + Vite responsive console with pairing, guided non-secret run settings, retry/recovery, approval cards, cancel, metrics, and fetch-based SSE |
 
 ## Quick start
 
@@ -66,6 +66,12 @@ pnpm --filter @ready4vibe/daemon start
 ```
 
 The default daemon address is `http://127.0.0.1:8787`. The web console can use same-origin access or a configured API base URL for a future Tailscale/SSH tunnel.
+
+The console includes a Settings panel for workspace, model, trust, sandbox,
+approval, network, and run limits. These choices are sent as a validated run
+profile; normal setup does not require editing `.env` or YAML files. API keys,
+private keys, and other secrets are deliberately excluded from this panel and
+are reserved for daemon-side secret-provider adapters.
 
 ## LAN and public-access boundary
 

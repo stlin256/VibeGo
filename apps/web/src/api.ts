@@ -21,6 +21,25 @@ export interface RunConfigInput {
   clientRequestId: string;
 }
 
+export type RunProfile = Pick<RunConfigInput, 'workspaceId' | 'model' | 'taskTrust' | 'sandbox' | 'approval' | 'limits'>;
+
+export const DEFAULT_RUN_PROFILE: RunProfile = {
+  workspaceId: 'default',
+  model: { provider: 'configured-default', name: 'deepseek-v4-flash' },
+  taskTrust: 'trusted-workspace',
+  sandbox: { mode: 'read-only', network: 'restricted' },
+  approval: 'on-request',
+  limits: {
+    maxTurns: 12,
+    maxWallTimeMs: 600_000,
+    maxModelInputTokens: 8_000,
+    maxModelOutputTokens: 4_000,
+    maxToolCalls: 50,
+    maxOutputBytes: 2_000_000,
+    maxContextBytes: 64_000,
+  },
+};
+
 export interface RunSnapshot {
   version: 1;
   runId: string;

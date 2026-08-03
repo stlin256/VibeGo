@@ -46,7 +46,7 @@ flowchart LR
 | 工具 | filesystem/shell 适配器和统一 executor；默认不启用主机执行 |
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
-| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、run composer、取消、指标和 SSE |
+| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、引导式非 secret 运行设置、审批卡片、恢复重试、取消、指标和 SSE |
 
 ## 快速开始
 
@@ -66,6 +66,8 @@ pnpm --filter @ready4vibe/daemon start
 ```
 
 默认地址是 `http://127.0.0.1:8787`。Web 控制台默认可以 same-origin 访问，也为后续 Tailscale/SSH tunnel 预留 API base URL。
+
+控制台内置 Settings 面板，可配置 workspace、模型、任务信任级别、sandbox、审批、网络和运行限制；常规使用不需要手动编辑 `.env` 或 YAML。API key、私钥等 secret 不会进入这个面板，后续由 daemon 侧安全 secret provider 负责。
 
 ## LAN 与公网访问边界
 

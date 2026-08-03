@@ -12,6 +12,17 @@ describe('web console shell', () => {
     expect(html).toContain('不可信任务强制 external sandbox');
   });
 
+  it('renders the non-secret run settings onboarding surface', () => {
+    const html = renderToStaticMarkup(<App />);
+    expect(html).toContain('Run profile');
+    expect(html).toContain('Workspace id');
+    expect(html).toContain('Model provider');
+    expect(html).toContain('Reset conservative defaults');
+    expect(html).toContain('Max context bytes');
+    expect(html).not.toContain('api_key');
+    expect(html).not.toContain('privatekey');
+  });
+
   it('renders run metrics and output without exposing an absolute workspace path', () => {
     const html = renderToStaticMarkup(<App health={{ status: 'ok', service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } }} run={{ version: 1, runId: 'run_1', status: 'executing', config: {} as never, lastEventSeq: 2, output: 'hello', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} />);
     expect(html).toContain('hello');

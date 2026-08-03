@@ -77,6 +77,14 @@ keeping PEM/private-key bytes in memory only. ACME issuance, renewal, and
 platform certificate stores remain explicit future adapters; no daemon startup
 path performs implicit network calls.
 
+## Spec 25: Configuration onboarding and settings UI (已完成)
+
+All user-facing setup must be possible from the responsive Web console rather
+than manual `.env`/YAML editing. The first slice will make workspace, model,
+trust, sandbox, approval, and run-limit choices explicit in a settings panel;
+server-side TLS/credential changes remain gated by safe adapters and never echo
+secrets.
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

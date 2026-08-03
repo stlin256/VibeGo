@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, type HealthResponse, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -10,6 +10,7 @@ function RuntimeApp(): JSX.Element {
   const [run, setRun] = useState<RunSnapshot>();
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [error, setError] = useState<string>();
+  const [profile, setProfile] = useState<RunProfile>(DEFAULT_RUN_PROFILE);
 
   useEffect(() => {
     void client.health().then(setHealth).catch((reason: unknown) => setError(safeError(reason)));
@@ -37,7 +38,7 @@ function RuntimeApp(): JSX.Element {
   const createRun = async (message: string): Promise<void> => {
     try {
       const config: RunConfigInput = {
-        workspaceId: 'default', userMessage: message, model: { provider: 'configured-default', name: 'deepseek-v4-flash' }, taskTrust: 'trusted-workspace', sandbox: { mode: 'read-only', network: 'restricted' }, approval: 'on-request', limits: { maxTurns: 12, maxWallTimeMs: 600_000, maxModelInputTokens: 8_000, maxModelOutputTokens: 4_000, maxToolCalls: 50, maxOutputBytes: 2_000_000, maxContextBytes: 64_000 }, createdBySessionId: 'web-memory-session', clientRequestId: crypto.randomUUID(),
+        ...profile, userMessage: message, createdBySessionId: 'web-memory-session', clientRequestId: crypto.randomUUID(),
       };
       const started = await client.createRun(config);
       await watchRun(started.runId, await client.getRun(started.runId));
@@ -62,7 +63,7 @@ function RuntimeApp(): JSX.Element {
     try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} onProfileChange={setProfile} onResetProfile={() => setProfile(DEFAULT_RUN_PROFILE)} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
 }
 
 function readTextDelta(payload: unknown): string {
