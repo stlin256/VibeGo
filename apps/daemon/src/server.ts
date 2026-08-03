@@ -4,11 +4,13 @@ import type { StoredEvent } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
+import { GoalProjectionError } from '@ready4vibe/goal-control';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
 import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
+import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, type GoalProjectionStore } from './goal-api.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -36,6 +38,7 @@ export interface DaemonServerOptions {
   gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
+  goalEventStore?: GoalProjectionStore;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -54,6 +57,7 @@ interface ResolvedDaemonServerOptions {
   gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
+  goalEventStore?: GoalProjectionStore;
 }
 
 export interface HealthResponse {
@@ -104,6 +108,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
+    ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -115,6 +120,10 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       }
       if (error instanceof RunManagerError) {
         writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      if (error instanceof GoalProjectionError) {
+        writeJson(response, 503, { error: { code: 'GOAL_PROJECTION_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
         return;
       }
       writeJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } });
@@ -216,6 +225,50 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateStatus);
+    return;
+  }
+
+  if (pathname === '/api/v1/goals') {
+    if (!options.goalEventStore) {
+      writeJson(response, 503, { error: { code: 'GOALS_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
+      return;
+    }
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    writeJson(response, 200, await listGoalProjections(options.goalEventStore));
+    return;
+  }
+
+  const goalMatch = /^\/api\/v1\/goals\/([^/]+)(?:\/(events))?$/u.exec(pathname);
+  if (goalMatch) {
+    if (!options.goalEventStore) {
+      writeJson(response, 503, { error: { code: 'GOALS_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
+      return;
+    }
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    const goalId = decodeGoalId(goalMatch[1]);
+    if (goalMatch[2] === 'events') {
+      const after = parseCursor(url.searchParams.get('after'));
+      const limit = parseGoalEventLimit(url.searchParams.get('limit'));
+      const page = await readGoalEventPage(options.goalEventStore, goalId, after, limit);
+      if (!page) {
+        writeJson(response, 404, { error: { code: 'GOAL_NOT_FOUND', message: 'goal not found' } });
+        return;
+      }
+      writeJson(response, 200, page);
+      return;
+    }
+    const projection = await readGoalProjection(options.goalEventStore, goalId);
+    if (!projection) {
+      writeJson(response, 404, { error: { code: 'GOAL_NOT_FOUND', message: 'goal not found' } });
+      return;
+    }
+    writeJson(response, 200, projection);
     return;
   }
 
@@ -700,6 +753,26 @@ function decodeRunId(value: string | undefined): string {
   } catch {
     throw new RequestError(400, 'INVALID_RUN_ID', 'Invalid run id.');
   }
+}
+
+function decodeGoalId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_GOAL_ID', 'Invalid goal id.');
+  try {
+    const goalId = decodeURIComponent(value);
+    if (!/^goal_[A-Za-z0-9_-]{8,128}$/u.test(goalId)) throw new Error('invalid');
+    return goalId;
+  } catch {
+    throw new RequestError(400, 'INVALID_GOAL_ID', 'Invalid goal id.');
+  }
+}
+
+function parseGoalEventLimit(value: string | null): number {
+  if (value === null || value.trim() === '') return DEFAULT_GOAL_EVENT_PAGE_SIZE;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_GOAL_EVENT_PAGE_SIZE) {
+    throw new RequestError(400, 'INVALID_GOAL_EVENT_LIMIT', `Goal event limit must be between 1 and ${MAX_GOAL_EVENT_PAGE_SIZE}.`);
+  }
+  return parsed;
 }
 
 function readJson(request: IncomingMessage, limitBytes: number): Promise<unknown> {

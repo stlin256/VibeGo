@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">VibeGo favicon</title>
+  <defs>
+    <linearGradient id="bg" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5CE1E6"/>
+      <stop offset="0.52" stop-color="#6B8CFF"/>
+      <stop offset="1" stop-color="#9A6BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="25" fill="#0B1020"/>
+  <rect x="7" y="7" width="82" height="82" rx="22" fill="url(#bg)"/>
+  <path d="M25 25 48 70 71 25" fill="none" stroke="#0B1020" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 25 48 70 71 25" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="76" cy="35" r="6" fill="#B8F36C" stroke="#0B1020" stroke-width="3"/>
+</svg>

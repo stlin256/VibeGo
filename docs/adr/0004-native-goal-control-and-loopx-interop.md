@@ -1,6 +1,6 @@
 # ADR 0004：原生 Goal Control 与 LoopX 协议互操作
 
-- 状态：Accepted（Phase 0 已实现；Phase 1 storage 首步已实现，daemon/Web/Phase 2 后置）
+- 状态：Accepted（Phase 0 已实现；Phase 1 storage 与 daemon 只读 projection/replay 已实现，写 API/Web/Phase 2 后置）
 - 日期：2026-08-03
 
 ## 背景
@@ -103,7 +103,9 @@ state，也不能绕过 daemon 的 auth、approval 或 sandbox。
 
 Phase 0 已按 [Spec 34](../specs/34-goal-control-plane-loopx-integration.md) 完成
 contract schema、projection/reducer、幂等/冲突测试、claim revision 门禁和隐私陷阱；
-Phase 1 的独立 SQLite `goal_events` adapter 首步也已完成。在只读 projection API
-和 daemon wiring 通过验收前，不得把 Goal quota 接入默认 run 创建路径，也不得修改
-现有 `run_events` 合同。Goal 的配置和操作必须继续通过现有 Web Settings/onboarding
-与受保护 API 完成，不能要求用户手动编辑配置文件。
+Phase 1 的独立 SQLite `goal_events` adapter、daemon 可选 store wiring 以及受保护的
+只读 projection/replay API 已通过验收。API 只读取 `goal_events` 并用
+`GoalProjectionBuilder` 重放；事件 JSON 会剥离 `claimTokenHash`，并受游标/页大小
+上限约束。仍不得把 Goal quota 接入默认 run 创建路径，也不得修改现有
+`run_events` 合同、AgentLoop、Scheduler、Approval 或 Sandbox。Goal 的写操作和
+配置必须继续通过后续受保护 Web/API 完成，不能要求用户手动编辑配置文件。

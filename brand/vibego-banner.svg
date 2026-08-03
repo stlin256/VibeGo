@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+  <title id="title">VibeGo — Vibe Coding, wherever you are</title>
+  <desc id="desc">A VibeGo brand banner for local-first remote Vibe Coding.</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="20" x2="1510" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#080D1C"/>
+      <stop offset="0.54" stop-color="#101A38"/>
+      <stop offset="1" stop-color="#241750"/>
+    </linearGradient>
+    <radialGradient id="glow-cyan" cx="0" cy="0" r="1" gradientTransform="translate(410 160) rotate(32) scale(460 300)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5CE1E6" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#5CE1E6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-violet" cx="0" cy="0" r="1" gradientTransform="translate(1330 290) rotate(148) scale(500 360)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9A6BFF" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#9A6BFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark-bg" x1="12" y1="8" x2="84" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5CE1E6"/>
+      <stop offset="0.52" stop-color="#6B8CFF"/>
+      <stop offset="1" stop-color="#9A6BFF"/>
+    </linearGradient>
+    <linearGradient id="route" x1="22" y1="22" x2="76" y2="74" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#D9E6FF"/>
+    </linearGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" fill="none" stroke="#A8B9FF" stroke-opacity="0.10"/>
+    </pattern>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="520" rx="28" fill="url(#bg)"/>
+  <rect width="1600" height="520" rx="28" fill="url(#glow-cyan)"/>
+  <rect width="1600" height="520" rx="28" fill="url(#glow-violet)"/>
+  <rect x="915" y="-80" width="760" height="700" fill="url(#grid)" transform="rotate(10 1295 270)"/>
+  <path d="M1050 72c128 48 185 113 198 212 14 105 66 155 218 192" fill="none" stroke="#5CE1E6" stroke-opacity="0.20" stroke-width="2"/>
+  <path d="M1100 22c135 64 184 129 190 223 7 102 50 148 171 207" fill="none" stroke="#B8F36C" stroke-opacity="0.15" stroke-width="2" stroke-dasharray="7 12"/>
+  <circle cx="1275" cy="282" r="13" fill="#B8F36C" opacity="0.82" filter="url(#soft)"/>
+  <circle cx="1275" cy="282" r="5" fill="#B8F36C"/>
+  <g transform="translate(112 121) scale(2.12)">
+    <rect width="96" height="96" rx="27" fill="#050914"/>
+    <rect x="7" y="7" width="82" height="82" rx="22" fill="url(#mark-bg)"/>
+    <path d="M25 25 48 70 71 25" fill="none" stroke="#0B1020" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M25 25 48 70 71 25" fill="none" stroke="url(#route)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M48 70c0-15 10-27 27-35" fill="none" stroke="#B8F36C" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="76" cy="35" r="6.5" fill="#B8F36C" stroke="#0B1020" stroke-width="3"/>
+  </g>
+  <text x="385" y="210" fill="#F7FAFF" font-family="Manrope, Inter, ui-sans-serif, system-ui, sans-serif" font-size="86" font-weight="800" letter-spacing="-4">Vibe<tspan fill="#B8F36C">Go</tspan></text>
+  <text x="390" y="273" fill="#D9E6FF" font-family="Manrope, Inter, ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="600" letter-spacing="0.2">Vibe Coding, wherever you are.</text>
+  <text x="390" y="320" fill="#AFC2E8" font-family="Manrope, Inter, ui-sans-serif, system-ui, sans-serif" font-size="24" font-weight="500">Your local workspace, wherever you are.</text>
+  <g transform="translate(390 370)">
+    <rect width="500" height="42" rx="21" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.16"/>
+    <text x="22" y="28" fill="#B8F36C" font-family="Manrope, Inter, ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="800" letter-spacing="1.5">LOCAL-FIRST  •  REMOTE-READY  •  HUMAN-APPROVED</text>
+  </g>
+  <text x="113" y="474" fill="#9EB1D8" font-family="Manrope, Inter, ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="600" letter-spacing="1.2">YOUR WORKSPACE. ANYWHERE.</text>
+</svg>

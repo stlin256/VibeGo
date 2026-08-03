@@ -21,6 +21,7 @@
     "@ready4vibe/certificates": "workspace:*",
     "@ready4vibe/contracts": "workspace:*",
     "@ready4vibe/execution": "workspace:*",
+    "@ready4vibe/goal-control": "workspace:*",
     "@ready4vibe/model-openai": "workspace:*",
     "@ready4vibe/policy": "workspace:*",
     "@ready4vibe/sandbox": "workspace:*",

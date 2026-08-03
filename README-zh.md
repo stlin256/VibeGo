@@ -1,7 +1,7 @@
 # VibeGo / ready4vibe 中文说明
 
 <p align="center">
-  <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
+  <img src="brand/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
 </p>
 
 **一个最小化、优先本地运行的 agent harness，用于远程 Vibe Coding。** VibeGo 让 agent 尽量靠近本地工作区，同时为不可信任务提供明确的审批、沙箱和执行边界，并通过适配桌面、平板和手机的 React 控制台远程观察与继续任务。
@@ -48,7 +48,7 @@ flowchart LR
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
 | Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式设置、模型配置、审批卡片、恢复重试、取消、指标、tool-output inspector 和 SSE |
-| Goal Control | Phase 0 原生 TypeScript contracts/projection/claim 守卫，加上 Phase 1 独立 SQLite `goal_events` adapter；尚未接入默认 run admission |
+| Goal Control | Phase 0 原生 TypeScript contracts/projection/claim 守卫，加上 Phase 1 独立 SQLite `goal_events` adapter 与受认证的 daemon 只读 projection/replay；Goal 写操作和默认 run admission 仍关闭 |
 
 ## 快速开始
 
@@ -147,7 +147,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 - 更完整的 external sandbox/VM adapter、资源限制与持久化；
 - Skill/MCP manifest 和 secret-safe 工具 allowlist；
 - 分页/高亮 diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
-- SQLite/daemon/Web Goal Control 后续阶段：跨 run 的目标、Todo/Gate/evidence 投影与可选 governed preflight（原生 TypeScript Phase 0 核心已存在）；
+- Goal 写 API、Web Goal 投影操作和 governed preflight（Phase 0/1 合同、存储与受认证只读 projection 已完成）；
 - ACME/certificate manager、Tailscale/SSH transport adapter；
 - 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
 

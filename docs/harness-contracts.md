@@ -166,7 +166,7 @@ interface EventStore {
 
 事件 payload 需通过 `contracts` schema 验证；事务顺序是“写事件/快照 → 提交 → 广播”。事件保留和敏感字段脱敏策略见安全 ADR。
 
-## Goal Control（Phase 0）
+## Goal Control（Phase 0/1）
 
 Goal Control 是 daemon application service 层的可选控制平面，不是第二个
 AgentLoop、Scheduler 或执行器。它必须满足以下边界：
@@ -185,9 +185,15 @@ AgentLoop、Scheduler 或执行器。它必须满足以下边界：
   模型自报完成、失败验证、recovery 和 retry 不能自动完成旧 Todo 或重放旧工具；
 - Goal payload 只允许 bounded text、稳定 ID、状态、hash、数量和引用；不得包含
   transcript、tool output、workspace 绝对路径、API key、token、环境变量或私钥；
-- Phase 0/1 未验收前，Goal Control 不进入默认 run admission；普通配置和操作由
+- Phase 0/1 的只读门禁已经验收，但在 Phase 2 governed preflight 验收前，Goal
+  Control 不进入默认 run admission；普通配置和操作由
   React Web Settings/onboarding 与受保护 API 提供，不要求用户编辑 `.env`、YAML、
   JSON、PEM 或 SQLite 文件。
+
+当前 Phase 1 daemon 只提供受认证的 `GET /api/v1/goals`、
+`GET /api/v1/goals/:goalId` 和 bounded JSON event replay；API 使用
+`GoalProjectionBuilder` 从独立 `goal_events` 重放，并剥离 `claimTokenHash`。Goal
+写 API、Web 首屏操作和 governed admission 仍以后续阶段实现。
 
 Goal Control 不执行模型、工具、shell、文件系统、Git、MCP 或 sandbox；这些事实
 仍归现有执行平面所有。

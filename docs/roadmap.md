@@ -160,7 +160,7 @@ Console shows bounded `tool.output` cards from the existing SSE stream, with
 safe text rendering and low-resource display limits. Pagination, highlighting,
 search/export, and inline review remain deferred.
 
-## Spec 34：长期目标控制层与 LoopX 思路整合（Phase 0 已实现）
+## Spec 34：长期目标控制层与 LoopX 思路整合（Phase 0/Phase 1 已实现）
 
 详见 [Spec 34](specs/34-goal-control-plane-loopx-integration.md) 和
 [ADR 0004](adr/0004-native-goal-control-and-loopx-interop.md)。该方案在
@@ -169,7 +169,7 @@ LoopX 的 Goal/Todo/Gate/Evidence/Handoff、事件投影和可解释 `shouldRun`
 但保留现有 run 执行平面、Scheduler、Approval、Sandbox、Workspace 和 SSE 合约
 为唯一执行事实源。Phase 0 已完成 contracts、纯 reducer、内存 event store、幂等
 claim/revision 和只读 projection 核心；默认后端不引入 Python LoopX runtime、CLI、
-Markdown/JSONL 状态或 POSIX 文件锁。下一步是独立 `goal_events` SQLite 适配器和
-Phase 1 的第一步已实现独立的 `goal_events` SQLite adapter；下一步是受保护的只读
-projection API，仍不接入默认 run admission。Goal 的普通配置和操作
+Markdown/JSONL 状态或 POSIX 文件锁。Phase 1 已实现独立的 `goal_events` SQLite
+adapter、daemon 可选 wiring、受认证的 goal 列表/详情/JSON event replay API；这些
+接口仍不接入默认 run admission。Goal 的普通配置和操作
 继续通过 Web Settings/onboarding 完成，不要求手动编辑 `.env`、YAML 或数据库文件。

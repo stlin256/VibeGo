@@ -35,6 +35,9 @@ importers:
       '@ready4vibe/execution':
         specifier: workspace:*
         version: link:../../packages/execution
+      '@ready4vibe/goal-control':
+        specifier: workspace:*
+        version: link:../../packages/goal-control
       '@ready4vibe/model-openai':
         specifier: workspace:*
         version: link:../../packages/model-openai

@@ -1,7 +1,7 @@
 # VibeGo / ready4vibe
 
 <p align="center">
-  <img src="docs/assets/vibego-banner.svg" alt="VibeGo — local-first agent harness for secure remote Vibe Coding" width="1200" />
+  <img src="brand/vibego-banner.svg" alt="VibeGo — local-first agent harness for secure remote Vibe Coding" width="1200" />
 </p>
 
 **A minimal, local-first agent harness for remote Vibe Coding.** VibeGo keeps the agent runtime close to your workspace, adds explicit safety boundaries for untrusted work, and exposes a responsive React console for desktop, tablet, and mobile access.
@@ -48,7 +48,7 @@ The core loop is deliberately small:
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
 | Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
-| Goals | Phase 0 native TypeScript Goal Control contracts/projection/claim guards plus an isolated Phase 1 SQLite `goal_events` adapter; not connected to default run admission yet |
+| Goals | Phase 0 native TypeScript Goal Control contracts/projection/claim guards plus Phase 1 isolated SQLite `goal_events` adapter and authenticated read-only daemon projection/replay; Goal writes and default run admission remain disabled |
 
 ## Quick start
 
@@ -176,7 +176,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - Git write/patch operations and a dedicated paginated diff/log explorer;
 - Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
 - paginated/highlighted diff/log/approval views and Playwright desktop/tablet/mobile flows;
-- SQLite/daemon/Web Goal Control phases for cross-run goals, Todo/Gate/evidence projections, and optional governed preflight (the native TypeScript Phase 0 core is already present);
+- Goal write APIs, Web Goal projection actions, and governed preflight after the native Phase 0/1 contracts, storage, and authenticated read-only projection slice;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 

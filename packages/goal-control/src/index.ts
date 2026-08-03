@@ -109,6 +109,11 @@ export class InMemoryGoalEventStore implements GoalEventStore {
     return (this.events.get(goalId) ?? []).filter((event) => event.appendSequence > afterSequence).map((event) => ({ ...event })) as StoredGoalEvent<TPayload>[];
   }
 
+  listGoalIds(): readonly string[] {
+    this.ensureOpen();
+    return Object.freeze([...this.events.keys()].sort((left, right) => left.localeCompare(right)));
+  }
+
   lastSequence(goalId: string): number {
     this.ensureOpen();
     return this.events.get(goalId)?.at(-1)?.appendSequence ?? 0;

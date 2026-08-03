@@ -1,0 +1,24 @@
+:root {
+  --vibego-ink: #0b1020;
+  --vibego-ink-strong: #050914;
+  --vibego-surface: #f6f8fc;
+  --vibego-surface-muted: #e9eef8;
+  --vibego-cyan: #5ce1e6;
+  --vibego-blue: #6b8cff;
+  --vibego-violet: #9a6bff;
+  --vibego-violet-deep: #6b62ff;
+  --vibego-lime: #b8f36c;
+  --vibego-text: #0b1020;
+  --vibego-text-muted: #5e6b85;
+  --vibego-on-dark: #f7faff;
+  --vibego-on-dark-muted: #afc2e8;
+  --vibego-gradient: linear-gradient(135deg, #5ce1e6 0%, #6b8cff 52%, #9a6bff 100%);
+  --vibego-gradient-dark: linear-gradient(135deg, #080d1c 0%, #101a38 54%, #241750 100%);
+  --vibego-radius-sm: 10px;
+  --vibego-radius-md: 16px;
+  --vibego-radius-lg: 24px;
+  --vibego-radius-pill: 999px;
+  --vibego-shadow-card: 0 18px 50px rgb(11 16 32 / 12%);
+  --vibego-font-sans: Manrope, Inter, "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --vibego-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}

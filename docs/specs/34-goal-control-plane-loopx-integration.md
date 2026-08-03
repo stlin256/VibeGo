@@ -1,6 +1,6 @@
 # Spec 34：长期目标控制层与 LoopX 思路整合
 
-**状态：Implemented（Phase 0；Phase 1 SQLite adapter 首步已实现，daemon/Web 接入仍后置）**
+**状态：Implemented（Phase 0；Phase 1 SQLite adapter 与 daemon 只读 projection/replay API 已实现，写 API、Web 投影和 governed admission 仍后置）**
 
 **日期：2026-08-03**
 
@@ -625,22 +625,27 @@ quiet poll、等待 Gate、失败验证、重复 retry、状态刷新和没有�
 
 ## API 与 UI 计划
 
-第一阶段先提供 daemon 内部应用服务，不立即暴露完整 Goal CRUD。需要 UI 时再
-增加受现有 pairing/Bearer/CSRF/Origin 保护的 API：
+第一阶段不暴露完整 Goal CRUD，只提供受现有 pairing/Bearer/CSRF/Origin 保护的
+只读 projection/replay API：
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
-| `GET` | `/api/v1/goals` | 返回安全的 goal 摘要列表 |
-| `POST` | `/api/v1/goals` | 创建 goal，要求明确 objective 和 workspace boundary |
-| `GET` | `/api/v1/goals/:goalId` | 返回首屏 projection、Gate、Todo 和 quota decision |
-| `GET` | `/api/v1/goals/:goalId/events?after=<sequence>` | 受限的 Goal event SSE/回放 |
-| `POST` | `/api/v1/goals/:goalId/todos` | 创建 user/agent Todo |
-| `POST` | `/api/v1/goals/:goalId/todos/:todoId/claim` | 幂等 claim |
-| `POST` | `/api/v1/goals/:goalId/gates/:gateId/resolve` | 用户/owner Gate 决策 |
-| `POST` | `/api/v1/goals/:goalId/runs/decision` | 返回 governed `shouldRun`，不直接启动 run |
+| `GET` | `/api/v1/goals` | 返回安全的 goal projection 摘要列表 |
+| `GET` | `/api/v1/goals/:goalId` | 返回首屏 projection、Gate、Todo 和 quota 状态 |
+| `GET` | `/api/v1/goals/:goalId/events?after=<sequence>&limit=<n>` | 返回受限的 Goal event JSON 回放（不是第二条 SSE 流） |
+| `POST` | `/api/v1/goals` | 后置：创建 goal，要求明确 objective 和 workspace boundary |
+| `POST` | `/api/v1/goals/:goalId/todos` | 后置：创建 user/agent Todo |
+| `POST` | `/api/v1/goals/:goalId/todos/:todoId/claim` | 后置：幂等 claim |
+| `POST` | `/api/v1/goals/:goalId/gates/:gateId/resolve` | 后置：用户/owner Gate 决策 |
+| `POST` | `/api/v1/goals/:goalId/runs/decision` | 后置：返回 governed `shouldRun`，不直接启动 run |
 
-Goal API 不返回：workspace 绝对路径、原始 transcript、凭据、完整工具输出、
+Goal API 当前只读且不返回：workspace 绝对路径、原始 transcript、凭据、完整工具输出、
 模型 provider secret、私有日志或未脱敏环境变量。
+
+列表和详情均通过 `GoalProjectionBuilder` 从 `goal_events` 重放；Todo 的
+`claimTokenHash` 以及事件 payload 中同名的内部字段在 API 边界剥离。事件回放
+支持非负 `after` 游标和最多 500 条（可请求但不超过 1,000 条）的 bounded page，
+不创建新的 scheduler、SSE stream 或状态源。
 
 ready4vibe Web 仍是主要前台。LoopX 风格的 projection 是 Web 的输入，不是第二
 个 dashboard source of truth。
@@ -691,17 +696,20 @@ Settings/onboarding 入口，并按向导顺序解释：
 - 不改变 daemon 默认 run admission、`run_events`、AgentLoop、Scheduler、Approval、
   Sandbox 或 Workspace 行为。
 
-### Phase 1：SQLite event store 与 read-only projection（进行中；storage 首步已完成）
+### Phase 1：SQLite event store 与 read-only projection（已完成）
 
 - 增加 `goal_events` 表和 `SqliteGoalEventStore`。
 - 实现 goal event normalize、fingerprint、idempotent append 和 replay。
 - 实现 `GoalProjectionBuilder` 和 `SessionRunProjection`。
-- 增加只读 `GET /api/v1/goals/:goalId`，不接入 run admission。
+- daemon 组合根可选注入 `GoalEventStore`，生产入口与现有 `events.sqlite` 共用文件，
+  但只新建/访问独立的 `goal_events` 表。
+- 增加受认证的只读 `GET /api/v1/goals`、`GET /api/v1/goals/:goalId` 和
+  `GET /api/v1/goals/:goalId/events`，不接入 run admission。
 
-Phase 1 的第一小步已实现 `packages/storage` 的独立 `goal_events` SQLite adapter
-和事务测试；它不复用、改写或迁移现有 `run_events` 表，也不要求 daemon 立即创建
-Goal store。adapter 通过了并发、回滚、幂等、冲突、重启和隐私验收；read-only
-projection API 和 daemon wiring 仍需另行提交。
+Phase 1 已实现 `packages/storage` 的独立 `goal_events` SQLite adapter、事务测试、
+只读 projection/replay API 和 daemon wiring；它不复用、改写或迁移现有 `run_events`
+表。adapter 与 API 通过了并发、回滚、幂等、冲突、重启、认证和隐私验收。Goal
+写 API、Goal quota admission、验证写回和 Web 首屏仍属于后续阶段。
 
 ### Phase 2：Run binding 与 governed preflight
 
@@ -744,7 +752,7 @@ projection API 和 daemon wiring 仍需另行提交。
 ### Security tests
 
 - Goal API 继承现有 pairing/Bearer/CSRF/Origin 门禁。
-- projection 和 SSE 不包含绝对路径、token、API key、环境变量和原始输出。
+- projection 和 JSON replay 不包含绝对路径、claim token/hash、API key、环境变量和原始输出。
 - Goal Control 不能凭 Todo 或 Gate payload 注册 tool、放宽 sandbox 或修改 approval。
 - Windows 下 SQLite 并发写入使用事务测试；不依赖 LoopX 的 `fcntl` 文件锁。
 

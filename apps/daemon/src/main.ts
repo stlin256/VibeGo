@@ -5,7 +5,7 @@ import { AuthGate } from '@ready4vibe/auth';
 import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { SqliteEventStore } from '@ready4vibe/storage';
+import { SqliteEventStore, SqliteGoalEventStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
@@ -32,6 +32,7 @@ const port = parsePort(process.env.READY4VIBE_PORT ?? '8787');
 const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
+const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
 const workspaceRegistry = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
 const modelSettings = new InMemoryModelSettingsManager();
 const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
@@ -48,6 +49,7 @@ const runManager = new RunManager({
 try {
   await runManager.recoverAfterRestart();
 } catch (error) {
+  goalEventStore.close();
   eventStore.close();
   throw error;
 }
@@ -63,6 +65,7 @@ const server = createDaemonServer({
   gitSettings,
   sandboxSettings,
   workspaceRegistry,
+  goalEventStore,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 
@@ -73,6 +76,7 @@ server.listen(port, host, () => {
 
 const shutdown = (): void => {
   server.close(() => {
+    goalEventStore.close();
     eventStore.close();
   });
 };

@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider, type ModelRequest } from '@ready4vibe/contracts';
+import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider, type ModelRequest, type NewGoalEvent } from '@ready4vibe/contracts';
 import { InMemoryApprovalBroker } from '@ready4vibe/agent';
 import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
@@ -17,6 +17,7 @@ import { InMemoryToolSettingsManager } from './tool-settings.js';
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { InMemoryGitSettingsManager } from './git-settings.js';
+import { InMemoryGoalEventStore, createGoalEvent } from '@ready4vibe/goal-control';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -39,6 +40,73 @@ const runConfig = (workspaceId = 'workspace-api') => ({
   createdBySessionId: 'session-api',
   clientRequestId: `client-${workspaceId}`,
 });
+
+async function goalStoreForApi(): Promise<InMemoryGoalEventStore> {
+  const store = new InMemoryGoalEventStore();
+  const goalId = 'goal_12345678';
+  const todoId = 'todo_12345678';
+  const at = '2026-08-03T00:00:00.000Z';
+  await store.appendBatch([
+    createGoalEvent({
+      eventId: 'gevt_00000001',
+      goalId,
+      eventType: 'goal.created',
+      recordedAt: at,
+      producer: 'server-test',
+      privacy: 'local_private',
+      refs: {},
+      payload: {
+        goal: {
+          goalId,
+          title: 'Server Goal',
+          objective: 'Verify the authenticated projection boundary.',
+          status: 'active',
+          controlRevision: 0,
+          createdAt: at,
+          updatedAt: at,
+          schemaVersion: 1,
+        },
+      },
+    }),
+    createGoalEvent({
+      eventId: 'gevt_00000002',
+      goalId,
+      eventType: 'todo.added',
+      recordedAt: at,
+      producer: 'server-test',
+      privacy: 'local_private',
+      refs: { todoId },
+      payload: {
+        todo: {
+          todoId,
+          goalId,
+          role: 'agent',
+          status: 'open',
+          taskClass: 'advancement',
+          title: 'Check API',
+          priority: 1,
+        },
+      },
+    }),
+    createGoalEvent({
+      eventId: 'gevt_00000003',
+      goalId,
+      eventType: 'todo.claimed',
+      recordedAt: at,
+      producer: 'server-test',
+      privacy: 'local_private',
+      refs: { todoId },
+      payload: {
+        todoId,
+        claimedBy: 'agent-a',
+        claimTokenHash: 'b'.repeat(64),
+        claimedAt: at,
+        claimExpiresAt: '2026-08-03T01:00:00.000Z',
+      },
+    }),
+  ] as NewGoalEvent[]);
+  return store;
+}
 
 async function listen(server: ReturnType<typeof createDaemonServer>): Promise<number> {
   server.listen(0, '127.0.0.1');
@@ -178,6 +246,51 @@ describe('daemon health server', () => {
     expect(body).toMatchObject({ subject: 'CN=dev.example.test', subjectAltNames: ['dev.example.test'] });
     expect(JSON.stringify(body)).not.toContain('PRIVATE KEY');
     expect(JSON.stringify(body)).not.toContain('cert.pem');
+  });
+
+  it('serves authenticated read-only Goal projections and bounded event replay', async () => {
+    const goalEventStore = await goalStoreForApi();
+    const server = createDaemonServer({ goalEventStore });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}`;
+
+    const list = await fetch(`${base}/api/v1/goals`);
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({
+      schemaVersion: 'ready4vibe_goal_api_v0',
+      goals: [{ goal: { goalId: 'goal_12345678' }, sourceEventCount: 3 }],
+    });
+
+    const detail = await fetch(`${base}/api/v1/goals/goal_12345678`);
+    const detailBody = await detail.json() as Record<string, unknown>;
+    expect(detail.status).toBe(200);
+    expect(detailBody).toHaveProperty('goal.goalId', 'goal_12345678');
+    expect(JSON.stringify(detailBody)).not.toContain('claimTokenHash');
+
+    const page = await fetch(`${base}/api/v1/goals/goal_12345678/events?after=1&limit=1`);
+    const pageBody = await page.json() as { nextAfter: number; hasMore: boolean; events: unknown[] };
+    expect(page.status).toBe(200);
+    expect(pageBody).toMatchObject({ nextAfter: 2, hasMore: true });
+    expect(pageBody.events).toHaveLength(1);
+
+    const claimPage = await fetch(`${base}/api/v1/goals/goal_12345678/events?after=2&limit=1`);
+    expect(JSON.stringify(await claimPage.json())).not.toContain('claimTokenHash');
+
+    const invalidLimit = await fetch(`${base}/api/v1/goals/goal_12345678/events?limit=1001`);
+    expect(invalidLimit.status).toBe(400);
+    await expect(fetch(`${base}/api/v1/goals/goal_missing1`)).resolves.toMatchObject({ status: 404 });
+    await expect(fetch(`${base}/api/v1/goals`, { method: 'POST' })).resolves.toMatchObject({ status: 405 });
+  });
+
+  it('inherits the LAN auth gate for Goal projection reads', async () => {
+    const authGate = new AuthGate({ mode: 'lan', tlsRequired: false, randomBytes: (() => new Uint8Array(64)) });
+    const server = createDaemonServer({ host: '0.0.0.0', transportMode: 'lan', authGate, goalEventStore: await goalStoreForApi() });
+    servers.push(server);
+    const port = await listen(server);
+    const denied = await fetch(`http://127.0.0.1:${port}/api/v1/goals`);
+    expect(denied.status).toBe(401);
+    expect(await denied.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
   });
 
   it('supports the versioned alias and rejects unknown paths', async () => {
