@@ -117,6 +117,24 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/tool-adapters:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@ready4vibe/execution':
+        specifier: workspace:*
+        version: link:../execution
+      '@ready4vibe/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@ready4vibe/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
+      '@ready4vibe/tools':
+        specifier: workspace:*
+        version: link:../tools
+
   packages/tools: {}
 
 packages:
