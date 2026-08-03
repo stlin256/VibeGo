@@ -59,11 +59,19 @@ importers:
         specifier: workspace:*
         version: link:../testkit
 
+  packages/context: {}
+
   packages/contracts:
     dependencies:
       zod:
         specifier: 3.25.76
         version: 3.25.76
+
+  packages/model-openai:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/scheduler:
     dependencies:
