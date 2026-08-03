@@ -1,6 +1,6 @@
 # 分阶段路线图
 
-**状态：Accepted（文档阶段）**
+**状态：Accepted（文档阶段已完成；阶段 1–2、认证门禁与 Web/PWA MVP 已落地）**
 
 每个阶段都是一个可回滚的 Git 提交或小提交组。完成条件包含：代码、单元测试、文档更新、验证命令和已知限制。
 
@@ -13,7 +13,7 @@
 | 4 | 工具与审批 | filesystem/patch/git/shell、风险分类、审批 UI API、审计 | 路径穿越、命令注入、超时、拒绝等安全测试通过 |
 | 5 | 沙箱 | host-restricted adapter、Docker adapter、资源限制 | 明确标注隔离强度；不可信任务默认不能落到 host adapter |
 | 6 | Skill/MCP | manifest loader、MCP stdio/HTTP、工具 allowlist | 恶意描述、超大 schema、断连、secret 泄漏测试通过 |
-| 7 | Web/PWA | React 多端布局、SSE resume、diff/log/approval、可访问性 | Playwright desktop/tablet/mobile 主流程通过 |
+| 7 | Web/PWA | React 多端布局、SSE resume、pairing/run console/cancel MVP | Web typecheck/build、API/SSE 单测和 React smoke test 通过；Playwright desktop/tablet/mobile、diff/log/approval 深化后置 |
 | 8 | 低资源与硬化 | 运行时指标、事件保留、速率限制、备份/导出 | 达到 `product-brief.md` 的目标，报告实测数据 |
 | 9 | 扩展生态 | plugin/adapter SDK、文档站、示例技能 | 第三方可在不改核心包的情况下增加 provider/tool |
 
@@ -21,7 +21,7 @@
 
 `contracts → fake-model loop → event storage → API/SSE → web read-only view → policy/approval → real tools → sandbox → MCP/Skills`。
 
-当前已完成 `contracts → testkit → in-memory event storage → scheduler → SQLite EventStore → daemon /health → fake-model loop → run API/SSE → ContextManager/provider → agent 接入 → ToolRegistry/ApprovalPolicy → sandbox/execution 安全边界 → tool adapter → auth/transport 门禁`；随后接 certificate manager、external sandbox runtime 与 Web UI。
+当前已完成 `contracts → testkit → in-memory event storage → scheduler → SQLite EventStore → daemon /health → fake-model loop → run API/SSE → ContextManager/provider → agent 接入 → ToolRegistry/ApprovalPolicy → sandbox/execution 安全边界 → tool adapter → auth/transport 门禁 → Web/PWA MVP`；随后接 certificate manager、external sandbox runtime 与 UI 深化。
 
 这样早期就能证明“远程观察和可恢复”主路径，同时把危险工具放在经过测试的边界之后。
 
