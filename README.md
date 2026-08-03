@@ -1,55 +1,161 @@
-# ready4vibe
+# VibeGo / ready4vibe
 
-> 本项目的目标是一个“本地运行、远程访问、多端适配”的最小化 coding-agent harness 与 Web 控制台。
+![VibeGo mark](apps/web/public/vibego-mark.svg)
 
-当前仓库处于文档与架构基线阶段，尚未承诺任何可运行的 agent 功能。实现会严格按文档中的模块边界、合约和测试门禁推进，并以小步 Git 提交交付。
+**A minimal, local-first agent harness for remote Vibe Coding.** VibeGo keeps the agent runtime close to your workspace, adds explicit safety boundaries for untrusted work, and exposes a responsive React console for desktop, tablet, and mobile access.
 
-## 先说明一个技术边界
+[简体中文说明](README-zh.md)
 
-React 是 UI/视图层技术，不是后端运行时。为满足“React + TypeScript”的目标，本项目采用 TypeScript 端到端：
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, and responsive Web/PWA run console are implemented and tested. Real external sandbox runtimes, MCP/Skill execution, ACME automation, and the full approval/diff UI are intentionally staged for later milestones.
 
-- 后端：Node.js + TypeScript，默认 Fastify/Node HTTP 单进程 daemon；
-- 前端：React + TypeScript + Vite，输出可安装 PWA；
-- 共享：`packages/contracts` 提供版本化 API、事件和工具 schema；
-- 运行形态：coding 主机运行 daemon，手机、平板、桌面浏览器通过受保护的 Web API 连接。
+## Why VibeGo?
 
-如果后续确实需要 React Server Components，可以在 Web 层增加适配，但不改变本地 daemon 与 harness 的核心边界。
+VibeGo is designed for a single developer who wants to continue a local coding task from another screen without turning the workstation into an unbounded remote shell.
 
-## 文档入口
+```mermaid
+flowchart LR
+    Browser["VibeGo React PWA"] -->|"Bearer + CSRF"| Daemon["Local daemon"]
+    Daemon --> Auth["Pairing + transport gate"]
+    Daemon --> Loop["Agent loop"]
+    Loop --> Context["Context manager"]
+    Loop --> Model["Model provider"]
+    Loop --> Policy["Approval policy"]
+    Policy --> Sandbox["Sandbox resolver"]
+    Sandbox --> Tools["Guarded tool adapters"]
+    Loop --> Events["SQLite event store"]
+    Events -->|"SSE replay by seq"| Browser
+```
 
-- [文档索引](docs/README.md)
-- [产品范围与非目标](docs/product-brief.md)
-- [总体架构](docs/architecture.md)
-- [开源项目调研](docs/open-source-research.md)
-- [harness 模块合约](docs/harness-contracts.md)
-- [安全、沙箱与审批默认值](docs/adr/0002-security-defaults.md)
-- [LAN 与 Codex-like 审批决策](docs/adr/0003-lan-access-and-codex-like-approval.md)
-- [沙箱/执行策略/审批详细 Spec](docs/specs/01-sandbox-approval.md)
-- [Run/Turn/Event 详细 Spec（Draft）](docs/specs/02-run-event-contract.md)
-- [ModelProvider/ContextManager 详细 Spec（Draft）](docs/specs/03-model-context-contract.md)
-- [HTTP/SSE API 合约](docs/api-contract.md)
-- [Web 多端设计](docs/web-ux.md)
-- [测试策略](docs/testing-strategy.md)
-- [分步开发与提交规范](docs/development-workflow.md)
-- [路线图](docs/roadmap.md)
+The core loop is deliberately small:
 
-## 设计原则
+1. Pair the browser once with a short-lived local code.
+2. Submit a run with an explicit workspace, trust level, sandbox, approval mode, and limits.
+3. Observe model deltas, scheduler state, tool decisions, and terminal events through resumable SSE.
+4. Keep the daemon bound to loopback by default; opt into LAN only with an explicit setting and TLS certificate pair.
 
-1. 本地优先：默认只监听 loopback，远程访问必须显式开启并认证。
-2. 最小权限：工具、文件路径、网络、环境变量和审批均采用 allowlist。
-3. 可恢复：运行事件追加写入，客户端可按序号续传；agent 可取消、暂停和恢复。
-4. 可替换：模型、存储、沙箱、MCP 和 UI 通过窄接口解耦。
-5. 可验证：每个模块先写合约和测试，再实现功能；危险动作必须有审计记录。
-6. 低资源：单进程、静态 SPA、懒加载编辑器、无默认遥测，不引入不必要的常驻服务。
+## Current capabilities
 
-## 当前状态
+| Area | Included now |
+| --- | --- |
+| Runtime | Node.js daemon, resumable run state, SQLite event store, bounded scheduler, cancellation |
+| Models | OpenAI-compatible provider boundary and in-memory fake provider for deterministic tests |
+| Context | Source-labelled context manager with budget/compaction boundaries |
+| Safety | Untrusted-task external-sandbox requirement, path/argv guards, approval policy metadata |
+| Tools | Filesystem and shell adapters behind a shared executor; host execution is not enabled by default |
+| Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
+| Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
+| Web | React 19 + TypeScript + Vite responsive run console with pairing, run composer, cancel, metrics, and fetch-based SSE |
 
-- [x] Git 仓库和文档基线初始化
-- [x] 架构、模块、API、安全和测试策略定稿（文档阶段）
-- [ ] TypeScript monorepo 骨架
-- [ ] fake-model agent loop 与事件日志
-- [ ] shell/filesystem 工具、审批和沙箱
-- [ ] MCP/Skill 接入
-- [ ] React PWA 与远程连接
+## Quick start
 
-详见 [路线图](docs/roadmap.md)。
+Requirements: Node.js `>=22.12.0` and pnpm `11.9.0`.
+
+```powershell
+pnpm install
+pnpm typecheck
+pnpm test
+
+# Start the responsive console during development
+pnpm --filter @ready4vibe/web dev
+
+# Build and start the daemon (loopback only)
+pnpm build
+pnpm --filter @ready4vibe/daemon start
+```
+
+The default daemon address is `http://127.0.0.1:8787`. The web console can use same-origin access or a configured API base URL for a future Tailscale/SSH tunnel.
+
+## LAN and public-access boundary
+
+LAN binding is opt-in and TLS is required by default:
+
+```powershell
+$env:READY4VIBE_HOST = '0.0.0.0'
+$env:READY4VIBE_ALLOW_LAN = '1'
+$env:READY4VIBE_TLS_CERT_FILE = 'C:\path\to\fullchain.pem'
+$env:READY4VIBE_TLS_KEY_FILE = 'C:\path\to\privatekey.pem'
+pnpm --filter @ready4vibe/daemon start
+```
+
+The certificate must cover the hostname/IP clients use (SAN). VibeGo validates the certificate/private-key pair at startup and never puts PEM contents into logs, health responses, events, or the browser. `READY4VIBE_ALLOW_INSECURE_LAN=1` is an explicit development-only exception; it does not disable pairing, bearer authentication, CSRF, or query-token rejection.
+
+ACME/Let's Encrypt issuance, Windows certificate-store integration, and reverse-proxy recipes are planned adapters rather than implicit network behavior.
+
+## Security model at a glance
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant D as Daemon
+    participant A as AuthGate
+    participant L as Agent loop
+    U->>D: POST /pairing/start (local only)
+    D->>A: create one-time code
+    U->>D: POST /pairing/complete { code }
+    D-->>U: in-memory access + CSRF tokens
+    U->>D: POST /runs + Bearer + CSRF
+    D->>A: authorize transport/origin/token
+    A-->>D: allow or stable denial code
+    D->>L: enqueue bounded run
+    L-->>U: SSE events with Last-Event-ID resume
+```
+
+- Tokens are held in memory only by the Web client; they are not stored in localStorage, cookies, URLs, events, or telemetry.
+- Untrusted content cannot silently select a host adapter; the resolver requires an external sandbox mode and fails closed when unavailable.
+- Shell arguments, paths, symlinks, environment propagation, and output limits have focused tests.
+- Health is a transport/storage summary, not proof that a model, sandbox, or tool is safe to use.
+
+## Repository map
+
+```text
+apps/
+  daemon/       HTTP(S) API, auth gate wiring, run manager, SSE
+  web/          React + TypeScript responsive console
+packages/
+  contracts/    Zod contracts and run/event state validation
+  storage/      in-memory and SQLite event stores
+  scheduler/    bounded concurrency and workspace leases
+  agent/        deterministic loop orchestration boundary
+  context/      context sources, budgets, and compaction boundary
+  model-openai/ OpenAI-compatible provider adapter
+  policy/       approval decisions and risk metadata
+  sandbox/      external-sandbox resolver and input guards
+  execution/    path/argv verification primitives
+  tool-adapters/ filesystem/shell executor adapters
+  auth/         pairing, token, Origin/CSRF, and transport gate
+  certificates/ PEM pair resolution and TLS validation
+  testkit/      fake providers, clocks, and event assertions
+```
+
+## Development discipline
+
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **16 workspace packages and 97 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+
+Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
+
+## Further reading
+
+- [Product brief](docs/product-brief.md) and [architecture](docs/architecture.md)
+- [Open-source research](docs/open-source-research.md) and [harness contracts](docs/harness-contracts.md)
+- [Security defaults](docs/adr/0002-security-defaults.md) and [LAN/Codex-like approval decisions](docs/adr/0003-lan-access-and-codex-like-approval.md)
+- [Implementation status](docs/implementation-status.md), [roadmap](docs/roadmap.md), and [spec index](docs/specs/)
+
+## Roadmap highlights
+
+- real external sandbox runtime with resource limits;
+- Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
+- diff/log/approval views and Playwright desktop/tablet/mobile flows;
+- ACME/certificate manager adapter and Tailscale/SSH transport adapters;
+- low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
+
+## Contributing
+
+Start with a spec or an issue-sized boundary, keep the change modular, add tests before wiring new side effects, update the relevant documentation before committing, and run:
+
+```powershell
+pnpm typecheck
+pnpm test
+pnpm diff:check
+```
+
+Do not commit API keys, private certificates, workspace secrets, or generated runtime data.
