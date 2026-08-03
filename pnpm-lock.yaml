@@ -32,15 +32,30 @@ importers:
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ready4vibe/execution':
+        specifier: workspace:*
+        version: link:../../packages/execution
       '@ready4vibe/model-openai':
         specifier: workspace:*
         version: link:../../packages/model-openai
+      '@ready4vibe/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
+      '@ready4vibe/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
       '@ready4vibe/scheduler':
         specifier: workspace:*
         version: link:../../packages/scheduler
       '@ready4vibe/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@ready4vibe/tool-adapters':
+        specifier: workspace:*
+        version: link:../../packages/tool-adapters
+      '@ready4vibe/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       uuid:
         specifier: 11.1.0
         version: 11.1.0
@@ -128,11 +143,19 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/sandbox-runtime:
+    dependencies:
+      '@ready4vibe/execution':
+        specifier: workspace:*
+        version: link:../execution
+
   packages/scheduler:
     dependencies:
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../contracts
+
+  packages/skill-mcp: {}
 
   packages/storage:
     dependencies:
@@ -171,14 +194,6 @@ importers:
         version: link:../tools
 
   packages/tools: {}
-
-  packages/skill-mcp: {}
-
-  packages/sandbox-runtime:
-    dependencies:
-      '@ready4vibe/execution':
-        specifier: workspace:*
-        version: link:../execution
 
 packages:
 

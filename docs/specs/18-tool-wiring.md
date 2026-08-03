@@ -34,8 +34,8 @@ when no runtime is explicitly injected.
   `approval.required` and fails the run with `APPROVAL_REQUIRED` rather than
   blocking an orphaned in-memory promise.
 - `RunManager` accepts a runtime only through explicit options. The daemon's
-  default construction remains runtime-free, so production host tools cannot be
-  enabled accidentally by importing the package.
+  filesystem runtime is constructed behind the disabled-by-default Spec 29
+  settings gate; no run receives it until the authenticated user enables it.
 
 ## Event contract
 

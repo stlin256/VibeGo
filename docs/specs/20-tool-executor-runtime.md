@@ -23,8 +23,9 @@ workspace or implicit approval.
 - Every call is delegated to `ToolExecutor.execute` with the run's AbortSignal.
   Registry/version/risk, approval, sandbox, and handler checks therefore remain
   centralized and are repeated at execution time.
-- The bridge is an opt-in library. `RunManager` and the daemon still construct
-  no runtime unless an application explicitly passes one.
+- The bridge is an opt-in library. `RunManager` receives a per-run runtime
+  snapshot only when the daemon's authenticated Spec 29 toggle is enabled;
+  otherwise the request remains runtime-free.
 
 ## Tests and exit gate
 
@@ -33,4 +34,3 @@ workspace or implicit approval.
 - No test uses a real filesystem, process, network, Docker, or Podman runtime.
 - `pnpm typecheck`, `pnpm test`, `pnpm diff:check`, and `git diff --check` pass
   before the standalone commit and push.
-

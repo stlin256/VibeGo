@@ -10,6 +10,7 @@ import { FakeModelProvider } from '@ready4vibe/testkit';
 import { RunManager } from './run-manager.js';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
+import { InMemoryToolSettingsManager } from './tool-settings.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -365,5 +366,21 @@ describe('daemon health server', () => {
     const cleared = await fetch(base, { method: 'DELETE' });
     expect(cleared.status).toBe(200);
     expect(await cleared.json()).toMatchObject({ configured: false, source: 'unconfigured' });
+  });
+
+  it('serves explicit filesystem tool settings without exposing the workspace path', async () => {
+    const toolSettings = new InMemoryToolSettingsManager('C:\\Users\\example\\workspace');
+    const server = createDaemonServer({ toolSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/tools`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    const initialBody = await initial.text();
+    expect(initialBody).not.toContain('C:\\Users\\example');
+    expect(JSON.parse(initialBody)).toMatchObject({ filesystemEnabled: false, availableTools: [] });
+    const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ filesystemEnabled: true }) });
+    expect(enabled.status).toBe(200);
+    expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
   });
 });

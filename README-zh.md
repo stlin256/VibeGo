@@ -8,6 +8,10 @@ Web 控制台的 Settings 面板现在包含 Model Access 向导：输入 OpenAI
 进程内存中；它不会写入 localStorage、事件、日志或 URL。daemon 重启后会再次
 提示配置，后续再接入 Windows Credential Manager 等系统密钥存储。
 
+Settings 还提供显式的“Filesystem tools”开关。开启后仅注册受路径守卫、
+审批和输出上限约束的文件读写工具；shell、Git、MCP、网络和外部 sandbox
+不会被隐式启用。
+
 <p align="center">
   <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
 </p>

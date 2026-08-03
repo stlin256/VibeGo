@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -15,6 +15,8 @@ function RuntimeApp(): JSX.Element {
   const [certificateStatusUnavailable, setCertificateStatusUnavailable] = useState(false);
   const [modelSettings, setModelSettings] = useState<ModelSettingsStatus>();
   const [modelSettingsUnavailable, setModelSettingsUnavailable] = useState(false);
+  const [toolSettings, setToolSettings] = useState<ToolSettingsStatus>();
+  const [toolSettingsUnavailable, setToolSettingsUnavailable] = useState(false);
 
   useEffect(() => {
     saveRunProfile(profile);
@@ -40,12 +42,23 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshToolSettings = async (): Promise<void> => {
+    try {
+      setToolSettings(await client.toolSettings());
+      setToolSettingsUnavailable(false);
+    } catch (reason) {
+      setToolSettings(undefined);
+      setToolSettingsUnavailable(isToolSettingsUnavailable(reason));
+    }
+  };
+
   useEffect(() => {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
       if (!nextHealth.auth.pairingRequired) {
         void refreshCertificateStatus();
         void refreshModelSettings();
+        void refreshToolSettings();
       }
     }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
@@ -57,6 +70,7 @@ function RuntimeApp(): JSX.Element {
       setHealth(await client.health());
       await refreshCertificateStatus();
       await refreshModelSettings();
+      await refreshToolSettings();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -118,12 +132,20 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) { setError(safeError(reason)); }
   };
 
+  const setFilesystemToolsEnabled = async (enabled: boolean): Promise<void> => {
+    try {
+      setToolSettings(await client.setFilesystemToolsEnabled(enabled));
+      setToolSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
   const resetProfile = (): void => {
     resetRunProfile();
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -141,6 +163,10 @@ function isCertificateStatusUnavailable(reason: unknown): boolean {
 
 function isModelSettingsUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'MODEL_SETTINGS_UNAVAILABLE';
+}
+
+function isToolSettingsUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'TOOL_SETTINGS_UNAVAILABLE';
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><RuntimeApp /></StrictMode>);

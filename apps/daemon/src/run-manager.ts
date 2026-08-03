@@ -29,6 +29,7 @@ export interface RunManagerOptions {
   modelProvider: ModelProvider;
   modelProviderForRun?: () => ModelProvider;
   toolRuntime?: ToolRuntime;
+  toolRuntimeForRun?: () => ToolRuntime | undefined;
   approvalBroker?: ApprovalBroker;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
@@ -40,12 +41,14 @@ export class RunManager {
   readonly approvalBroker: ApprovalBroker;
   private readonly agentLoop: AgentLoop;
   private readonly modelProviderForRun: () => ModelProvider;
+  private readonly toolRuntimeForRun: () => ToolRuntime | undefined;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
   constructor(options: RunManagerOptions) {
     this.eventStore = new ObservableEventStore(options.eventStore);
     this.modelProviderForRun = options.modelProviderForRun ?? (() => options.modelProvider);
+    this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.scheduler = options.scheduler ?? new Scheduler(options.schedulerPolicy ?? {
       maxActiveRuns: 2,
       maxActiveModelCalls: 2,
@@ -68,7 +71,14 @@ export class RunManager {
     const runId = `run_${uuidv7()}`;
     const controller = new AbortController();
     this.controllers.set(runId, controller);
-    const promise = this.agentLoop.run({ runId, config, signal: controller.signal, modelProvider: this.modelProviderForRun() });
+    const capturedToolRuntime = this.toolRuntimeForRun();
+    const promise = this.agentLoop.run({
+      runId,
+      config,
+      signal: controller.signal,
+      modelProvider: this.modelProviderForRun(),
+      ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
+    });
     void promise.then((result) => {
       this.completions.set(runId, result);
       this.controllers.delete(runId);

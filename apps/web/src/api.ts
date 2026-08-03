@@ -170,6 +170,12 @@ export interface ModelSettingsInput {
   model: string;
 }
 
+export interface ToolSettingsStatus {
+  filesystemEnabled: boolean;
+  workspaceLabel: string;
+  availableTools: readonly string[];
+}
+
 export interface StoredEvent {
   version: 1;
   id: string;
@@ -232,6 +238,14 @@ export class ApiClient {
 
   async clearModelSettings(): Promise<ModelSettingsStatus> {
     return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'DELETE' });
+  }
+
+  async toolSettings(): Promise<ToolSettingsStatus> {
+    return this.request<ToolSettingsStatus>('/api/v1/settings/tools', { method: 'GET' });
+  }
+
+  async setFilesystemToolsEnabled(filesystemEnabled: boolean): Promise<ToolSettingsStatus> {
+    return this.request<ToolSettingsStatus>('/api/v1/settings/tools', { method: 'POST', body: JSON.stringify({ filesystemEnabled }) });
   }
 
   async completePairing(code: string): Promise<PairingResult> {

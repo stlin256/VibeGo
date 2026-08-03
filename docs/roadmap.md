@@ -108,6 +108,21 @@ events, logs, or URLs. OS keyring/Credential Manager persistence remains a
 separate adapter milestone. The authenticated GET/POST/DELETE settings API,
 runtime provider switch, and Web setup card are now covered by unit tests.
 
+## Spec 29: Explicit filesystem tool wiring (implemented)
+
+Wire the tested filesystem adapters into the daemon behind an authenticated,
+process-memory Web toggle. The first slice exposes only bounded read/write
+tools for the daemon working directory; shell, Git, MCP/Skill, external
+sandbox, and multi-workspace mapping remain separate fail-closed milestones.
+The authenticated settings API, Web toggle, per-run runtime snapshot, and
+guarded adapter tests are now implemented.
+
+## Spec 30: External shell and sandbox runtime (next)
+
+Connect shell execution only through an explicit Docker/Podman runtime and
+workspace registry. The next slice must keep mutable image tags, host fallback,
+network access, and process spawning fail-closed, with no default shell runner.
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

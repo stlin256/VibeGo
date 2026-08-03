@@ -5,6 +5,7 @@ import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type T
 import type { CertificateStatus } from '@ready4vibe/certificates';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager } from './run-manager.js';
+import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -28,6 +29,7 @@ export interface DaemonServerOptions {
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
   modelSettings?: ModelSettingsManager;
+  toolSettings?: ToolSettingsManager;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -42,6 +44,7 @@ interface ResolvedDaemonServerOptions {
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
   modelSettings?: ModelSettingsManager;
+  toolSettings?: ToolSettingsManager;
 }
 
 export interface HealthResponse {
@@ -88,6 +91,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.tls ? { tls: options.tls } : {}),
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
+    ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -225,6 +229,36 @@ async function handleRequest(
       writeJson(response, 200, options.modelSettings.configure(input));
     } catch (error) {
       if (error instanceof ModelSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/tools') {
+    if (!options.toolSettings) {
+      writeJson(response, 503, { error: { code: 'TOOL_SETTINGS_UNAVAILABLE', message: 'Tool settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.toolSettings.status());
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST required' } }, { Allow: 'GET, POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isToolSettingsInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'filesystemEnabled boolean is required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, options.toolSettings.setFilesystemEnabled(input.filesystemEnabled));
+    } catch (error) {
+      if (error instanceof ToolSettingsError) {
         writeJson(response, 400, { error: { code: error.code, message: error.message } });
         return;
       }
@@ -390,6 +424,10 @@ function isModelSettingsInput(value: unknown): value is ModelSettingsInput {
     && 'baseUrl' in value && typeof value.baseUrl === 'string'
     && 'apiKey' in value && typeof value.apiKey === 'string'
     && 'model' in value && typeof value.model === 'string';
+}
+
+function isToolSettingsInput(value: unknown): value is { filesystemEnabled: boolean } {
+  return typeof value === 'object' && value !== null && 'filesystemEnabled' in value && typeof value.filesystemEnabled === 'boolean';
 }
 
 function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {

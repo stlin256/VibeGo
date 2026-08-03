@@ -25,6 +25,8 @@ export interface AgentRunRequest {
   contextItems?: readonly ContextItem[];
   /** Provider captured for this run; when omitted the loop default is used. */
   modelProvider?: ModelProvider;
+  /** Tool runtime captured for this run; when omitted the loop default is used. */
+  toolRuntime?: ToolRuntime;
 }
 
 export interface AgentRunResult {
@@ -80,6 +82,7 @@ export class AgentLoop {
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const config = parseRunConfig(request.config);
     const modelProvider = request.modelProvider ?? this.options.modelProvider;
+    const toolRuntime = request.toolRuntime ?? this.options.toolRuntime;
     const runId = request.runId ?? `run_${uuidv7()}`;
     const correlationId = `corr_${uuidv7()}`;
     let status: RunStatus = 'created';
@@ -154,7 +157,7 @@ export class AgentLoop {
       await transition('queued');
       if (controller.signal.aborted) return await cancel('user-cancelled-while-queued');
 
-      const schedulerRequest = this.toSchedulerRequest(runId, config, request.priority);
+      const schedulerRequest = this.toSchedulerRequest(runId, config, request.priority, toolRuntime);
       try {
         lease = await this.options.scheduler.acquire(schedulerRequest);
       } catch (error) {
@@ -167,7 +170,6 @@ export class AgentLoop {
       if (controller.signal.aborted) return await cancel('user-cancelled-before-start');
       await transition('planning');
 const messages: unknown[] = [...contextResult.messages];
-      const toolRuntime = this.options.toolRuntime;
       const modelTools = modelProvider.capabilities.toolCalls && toolRuntime
         ? toolRuntime.descriptors.map(toModelTool)
         : [];
@@ -294,7 +296,7 @@ const messages: unknown[] = [...contextResult.messages];
 
         const toolResults: Array<{ call: PendingToolCall; descriptor: AgentToolDescriptor; content: string }> = [];
         for (const call of calls.values()) {
-          const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal, transition);
+          const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal, transition, toolRuntime);
           if (toolResult.failure) {
             if (controller.signal.aborted) return await cancel('user-cancelled-during-tool');
             controller.abort();
@@ -334,7 +336,7 @@ const messages: unknown[] = [...contextResult.messages];
     }
   }
 
-  private toSchedulerRequest(runId: string, config: RunConfig, priority: SchedulerRequest['priority']): SchedulerRequest {
+  private toSchedulerRequest(runId: string, config: RunConfig, priority: SchedulerRequest['priority'], toolRuntime?: ToolRuntime): SchedulerRequest {
     return {
       runId,
       workspaceId: config.workspaceId,
@@ -342,7 +344,7 @@ const messages: unknown[] = [...contextResult.messages];
       ...(priority ? { priority } : {}),
       resources: {
         modelCalls: 1,
-        ...(this.options.toolRuntime ? { toolProcesses: 1 } : {}),
+        ...(toolRuntime ? { toolProcesses: 1 } : {}),
         externalSandboxes: config.sandbox.mode === 'external-sandbox' ? 1 : 0,
       },
     };
@@ -355,8 +357,8 @@ const messages: unknown[] = [...contextResult.messages];
     config: RunConfig,
     signal: AbortSignal,
     transition: (next: RunStatus, reason?: string) => Promise<void>,
+    runtime: ToolRuntime | undefined,
   ): Promise<{ descriptor: AgentToolDescriptor; content: string; failure?: undefined } | { failure: { code: string; message: string } }> {
-    const runtime = this.options.toolRuntime;
     if (!runtime) return { failure: { code: 'TOOLS_UNAVAILABLE', message: 'Tool calls are not enabled for this run.' } };
     const descriptor = runtime.descriptors.find((entry) => entry.name === call.name || entry.id === call.name);
     await this.append(runId, 'tool.requested', 'orchestrator', turnId, {

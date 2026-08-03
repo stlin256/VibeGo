@@ -31,6 +31,13 @@ describe('web console shell', () => {
     expect(html).not.toContain('test-secret');
   });
 
+  it('renders an explicit guarded filesystem toggle without an absolute path', () => {
+    const html = renderToStaticMarkup(<App toolSettings={{ filesystemEnabled: false, workspaceLabel: 'workspace', availableTools: [] }} onSetFilesystemToolsEnabled={() => undefined} />);
+    expect(html).toContain('Enable guarded filesystem tools');
+    expect(html).toContain('writes still require approval');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders run metrics and output without exposing an absolute workspace path', () => {
     const html = renderToStaticMarkup(<App health={{ status: 'ok', service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } }} run={{ version: 1, runId: 'run_1', status: 'executing', config: {} as never, lastEventSeq: 2, output: 'hello', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} />);
     expect(html).toContain('hello');

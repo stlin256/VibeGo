@@ -121,6 +121,18 @@ describe('ApiClient', () => {
     expect(calls[2]?.init?.method).toBe('DELETE');
   });
 
+  it('toggles filesystem tools through the authenticated settings endpoint', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ filesystemEnabled: init?.method === 'POST', workspaceLabel: 'workspace', availableTools: init?.method === 'POST' ? ['filesystem.read@1.0.0'] : [] });
+    });
+    await expect(client.toolSettings()).resolves.toMatchObject({ filesystemEnabled: false, workspaceLabel: 'workspace' });
+    await expect(client.setFilesystemToolsEnabled(true)).resolves.toMatchObject({ filesystemEnabled: true });
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/tools', '/api/v1/settings/tools']);
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ filesystemEnabled: true }));
+  });
+
   it('parses SSE frames, ignores heartbeat/invalid data and stops at terminal event', async () => {
     expect(parseSseFrame(': heartbeat')).toBeUndefined();
     expect(parseSseFrame('id: 4\nevent: model.delta\ndata: {"version":1,"id":"e4","seq":4,"runId":"run_1","type":"model.delta","at":"now","payload":{}}')).toMatchObject({ seq: 4, type: 'model.delta' });

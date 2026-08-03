@@ -8,6 +8,7 @@ import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
+import { InMemoryToolSettingsManager } from './tool-settings.js';
 import { resolveDaemonTransport } from './transport-config.js';
 
 const transport = resolveDaemonTransport();
@@ -29,10 +30,12 @@ const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const modelSettings = new InMemoryModelSettingsManager();
+const toolSettings = new InMemoryToolSettingsManager();
 const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
+  toolRuntimeForRun: () => toolSettings.runtimeForRun(),
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {
@@ -49,6 +52,7 @@ const server = createDaemonServer({
   runManager,
   ...(certificateStatus ? { certificateStatus } : {}),
   modelSettings,
+  toolSettings,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 

@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type ToolSettingsStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -22,13 +22,17 @@ export interface AppProps {
   modelSettingsUnavailable?: boolean;
   onConfigureModel?: (input: ModelSettingsInput) => Promise<void> | void;
   onClearModelSettings?: () => Promise<void> | void;
+  toolSettings?: ToolSettingsStatus;
+  toolSettingsUnavailable?: boolean;
+  onSetFilesystemToolsEnabled?: (enabled: boolean) => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
   const [modelApiKey, setModelApiKey] = useState('');
+  const [toolToggleBusy, setToolToggleBusy] = useState(false);
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
   }, [modelSettings?.baseUrl]);
@@ -53,6 +57,11 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     } catch {
       // The parent renders a safe error; keep the field for an intentional retry.
     }
+  };
+  const toggleFilesystemTools = async (enabled: boolean): Promise<void> => {
+    if (!onSetFilesystemToolsEnabled) return;
+    setToolToggleBusy(true);
+    try { await onSetFilesystemToolsEnabled(enabled); } catch { /* Parent renders a safe error and keeps the previous toggle state. */ } finally { setToolToggleBusy(false); }
   };
   const updateProfile = (patch: Partial<RunProfile>): void => onProfileChange?.({ ...profile, ...patch });
   const updateLimit = (key: keyof RunProfile['limits'], value: string): void => onProfileChange?.({ ...profile, limits: { ...profile.limits, [key]: clampLimit(key, value) } });
@@ -90,6 +99,14 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                     <div className="inline-actions"><button type="submit" disabled={!modelApiKey}>Save provider</button>{modelSettings?.configured && <button className="cancel-button" type="button" onClick={() => { void (async () => { await onClearModelSettings?.(); setModelApiKey(''); })(); }}>Clear daemon key</button>}</div>
                   </form>
                 </>}
+              </div>
+              <div className="tool-setup" aria-label="Filesystem tool setup">
+                <div className="eyebrow">TOOL ACCESS</div>
+                {toolSettingsUnavailable ? <p className="muted">Tool settings are unavailable until the daemon exposes the authenticated adapter.</p> : toolSettings ? <>
+                  <label className="toggle-row"><input type="checkbox" checked={toolSettings.filesystemEnabled} disabled={toolToggleBusy} onChange={(event) => { void toggleFilesystemTools(event.target.checked); }} /><span>Enable guarded filesystem tools</span></label>
+                  <p className="muted">Workspace: {toolSettings.workspaceLabel}. Reads are bounded; writes still require approval. Shell, Git, MCP, and network tools remain disabled.</p>
+                  {toolSettings.availableTools.length > 0 && <p className="muted">Available: {toolSettings.availableTools.join(', ')}</p>}
+                </> : <p className="muted">Pair with the daemon to configure guarded filesystem tools.</p>}
               </div>
               <label>Task trust<select value={profile.taskTrust} onChange={(event) => updateProfile({ taskTrust: event.target.value as RunProfile['taskTrust'] })}><option value="trusted-workspace">Trusted workspace</option><option value="untrusted-content">Untrusted content</option></select></label>
               <label>Sandbox<select value={profile.sandbox.mode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">Read-only</option><option value="workspace-write">Workspace write</option><option value="external-sandbox">External sandbox</option></select></label>
