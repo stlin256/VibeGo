@@ -111,10 +111,240 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .event-row span:nth-child(2) { color: #c4d2e5; overflow-wrap: anywhere; } .event-row time { color: #6f86a7; }
 .cancel-button { margin-top: 15px; color: #ffd0c9; border: 1px solid #bd665a; background: transparent; }
 .cancel-button:hover { background: #321d27; }
-@media (max-width: 780px) { .app-shell { padding-top: 12px; } .content-grid { grid-template-columns: 1fr; } .sidebar { grid-template-columns: 1fr 1fr; } .connection-panel { grid-column: 1 / -1; } .safety-panel { grid-column: 1 / -1; } }
-@media (max-width: 780px) { .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .model-setup form { grid-template-columns: 1fr 1fr; } .model-setup form .inline-actions { grid-column: 1 / -1; } }
-@media (max-width: 520px) { .sidebar { grid-template-columns: 1fr; } .connection-panel, .safety-panel { grid-column: auto; } .composer-footer, .run-header { align-items: stretch; flex-direction: column; } .composer-footer button { width: 100%; } .run-metrics { grid-template-columns: repeat(2, 1fr); } .topbar { margin-bottom: 16px; } }
-@media (max-width: 520px) { .settings-grid { grid-template-columns: 1fr; } .model-setup form { grid-template-columns: 1fr; } .model-setup form .inline-actions { grid-column: auto; } }
-@media (max-width: 520px) { .approval-card { align-items: stretch; flex-direction: column; } .approval-actions button { flex: 1; } }
-@media (max-width: 520px) { .goal-panel-header { align-items: stretch; flex-direction: column; } .goal-refresh { width: 100%; } .goal-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .goal-item-list li { align-items: start; flex-direction: column; } }
+/* Spec 37: ratio-first compositions. The sidebar becomes grid contents only
+   when there is enough width for a persistent summary rail; this lets Settings
+   occupy a full-width row without duplicating the React component tree. */
+@media (min-width: 1280px) and (min-aspect-ratio: 3/2) {
+  .content-grid { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 24px; }
+  .sidebar { display: contents; }
+  .settings-panel { grid-column: 1 / -1; grid-row: 1; }
+  .connection-panel, .pairing-panel, .safety-panel { grid-column: 1; }
+  .main-column { grid-column: 2; grid-row: 2 / span 3; }
+  .settings-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .output-view { max-height: 520px; }
+}
+@media (min-width: 900px) and (max-width: 1279px) and (min-aspect-ratio: 5/4) {
+  .content-grid { grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); gap: 18px; }
+  .sidebar { display: contents; }
+  .settings-panel { grid-column: 1 / -1; grid-row: 1; }
+  .connection-panel, .pairing-panel, .safety-panel { grid-column: 1; }
+  .main-column { grid-column: 2; grid-row: 2 / span 3; }
+  .settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .panel { padding: 18px; }
+}
+/* Portrait monitors and tall unfolded devices keep a readable single reading
+   column while retaining two-column settings and metric density. */
+@media (min-width: 900px) and (max-aspect-ratio: 1/1) {
+  .app-shell { width: min(980px, 100%); }
+  .content-grid { grid-template-columns: 1fr; }
+  .sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-panel, .connection-panel, .pairing-panel, .safety-panel { grid-column: 1 / -1; }
+  .main-column { grid-column: 1; }
+  .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .model-setup form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .model-setup form .inline-actions { grid-column: 1 / -1; }
+  .composer-footer, .run-header { align-items: center; }
+  .output-view { max-height: 480px; }
+}
+/* Tablet landscape and unfolded/tri-fold-like ratios get a smaller persistent
+   rail only when the viewport is wide enough to avoid a cramped touch UI. */
+@media (min-width: 768px) and (max-width: 1199px) and (min-aspect-ratio: 23/20) {
+  .content-grid { grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); gap: 16px; }
+  .sidebar { display: contents; }
+  .settings-panel { grid-column: 1 / -1; grid-row: 1; }
+  .connection-panel, .pairing-panel, .safety-panel { grid-column: 1; }
+  .main-column { grid-column: 2; grid-row: 2 / span 3; }
+  .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel { padding: 16px; }
+  .goal-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Phone, fold cover, tablet portrait, and narrow tri-fold panes use a
+   one-column action flow. Width wins over ratio so a narrow landscape cover
+   never receives a desktop rail. */
+@media (max-width: 767px), (min-width: 768px) and (max-width: 899px), (min-width: 900px) and (max-aspect-ratio: 1/1) {
+  .app-shell { padding-top: 12px; }
+  .content-grid { grid-template-columns: 1fr; }
+  .sidebar { grid-template-columns: 1fr 1fr; }
+  .settings-panel, .connection-panel, .pairing-panel, .safety-panel { grid-column: 1 / -1; }
+  .main-column { grid-column: 1; }
+  .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .model-setup form { grid-template-columns: 1fr 1fr; }
+  .model-setup form .inline-actions { grid-column: 1 / -1; }
+  .goal-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 599px), (min-width: 600px) and (max-width: 767px) and (max-aspect-ratio: 1/1) {
+  .app-shell { padding: 10px 10px 32px; }
+  .topbar { margin-bottom: 14px; }
+  .brand-lockup { font-size: 16px; }
+  .brand-mark { width: 32px; height: 32px; }
+  .sidebar { grid-template-columns: 1fr; }
+  .connection-panel, .pairing-panel, .safety-panel { grid-column: auto; }
+  .settings-grid { grid-template-columns: 1fr; }
+  .model-setup form { grid-template-columns: 1fr; }
+  .model-setup form .inline-actions { grid-column: auto; }
+  .composer-footer, .run-header, .goal-panel-header { align-items: stretch; flex-direction: column; }
+  .composer-footer button, .goal-refresh { width: 100%; }
+  .run-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .approval-card, .recovery-card { align-items: stretch; flex-direction: column; }
+  .approval-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .approval-actions button { width: 100%; }
+  .goal-item-list li { align-items: start; flex-direction: column; }
+  .panel { padding: 14px; }
+}
+@media (min-width: 600px) and (max-width: 899px) and (min-aspect-ratio: 3/2) {
+  /* Fold cover in landscape: preserve a compact top strip, but keep the
+     single-column action order to avoid hinge/viewport clipping. */
+  .sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-panel, .connection-panel, .pairing-panel, .safety-panel { grid-column: 1 / -1; }
+  .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .topbar { margin-bottom: 12px; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+/* Spec 38: conversation-first shell. The existing settings form remains a
+   semantic component, but it is a dismissible drawer rather than the default
+   reading surface. */
+body { overflow-x: hidden; }
+.topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.topbar-button { min-height: 36px; padding: 0 12px; color: #cbe4ff; border: 1px solid #30415c; background: #122039; font-size: 12px; }
+.topbar-button:hover { background: #172b4b; }
+.content-grid { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.workspace-rail { position: sticky; top: 16px; display: grid; gap: 9px; min-width: 0; border: 1px solid rgb(175 194 232 / 18%); border-radius: var(--vibego-radius-md); padding: 14px; background: rgb(11 16 32 / 72%); box-shadow: 0 18px 50px rgb(5 9 20 / 24%); }
+.workspace-rail-name { overflow-wrap: anywhere; color: #e8edf6; font-size: 14px; }
+.workspace-rail p { margin: 0; font-size: 11px; }
+.rail-new-button, .rail-settings-button { width: 100%; min-height: 40px; padding: 0 10px; font-size: 12px; }
+.rail-settings-button { color: #cbe4ff; border: 1px solid #30415c; background: transparent; }
+.rail-settings-button:hover { background: #17243c; }
+.rail-section-label { margin-top: 12px; color: #6f86a7; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.rail-session { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 8px; border-radius: 8px; color: #8fa4c3; font-size: 12px; }
+.rail-session.active { color: #e8edf6; background: #17243c; }
+.session-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--vibego-lime); box-shadow: 0 0 0 3px rgb(184 243 108 / 12%); }
+.muted-dot { background: #52627d; box-shadow: none; }
+.main-column { min-width: 0; display: block; }
+.conversation-column { display: grid; gap: 16px; min-width: 0; }
+.conversation-column h1 { margin-bottom: 10px; font-size: clamp(20px, 2.5vw, 28px); }
+.context-rail { display: grid; gap: 16px; min-width: 0; }
+.context-rail[data-open="false"] { display: none; }
+.settings-panel[data-open="false"] { display: none; }
+.settings-panel[data-open="true"] { position: fixed; z-index: 20; top: 16px; left: 50%; width: min(1040px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; transform: translateX(-50%); display: block; border-color: rgb(92 225 230 / 42%); box-shadow: 0 28px 90px rgb(0 0 0 / 56%); }
+.settings-drawer-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.settings-drawer-header h2 { margin-bottom: 0; }
+.drawer-close { min-height: 36px; padding: 0 12px; color: #cbe4ff; border: 1px solid #30415c; background: transparent; font-size: 12px; }
+.drawer-close:hover { background: #17243c; }
+.composer-panel { border-color: rgb(92 225 230 / 28%); }
+.composer-panel textarea { min-height: 132px; }
+.sidebar { min-width: 0; }
+.sidebar .settings-panel { grid-column: auto; }
+
+@media (min-width: 1200px) and (min-aspect-ratio: 3/2) {
+  .app-shell { width: min(1600px, 100%); }
+  .content-grid { grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(300px, 360px); gap: 18px; }
+  .workspace-rail { grid-column: 1; grid-row: 1; }
+  .sidebar { grid-column: 1; grid-row: 2; display: grid; }
+  .main-column { grid-column: 2; grid-row: 1 / span 2; }
+  .context-rail { grid-column: 3; grid-row: 1 / span 2; }
+  .context-rail[data-open="false"] { display: none; }
+  .settings-panel[data-open="true"] { width: min(1100px, calc(100vw - 48px)); }
+}
+
+@media (min-width: 900px) and (max-width: 1199px) and (min-aspect-ratio: 5/4) {
+  .content-grid { grid-template-columns: minmax(180px, 210px) minmax(0, 1fr); }
+  .workspace-rail { grid-column: 1; grid-row: 1; }
+  .sidebar { grid-column: 1; grid-row: 2; display: grid; }
+  .main-column { grid-column: 2; grid-row: 1 / span 3; }
+  .context-rail { grid-column: 2; grid-row: 4; }
+  .settings-panel[data-open="true"] { width: min(900px, calc(100vw - 32px)); }
+}
+
+@media (min-width: 1200px) and (max-width: 1399px) and (min-aspect-ratio: 5/4) {
+  .content-grid { grid-template-columns: minmax(190px, 220px) minmax(0, 1fr); }
+  .workspace-rail { grid-column: 1; grid-row: 1; }
+  .sidebar { grid-column: 1; grid-row: 2; display: grid; }
+  .main-column { grid-column: 2; grid-row: 1 / span 3; }
+  .context-rail { grid-column: 2; grid-row: 4; }
+  .settings-panel[data-open="true"] { width: min(1000px, calc(100vw - 32px)); }
+}
+
+@media (max-width: 899px), (min-width: 900px) and (max-aspect-ratio: 1/1) {
+  .content-grid { grid-template-columns: 1fr; }
+  .workspace-rail { position: static; grid-column: 1; grid-row: 1; }
+  .workspace-rail .rail-section-label, .workspace-rail .rail-session { display: none; }
+  .workspace-rail { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+  .workspace-rail .eyebrow { grid-column: 1; grid-row: 1; }
+  .workspace-rail-name { grid-column: 2; grid-row: 1; }
+  .workspace-rail p { grid-column: 2; grid-row: 2; }
+  .rail-new-button { grid-column: 3; grid-row: 1 / span 2; width: auto; }
+  .rail-settings-button { grid-column: 1 / -1; grid-row: 3; }
+  .sidebar { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sidebar .connection-panel, .sidebar .pairing-panel, .sidebar .safety-panel { grid-column: 1 / -1; }
+  .main-column { grid-column: 1; grid-row: 3; }
+  .context-rail { grid-column: 1; grid-row: 4; }
+  .context-rail[data-open="false"] { display: none; }
+  .settings-panel[data-open="true"] { inset: 10px; width: auto; max-height: calc(100vh - 20px); transform: none; }
+}
+
+@media (max-width: 599px) {
+  .app-shell { padding: 10px 10px 28px; }
+  .topbar { align-items: start; margin-bottom: 12px; }
+  .topbar-actions { gap: 5px; }
+  .topbar-button { min-height: 34px; padding: 0 9px; }
+  .topbar-button.context-toggle { display: inline-flex; }
+  .connection-pill { align-self: center; }
+  .workspace-rail { grid-template-columns: auto minmax(0, 1fr); padding: 11px; }
+  .workspace-rail .eyebrow { grid-column: 1; }
+  .workspace-rail-name { grid-column: 2; }
+  .workspace-rail p { grid-column: 2; }
+  .rail-new-button { grid-column: 1 / -1; grid-row: 3; width: 100%; }
+  .rail-settings-button { grid-row: 4; }
+  .sidebar { grid-template-columns: 1fr; }
+  .conversation-column { gap: 12px; }
+  .composer-panel { position: relative; }
+  .composer-panel textarea { min-height: 116px; }
+  .composer-footer { align-items: stretch; flex-direction: column; }
+  .composer-footer button { width: 100%; }
+  .context-rail { gap: 12px; }
+  .settings-panel[data-open="true"] { inset: 6px; max-height: calc(100vh - 12px); padding: 14px; }
+}
+
+/* Codex-like desktop fit guard: every rail is a shrink-safe grid item. Long
+   Goal text must wrap inside the bounded context column instead of widening
+   the page and clipping the right edge of the console. */
+.topbar, .topbar-actions, .workspace-rail, .sidebar, .main-column,
+.conversation-column, .context-rail, .goal-panel, .goal-card,
+.goal-panel-header, .goal-card-header, .goal-list, .goal-subsection,
+.goal-metrics { min-width: 0; }
+.topbar-actions { overflow: hidden; }
+.goal-panel { overflow: hidden; }
+.goal-panel-header { flex-wrap: wrap; }
+.goal-panel-header > div, .goal-card-header > div { min-width: 0; }
+.goal-panel-header > div { flex: 1 1 180px; }
+.goal-refresh { max-width: 100%; }
+
+@media (min-width: 1200px) and (min-aspect-ratio: 3/2) {
+  .app-shell { width: min(100%, 1760px); padding-inline: clamp(14px, 2vw, 32px); }
+  .content-grid { grid-template-columns: minmax(176px, 210px) minmax(0, 1fr) minmax(280px, 340px); gap: clamp(12px, 1.5vw, 20px); }
+  .workspace-rail { grid-column: 1; grid-row: 1; }
+  .sidebar { grid-column: 1; grid-row: 2; }
+  .main-column { grid-column: 2; grid-row: 1 / span 2; }
+  .context-rail { grid-column: 3; grid-row: 1 / span 2; }
+}
+
+/* Conversation-first interaction: the timeline is the reading surface and
+   the composer is the final, always-available action. */
+.conversation-column { grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; min-height: clamp(620px, calc(100vh - 118px), 1040px); }
+.conversation-stream { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: clamp(360px, 58vh, 720px); overflow: hidden; }
+.conversation-stream-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; border-bottom: 1px solid #263650; padding-bottom: 14px; }
+.conversation-stream-header h1 { margin: 7px 0 0; font-size: clamp(20px, 2.5vw, 28px); }
+.conversation-hint { margin-top: 4px; font-size: 11px; text-align: right; }
+.conversation-stream > .empty-state { min-height: 0; height: 100%; }
+.conversation-stream > .run-panel { min-height: 0; border: 0; border-radius: 0; padding: 18px 0 0; background: transparent; box-shadow: none; overflow: auto; }
+.composer-panel { position: sticky; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 2; padding: 16px 18px; }
+.composer-panel textarea { min-height: 88px; }
+
+@media (max-width: 599px) {
+  .conversation-column { min-height: 0; }
+  .conversation-stream { min-height: 420px; }
+  .conversation-stream-header { flex-direction: column; gap: 6px; }
+  .conversation-hint { margin-top: 0; text-align: left; }
+  .composer-panel { position: sticky; bottom: max(6px, env(safe-area-inset-bottom)); }
+}

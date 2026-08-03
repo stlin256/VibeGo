@@ -1,5 +1,5 @@
 import type { FormEvent, JSX } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_RUN_PROFILE, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
@@ -61,6 +61,9 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [workspacePathInput, setWorkspacePathInput] = useState('');
   const [workspaceConfirmed, setWorkspaceConfirmed] = useState(false);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(true);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
   }, [modelSettings?.baseUrl]);
@@ -112,11 +115,32 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     try { await onSetSandboxSettings({ provider: sandboxProvider, imageDigest: sandboxImageDigest, network: sandboxNetwork, resources: sandboxSettings.resources, enabled }); } catch { /* Parent renders a safe error. */ } finally { setSandboxBusy(false); }
   };
   const updateProfile = (patch: Partial<RunProfile>): void => onProfileChange?.({ ...profile, ...patch });
+  const startNewTask = (): void => {
+    setMessage('');
+    setContextOpen(false);
+    if (typeof window !== 'undefined') window.requestAnimationFrame(() => composerRef.current?.focus());
+  };
   useEffect(() => {
     if (!workspaces || workspaces.workspaces.some((workspace) => workspace.id === profile.workspaceId)) return;
     const fallback = workspaces.workspaces.find((workspace) => workspace.isDefault) ?? workspaces.workspaces[0];
     if (fallback) updateProfile({ workspaceId: fallback.id });
   }, [profile.workspaceId, workspaces]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setSettingsOpen(false); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [settingsOpen]);
+  useEffect(() => {
+    const startFromShortcut = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        startNewTask();
+      }
+    };
+    window.addEventListener('keydown', startFromShortcut);
+    return () => window.removeEventListener('keydown', startFromShortcut);
+  }, []);
   const addWorkspace = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (!onAddWorkspace || !workspaceIdInput.trim() || !workspacePathInput.trim() || !workspaceConfirmed) return;
@@ -148,13 +172,27 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><img className="brand-mark" src="/vibego-mark.svg" alt="VibeGo" /><span>Vibe<span className="brand-go">Go</span></span></div>
-        <div className="connection-pill" data-connected={connected}>{connected ? '已连接' : '等待配对'}</div>
+        <div className="topbar-actions">
+          <button className="topbar-button primary-task-button" type="button" onClick={startNewTask}>New task</button>
+          <button className="topbar-button context-toggle" type="button" aria-expanded={contextOpen} onClick={() => setContextOpen((current) => !current)}>{contextOpen ? 'Hide details' : 'Details'}</button>
+          <button className="topbar-button settings-toggle" type="button" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={() => setSettingsOpen(true)}>Settings</button>
+          <div className="connection-pill" data-connected={connected}>{connected ? '已连接' : '等待配对'}</div>
+        </div>
       </header>
       <section className="content-grid">
+        <nav className="workspace-rail" aria-label="Workspace navigation">
+          <div className="eyebrow">WORKSPACE</div>
+          <strong className="workspace-rail-name">{workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId}</strong>
+          <p className="muted">Local session</p>
+          <button className="rail-new-button" type="button" onClick={startNewTask}>＋ New task</button>
+          <div className="rail-section-label">RECENT</div>
+          <div className="rail-session active"><span className="session-dot" />Current task</div>
+          <div className="rail-session"><span className="session-dot muted-dot" />No other runs</div>
+          <button className="rail-settings-button" type="button" onClick={() => setSettingsOpen(true)}>⚙ Settings</button>
+        </nav>
         <aside className="sidebar" aria-label="连接与运行摘要">
-          <section className="panel settings-panel">
-            <div className="eyebrow">SETTINGS</div>
-            <h2>Run profile</h2>
+          <section id="settings-drawer" className="panel settings-panel" data-open={settingsOpen} aria-label="Run settings">
+            <div className="settings-drawer-header"><div><div className="eyebrow">SETTINGS</div><h2>Run profile</h2></div><button className="drawer-close" type="button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>Close</button></div>
             <p className="muted">Configure this run from the console; no config file editing is required.</p>
             <div className="settings-grid">
               <div className="workspace-setup" aria-label="Workspace setup">
@@ -232,23 +270,39 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
               {certificateStatus ? <><strong>{certificateStatus.subject}</strong><p className="muted">Valid to {new Date(certificateStatus.validTo).toLocaleDateString()} · {certificateStatus.daysRemaining} days remaining</p><p className="muted">SAN: {certificateStatus.subjectAltNames.join(', ') || 'not reported'}</p></> : health?.transport.tlsRequired || certificateStatusUnavailable ? <p className="muted">Certificate setup is required for this TLS transport. Use the daemon certificate adapter; private keys are never entered or shown in this browser.</p> : <p className="muted">Loopback HTTP is active for local development. Pairing and future TLS setup remain available.</p>}
             </div>
           </section>
-          <section className="panel connection-panel">
-            <div className="eyebrow">CONNECTION</div>
-            <h1>连接你的本地工作区</h1>
-            <p className="muted">Vibe Coding，随时随地；执行有边界，进度可继续。</p>
-            {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
-          </section>
-          {!connected && <section className="panel pairing-panel"><div className="eyebrow">PAIRING</div><h2>输入一次性配对码</h2><p className="muted">配对完成后 token 只保存在当前页面内。</p><form onSubmit={submitPairing}><label htmlFor="pairing-code">Pairing code</label><input id="pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value)} autoComplete="off" inputMode="text" /><button type="submit">连接 daemon</button></form></section>}
-          <section className="panel safety-panel"><div className="eyebrow">GUARDRAILS</div><ul><li>不可信任务强制 external sandbox</li><li>写入与命令按策略请求审批</li><li>事件流可按 seq 断线续传</li></ul></section>
+          {!connected && <>
+            <section className="panel connection-panel">
+              <div className="eyebrow">CONNECTION</div>
+              <h1>连接你的本地工作区</h1>
+              <p className="muted">Vibe Coding，随时随地；执行有边界，进度可继续。</p>
+              {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
+            </section>
+            <section className="panel pairing-panel"><div className="eyebrow">PAIRING</div><h2>输入一次性配对码</h2><p className="muted">配对完成后 token 只保存在当前页面内。</p><form onSubmit={submitPairing}><label htmlFor="pairing-code">Pairing code</label><input id="pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value)} autoComplete="off" inputMode="text" /><button type="submit">连接 daemon</button></form></section>
+            <section className="panel safety-panel"><div className="eyebrow">GUARDRAILS</div><ul><li>不可信任务强制 external sandbox</li><li>写入与命令按策略请求审批</li><li>事件流可按 seq 断线续传</li></ul></section>
+          </>}
         </aside>
         <section className="main-column">
           {error && <div className="error-banner" role="alert">{error}</div>}
           {connected ? <>
-            <section className="panel composer-panel"><div className="eyebrow">NEW RUN</div><h2>告诉 agent 下一步做什么</h2><form onSubmit={submitRun}><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="例如：运行测试，定位失败原因并给出最小修复。" rows={4} /><div className="composer-footer"><span className="muted">默认：trusted workspace · read-only</span><button type="submit">开始 run</button></div></form></section>
-            <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} />
-            {run ? <RunConsole run={run} events={events} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <section className="panel empty-state"><span className="empty-icon">⌁</span><h2>还没有活动 run</h2><p className="muted">提交一个任务，实时查看 agent 的计划、输出和审批。</p></section>}
+            <section className="conversation-column" aria-label="Conversation and run timeline">
+              <section className="panel conversation-stream" aria-label="Conversation stream">
+                <div className="conversation-stream-header"><div><div className="eyebrow">CONVERSATION</div><h1>What should agent do next?</h1></div><span className="muted conversation-hint">One task at a time · local workspace</span></div>
+                {run ? <RunConsole run={run} events={events} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <div className="empty-state"><span className="empty-icon">⌁</span><h2>Ready for your next task</h2><p className="muted">Describe a change, test, or explanation below. The agent’s plan, output, approvals, and recovery stay in this conversation.</p></div>}
+              </section>
+              <section className="panel composer-panel"><div className="eyebrow">NEW MESSAGE</div><form onSubmit={submitRun}><textarea ref={composerRef} aria-label="Task input" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask for a change, a test run, or an explanation…" rows={3} /><div className="composer-footer"><span className="muted">{profile.taskTrust === 'untrusted-content' ? 'untrusted content · external sandbox' : 'trusted workspace · read-only'}</span><button type="submit">Start run</button></div></form></section>
+            </section>
           </> : <section className="panel empty-state"><span className="empty-icon">◎</span><h2>先完成安全配对</h2><p className="muted">daemon 默认不会把 token 放进 URL、cookie 或本地存储。</p></section>}
         </section>
+        {connected && <aside className="context-rail" data-open={contextOpen} aria-label="Run context">
+          <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} />
+          <section className="panel connection-panel">
+            <div className="eyebrow">CONNECTION</div>
+            <h2>Connected workspace</h2>
+            <p className="muted">Vibe Coding，随时随地；执行有边界，进度可继续。</p>
+            {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
+          </section>
+          <section className="panel safety-panel"><div className="eyebrow">GUARDRAILS</div><ul><li>不可信任务强制 external sandbox</li><li>写入与命令按策略请求审批</li><li>事件流可按 seq 断线续传</li></ul></section>
+        </aside>}
       </section>
     </main>
   );
