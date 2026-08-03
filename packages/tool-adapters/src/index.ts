@@ -419,6 +419,98 @@ export class ShellToolAdapter implements ToolHandler {
   }
 }
 
+export type GitToolId = 'git.status' | 'git.diff' | 'git.log';
+
+export interface GitToolAdapterOptions {
+  readonly timeoutMs?: number;
+  readonly maxOutputBytes?: number;
+}
+
+/**
+ * Fixed, read-only Git commands. The adapter deliberately has no argv input;
+ * callers can only select the bounded staged/log options below.
+ */
+export class GitToolAdapter implements ToolHandler {
+  readonly version = '1.0.0';
+
+  constructor(
+    readonly id: GitToolId,
+    private readonly runner: ProcessRunner = new UnavailableProcessRunner(),
+    private readonly defaults: GitToolAdapterOptions = {},
+  ) {}
+
+  async execute(input: unknown, context: ToolHandlerContext): Promise<unknown> {
+    const parsed = this.parseInput(input);
+    const argv = this.argv(parsed);
+    const timeoutMs = this.limit(parsed.timeoutMs, this.defaults.timeoutMs ?? 15_000);
+    const maxOutputBytes = this.limit(parsed.maxOutputBytes, this.defaults.maxOutputBytes ?? 2 * 1024 * 1024);
+    try {
+      const result = await this.runner.run({
+        argv,
+        shell: false,
+        cwd: context.workspaceRoot,
+        env: gitEnvironment(),
+        timeoutMs,
+        maxOutputBytes,
+        signal: context.signal,
+      });
+      return {
+        exitCode: result.exitCode,
+        stdout: redactWorkspacePath(result.stdout, context.workspaceRoot),
+        stderr: redactWorkspacePath(result.stderr, context.workspaceRoot),
+        truncated: result.truncated,
+      };
+    } catch (error) {
+      if (error instanceof ToolAdapterError) throw error;
+      throw new ToolAdapterError('TOOL_FAILED');
+    }
+  }
+
+  private parseInput(input: unknown): { staged?: boolean; limit?: number; timeoutMs?: number; maxOutputBytes?: number } {
+    if (!isRecord(input)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const allowed = this.id === 'git.status' ? new Set(['timeoutMs', 'maxOutputBytes']) : this.id === 'git.diff' ? new Set(['staged', 'timeoutMs', 'maxOutputBytes']) : new Set(['limit', 'timeoutMs', 'maxOutputBytes']);
+    if (Object.keys(input).some((key) => !allowed.has(key))) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if ('staged' in input && typeof input.staged !== 'boolean') throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if ('limit' in input && (typeof input.limit !== 'number' || !Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if ('timeoutMs' in input && (typeof input.timeoutMs !== 'number' || !Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if ('maxOutputBytes' in input && (typeof input.maxOutputBytes !== 'number' || !Number.isSafeInteger(input.maxOutputBytes) || input.maxOutputBytes < 1)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    return {
+      ...('staged' in input && typeof input.staged === 'boolean' ? { staged: input.staged } : {}),
+      ...('limit' in input && typeof input.limit === 'number' ? { limit: input.limit } : {}),
+      ...('timeoutMs' in input && typeof input.timeoutMs === 'number' ? { timeoutMs: input.timeoutMs } : {}),
+      ...('maxOutputBytes' in input && typeof input.maxOutputBytes === 'number' ? { maxOutputBytes: input.maxOutputBytes } : {}),
+    };
+  }
+
+  private argv(input: { staged?: boolean; limit?: number }): readonly string[] {
+    if (this.id === 'git.status') return ['--no-pager', '--no-optional-locks', 'status', '--short', '--branch', '--untracked-files=normal'];
+    if (this.id === 'git.diff') return ['--no-pager', '--no-optional-locks', 'diff', '--no-ext-diff', '--unified=3', ...(input.staged ? ['--cached'] : []), '--'];
+    return ['--no-pager', '--no-optional-locks', 'log', '--oneline', '--decorate=short', '--max-count=' + String(input.limit ?? 20), '--'];
+  }
+
+  private limit(value: number | undefined, maximum: number): number {
+    if (!Number.isSafeInteger(maximum) || maximum <= 0) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if (value === undefined) return maximum;
+    if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    return value;
+  }
+}
+
+function gitEnvironment(): Readonly<Record<string, string>> {
+  return {
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_OPTIONAL_LOCKS: '0',
+    GIT_CONFIG_NOSYSTEM: '1',
+    LC_ALL: 'C',
+  };
+}
+
+function redactWorkspacePath(value: string, workspaceRoot: string): string {
+  if (!workspaceRoot) return value;
+  const escaped = workspaceRoot.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  try { return value.replace(new RegExp(escaped, 'giu'), '[workspace]'); } catch { return value.split(workspaceRoot).join('[workspace]'); }
+}
+
 export function createSafeToolExecutor(options: ToolExecutorOptions): ToolExecutor {
   return new ToolExecutor(options);
 }

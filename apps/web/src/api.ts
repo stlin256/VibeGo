@@ -178,6 +178,12 @@ export interface ToolSettingsStatus {
   availableTools: readonly string[];
 }
 
+export interface GitSettingsStatus {
+  enabled: boolean;
+  workspaceLabel: string;
+  availableTools: readonly string[];
+}
+
 export interface WorkspaceStatus {
   id: string;
   label: string;
@@ -279,6 +285,14 @@ export class ApiClient {
 
   async setFilesystemToolsEnabled(filesystemEnabled: boolean): Promise<ToolSettingsStatus> {
     return this.request<ToolSettingsStatus>('/api/v1/settings/tools', { method: 'POST', body: JSON.stringify({ filesystemEnabled }) });
+  }
+
+  async gitSettings(): Promise<GitSettingsStatus> {
+    return this.request<GitSettingsStatus>('/api/v1/settings/git', { method: 'GET' });
+  }
+
+  async setGitToolsEnabled(enabled: boolean): Promise<GitSettingsStatus> {
+    return this.request<GitSettingsStatus>('/api/v1/settings/git', { method: 'POST', body: JSON.stringify({ enabled }) });
   }
 
   async workspaces(): Promise<WorkspaceRegistryStatus> {

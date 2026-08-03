@@ -16,6 +16,7 @@ import { createDaemonServer } from './server.js';
 import { InMemoryToolSettingsManager } from './tool-settings.js';
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
+import { InMemoryGitSettingsManager } from './git-settings.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -389,6 +390,33 @@ describe('daemon health server', () => {
       const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ filesystemEnabled: true }) });
       expect(enabled.status).toBe(200);
       expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('serves explicit Git read-only settings without exposing the workspace path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-git-settings-'));
+    try {
+      const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry: new InMemoryWorkspaceRegistry({ defaultRoot: root }), processRunner: { run: async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false }) } });
+      const server = createDaemonServer({ gitSettings });
+      servers.push(server);
+      const port = await listen(server);
+      const base = `http://127.0.0.1:${port}/api/v1/settings/git`;
+      const initial = await fetch(base);
+      const initialBody = await initial.text();
+      expect(initial.status).toBe(200);
+      expect(initialBody).not.toContain(root);
+      expect(JSON.parse(initialBody)).toMatchObject({ enabled: false, availableTools: [] });
+      const malformed = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: 'yes' }) });
+      expect(malformed.status).toBe(400);
+      const pathInjection = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, path: root }) });
+      expect(pathInjection.status).toBe(400);
+      const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true }) });
+      expect(enabled.status).toBe(200);
+      const enabledBody = await enabled.text();
+      expect(enabledBody).not.toContain(root);
+      expect(JSON.parse(enabledBody)).toMatchObject({ enabled: true, availableTools: ['git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0'] });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

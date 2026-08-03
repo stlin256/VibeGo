@@ -9,6 +9,7 @@ import { ToolRegistry } from '@ready4vibe/tools';
 import {
   FileSystemToolAdapter,
   FileSystemWriteToolAdapter,
+  GitToolAdapter,
   ShellToolAdapter,
   ToolAdapterError,
   ToolExecutor,
@@ -132,6 +133,40 @@ describe('shell adapter', () => {
         sandbox: { mode: 'external-sandbox', network: 'restricted', provider: 'docker' },
         signal: new AbortController().signal,
       })).rejects.toMatchObject({ code: 'TOOL_EXECUTION_UNAVAILABLE' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('read-only Git adapter', () => {
+  it('uses fixed argv, bounded options, minimal environment, and redacts the workspace root', async () => {
+    const calls: Array<{ argv: readonly string[]; cwd: string; env: Readonly<Record<string, string>>; timeoutMs: number; maxOutputBytes: number }> = [];
+    const root = await temporaryWorkspace();
+    try {
+      const runner: ProcessRunner = { run: vi.fn(async (request) => { calls.push(request); return { exitCode: 0, stdout: `changed ${root}`, stderr: root, truncated: false }; }) };
+      const context = { workspaceRoot: root, signal: new AbortController().signal } as never;
+      const status = await new GitToolAdapter('git.status', runner).execute({}, context);
+      const diff = await new GitToolAdapter('git.diff', runner).execute({ staged: true, timeoutMs: 1_000, maxOutputBytes: 2_000 }, context);
+      const log = await new GitToolAdapter('git.log', runner).execute({ limit: 3 }, context);
+      expect(status).toEqual({ exitCode: 0, stdout: 'changed [workspace]', stderr: '[workspace]', truncated: false });
+      expect(diff).toEqual(status);
+      expect(log).toEqual(status);
+      expect(calls[0]).toMatchObject({ argv: ['--no-pager', '--no-optional-locks', 'status', '--short', '--branch', '--untracked-files=normal'], cwd: root, env: { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GIT_CONFIG_NOSYSTEM: '1', LC_ALL: 'C' }, timeoutMs: 15_000, maxOutputBytes: 2 * 1024 * 1024 });
+      expect(calls[1]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'diff', '--no-ext-diff', '--unified=3', '--cached', '--']);
+      expect(calls[1]?.timeoutMs).toBe(1_000);
+      expect(calls[1]?.maxOutputBytes).toBe(2_000);
+      expect(calls[2]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'log', '--oneline', '--decorate=short', '--max-count=3', '--']);
+      await expect(new GitToolAdapter('git.status', runner).execute({ argv: ['git', 'reset'] }, context)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when no process runner is injected', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      await expect(new GitToolAdapter('git.diff').execute({}, { workspaceRoot: root, signal: new AbortController().signal } as never)).rejects.toMatchObject({ code: 'TOOL_EXECUTION_UNAVAILABLE' });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

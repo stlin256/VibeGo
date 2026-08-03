@@ -145,3 +145,12 @@ directory pickers, and Git/diff tools remain separate milestones.
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。
 - 是否采用 Redis/Postgres：单用户本地场景先不用；并发/协作需求出现时再增加 storage adapter。
 - 是否支持浏览器自动化：不属于最小 coding harness，后续作为独立工具包评估。
+
+## Spec 32 milestone note (2026-08-03)
+
+The guided workspace registry milestone is followed by an opt-in Git
+read-only slice. The Web console now enables only bounded `git.status`,
+`git.diff`, and `git.log` descriptors through an authenticated settings toggle;
+the daemon captures a workspace root per run and never exposes host Git to
+untrusted or external-sandbox runs. Git write/patch operations, a paginated
+diff/log explorer, and remote operations remain later milestones.

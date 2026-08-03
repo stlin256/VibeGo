@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -17,6 +17,8 @@ function RuntimeApp(): JSX.Element {
   const [modelSettingsUnavailable, setModelSettingsUnavailable] = useState(false);
   const [toolSettings, setToolSettings] = useState<ToolSettingsStatus>();
   const [toolSettingsUnavailable, setToolSettingsUnavailable] = useState(false);
+  const [gitSettings, setGitSettings] = useState<GitSettingsStatus>();
+  const [gitSettingsUnavailable, setGitSettingsUnavailable] = useState(false);
   const [sandboxSettings, setSandboxSettings] = useState<SandboxSettingsStatus>();
   const [sandboxSettingsUnavailable, setSandboxSettingsUnavailable] = useState(false);
   const [workspaces, setWorkspaces] = useState<WorkspaceRegistryStatus>();
@@ -66,6 +68,16 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshGitSettings = async (): Promise<void> => {
+    try {
+      setGitSettings(await client.gitSettings());
+      setGitSettingsUnavailable(false);
+    } catch (reason) {
+      setGitSettings(undefined);
+      setGitSettingsUnavailable(isGitSettingsUnavailable(reason));
+    }
+  };
+
   const refreshWorkspaces = async (): Promise<void> => {
     try {
       setWorkspaces(await client.workspaces());
@@ -83,6 +95,7 @@ function RuntimeApp(): JSX.Element {
         void refreshCertificateStatus();
         void refreshModelSettings();
         void refreshToolSettings();
+        void refreshGitSettings();
         void refreshSandboxSettings();
         void refreshWorkspaces();
       }
@@ -97,6 +110,7 @@ function RuntimeApp(): JSX.Element {
       await refreshCertificateStatus();
       await refreshModelSettings();
       await refreshToolSettings();
+      await refreshGitSettings();
       await refreshSandboxSettings();
       await refreshWorkspaces();
     } catch (reason) { setError(safeError(reason)); }
@@ -168,6 +182,14 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
 
+  const setGitToolsEnabled = async (enabled: boolean): Promise<void> => {
+    try {
+      setGitSettings(await client.setGitToolsEnabled(enabled));
+      setGitSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
   const probeSandbox = async (provider: 'docker' | 'podman'): Promise<void> => {
     try {
       setSandboxSettings(await client.probeSandbox(provider));
@@ -210,7 +232,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -232,6 +254,10 @@ function isModelSettingsUnavailable(reason: unknown): boolean {
 
 function isToolSettingsUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'TOOL_SETTINGS_UNAVAILABLE';
+}
+
+function isGitSettingsUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'GIT_SETTINGS_UNAVAILABLE';
 }
 
 function isSandboxSettingsUnavailable(reason: unknown): boolean {

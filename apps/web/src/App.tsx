@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -25,6 +25,9 @@ export interface AppProps {
   toolSettings?: ToolSettingsStatus;
   toolSettingsUnavailable?: boolean;
   onSetFilesystemToolsEnabled?: (enabled: boolean) => Promise<void> | void;
+  gitSettings?: GitSettingsStatus;
+  gitSettingsUnavailable?: boolean;
+  onSetGitToolsEnabled?: (enabled: boolean) => Promise<void> | void;
   sandboxSettings?: SandboxSettingsStatus;
   sandboxSettingsUnavailable?: boolean;
   onProbeSandbox?: (provider: 'docker' | 'podman') => Promise<void> | void;
@@ -35,12 +38,13 @@ export interface AppProps {
   onRemoveWorkspace?: (id: string) => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
   const [modelApiKey, setModelApiKey] = useState('');
   const [toolToggleBusy, setToolToggleBusy] = useState(false);
+  const [gitToggleBusy, setGitToggleBusy] = useState(false);
   const [sandboxProvider, setSandboxProvider] = useState<'docker' | 'podman'>('docker');
   const [sandboxImageDigest, setSandboxImageDigest] = useState('');
   const [sandboxNetwork, setSandboxNetwork] = useState<'restricted' | 'enabled'>('restricted');
@@ -84,6 +88,11 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     if (!onSetFilesystemToolsEnabled) return;
     setToolToggleBusy(true);
     try { await onSetFilesystemToolsEnabled(enabled); } catch { /* Parent renders a safe error and keeps the previous toggle state. */ } finally { setToolToggleBusy(false); }
+  };
+  const toggleGitTools = async (enabled: boolean): Promise<void> => {
+    if (!onSetGitToolsEnabled) return;
+    setGitToggleBusy(true);
+    try { await onSetGitToolsEnabled(enabled); } catch { /* Parent renders a safe error and keeps the previous toggle state. */ } finally { setGitToggleBusy(false); }
   };
   const probeSandbox = async (): Promise<void> => {
     if (!onProbeSandbox) return;
@@ -174,9 +183,17 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                 <div className="eyebrow">TOOL ACCESS</div>
                 {toolSettingsUnavailable ? <p className="muted">Tool settings are unavailable until the daemon exposes the authenticated adapter.</p> : toolSettings ? <>
                   <label className="toggle-row"><input type="checkbox" checked={toolSettings.filesystemEnabled} disabled={toolToggleBusy} onChange={(event) => { void toggleFilesystemTools(event.target.checked); }} /><span>Enable guarded filesystem tools</span></label>
-                  <p className="muted">Workspace: {toolSettings.workspaceLabel}. Reads are bounded; writes still require approval. Shell, Git, MCP, and network tools remain disabled.</p>
+                  <p className="muted">Workspace: {toolSettings.workspaceLabel}. Reads are bounded; writes still require approval. Shell, MCP, and network tools remain disabled here; Git reads have a separate toggle.</p>
                   {toolSettings.availableTools.length > 0 && <p className="muted">Available: {toolSettings.availableTools.join(', ')}</p>}
                 </> : <p className="muted">Pair with the daemon to configure guarded filesystem tools.</p>}
+              </div>
+              <div className="tool-setup" aria-label="Git read-only tool setup">
+                <div className="eyebrow">GIT READ-ONLY TOOLS</div>
+                {gitSettingsUnavailable ? <p className="muted">Git settings are unavailable until the daemon exposes the authenticated adapter.</p> : gitSettings ? <>
+                  <label className="toggle-row"><input type="checkbox" checked={gitSettings.enabled} disabled={gitToggleBusy} onChange={(event) => { void toggleGitTools(event.target.checked); }} /><span>Enable Git read-only tools</span></label>
+                  <p className="muted">Workspace: {gitSettings.workspaceLabel}. This exposes only bounded status, diff, and log reads; commits, checkout, reset, patch writes, remotes, and arbitrary Git flags remain unavailable.</p>
+                  {gitSettings.availableTools.length > 0 && <p className="muted">Available: {gitSettings.availableTools.join(', ')}</p>}
+                </> : <p className="muted">Pair with the daemon to configure Git read-only tools.</p>}
               </div>
               <div className="tool-setup" aria-label="External sandbox setup">
                 <div className="eyebrow">EXTERNAL SANDBOX</div>

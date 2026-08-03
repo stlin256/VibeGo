@@ -153,3 +153,28 @@ certificate subject/issuer, validity, remaining days, SHA-256 fingerprint, and
 SAN values. It returns `503 CERTIFICATE_STATUS_UNAVAILABLE` when no certificate
 is configured. It never returns PEM, private-key bytes, certificate paths, or
 query tokens.
+
+## Git read-only settings (Spec 32)
+
+Authenticated `GET /api/v1/settings/git` returns:
+
+```json
+{
+  "enabled": false,
+  "workspaceLabel": "ready4vibe",
+  "availableTools": []
+}
+```
+
+`POST /api/v1/settings/git` accepts `{ "enabled": boolean }` and returns the
+same safe status. The process-memory toggle is disabled by default. When
+enabled, only `git.status@1.0.0`, `git.diff@1.0.0`, and `git.log@1.0.0` are
+available for trusted `read-only` or `workspace-write` runs. The daemon does
+not accept a Git subcommand, repository path, environment, remote, or
+arbitrary flags from the client; staged diff and bounded log count are the only
+tool inputs. Host Git is not exposed for untrusted or external-sandbox runs.
+
+Git results are bounded, path-redacted, and executed with `shell:false` and a
+minimal environment. No commit, checkout, reset, patch/apply, hook, remote, or
+write route is part of this contract. Settings responses never include the
+workspace path, environment snapshot, credentials, or process output.

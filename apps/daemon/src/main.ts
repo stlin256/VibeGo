@@ -12,6 +12,7 @@ import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-setting
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { resolveDaemonTransport } from './transport-config.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
+import { InMemoryGitSettingsManager } from './git-settings.js';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -34,12 +35,13 @@ const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const workspaceRegistry = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
 const modelSettings = new InMemoryModelSettingsManager();
 const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
+const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry });
 const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry });
 const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
-  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
+  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
@@ -58,6 +60,7 @@ const server = createDaemonServer({
   ...(certificateStatus ? { certificateStatus } : {}),
   modelSettings,
   toolSettings,
+  gitSettings,
   sandboxSettings,
   workspaceRegistry,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),

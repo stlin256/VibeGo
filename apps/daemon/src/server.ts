@@ -8,6 +8,7 @@ import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager 
 import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
+import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -32,6 +33,7 @@ export interface DaemonServerOptions {
   certificateStatus?: CertificateStatus;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
+  gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
 }
@@ -49,6 +51,7 @@ interface ResolvedDaemonServerOptions {
   certificateStatus?: CertificateStatus;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
+  gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
 }
@@ -98,6 +101,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
+    ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
   };
@@ -337,6 +341,36 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/git') {
+    if (!options.gitSettings) {
+      writeJson(response, 503, { error: { code: 'GIT_SETTINGS_UNAVAILABLE', message: 'Git settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.gitSettings.status());
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST required' } }, { Allow: 'GET, POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isGitSettingsInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'enabled boolean is required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, options.gitSettings.setGitEnabled(input.enabled));
+    } catch (error) {
+      if (error instanceof GitSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
   if (pathname === '/api/v1/settings/sandbox') {
     if (!options.sandboxSettings) {
       writeJson(response, 503, { error: { code: 'SANDBOX_SETTINGS_UNAVAILABLE', message: 'Sandbox settings are unavailable.' } });
@@ -558,6 +592,10 @@ function isModelSettingsInput(value: unknown): value is ModelSettingsInput {
 
 function isToolSettingsInput(value: unknown): value is { filesystemEnabled: boolean } {
   return typeof value === 'object' && value !== null && 'filesystemEnabled' in value && typeof value.filesystemEnabled === 'boolean';
+}
+
+function isGitSettingsInput(value: unknown): value is { enabled: boolean } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).every((key) => key === 'enabled') && 'enabled' in value && typeof value.enabled === 'boolean';
 }
 
 function isSandboxProbeInput(value: unknown): value is { provider: 'docker' | 'podman' } {

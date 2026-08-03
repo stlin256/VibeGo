@@ -34,13 +34,14 @@
 26. `apps/web` 已按 `docs/specs/26-settings-certificate-guidance.md` 在设置/引导界面展示安全 TLS 元数据和缺失证书提示，不上传或回显私钥；
 27. `apps/web` 已按 `docs/specs/27-profile-persistence.md` 实现版本化非 secret 运行 profile 持久化：启动加载、编辑自动保存、显式重置和存储失败安全回退；pairing/token、模型凭据、证书材料与事件 payload 均不写入浏览器存储；
 28. `packages/workspaces` 与 `apps/daemon` 已按 `docs/specs/31-workspace-registry.md` 实现单用户、进程内 workspace 映射；Web 设置提供安全列表、添加和删除向导；运行时不回退到 default，filesystem/shell 均按 run 捕获 workspace root；
-29. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+29. `packages/tool-adapters` 与 `apps/daemon` 已按 `docs/specs/32-guided-git-readonly-tools.md` 实现独立 Git 只读开关：仅注册 status/diff/log，固定 argv、最小环境、超时/输出上限、取消与路径脱敏均受测试覆盖；不可信或 external-sandbox run 不获得主机 Git runtime；
+30. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（19 个 workspace package）；
-- `pnpm test`：通过，177 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 36、web 24；Vitest 按 package 输出）；
-- Spec 31 增加 workspace registry 4 项、daemon 3 项、Web 2 项测试；当前 Web 共 24 项；
+- `pnpm test`：通过，185 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 40、web 26；Vitest 按 package 输出）；
+- Spec 31 增加 workspace registry 4 项、daemon 3 项、Web 2 项测试；Spec 32 再增加 tool-adapters 2 项、daemon 4 项、Web 2 项；当前 Web 共 26 项；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -124,3 +125,18 @@ storage. Filesystem and external-shell runtimes resolve the selected workspace
 at run start, and unknown ids fail closed without falling back to `default`.
 The registry is intentionally process-memory only until a durable non-secret
 settings adapter is designed.
+
+## Spec 32 implementation note (2026-08-03)
+
+The daemon now exposes a separately gated Git read-only settings adapter. The
+Web Settings panel can enable only `git.status`, `git.diff`, and `git.log`; the
+process-memory toggle is disabled by default and never returns a host path.
+Each run captures its selected workspace root and a fixed Git runtime. The
+child-process boundary uses `shell:false`, a minimal environment, bounded
+timeout/output, cancellation, and workspace-path redaction. Host Git is not
+available to untrusted or external-sandbox runs, and no commit, patch, remote,
+checkout, reset, or arbitrary Git command is registered. API, runtime, adapter,
+and Web tests cover the gate and fail-closed behavior.
+
+The current verification baseline is 19 workspace packages and 185 passing
+tests (including 15 tool-adapter, 40 daemon, and 26 Web tests).

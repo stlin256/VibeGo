@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. MCP/Skill activation, ACME automation, and the full approval/diff UI remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. MCP/Skill activation, ACME automation, Git write/patch operations, and the full approval/diff UI remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -43,7 +43,7 @@ The core loop is deliberately small:
 | Models | OpenAI-compatible provider boundary, authenticated Web onboarding, process-memory secret handling, and in-memory fake provider for deterministic tests |
 | Context | Source-labelled context manager with budget/compaction boundaries |
 | Safety | Untrusted-task external-sandbox requirement, path/argv guards, approval policy metadata |
-| Tools | Guarded filesystem read/write plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled |
+| Tools | Guarded filesystem read/write, opt-in Git status/diff/log reads, plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled |
 | Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
@@ -80,7 +80,10 @@ guidance without asking the user to paste or upload a private key.
 
 The same Settings panel has an explicit Filesystem tools toggle. It exposes
 only bounded read/write adapters for the daemon workspace; writes still use the
-approval flow, and shell/Git/MCP/network tools are not silently enabled.
+approval flow, and shell/MCP/network tools are not silently enabled. A separate
+Git read-only toggle exposes only bounded `git.status`, `git.diff`, and `git.log`
+for trusted host-workspace runs; commits, remotes, patch writes, and arbitrary
+Git flags are not registered.
 Workspace setup replaces the free-form workspace id with a guided selector and
 an explicit add/remove flow. Added paths are on the daemon machine and remain
 process-memory only; they are never echoed into status, events, logs, or browser
@@ -144,7 +147,7 @@ packages/
   sandbox/      external-sandbox resolver and input guards
   execution/    path/argv verification primitives
   sandbox-runtime/ Docker/Podman command plans and fail-closed CLI runner boundary
-  tool-adapters/ filesystem/shell executor adapters
+  tool-adapters/ filesystem/shell/Git executor adapters
   workspaces/    safe single-user workspace id to daemon-root registry
   auth/         pairing, token, Origin/CSRF, and transport gate
   certificates/ PEM pair resolution and TLS validation
@@ -154,7 +157,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **19 workspace packages and 177 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **19 workspace packages and 185 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 
@@ -168,6 +171,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 ## Roadmap highlights
 
 - deeper external sandbox/VM adapters with resource limits and persistence;
+- Git write/patch operations and a dedicated paginated diff/log explorer;
 - Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
 - diff/log/approval views and Playwright desktop/tablet/mobile flows;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;

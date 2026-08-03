@@ -90,8 +90,8 @@ does not execute commands, read files, or grant policy permissions.
 ## Explicitly deferred
 
 Durable registry persistence, native OS directory pickers for remote browsers,
-Git/patch/diff tools, MCP/Skill activation, public access, and Tailscale/SSH
-transport adapters remain separate milestones.
+Git write/patch tools and the dedicated diff/log explorer, MCP/Skill activation,
+public access, and Tailscale/SSH transport adapters remain separate milestones.
 
 ## Implementation evidence (2026-08-03)
 

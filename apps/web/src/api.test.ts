@@ -133,6 +133,18 @@ describe('ApiClient', () => {
     expect(calls[1]?.init?.body).toBe(JSON.stringify({ filesystemEnabled: true }));
   });
 
+  it('toggles Git read-only tools through the authenticated settings endpoint', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ enabled: init?.method === 'POST', workspaceLabel: 'workspace', availableTools: init?.method === 'POST' ? ['git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0'] : [] });
+    });
+    await expect(client.gitSettings()).resolves.toMatchObject({ enabled: false, availableTools: [] });
+    await expect(client.setGitToolsEnabled(true)).resolves.toMatchObject({ enabled: true, availableTools: ['git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0'] });
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/git', '/api/v1/settings/git']);
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true }));
+  });
+
   it('uses guided workspace endpoints and never stores the daemon path', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

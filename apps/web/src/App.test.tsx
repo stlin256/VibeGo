@@ -39,6 +39,14 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\Users');
   });
 
+  it('renders the guided Git read-only tools toggle without an absolute path', () => {
+    const html = renderToStaticMarkup(<App gitSettings={{ enabled: false, workspaceLabel: 'workspace', availableTools: [] }} onSetGitToolsEnabled={() => undefined} />);
+    expect(html).toContain('GIT READ-ONLY TOOLS');
+    expect(html).toContain('Enable Git read-only tools');
+    expect(html).toContain('commits, checkout, reset');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders guided external sandbox setup without exposing host paths', () => {
     const html = renderToStaticMarkup(<App sandboxSettings={{ provider: 'docker', detected: true, healthy: true, enabled: false, imageDigest: null, network: 'restricted', resources: { maxMemoryBytes: 1, maxCpuMillis: 1, maxPids: 1, timeoutMs: 1, maxOutputBytes: 1 }, capabilities: { version: 'test', networkModes: ['restricted'], maxMemoryBytes: 1, maxCpuMillis: 1 } }} onProbeSandbox={() => undefined} onSetSandboxSettings={() => undefined} />);
     expect(html).toContain('Probe runtime');
