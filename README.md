@@ -1,6 +1,8 @@
 # VibeGo / ready4vibe
 
-![VibeGo mark](apps/web/public/vibego-mark.svg)
+<p align="center">
+  <img src="docs/assets/vibego-banner.svg" alt="VibeGo — local-first agent harness for secure remote Vibe Coding" width="1200" />
+</p>
 
 **A minimal, local-first agent harness for remote Vibe Coding.** VibeGo keeps the agent runtime close to your workspace, adds explicit safety boundaries for untrusted work, and exposes a responsive React console for desktop, tablet, and mobile access.
 

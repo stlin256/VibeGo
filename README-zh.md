@@ -1,6 +1,8 @@
 # VibeGo / ready4vibe 中文说明
 
-![VibeGo 标志](apps/web/public/vibego-mark.svg)
+<p align="center">
+  <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
+</p>
 
 **一个最小化、优先本地运行的 agent harness，用于远程 Vibe Coding。** VibeGo 让 agent 尽量靠近本地工作区，同时为不可信任务提供明确的审批、沙箱和执行边界，并通过适配桌面、平板和手机的 React 控制台远程观察与继续任务。
 

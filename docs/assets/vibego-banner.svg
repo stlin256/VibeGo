@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" role="img" aria-labelledby="title desc">
+  <title id="title">VibeGo local-first agent harness</title>
+  <desc id="desc">VibeGo, a secure remote Vibe Coding agent harness with a responsive web console.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1600" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1020"/>
+      <stop offset="0.62" stop-color="#111B3B"/>
+      <stop offset="1" stop-color="#24205A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="110" y1="70" x2="330" y2="350" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5CE1E6"/>
+      <stop offset="0.52" stop-color="#6B8CFF"/>
+      <stop offset="1" stop-color="#9A6BFF"/>
+    </linearGradient>
+    <linearGradient id="route" x1="155" y1="155" x2="265" y2="275" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#D9E6FF"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#050813" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="420" rx="34" fill="url(#background)"/>
+  <circle cx="1390" cy="58" r="210" fill="#6B8CFF" opacity="0.16" filter="url(#glow)"/>
+  <circle cx="1200" cy="390" r="170" fill="#9A6BFF" opacity="0.14" filter="url(#glow)"/>
+  <path d="M0 340C240 275 360 390 610 322s405-11 610 22 270-6 390-85" fill="none" stroke="#5CE1E6" stroke-opacity="0.14" stroke-width="2"/>
+  <path d="M0 365C240 300 360 415 610 347s405-11 610 22 270-6 390-85" fill="none" stroke="#B8F36C" stroke-opacity="0.1" stroke-width="2"/>
+  <g transform="translate(82 70)">
+    <rect x="0" y="0" width="280" height="280" rx="62" fill="#050813" opacity="0.5" filter="url(#shadow)"/>
+    <rect x="8" y="8" width="264" height="264" rx="56" fill="url(#accent)"/>
+    <path d="M65 65 140 215 215 65" fill="none" stroke="#0B1020" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+    <path d="M65 65 140 215 215 65" fill="none" stroke="url(#route)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M140 215c0-50 34-91 91-117" fill="none" stroke="#B8F36C" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="231" cy="98" r="21" fill="#B8F36C" stroke="#0B1020" stroke-width="10"/>
+  </g>
+  <g font-family="Segoe UI, Inter, Arial, sans-serif">
+    <text x="440" y="168" fill="#FFFFFF" font-size="92" font-weight="700" letter-spacing="-2">VibeGo</text>
+    <text x="446" y="228" fill="#5CE1E6" font-size="24" font-weight="700" letter-spacing="6">LOCAL-FIRST AGENT HARNESS</text>
+    <text x="446" y="286" fill="#D9E6FF" font-size="30">Secure remote Vibe Coding with bounded execution</text>
+    <rect x="446" y="322" width="300" height="5" rx="2.5" fill="#B8F36C"/>
+    <text x="766" y="328" fill="#AEBCE8" font-size="19" letter-spacing="2">REACT · TYPESCRIPT · SANDBOX · SSE</text>
+  </g>
+</svg>
