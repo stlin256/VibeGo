@@ -42,6 +42,12 @@
 stdio/HTTP 仅共享 channel contract；本阶段不启动子进程、不发网络请求，后续再接
 sandbox、approval 和 scheduler。
 
+## Spec 20：ToolExecutor runtime bridge（当前）
+
+将 AgentLoop 的通用 ToolRuntime 请求转换为 ToolExecutor 所需的 intent、sandbox
+request 和 workspace root。三类解析器都必须显式注入，确保 path/command/network
+能够参与 approval cache key；daemon 默认不创建 bridge。
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

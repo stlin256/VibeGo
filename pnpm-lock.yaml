@@ -151,6 +151,9 @@ importers:
 
   packages/tool-adapters:
     dependencies:
+      '@ready4vibe/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../contracts

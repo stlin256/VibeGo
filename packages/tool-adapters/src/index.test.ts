@@ -12,6 +12,7 @@ import {
   ShellToolAdapter,
   ToolAdapterError,
   ToolExecutor,
+  ToolExecutorRuntime,
   ToolHandlerRegistry,
   type FileSystemAdapterFileSystem,
   type ProcessRunner,
@@ -186,6 +187,79 @@ describe('ToolExecutor', () => {
       const value = intent();
       const executor = new ToolExecutor({ registry: registry(), approvalPolicy: new ApprovalPolicy(registry()), sandboxResolver: new SandboxResolver(), handlers });
       await expect(executor.execute({ workspaceRoot: root, intent: value, sandbox: sandboxFor(value), input: { path: 'ok.txt' } })).resolves.toEqual({ path: 'ok.txt', content: 'ok', bytes: 2 });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('ToolExecutorRuntime', () => {
+  it('projects public descriptors and delegates with explicit workspace, intent and sandbox callbacks', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      await writeFile(join(root, 'ok.txt'), 'ok');
+      const value = registry();
+      const handlers = new ToolHandlerRegistry();
+      handlers.register(new FileSystemToolAdapter(new PathGuard(root), realFileSystem()));
+      const executor = new ToolExecutor({ registry: value, approvalPolicy: new ApprovalPolicy(value), sandboxResolver: new SandboxResolver(), handlers });
+      const resolveWorkspaceRoot = vi.fn(() => root);
+      const createIntent = vi.fn((request) => intent({ toolId: request.descriptor.id, toolVersion: request.descriptor.version, risk: request.descriptor.risk }));
+      const createSandboxRequest = vi.fn((request) => sandboxFor(createIntent(request)));
+      const runtime = new ToolExecutorRuntime({ registry: value, executor, resolveWorkspaceRoot, createIntent, createSandboxRequest });
+      const descriptor = runtime.descriptors.find((entry) => entry.id === 'filesystem.read');
+      const result = await runtime.execute({
+        runId: 'run-1',
+        turnId: 'turn-1',
+        callId: 'call-1',
+        descriptor: descriptor!,
+        input: { path: 'ok.txt' },
+        config: {} as never,
+        signal: new AbortController().signal,
+      });
+      expect(result).toEqual({ output: { path: 'ok.txt', content: 'ok', bytes: 2 } });
+      expect(resolveWorkspaceRoot).toHaveBeenCalledOnce();
+      expect(createIntent).toHaveBeenCalledWith(expect.objectContaining({ input: { path: 'ok.txt' } }));
+      expect(createSandboxRequest).toHaveBeenCalledOnce();
+      expect(runtime.descriptors.find((entry) => entry.id === 'filesystem.read')).toMatchObject({ name: 'filesystem.read', risk: 'read' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves executor approval failures and never supplies an implicit approval', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const value = registry();
+      const handlers = new ToolHandlerRegistry();
+      handlers.register({ id: 'filesystem.write', version: '1.0.0', execute: vi.fn(async () => ({ ok: true })) });
+      const executor = new ToolExecutor({ registry: value, approvalPolicy: new ApprovalPolicy(value), sandboxResolver: new SandboxResolver(), handlers });
+      const runtime = new ToolExecutorRuntime({
+        registry: value,
+        executor,
+        resolveWorkspaceRoot: () => root,
+        createIntent: (request) => intent({ toolId: request.descriptor.id, toolVersion: request.descriptor.version, risk: request.descriptor.risk, sandboxMode: 'workspace-write' }),
+        createSandboxRequest: (request) => sandboxFor(intent({ toolId: request.descriptor.id, toolVersion: request.descriptor.version, risk: request.descriptor.risk, sandboxMode: 'workspace-write' })),
+      });
+      const descriptor = runtime.descriptors.find((entry) => entry.id === 'filesystem.write')!;
+      await expect(runtime.execute({ runId: 'run-1', turnId: 'turn-1', callId: 'call-1', descriptor, input: { path: 'x', content: 'x' }, config: {} as never, signal: new AbortController().signal })).rejects.toMatchObject({ code: 'APPROVAL_REQUIRED' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('passes an already-aborted signal through the executor boundary', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const value = registry();
+      const receivedSignals: AbortSignal[] = [];
+      const handlers = new ToolHandlerRegistry();
+      handlers.register({ id: 'filesystem.read', version: '1.0.0', execute: vi.fn(async (_input, context) => { receivedSignals.push(context.signal); return { ok: true }; }) });
+      const executor = new ToolExecutor({ registry: value, approvalPolicy: new ApprovalPolicy(value), sandboxResolver: new SandboxResolver(), handlers });
+      const runtime = new ToolExecutorRuntime({ registry: value, executor, resolveWorkspaceRoot: () => root, createIntent: (request) => intent({ toolId: request.descriptor.id, risk: request.descriptor.risk }), createSandboxRequest: (request) => sandboxFor(intent({ toolId: request.descriptor.id, risk: request.descriptor.risk })) });
+      const controller = new AbortController();
+      controller.abort();
+      await runtime.execute({ runId: 'run-1', turnId: 'turn-1', callId: 'call-1', descriptor: runtime.descriptors.find((entry) => entry.id === 'filesystem.read')!, input: { path: 'ok.txt' }, config: {} as never, signal: controller.signal });
+      expect(receivedSignals[0]?.aborted).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ready4vibe/agent": "workspace:*",
     "@ready4vibe/contracts": "workspace:*",
     "@ready4vibe/execution": "workspace:*",
     "@ready4vibe/policy": "workspace:*",

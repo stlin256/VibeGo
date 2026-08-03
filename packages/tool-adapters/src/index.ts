@@ -1,3 +1,4 @@
+import type { AgentToolDescriptor, ToolRuntime, ToolRuntimeRequest, ToolRuntimeResult } from '@ready4vibe/agent';
 import type { SandboxPolicy } from '@ready4vibe/contracts';
 import {
   ArgvGuard,
@@ -126,6 +127,62 @@ export class ToolExecutor {
     if ('network' in sandbox.policy && sandbox.policy.network !== intent.networkAccess) {
       throw new ToolAdapterError('SANDBOX_REQUEST_MISMATCH');
     }
+  }
+}
+
+export interface ToolExecutorRuntimeOptions {
+  readonly registry: ToolRegistry;
+  readonly executor: ToolExecutor;
+  readonly descriptors?: readonly AgentToolDescriptor[];
+  readonly resolveWorkspaceRoot: (request: ToolRuntimeRequest) => string;
+  readonly createIntent: (request: ToolRuntimeRequest) => ToolIntent;
+  readonly createSandboxRequest: (request: ToolRuntimeRequest) => SandboxResolveRequest;
+}
+
+/**
+ * Explicit bridge from the agent package to the policy/sandbox/handler
+ * executor. It intentionally has no default workspace, intent, or sandbox
+ * resolver, so callers cannot accidentally bypass approval boundaries.
+ */
+export class ToolExecutorRuntime implements ToolRuntime {
+  readonly descriptors: readonly AgentToolDescriptor[];
+  private readonly byName = new Map<string, AgentToolDescriptor>();
+
+  constructor(private readonly options: ToolExecutorRuntimeOptions) {
+    const descriptors: readonly AgentToolDescriptor[] = options.descriptors ?? options.registry.list().map((descriptor): AgentToolDescriptor => ({
+      name: descriptor.id,
+      id: descriptor.id,
+      version: descriptor.version,
+      risk: descriptor.risk,
+      summary: descriptor.summary,
+    }));
+    for (const descriptor of descriptors) {
+      const registered = options.registry.get(descriptor.id, descriptor.version);
+      if (!registered || registered.risk !== descriptor.risk) throw new ToolAdapterError('TOOL_FORBIDDEN');
+      if (!descriptor.name || this.byName.has(descriptor.name)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+      const safeDescriptor: AgentToolDescriptor = Object.freeze({
+        ...descriptor,
+        ...(descriptor.inputSchema === undefined ? {} : { inputSchema: Object.freeze({ ...descriptor.inputSchema }) }),
+      });
+      this.byName.set(safeDescriptor.name, safeDescriptor);
+    }
+    this.descriptors = Object.freeze([...this.byName.values()]);
+  }
+
+  async execute(request: ToolRuntimeRequest): Promise<ToolRuntimeResult> {
+    const descriptor = this.byName.get(request.descriptor.name);
+    if (!descriptor || descriptor.id !== request.descriptor.id || descriptor.version !== request.descriptor.version) {
+      throw new ToolAdapterError('TOOL_FORBIDDEN');
+    }
+    const workspaceRoot = this.options.resolveWorkspaceRoot(request);
+    if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const output = await this.options.executor.execute({
+      workspaceRoot,
+      intent: this.options.createIntent({ ...request, descriptor }),
+      sandbox: this.options.createSandboxRequest({ ...request, descriptor }),
+      input: request.input,
+    }, request.signal);
+    return { output };
   }
 }
 
