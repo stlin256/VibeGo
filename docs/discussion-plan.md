@@ -6,26 +6,26 @@
 
 ## 讨论顺序
 
-1. **产品边界与信任模型**：单用户/单主机、远程访问方式、可信与不可信任务、是否接受 Docker 依赖。
+1. **产品边界与信任模型**：单用户/单主机、LAN 门禁、Tailscale/SSH transport、可信与不可信任务。**已初步收敛，见 ADR 0003/Spec 01。**
 2. **运行时与仓库骨架**：Node 版本、pnpm、Fastify/Node HTTP、SQLite/file adapter、包边界和 CI。
 3. **Run/Turn/Event 合约**：状态机、事件字段、幂等、取消、恢复、错误与事件保留。
 4. **模型层**：OpenAI-compatible 最小协议、流式、tool call、重试、模型配置与 secret。
 5. **上下文管理**：消息来源、文件检索、token/字节预算、压缩、注入防护和可重放 fixture。
-6. **工具/审批/沙箱**：shell、filesystem、Git、风险等级、自动批准边界、隔离强度和资源限制。
+6. **工具/审批/沙箱**：shell、filesystem、Git、风险等级、自动批准边界、隔离强度和资源限制。**详细规格已建立，待逐项讨论。**
 7. **Skill/MCP**：manifest、来源、schema、server 生命周期、工具映射、断连与权限。
-8. **远程 API 与认证**：pairing、token 生命周期、SSE resume、反代/Tailscale、速率限制。
+8. **远程 API 与认证**：pairing、token 生命周期、SSE resume、LAN/Tailscale/SSH、速率限制。
 9. **Web 多端**：桌面/平板/手机布局、审批交互、PWA 缓存、可访问性、断线体验。
 10. **质量与演进**：单元/集成/E2E、安全/性能门禁、插件 API、发布与迁移。
 
 ## 默认假设（可被讨论推翻）
 
 - 首版只支持一个本地 daemon 和一个用户会话；
-- 默认 loopback，远程访问由用户显式开启；
+- 默认 loopback，用户显式开启后允许 LAN；Tailscale/SSH 先只保留 transport port；
 - Node.js 22 + TypeScript，React/Vite 静态 PWA；
 - SQLite/file event store，不引入 Redis/Postgres；
 - OpenAI-compatible provider 作为第一实现，真实模型之前先用 fake model；
-- S0/S1 只服务可信 workspace；不可信任务需要 S2/S3；
-- 自动审批只覆盖 R0/R1 的固定 allowlist，写文件和网络默认询问；
+- 可信任务使用受限 workspace-write；不可信任务需要可验证 external sandbox；
+- 自动审批参考 Codex：确定性 allow/prompt/forbidden + 精确 session key；写文件和网络只在明确规则/批准范围内无感；R4 默认拒绝；
 - 每个模块先文档、再 failing test、再实现、再测量和提交。
 
 ## 每次讨论的输出模板
@@ -41,5 +41,4 @@
 需更新的文档与 Git 提交：
 ```
 
-建议下一步先讨论第 1 项“产品边界与信任模型”，因为它会决定远程暴露、沙箱依赖和自动审批的所有后续取舍。
-
+下一步转入第 2 项“运行时与仓库骨架”；在实现前仍需逐条确认 Spec 01 的 sandbox mode、LAN pairing 和批准 key 细节。

@@ -19,12 +19,13 @@
 ## MVP 必须具备
 
 - 单主机、单 daemon、单用户；
+- 默认 loopback，用户显式开启后允许局域网访问；Tailscale/SSH 作为后续 transport 扩展；
 - OpenAI-compatible 模型适配器，另留本地模型适配接口；
 - 可取消、可超时、可限步数的 agent loop；
 - 上下文追加日志、预算、压缩和恢复；
 - 只读文件、受限写文件、patch、Git 状态和 shell 工具；
-- 风险分级、自动审批、人工审批、拒绝和审计；
-- workspace 路径边界、命令超时、输出截断和进程取消；
+- Codex-like 的 allow/prompt/forbidden 执行策略、精确会话 grant、自动审查（可选）、人工审批、拒绝和审计；
+- workspace 路径边界、命令超时、输出截断和进程取消；不可信任务必须使用可验证 external sandbox；
 - MCP client 与 Skill loader 的最小接口（可在 MVP 后打开）；
 - React + TypeScript 响应式 PWA，支持桌面三栏、平板双栏、手机单栏；
 - HTTP JSON + SSE 事件流、token 认证、连接恢复；
@@ -51,4 +52,3 @@
 | 任务可恢复率 | 断线重连不丢事件序号 | fake-model + SSE 重连测试 |
 
 这些是验收目标，不代表当前已经达到；每个版本必须附测量命令和结果。
-

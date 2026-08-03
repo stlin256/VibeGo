@@ -98,7 +98,7 @@ interface ApprovalPolicy {
 }
 ```
 
-决策必须是 `allow | deny | ask`，并返回 `reasonCode`、匹配规则、过期时间和审计数据。服务端永远可以把客户端请求升级为 `ask` 或 `deny`，不能降级安全级别。
+决策必须是 `allow | deny | ask`，并返回 `reasonCode`、匹配规则、sandbox/network 影响、过期时间和审计数据。服务端永远可以把客户端请求升级为 `ask` 或 `deny`，不能降级安全级别。实现细节遵循 [Spec 01](specs/01-sandbox-approval.md)：规则 allow/prompt/forbidden、精确 ApprovalKey、会话 grant、network amendment 和自动审查 fail-closed。
 
 ## SandboxAdapter
 
@@ -141,6 +141,19 @@ skill/
 - server 返回的工具只进入临时 registry，先经过名称冲突、schema 大小、risk/capability 标注和用户配置 allowlist。
 - MCP 资源和 prompt 必须保留来源；不能把远程内容当系统指令。
 
+## RemoteTransport
+
+```ts
+interface RemoteTransport {
+  readonly kind: 'lan-http' | 'tailscale' | 'ssh-stdio';
+  start(handler: ApiHandler, signal: AbortSignal): Promise<void>;
+  peerIdentity(request: IncomingRequest): Promise<PeerIdentity>;
+  close(): Promise<void>;
+}
+```
+
+MVP 只实现 LAN HTTP；Tailscale/SSH 适配器之后复用 API、事件、认证和审批合约，不允许通过 transport 绕过 sandbox 或 policy。
+
 ## Storage 与 EventLog
 
 ```ts
@@ -169,4 +182,3 @@ contracts → web/ui
 ```
 
 `contracts` 不依赖应用；`harness` 不依赖 React/Fastify；`web` 不依赖 Node fs/child_process；测试使用 `testkit` 的 fake provider，而不是线上模型。
-

@@ -22,7 +22,9 @@ React 是 UI/视图层技术，不是后端运行时。为满足“React + TypeS
 - [总体架构](docs/architecture.md)
 - [开源项目调研](docs/open-source-research.md)
 - [harness 模块合约](docs/harness-contracts.md)
-- [安全、沙箱与审批](docs/adr/0002-security-defaults.md)
+- [安全、沙箱与审批默认值](docs/adr/0002-security-defaults.md)
+- [LAN 与 Codex-like 审批决策](docs/adr/0003-lan-access-and-codex-like-approval.md)
+- [沙箱/执行策略/审批详细 Spec](docs/specs/01-sandbox-approval.md)
 - [HTTP/SSE API 合约](docs/api-contract.md)
 - [Web 多端设计](docs/web-ux.md)
 - [测试策略](docs/testing-strategy.md)
@@ -49,4 +51,3 @@ React 是 UI/视图层技术，不是后端运行时。为满足“React + TypeS
 - [ ] React PWA 与远程连接
 
 详见 [路线图](docs/roadmap.md)。
-

@@ -13,6 +13,8 @@ X-Request-Id: <client-generated-id>
 
 只读查询允许短期 access token；写操作、审批和取消必须认证并检查 run 所属会话。`POST` 写操作支持 `Idempotency-Key`。
 
+LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL。未来 Tailscale/SSH transport 可提供额外 peer identity，但仍必须经过同一 API authorization。
+
 ## 端点
 
 | 方法 | 路径 | 作用 |
@@ -30,6 +32,8 @@ X-Request-Id: <client-generated-id>
 | `GET` | `/runs/:runId/diff` | 获取受限 diff 摘要/分页内容 |
 | `POST` | `/pairing/start` | 仅本机启动一次性配对流程 |
 | `POST` | `/pairing/complete` | 兑换配对码，返回 token（只显示一次） |
+
+服务端 health/capability 响应必须包含 `transport.kind`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
 
 ## 创建 run 请求
 
@@ -97,4 +101,3 @@ X-Request-Id: <client-generated-id>
 - v1 只新增可选字段；删除/改变字段含义必须提升版本。
 - 未知事件类型客户端应保留原始 payload 并显示“未知事件”，不能阻塞整个时间线。
 - contracts 包、OpenAPI/JSON Schema、API 文档和 contract tests 必须同一提交更新。
-

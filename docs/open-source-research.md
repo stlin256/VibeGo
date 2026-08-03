@@ -20,6 +20,7 @@
 
 - `sdk/typescript/README.md` 描述 SDK 通过 stdin/stdout JSONL 驱动 CLI，并提供 `Thread`、`runStreamed()`、结构化输出、恢复已有 thread、工作目录 Git 检查和受控环境变量。
 - 这支持本项目的“run + append-only event + resume”模型，但实现会使用自己的 contracts 和 Node API，而非复制 SDK。
+- 本次快照还包含 `codex-rs/app-server-protocol/schema/typescript/v2/AskForApproval.ts`、`SandboxPolicy.ts`、`CommandExecutionApprovalDecision.ts` 和 `NetworkApprovalContext.ts`：可见的设计要点是 `untrusted/on-request/granular/never`、`read-only/workspace-write/external-sandbox/danger-full-access`、一次/会话/追加规则/网络规则/拒绝/取消等明确决策。`codex-rs/core/src/tools/sandboxing.rs` 的会话 key 缓存和 denied-read 保留逻辑、`codex-rs/execpolicy/README.md` 的 allow/prompt/forbidden prefix rule 与 match/not_match 自测，已转化为本项目 Spec 01 的独立合约。
 
 ### OpenHands
 
@@ -52,4 +53,3 @@
 ## 许可证与发布注意
 
 在真正引入任何第三方代码、schema 或依赖前，必须单独做许可证审查并把 NOTICE/许可证文件加入发布物。本次仅阅读代码结构，没有将这些仓库的代码复制到产品源码，也没有把它们作为运行时依赖。
-
