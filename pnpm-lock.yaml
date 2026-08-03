@@ -171,6 +171,12 @@ importers:
 
   packages/skill-mcp: {}
 
+  packages/sandbox-runtime:
+    dependencies:
+      '@ready4vibe/execution':
+        specifier: workspace:*
+        version: link:../execution
+
 packages:
 
   '@esbuild/aix-ppc64@0.25.12':
