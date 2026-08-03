@@ -48,7 +48,7 @@ The core loop is deliberately small:
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
 | Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
-| Goals | Phase 0 native TypeScript Goal Control contracts, deterministic projection, `shouldRun`, and optimistic Todo claim/revision guards; not connected to default run admission yet |
+| Goals | Phase 0 native TypeScript Goal Control contracts/projection/claim guards plus an isolated Phase 1 SQLite `goal_events` adapter; not connected to default run admission yet |
 
 ## Quick start
 
@@ -159,7 +159,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 201 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 206 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 

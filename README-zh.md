@@ -48,7 +48,7 @@ flowchart LR
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
 | Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式设置、模型配置、审批卡片、恢复重试、取消、指标、tool-output inspector 和 SSE |
-| Goal Control | Phase 0 原生 TypeScript contracts、确定性 projection、`shouldRun` 和 Todo 乐观 claim/revision 守卫；尚未接入默认 run admission |
+| Goal Control | Phase 0 原生 TypeScript contracts/projection/claim 守卫，加上 Phase 1 独立 SQLite `goal_events` adapter；尚未接入默认 run admission |
 
 ## 快速开始
 
@@ -131,7 +131,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、201 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、206 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 

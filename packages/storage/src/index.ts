@@ -229,3 +229,5 @@ export class SqliteEventStore implements EventStore {
     }
   }
 }
+
+export * from './goal.js';

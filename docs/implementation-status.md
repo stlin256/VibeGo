@@ -37,12 +37,13 @@
 29. `packages/tool-adapters` 与 `apps/daemon` 已按 `docs/specs/32-guided-git-readonly-tools.md` 实现独立 Git 只读开关：仅注册 status/diff/log，固定 argv、最小环境、超时/输出上限、取消与路径脱敏均受测试覆盖；不可信或 external-sandbox run 不获得主机 Git runtime；
 30. `apps/web` 已按 `docs/specs/33-guided-tool-output-inspector.md` 实现受限 tool-output inspector：仅消费现有 SSE tool.output 事件，最多显示 24 个卡片、每卡片最多 128 KiB，安全渲染 Git 文本，不新增执行权限或持久化；
 31. `packages/contracts` 与 `packages/goal-control` 已按 `docs/specs/34-goal-control-plane-loopx-integration.md` 实现 Phase 0：版本化 Goal/Todo/Gate/Evidence/Handoff/Event/Projection/Decision/Binding schema、privacy scan、内存 goal event store、canonical fingerprint、projection replay、最小 `shouldRun`、并发 claim/stale revision 门禁和 validated-writeback guard；不接入 daemon 默认 run admission，也不执行模型/工具/shell/filesystem/Git/MCP/sandbox；
-32. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+32. `packages/storage` 已实现 Phase 1 首步 `SqliteGoalEventStore`：独立 `goal_events` 表、goal-local `appendSequence`、`BEGIN IMMEDIATE`、eventId no-op/conflict、批量原子回滚、重启恢复、cursor/list 和并发 writer 测试；不修改现有 `run_events` 表，也未接入 daemon；
+33. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，201 个测试全部通过（contracts 8、goal-control 11、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 40、web 28；Vitest 按 package 输出）；
+- `pnpm test`：通过，206 个测试全部通过（contracts 8、goal-control 11、storage 12、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 40、web 28；Vitest 按 package 输出）；
 - Spec 31 增加 workspace registry 4 项、daemon 3 项、Web 2 项测试；Spec 32 再增加 tool-adapters 2 项、daemon 4 项、Web 2 项；Spec 33 增加 Web 2 项；当前 Web 共 28 项；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
@@ -159,7 +160,8 @@ claim conflict. Claim tokens are returned only to the caller and persisted as
 hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
-The verification baseline is now 20 workspace packages and 201 passing tests.
-SQLite `goal_events`, daemon application-service wiring, Goal API/Web projection,
+The verification baseline after the Phase 1 storage slice is now 20 workspace
+packages and 206 passing tests. SQLite `goal_events` is now available through
+the isolated storage adapter; daemon application-service wiring, Goal API/Web projection,
 LoopX import/export, and governed admission remain later phases. Existing
 unbound interactive runs and the `run_events` contract are unchanged.

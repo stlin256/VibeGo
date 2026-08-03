@@ -1,6 +1,6 @@
 # Spec 34：长期目标控制层与 LoopX 思路整合
 
-**状态：Implemented（Phase 0；SQLite/daemon/Web 接入仍后置）**
+**状态：Implemented（Phase 0；Phase 1 SQLite adapter 首步已实现，daemon/Web 接入仍后置）**
 
 **日期：2026-08-03**
 
@@ -691,12 +691,17 @@ Settings/onboarding 入口，并按向导顺序解释：
 - 不改变 daemon 默认 run admission、`run_events`、AgentLoop、Scheduler、Approval、
   Sandbox 或 Workspace 行为。
 
-### Phase 1：SQLite event store 与 read-only projection
+### Phase 1：SQLite event store 与 read-only projection（进行中；storage 首步已完成）
 
 - 增加 `goal_events` 表和 `SqliteGoalEventStore`。
 - 实现 goal event normalize、fingerprint、idempotent append 和 replay。
 - 实现 `GoalProjectionBuilder` 和 `SessionRunProjection`。
 - 增加只读 `GET /api/v1/goals/:goalId`，不接入 run admission。
+
+Phase 1 的第一小步已实现 `packages/storage` 的独立 `goal_events` SQLite adapter
+和事务测试；它不复用、改写或迁移现有 `run_events` 表，也不要求 daemon 立即创建
+Goal store。adapter 通过了并发、回滚、幂等、冲突、重启和隐私验收；read-only
+projection API 和 daemon wiring 仍需另行提交。
 
 ### Phase 2：Run binding 与 governed preflight
 

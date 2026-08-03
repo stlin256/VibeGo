@@ -170,5 +170,6 @@ LoopX 的 Goal/Todo/Gate/Evidence/Handoff、事件投影和可解释 `shouldRun`
 为唯一执行事实源。Phase 0 已完成 contracts、纯 reducer、内存 event store、幂等
 claim/revision 和只读 projection 核心；默认后端不引入 Python LoopX runtime、CLI、
 Markdown/JSONL 状态或 POSIX 文件锁。下一步是独立 `goal_events` SQLite 适配器和
-受保护的只读 projection API，仍不接入默认 run admission。Goal 的普通配置和操作
+Phase 1 的第一步已实现独立的 `goal_events` SQLite adapter；下一步是受保护的只读
+projection API，仍不接入默认 run admission。Goal 的普通配置和操作
 继续通过 Web Settings/onboarding 完成，不要求手动编辑 `.env`、YAML 或数据库文件。
