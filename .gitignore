@@ -1,0 +1,19 @@
+.research/
+node_modules/
+dist/
+coverage/
+.turbo/
+.vite/
+.env
+.env.*
+!.env.example
+*.log
+*.local
+.DS_Store
+Thumbs.db
+
+# Runtime data must never enter source control.
+.ready4vibe/
+data/
+tmp/
+
