@@ -91,6 +91,14 @@ Bring the safe certificate status metadata into the guided settings surface.
 Users see TLS validity and next-step guidance in the Web UI; no browser flow
 uploads, edits, or downloads PEM/private-key material.
 
+## Spec 27: Non-secret profile persistence (implemented)
+
+Persist only the validated run profile in a versioned browser preference key so
+refreshes keep user choices. Tokens, model credentials, certificate material,
+and event payloads remain excluded and reset is always available. The Web
+runtime now loads, saves, and resets this profile through a controlled storage
+adapter; storage failures fall back to in-memory defaults.
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

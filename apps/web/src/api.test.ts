@@ -1,11 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import { ApiClient, ApiError, parseSseFrame, type FetchLike } from './api.js';
+import { ApiClient, ApiError, DEFAULT_RUN_PROFILE, loadRunProfile, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, type FetchLike, type RunProfile, type RunProfileStorage } from './api.js';
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 }
 
+function memoryStorage(initial?: string): RunProfileStorage {
+  let value = initial ?? null;
+  return {
+    getItem: () => value,
+    setItem: (_key, next) => { value = next; },
+    removeItem: () => { value = null; },
+  };
+}
+
 describe('ApiClient', () => {
+  it('round-trips a validated non-secret run profile through controlled storage', () => {
+    const storage = memoryStorage();
+    const profile: RunProfile = {
+      ...DEFAULT_RUN_PROFILE,
+      workspaceId: 'repo-a',
+      model: { provider: 'deepseek', name: 'deepseek-v4-flash' },
+      sandbox: { mode: 'workspace-write', network: 'restricted', writableRoots: ['.'] },
+    };
+    saveRunProfile(profile, storage);
+    expect(storage.getItem(RUN_PROFILE_STORAGE_KEY)).not.toContain('apiKey');
+    expect(loadRunProfile(storage)).toEqual(profile);
+    resetRunProfile(storage);
+    expect(loadRunProfile(storage)).toEqual(DEFAULT_RUN_PROFILE);
+  });
+
+  it('falls back to conservative defaults for malformed or secret-shaped profiles', () => {
+    const malformed = memoryStorage('{"workspaceId":"repo","model":{}}');
+    expect(loadRunProfile(malformed)).toEqual(DEFAULT_RUN_PROFILE);
+    const secretShaped = memoryStorage(JSON.stringify({ ...DEFAULT_RUN_PROFILE, apiKey: 'do-not-store' }));
+    expect(loadRunProfile(secretShaped)).toEqual(DEFAULT_RUN_PROFILE);
+  });
+
+  it('does not let unavailable browser storage interrupt the UI', () => {
+    const failing: RunProfileStorage = {
+      getItem: () => { throw new Error('disabled'); },
+      setItem: () => { throw new Error('quota'); },
+      removeItem: () => { throw new Error('disabled'); },
+    };
+    expect(loadRunProfile(failing)).toEqual(DEFAULT_RUN_PROFILE);
+    expect(() => saveRunProfile(DEFAULT_RUN_PROFILE, failing)).not.toThrow();
+    expect(() => resetRunProfile(failing)).not.toThrow();
+  });
+
   it('keeps pairing credentials in memory and sends Bearer/CSRF headers', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const fetcher: FetchLike = async (input, init) => {

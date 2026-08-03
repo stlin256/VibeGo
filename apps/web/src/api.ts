@@ -40,6 +40,86 @@ export const DEFAULT_RUN_PROFILE: RunProfile = {
   },
 };
 
+export const RUN_PROFILE_STORAGE_KEY = 'vibego.run-profile.v1';
+export interface RunProfileStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export function loadRunProfile(storage: RunProfileStorage | undefined = browserStorage()): RunProfile {
+  if (!storage) return DEFAULT_RUN_PROFILE;
+  try {
+    const raw = storage.getItem(RUN_PROFILE_STORAGE_KEY);
+    if (!raw || raw.length > 32 * 1024) return DEFAULT_RUN_PROFILE;
+    const parsed: unknown = JSON.parse(raw);
+    return parseRunProfile(parsed) ?? DEFAULT_RUN_PROFILE;
+  } catch {
+    return DEFAULT_RUN_PROFILE;
+  }
+}
+
+export function saveRunProfile(profile: RunProfile, storage: RunProfileStorage | undefined = browserStorage()): void {
+  if (!storage) return;
+  try {
+    storage.setItem(RUN_PROFILE_STORAGE_KEY, JSON.stringify(parseRunProfile(profile) ?? DEFAULT_RUN_PROFILE));
+  } catch {
+    // Disabled or full browser storage must never block a run.
+  }
+}
+
+export function resetRunProfile(storage: RunProfileStorage | undefined = browserStorage()): void {
+  try { storage?.removeItem(RUN_PROFILE_STORAGE_KEY); } catch { /* best effort */ }
+}
+
+function parseRunProfile(value: unknown): RunProfile | undefined {
+  if (!isRecord(value)) return undefined;
+  try {
+    if (JSON.stringify(value).match(/api[_-]?key|access[_-]?token|csrf|private[_-]?key|pem|secret/iu)) return undefined;
+  } catch { return undefined; }
+  if (typeof value.workspaceId !== 'string' || value.workspaceId.length === 0 || value.workspaceId.length > 256) return undefined;
+  if (!isRecord(value.model) || typeof value.model.provider !== 'string' || value.model.provider.length === 0 || value.model.provider.length > 128 || typeof value.model.name !== 'string' || value.model.name.length === 0 || value.model.name.length > 128) return undefined;
+  if (value.taskTrust !== 'trusted-workspace' && value.taskTrust !== 'untrusted-content') return undefined;
+  if (!isSandboxProfile(value.sandbox) || !isApprovalProfile(value.approval) || !isLimitsProfile(value.limits)) return undefined;
+  return {
+    workspaceId: value.workspaceId,
+    model: { provider: value.model.provider, name: value.model.name },
+    taskTrust: value.taskTrust,
+    sandbox: value.sandbox,
+    approval: value.approval,
+    limits: value.limits,
+  };
+}
+
+function isSandboxProfile(value: unknown): value is RunProfile['sandbox'] {
+  if (!isRecord(value) || (value.mode !== 'read-only' && value.mode !== 'workspace-write' && value.mode !== 'external-sandbox')) return false;
+  if (value.network !== 'restricted' && value.network !== 'enabled') return false;
+  if (value.mode === 'workspace-write' && (!Array.isArray(value.writableRoots) || value.writableRoots.length === 0 || value.writableRoots.length > 32 || value.writableRoots.some((item) => typeof item !== 'string' || item.length === 0 || item.length > 512))) return false;
+  if (value.mode === 'external-sandbox' && value.provider !== 'docker' && value.provider !== 'podman' && value.provider !== 'vm') return false;
+  return true;
+}
+
+function isApprovalProfile(value: unknown): value is RunProfile['approval'] {
+  if (value === 'untrusted' || value === 'on-request' || value === 'never') return true;
+  if (!isRecord(value) || !isRecord(value.granular)) return false;
+  return ['sandboxApproval', 'ruleApproval', 'skillApproval', 'permissionRequest', 'mcpElicitation'].every((key) => typeof value.granular[key] === 'boolean');
+}
+
+function isLimitsProfile(value: unknown): value is RunProfile['limits'] {
+  if (!isRecord(value)) return false;
+  const keys = ['maxTurns', 'maxWallTimeMs', 'maxModelInputTokens', 'maxModelOutputTokens', 'maxToolCalls', 'maxOutputBytes', 'maxContextBytes'] as const;
+  if (!keys.every((key) => typeof value[key] === 'number' && Number.isSafeInteger(value[key]) && value[key] > 0)) return false;
+  return value.maxTurns <= 50 && value.maxWallTimeMs <= 1_800_000 && value.maxToolCalls <= 200 && value.maxOutputBytes <= 50 * 1024 * 1024;
+}
+
+function browserStorage(): RunProfileStorage | undefined {
+  try { return typeof globalThis.localStorage === 'undefined' ? undefined : globalThis.localStorage; } catch { return undefined; }
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export interface RunSnapshot {
   version: 1;
   runId: string;

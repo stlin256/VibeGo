@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -10,9 +10,13 @@ function RuntimeApp(): JSX.Element {
   const [run, setRun] = useState<RunSnapshot>();
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [error, setError] = useState<string>();
-  const [profile, setProfile] = useState<RunProfile>(DEFAULT_RUN_PROFILE);
+  const [profile, setProfile] = useState<RunProfile>(() => loadRunProfile());
   const [certificateStatus, setCertificateStatus] = useState<CertificateStatus>();
   const [certificateStatusUnavailable, setCertificateStatusUnavailable] = useState(false);
+
+  useEffect(() => {
+    saveRunProfile(profile);
+  }, [profile]);
 
   const refreshCertificateStatus = async (): Promise<void> => {
     try {
@@ -79,7 +83,12 @@ function RuntimeApp(): JSX.Element {
     try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} onProfileChange={setProfile} onResetProfile={() => setProfile(DEFAULT_RUN_PROFILE)} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
+  const resetProfile = (): void => {
+    resetRunProfile();
+    setProfile(DEFAULT_RUN_PROFILE);
+  };
+
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
 }
 
 function readTextDelta(payload: unknown): string {
