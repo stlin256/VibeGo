@@ -143,6 +143,35 @@ describe('daemon health server', () => {
     expect(JSON.stringify(body)).not.toContain('secret');
   });
 
+  it('serves certificate metadata without PEM material and reports missing status', async () => {
+    const unavailable = createDaemonServer();
+    servers.push(unavailable);
+    const unavailablePort = await listen(unavailable);
+    const missing = await fetch(`http://127.0.0.1:${unavailablePort}/api/v1/certificates/status`);
+    expect(missing.status).toBe(503);
+    expect(await missing.json()).toMatchObject({ error: { code: 'CERTIFICATE_STATUS_UNAVAILABLE' } });
+
+    const server = createDaemonServer({
+      certificateStatus: {
+        subject: 'CN=dev.example.test',
+        issuer: 'CN=Test CA',
+        validFrom: '2026-01-01T00:00:00.000Z',
+        validTo: '2030-01-01T00:00:00.000Z',
+        daysRemaining: 1_000,
+        fingerprint256: 'AA:BB:CC',
+        subjectAltNames: ['dev.example.test'],
+      },
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/certificates/status`);
+    const body = await response.json() as Record<string, unknown>;
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ subject: 'CN=dev.example.test', subjectAltNames: ['dev.example.test'] });
+    expect(JSON.stringify(body)).not.toContain('PRIVATE KEY');
+    expect(JSON.stringify(body)).not.toContain('cert.pem');
+  });
+
   it('supports the versioned alias and rejects unknown paths', async () => {
     const server = createDaemonServer();
     servers.push(server);
@@ -296,6 +325,8 @@ describe('daemon health server', () => {
     const denied = await fetch(`${base}/api/v1/runs/run_missing`);
     expect(denied.status).toBe(401);
     expect(await denied.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
+    const deniedCertificateStatus = await fetch(`${base}/api/v1/certificates/status`);
+    expect(deniedCertificateStatus.status).toBe(401);
 
     const pairingStart = await fetch(`${base}/api/v1/pairing/start`, { method: 'POST' });
     const pairing = await pairingStart.json() as { code: string };

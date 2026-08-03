@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import type { SecureContextOptions } from 'node:tls';
 import { describe, expect, it } from 'vitest';
-import { CertificateConfigError, loadTlsCredentials, resolveTlsCertificatePaths } from './index.js';
+import { CertificateConfigError, inspectTlsCertificate, loadTlsCredentials, resolveTlsCertificatePaths } from './index.js';
 
 describe('TLS certificate configuration', () => {
   it('requires a complete explicit PEM file pair', () => {
@@ -44,5 +44,27 @@ describe('TLS certificate configuration', () => {
       { certFile: 'cert.pem', keyFile: 'key.pem' },
       { readFile: (path) => Buffer.from(path), createSecureContext: () => { throw new Error('mismatch'); } },
     )).toThrowError(new CertificateConfigError('TLS_CERTIFICATE_INVALID', 'TLS certificate and private key could not be validated.'));
+  });
+
+  it('extracts safe X.509 metadata without returning certificate material', () => {
+    const status = inspectTlsCertificate(Buffer.from('CERTIFICATE'), {
+      createCertificate: () => ({
+        subject: 'CN=dev.example.test',
+        issuer: 'CN=Test CA',
+        validFrom: '2026-01-01T00:00:00.000Z',
+        validTo: '2030-01-01T00:00:00.000Z',
+        fingerprint256: 'AA:BB:CC',
+        subjectAltName: 'DNS:dev.example.test, IP Address:192.0.2.10, URI:ignored',
+      }),
+    });
+    expect(status).toMatchObject({ subject: 'CN=dev.example.test', issuer: 'CN=Test CA', validFrom: '2026-01-01T00:00:00.000Z', validTo: '2030-01-01T00:00:00.000Z', fingerprint256: 'AA:BB:CC', subjectAltNames: ['dev.example.test', '192.0.2.10'] });
+    expect(JSON.stringify(status)).not.toContain('CERTIFICATE');
+    expect(JSON.stringify(status)).not.toContain('PRIVATE');
+  });
+
+  it('rejects invalid certificate metadata with a stable error', () => {
+    expect(() => inspectTlsCertificate(Buffer.from('CERTIFICATE'), { createCertificate: () => ({ subject: '', issuer: '', validFrom: 'nope', validTo: 'nope', fingerprint256: '' }) })).toThrowError(
+      new CertificateConfigError('TLS_CERTIFICATE_INVALID', 'TLS certificate metadata could not be inspected.'),
+    );
   });
 });

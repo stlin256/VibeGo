@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { X509Certificate } from 'node:crypto';
 import { createSecureContext, type SecureContext, type SecureContextOptions } from 'node:tls';
 
 export interface TlsCertificatePaths {
@@ -27,6 +28,27 @@ export class CertificateConfigError extends Error {
 
 export type FileReader = (path: string) => Buffer;
 export type SecureContextFactory = (options: SecureContextOptions) => SecureContext | unknown;
+
+export interface CertificateStatus {
+  readonly subject: string;
+  readonly issuer: string;
+  readonly validFrom: string;
+  readonly validTo: string;
+  readonly daysRemaining: number;
+  readonly fingerprint256: string;
+  readonly subjectAltNames: readonly string[];
+}
+
+export interface X509CertificateLike {
+  readonly subject: string;
+  readonly issuer: string;
+  readonly validFrom: string;
+  readonly validTo: string;
+  readonly fingerprint256: string;
+  readonly subjectAltName?: string;
+}
+
+export type X509CertificateFactory = (certificate: Buffer) => X509CertificateLike;
 
 /** Resolves the explicit PEM file pair without reading or logging their contents. */
 export function resolveTlsCertificatePaths(
@@ -68,4 +90,49 @@ export function loadTlsCredentials(
     throw new CertificateConfigError('TLS_CERTIFICATE_INVALID', 'TLS certificate and private key could not be validated.');
   }
   return { cert, key };
+}
+
+/** Extracts non-secret certificate metadata for authenticated status surfaces. */
+export function inspectTlsCertificate(
+  certificate: Buffer,
+  options: { createCertificate?: X509CertificateFactory } = {},
+): CertificateStatus {
+  try {
+    if (!Buffer.isBuffer(certificate) || certificate.byteLength === 0) throw new Error('empty certificate');
+    const parsed = (options.createCertificate ?? ((value: Buffer) => new X509Certificate(value)))(certificate);
+    const validFrom = toIsoDate(parsed.validFrom);
+    const validTo = toIsoDate(parsed.validTo);
+    if (!parsed.subject || !parsed.issuer || !parsed.fingerprint256) throw new Error('certificate metadata is incomplete');
+    return Object.freeze({
+      subject: sanitizeMetadata(parsed.subject),
+      issuer: sanitizeMetadata(parsed.issuer),
+      validFrom,
+      validTo,
+      daysRemaining: Math.floor((Date.parse(validTo) - Date.now()) / 86_400_000),
+      fingerprint256: sanitizeMetadata(parsed.fingerprint256),
+      subjectAltNames: Object.freeze(parseSubjectAltNames(parsed.subjectAltName)),
+    });
+  } catch {
+    throw new CertificateConfigError('TLS_CERTIFICATE_INVALID', 'TLS certificate metadata could not be inspected.');
+  }
+}
+
+function toIsoDate(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) throw new Error('invalid certificate date');
+  return new Date(timestamp).toISOString();
+}
+
+function parseSubjectAltNames(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.startsWith('DNS:') || entry.startsWith('IP Address:'))
+    .map((entry) => entry.slice(entry.indexOf(':') + 1).trim())
+    .filter((entry) => entry.length > 0 && !/[\u0000-\u001F\u007F]/u.test(entry));
+}
+
+function sanitizeMetadata(value: string): string {
+  return value.replace(/[\r\n\u0000-\u001F\u007F]/gu, ' ').trim();
 }

@@ -52,6 +52,16 @@ describe('ApiClient', () => {
     expect(calls[0]?.input).not.toContain('token');
   });
 
+  it('reads certificate status through the authenticated API path', async () => {
+    const calls: string[] = [];
+    const client = new ApiClient('', async (input) => {
+      calls.push(input);
+      return response({ subject: 'CN=dev.example.test', issuer: 'CN=Test CA', validFrom: '2026-01-01T00:00:00.000Z', validTo: '2030-01-01T00:00:00.000Z', daysRemaining: 1000, fingerprint256: 'AA:BB:CC', subjectAltNames: ['dev.example.test'] });
+    });
+    await expect(client.certificateStatus()).resolves.toMatchObject({ subject: 'CN=dev.example.test', daysRemaining: 1000 });
+    expect(calls).toEqual(['/api/v1/certificates/status']);
+  });
+
   it('parses SSE frames, ignores heartbeat/invalid data and stops at terminal event', async () => {
     expect(parseSseFrame(': heartbeat')).toBeUndefined();
     expect(parseSseFrame('id: 4\nevent: model.delta\ndata: {"version":1,"id":"e4","seq":4,"runId":"run_1","type":"model.delta","at":"now","payload":{}}')).toMatchObject({ seq: 4, type: 'model.delta' });

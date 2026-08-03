@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
+import type { CertificateStatus } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
@@ -24,6 +25,7 @@ export interface DaemonServerOptions {
   runManager?: RunManager;
   bodyLimitBytes?: number;
   tls?: DaemonTlsOptions;
+  certificateStatus?: CertificateStatus;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -36,6 +38,7 @@ interface ResolvedDaemonServerOptions {
   bodyLimitBytes: number;
   runManager?: RunManager;
   tls?: DaemonTlsOptions;
+  certificateStatus?: CertificateStatus;
 }
 
 export interface HealthResponse {
@@ -80,6 +83,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     bodyLimitBytes: options.bodyLimitBytes ?? 1024 * 1024,
     ...(options.runManager ? { runManager: options.runManager } : {}),
     ...(options.tls ? { tls: options.tls } : {}),
+    ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -175,6 +179,19 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/certificates/status') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.certificateStatus) {
+      writeJson(response, 503, { error: { code: 'CERTIFICATE_STATUS_UNAVAILABLE', message: 'Certificate status is unavailable.' } });
+      return;
+    }
+    writeJson(response, 200, options.certificateStatus);
     return;
   }
 

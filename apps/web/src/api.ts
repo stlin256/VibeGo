@@ -46,6 +46,16 @@ export interface ApprovalSummary {
   expiresAt: number;
 }
 
+export interface CertificateStatus {
+  subject: string;
+  issuer: string;
+  validFrom: string;
+  validTo: string;
+  daysRemaining: number;
+  fingerprint256: string;
+  subjectAltNames: readonly string[];
+}
+
 export interface StoredEvent {
   version: 1;
   id: string;
@@ -92,6 +102,10 @@ export class ApiClient {
 
   async health(): Promise<HealthResponse> {
     return this.request<HealthResponse>('/health', { method: 'GET' }, false);
+  }
+
+  async certificateStatus(): Promise<CertificateStatus> {
+    return this.request<CertificateStatus>('/api/v1/certificates/status', { method: 'GET' });
   }
 
   async completePairing(code: string): Promise<PairingResult> {

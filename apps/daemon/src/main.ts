@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { AuthGate } from '@ready4vibe/auth';
-import { loadTlsCredentials } from '@ready4vibe/certificates';
+import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore } from '@ready4vibe/storage';
@@ -16,6 +16,7 @@ if (tlsEnabled && !certificatePaths) {
   throw new Error('TLS is enabled but certificate files are not configured; set READY4VIBE_TLS_CERT_FILE and READY4VIBE_TLS_KEY_FILE');
 }
 const tlsCredentials = tlsEnabled && certificatePaths ? loadTlsCredentials(certificatePaths) : undefined;
+const certificateStatus = tlsCredentials ? inspectTlsCertificate(tlsCredentials.cert) : undefined;
 const allowedOrigins = process.env.READY4VIBE_ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
 const authGate = new AuthGate({
   mode: transportMode,
@@ -45,6 +46,7 @@ const server = createDaemonServer({
   authGate,
   storageKind: 'sqlite',
   runManager,
+  ...(certificateStatus ? { certificateStatus } : {}),
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 

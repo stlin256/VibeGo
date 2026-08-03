@@ -117,3 +117,11 @@ RECOVERY_CONFIRMATION_REQUIRED`. On success the daemon returns `202` with a
 new run id and `retryOf`. The new run copies only persisted user-level
 configuration and receives a fresh client request id; it never replays
 tool-call arguments, approvals, environment values, or output.
+
+## Certificate status
+
+`GET /api/v1/certificates/status` is authenticated in LAN mode and returns
+certificate subject/issuer, validity, remaining days, SHA-256 fingerprint, and
+SAN values. It returns `503 CERTIFICATE_STATUS_UNAVAILABLE` when no certificate
+is configured. It never returns PEM, private-key bytes, certificate paths, or
+query tokens.

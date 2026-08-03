@@ -70,6 +70,13 @@ Only a recovered run can create a fresh run; the server reuses the persisted
 user-level configuration and generates a new client request id. No old tool
 arguments, approvals, output, or execution state is replayed.
 
+## Spec 24: Certificate manager boundary and status (current)
+
+Expose safe certificate metadata through an authenticated status endpoint while
+keeping PEM/private-key bytes in memory only. ACME issuance, renewal, and
+platform certificate stores remain explicit future adapters; no daemon startup
+path performs implicit network calls.
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。
