@@ -85,6 +85,12 @@ trust, sandbox, approval, and run-limit choices explicit in a settings panel;
 server-side TLS/credential changes remain gated by safe adapters and never echo
 secrets.
 
+## Spec 26: Settings certificate guidance (已完成)
+
+Bring the safe certificate status metadata into the guided settings surface.
+Users see TLS validity and next-step guidance in the Web UI; no browser flow
+uploads, edits, or downloads PEM/private-key material.
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

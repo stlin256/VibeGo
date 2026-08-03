@@ -28,6 +28,9 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .settings-grid input, .settings-grid select { min-height: 40px; padding: 9px 10px; }
 .reset-button { margin-top: 12px; color: #cbe4ff; border: 1px solid #30415c; background: transparent; }
 .reset-button:hover { background: #17243c; }
+.certificate-guidance { display: grid; gap: 4px; margin-top: 14px; border-top: 1px solid #263650; padding-top: 12px; }
+.certificate-guidance strong { overflow-wrap: anywhere; font-size: 13px; }
+.certificate-guidance p { margin: 0; font-size: 12px; }
 dt { color: #6f86a7; font-size: 12px; } dd { max-width: 65%; margin: 0; color: #d7e1ef; font-size: 12px; text-align: right; overflow-wrap: anywhere; }
 form { display: grid; gap: 10px; }
 label { color: #95a9c3; font-size: 12px; }

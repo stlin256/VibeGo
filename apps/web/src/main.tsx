@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -11,9 +11,24 @@ function RuntimeApp(): JSX.Element {
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [error, setError] = useState<string>();
   const [profile, setProfile] = useState<RunProfile>(DEFAULT_RUN_PROFILE);
+  const [certificateStatus, setCertificateStatus] = useState<CertificateStatus>();
+  const [certificateStatusUnavailable, setCertificateStatusUnavailable] = useState(false);
+
+  const refreshCertificateStatus = async (): Promise<void> => {
+    try {
+      setCertificateStatus(await client.certificateStatus());
+      setCertificateStatusUnavailable(false);
+    } catch (reason) {
+      setCertificateStatus(undefined);
+      setCertificateStatusUnavailable(isCertificateStatusUnavailable(reason));
+    }
+  };
 
   useEffect(() => {
-    void client.health().then(setHealth).catch((reason: unknown) => setError(safeError(reason)));
+    void client.health().then((nextHealth) => {
+      setHealth(nextHealth);
+      if (!nextHealth.auth.pairingRequired) void refreshCertificateStatus();
+    }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
 
   const pair = async (code: string): Promise<void> => {
@@ -21,6 +36,7 @@ function RuntimeApp(): JSX.Element {
       await client.completePairing(code);
       setError(undefined);
       setHealth(await client.health());
+      await refreshCertificateStatus();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -63,7 +79,7 @@ function RuntimeApp(): JSX.Element {
     try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} onProfileChange={setProfile} onResetProfile={() => setProfile(DEFAULT_RUN_PROFILE)} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} onProfileChange={setProfile} onResetProfile={() => setProfile(DEFAULT_RUN_PROFILE)} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -73,6 +89,10 @@ function readTextDelta(payload: unknown): string {
 function safeError(reason: unknown): string {
   if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') return `请求失败：${reason.code}`;
   return '请求失败，请检查 daemon 连接。';
+}
+
+function isCertificateStatusUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'CERTIFICATE_STATUS_UNAVAILABLE';
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><RuntimeApp /></StrictMode>);

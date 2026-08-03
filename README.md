@@ -71,7 +71,9 @@ The console includes a Settings panel for workspace, model, trust, sandbox,
 approval, network, and run limits. These choices are sent as a validated run
 profile; normal setup does not require editing `.env` or YAML files. API keys,
 private keys, and other secrets are deliberately excluded from this panel and
-are reserved for daemon-side secret-provider adapters.
+are reserved for daemon-side secret-provider adapters. When TLS is required,
+the same panel shows certificate validity and safe next-step guidance without
+asking the user to paste or upload a private key.
 
 ## LAN and public-access boundary
 

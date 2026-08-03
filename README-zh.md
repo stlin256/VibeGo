@@ -68,6 +68,7 @@ pnpm --filter @ready4vibe/daemon start
 默认地址是 `http://127.0.0.1:8787`。Web 控制台默认可以 same-origin 访问，也为后续 Tailscale/SSH tunnel 预留 API base URL。
 
 控制台内置 Settings 面板，可配置 workspace、模型、任务信任级别、sandbox、审批、网络和运行限制；常规使用不需要手动编辑 `.env` 或 YAML。API key、私钥等 secret 不会进入这个面板，后续由 daemon 侧安全 secret provider 负责。
+当传输要求 TLS 时，同一面板还会展示证书有效期和安全的下一步提示，不会要求用户粘贴或上传私钥。
 
 ## LAN 与公网访问边界
 

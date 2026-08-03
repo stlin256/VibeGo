@@ -30,6 +30,17 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\Users');
   });
 
+  it('renders certificate metadata and safe missing-TLS guidance', () => {
+    const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'https-lan', tlsRequired: true, boundAddresses: ['0.0.0.0'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } };
+    const withStatus = renderToStaticMarkup(<App health={health} certificateStatus={{ subject: 'CN=dev.example.test', issuer: 'CN=Test CA', validFrom: '2026-01-01T00:00:00.000Z', validTo: '2030-01-01T00:00:00.000Z', daysRemaining: 1000, fingerprint256: 'AA:BB:CC', subjectAltNames: ['dev.example.test'] }} />);
+    expect(withStatus).toContain('CN=dev.example.test');
+    expect(withStatus).toContain('dev.example.test');
+    expect(withStatus).not.toContain('PRIVATE KEY');
+    const missing = renderToStaticMarkup(<App health={health} certificateStatusUnavailable />);
+    expect(missing).toContain('Certificate setup is required');
+    expect(missing).not.toContain('.pem');
+  });
+
   it('renders an explicit approval card with allow and deny controls', () => {
     const html = renderToStaticMarkup(<App health={{ status: 'ok', service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } }} run={{ version: 1, runId: 'run_approval', status: 'waiting-approval', config: {} as never, lastEventSeq: 4, output: '', approvals: [{ approvalId: 'ap_1', runId: 'run_approval', turnId: 'turn_1', callId: 'call_1', toolId: 'filesystem.write', toolVersion: '1.0.0', risk: 'write', argumentBytes: 12, createdAt: 1_000, expiresAt: 2_000 }], scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'write' } }} onApprove={() => undefined} />);
     expect(html).toContain('APPROVAL REQUIRED');

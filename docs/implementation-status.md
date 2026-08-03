@@ -31,12 +31,13 @@
 23. `apps/daemon` 与 `apps/web` 已按 `docs/specs/23-recovered-run-retry.md` 实现受认证的显式 retry API 和 recovery 卡片：仅允许用户确认后从 `needs-recovery` 创建新 run，不重放旧工具或审批状态；
 24. `packages/certificates` 与 `apps/daemon` 已按 `docs/specs/24-certificate-status.md` 实现显式注入安全证书元数据和受保护状态查询，不启动 ACME 或返回私钥；
 25. `apps/web` 已按 `docs/specs/25-configuration-onboarding.md` 实现首个非 secret 运行 profile 与响应式设置面板，替代硬编码的 run 配置；
-26. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+26. `apps/web` 已按 `docs/specs/26-settings-certificate-guidance.md` 在设置/引导界面展示安全 TLS 元数据和缺失证书提示，不上传或回显私钥；
+27. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（18 个 workspace package）；
-- `pnpm test`：通过，142 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 5、skill-mcp 10、daemon 20、web 11；Vitest 按 package 输出）；
+- `pnpm test`：通过，143 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 13、auth 5、certificates 5、skill-mcp 10、daemon 20、web 12；Vitest 按 package 输出）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。

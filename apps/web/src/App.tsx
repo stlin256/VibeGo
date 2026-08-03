@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type CertificateStatus, type HealthResponse, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import './styles.css';
 
 export interface AppProps {
@@ -16,9 +16,11 @@ export interface AppProps {
   profile?: RunProfile;
   onProfileChange?: (profile: RunProfile) => void;
   onResetProfile?: () => void;
+  certificateStatus?: CertificateStatus;
+  certificateStatusUnavailable?: boolean;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const connected = health?.auth.pairingRequired === false;
@@ -73,6 +75,10 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
               <label>Max context bytes<input type="number" min={1} value={profile.limits.maxContextBytes} onChange={(event) => updateLimit('maxContextBytes', event.target.value)} /></label>
             </div>
             <button className="reset-button" type="button" onClick={onResetProfile}>Reset conservative defaults</button>
+            <div className="certificate-guidance">
+              <div className="eyebrow">TLS STATUS</div>
+              {certificateStatus ? <><strong>{certificateStatus.subject}</strong><p className="muted">Valid to {new Date(certificateStatus.validTo).toLocaleDateString()} · {certificateStatus.daysRemaining} days remaining</p><p className="muted">SAN: {certificateStatus.subjectAltNames.join(', ') || 'not reported'}</p></> : health?.transport.tlsRequired || certificateStatusUnavailable ? <p className="muted">Certificate setup is required for this TLS transport. Use the daemon certificate adapter; private keys are never entered or shown in this browser.</p> : <p className="muted">Loopback HTTP is active for local development. Pairing and future TLS setup remain available.</p>}
+            </div>
           </section>
           <section className="panel connection-panel">
             <div className="eyebrow">CONNECTION</div>
