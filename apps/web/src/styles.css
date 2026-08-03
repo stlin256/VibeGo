@@ -39,6 +39,8 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .run-metrics span { color: #6f86a7; font-size: 11px; } .run-metrics strong { overflow-wrap: anywhere; font-size: 13px; }
 .output-view { min-height: 180px; max-height: 420px; overflow: auto; margin: 0; border-radius: 12px; padding: 14px; color: #cbe4ff; background: #08111d; white-space: pre-wrap; word-break: break-word; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .approval-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(184 243 108 / 52%); border-radius: 12px; padding: 14px; background: rgb(184 243 108 / 8%); }
+.recovery-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(255 190 92 / 58%); border-radius: 12px; padding: 14px; background: rgb(255 190 92 / 9%); }
+.recovery-card p { margin: 5px 0 0; font-size: 12px; }
 .approval-card p { margin: 5px 0 0; font-size: 12px; }
 .approval-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .approval-actions .cancel-button { margin-top: 0; }

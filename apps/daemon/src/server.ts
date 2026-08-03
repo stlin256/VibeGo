@@ -201,7 +201,7 @@ async function handleRequest(
     return;
   }
 
-  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel))?$/.exec(pathname);
+  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel|retry))?$/.exec(pathname);
   if (!runMatch) {
     writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
     return;
@@ -249,6 +249,28 @@ async function handleRequest(
       return;
     }
     writeJson(response, 202, { runId, approvalId: input.approvalId, status: 'accepted' });
+    return;
+  }
+  if (subresource === 'retry') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isRetryInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Explicit retry confirmation is required.' } });
+      return;
+    }
+    const outcome = await options.runManager.retryRecovered(runId);
+    if (outcome === 'not-found') {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
+      return;
+    }
+    if (outcome === 'not-recoverable') {
+      writeJson(response, 409, { error: { code: 'RECOVERY_CONFIRMATION_REQUIRED', message: 'Only a recovered run can be retried.' } });
+      return;
+    }
+    writeJson(response, 202, outcome);
     return;
   }
   if (request.method !== 'GET') {
@@ -301,6 +323,10 @@ function isPairingInput(value: unknown): value is { code: string } {
 
 function isApprovalInput(value: unknown): value is { approvalId: string; decision: 'allow' | 'deny' } {
   return typeof value === 'object' && value !== null && 'approvalId' in value && typeof value.approvalId === 'string' && /^[A-Za-z0-9_-]{8,128}$/u.test(value.approvalId) && 'decision' in value && (value.decision === 'allow' || value.decision === 'deny');
+}
+
+function isRetryInput(value: unknown): value is { confirmation: 'retry-as-new-run' } {
+  return typeof value === 'object' && value !== null && 'confirmation' in value && value.confirmation === 'retry-as-new-run';
 }
 
 function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {

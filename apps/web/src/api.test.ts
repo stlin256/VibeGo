@@ -40,6 +40,18 @@ describe('ApiClient', () => {
     expect(calls[1]?.input).not.toContain('access');
   });
 
+  it('posts explicit recovery retry confirmation without URL secrets', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('/daemon', async (input, init) => {
+      calls.push({ input, init });
+      return response({ runId: 'run_new', status: 'queued', retryOf: 'run_old' }, 202);
+    });
+    await client.retryRun('run_old');
+    expect(calls[0]?.input).toBe('/daemon/api/v1/runs/run_old/retry');
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({ confirmation: 'retry-as-new-run' }));
+    expect(calls[0]?.input).not.toContain('token');
+  });
+
   it('parses SSE frames, ignores heartbeat/invalid data and stops at terminal event', async () => {
     expect(parseSseFrame(': heartbeat')).toBeUndefined();
     expect(parseSseFrame('id: 4\nevent: model.delta\ndata: {"version":1,"id":"e4","seq":4,"runId":"run_1","type":"model.delta","at":"now","payload":{}}')).toMatchObject({ seq: 4, type: 'model.delta' });

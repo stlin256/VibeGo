@@ -23,22 +23,32 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) { setError(safeError(reason)); }
   };
 
+  const watchRun = async (runId: string, initial: RunSnapshot): Promise<void> => {
+    setRun(initial);
+    setEvents([]);
+    for await (const event of client.streamEvents(runId, initial.lastEventSeq)) {
+      setEvents((current) => current.some((item) => item.seq === event.seq) ? current : [...current, event]);
+      if (event.type === 'model.delta') setRun((current) => current ? { ...current, output: `${current.output}${readTextDelta(event.payload)}`, lastEventSeq: event.seq } : current);
+      else setRun((current) => current ? { ...current, lastEventSeq: event.seq } : current);
+      if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') setRun(await client.getRun(runId));
+    }
+  };
+
   const createRun = async (message: string): Promise<void> => {
     try {
       const config: RunConfigInput = {
         workspaceId: 'default', userMessage: message, model: { provider: 'configured-default', name: 'deepseek-v4-flash' }, taskTrust: 'trusted-workspace', sandbox: { mode: 'read-only', network: 'restricted' }, approval: 'on-request', limits: { maxTurns: 12, maxWallTimeMs: 600_000, maxModelInputTokens: 8_000, maxModelOutputTokens: 4_000, maxToolCalls: 50, maxOutputBytes: 2_000_000, maxContextBytes: 64_000 }, createdBySessionId: 'web-memory-session', clientRequestId: crypto.randomUUID(),
       };
       const started = await client.createRun(config);
-      const initial = await client.getRun(started.runId);
-      setRun(initial);
-      setEvents([]);
-      for await (const event of client.streamEvents(started.runId, initial.lastEventSeq)) {
-        setEvents((current) => current.some((item) => item.seq === event.seq) ? current : [...current, event]);
-        if (event.type === 'model.delta') setRun((current) => current ? { ...current, output: `${current.output}${readTextDelta(event.payload)}`, lastEventSeq: event.seq } : current);
-        else setRun((current) => current ? { ...current, lastEventSeq: event.seq } : current);
-        if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired') setRun(await client.getRun(started.runId));
-        if (event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled') setRun(await client.getRun(started.runId));
-      }
+      await watchRun(started.runId, await client.getRun(started.runId));
+    } catch (reason) { setError(safeError(reason)); }
+  };
+
+  const retry = async (): Promise<void> => {
+    if (!run) return;
+    try {
+      const started = await client.retryRun(run.runId);
+      await watchRun(started.runId, await client.getRun(started.runId));
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -52,7 +62,7 @@ function RuntimeApp(): JSX.Element {
     try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} />;
 }
 
 function readTextDelta(payload: unknown): string {

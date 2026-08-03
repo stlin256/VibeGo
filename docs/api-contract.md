@@ -106,3 +106,14 @@ run 状态响应还应包含 `scheduler.queuePosition`、`scheduler.activeRunCou
 - v1 只新增可选字段；删除/改变字段含义必须提升版本。
 - 未知事件类型客户端应保留原始 payload 并显示“未知事件”，不能阻塞整个时间线。
 - contracts 包、OpenAPI/JSON Schema、API 文档和 contract tests 必须同一提交更新。
+
+## Recovered-run retry
+
+`POST /api/v1/runs/:runId/retry` accepts only
+`{"confirmation":"retry-as-new-run"}`. It is authenticated and CSRF
+protected like other mutating run endpoints. The source run must be
+`needs-recovery`; otherwise the daemon returns `409
+RECOVERY_CONFIRMATION_REQUIRED`. On success the daemon returns `202` with a
+new run id and `retryOf`. The new run copies only persisted user-level
+configuration and receives a fresh client request id; it never replays
+tool-call arguments, approvals, environment values, or output.

@@ -63,6 +63,13 @@ environment values, paths, or secrets. Approval waits are not restored and no
 operation is retried automatically; a later spec will add an explicit
 user-confirmed retry/new-run flow.
 
+## Spec 23: Explicit retry after recovery (current)
+
+Expose an authenticated `POST /api/v1/runs/:runId/retry` confirmation action.
+Only a recovered run can create a fresh run; the server reuses the persisted
+user-level configuration and generates a new client request id. No old tool
+arguments, approvals, output, or execution state is replayed.
+
 ## 暂缓决策
 
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。

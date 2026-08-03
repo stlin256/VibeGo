@@ -78,6 +78,17 @@ export class RunManager {
     return { runId, status: 'queued' };
   }
 
+  async retryRecovered(runId: string): Promise<{ runId: string; status: 'queued'; retryOf: string } | 'not-found' | 'not-recoverable'> {
+    const snapshot = await this.snapshot(runId);
+    if (!snapshot) return 'not-found';
+    if (snapshot.status !== 'needs-recovery') return 'not-recoverable';
+    const started = await this.start({
+      ...snapshot.config,
+      clientRequestId: `recovery_${uuidv7()}`,
+    });
+    return { ...started, retryOf: runId };
+  }
+
   async snapshot(runId: string): Promise<RunSnapshot | undefined> {
     const events = await this.eventStore.read(runId);
     if (events.length === 0) return undefined;

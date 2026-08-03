@@ -208,6 +208,32 @@ describe('daemon health server', () => {
     expect(resumedIds.every((id) => id > after)).toBe(true);
   });
 
+  it('requires explicit confirmation before retrying a recovered run', async () => {
+    const eventStore = new InMemoryEventStore();
+    const recoveredRunId = 'run_recovered_api';
+    await eventStore.append({ runId: recoveredRunId, type: 'run.created', source: 'user', correlationId: 'corr_recovery', payload: { config: runConfig('workspace-retry') } });
+    await eventStore.append({ runId: recoveredRunId, type: 'run.status', source: 'system', correlationId: 'corr_recovery', payload: { from: 'created', to: 'queued' } });
+    const manager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }) });
+    await manager.recoverAfterRestart();
+    const server = createDaemonServer({ runManager: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/runs/${recoveredRunId}/retry`;
+
+    const invalid = await fetch(base, { method: 'POST', body: JSON.stringify({ confirmation: 'retry' }) });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ error: { code: 'INVALID_REQUEST' } });
+
+    const retried = await fetch(base, { method: 'POST', body: JSON.stringify({ confirmation: 'retry-as-new-run' }) });
+    const body = await retried.json() as { runId: string; status: string; retryOf: string };
+    expect(retried.status).toBe(202);
+    expect(body).toMatchObject({ status: 'queued', retryOf: recoveredRunId });
+    expect(body.runId).not.toBe(recoveredRunId);
+    const snapshot = await manager.snapshot(body.runId);
+    expect(snapshot?.config.clientRequestId).toMatch(/^recovery_/u);
+    expect((await manager.snapshot(recoveredRunId))?.status).toBe('needs-recovery');
+  });
+
   it('cancels an active run idempotently', async () => {
     const { server } = makeRunServer(new FakeModelProvider({
       delayMs: 25,

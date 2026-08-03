@@ -25,4 +25,12 @@ describe('web console shell', () => {
     expect(html).toContain('Allow');
     expect(html).toContain('Deny');
   });
+
+  it('renders a safe explicit retry action for recovered runs', () => {
+    const html = renderToStaticMarkup(<App health={{ status: 'ok', service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } }} run={{ version: 1, runId: 'run_recovered', status: 'needs-recovery', config: {} as never, lastEventSeq: 3, output: '', approvals: [{ approvalId: 'ap_old', runId: 'run_recovered', turnId: 'turn_1', callId: 'call_1', toolId: 'filesystem.write', toolVersion: '1.0.0', risk: 'write', argumentBytes: 20, createdAt: 1_000, expiresAt: 2_000 }], final: { summary: 'Run requires recovery after daemon restart.', exitReason: 'daemon-restarted' }, scheduler: { queuePosition: null, activeRunCount: 0, workspaceLease: null } }} onRetry={() => undefined} />);
+    expect(html).toContain('RECOVERY REQUIRED');
+    expect(html).toContain('Retry as new run');
+    expect(html).not.toContain('APPROVAL REQUIRED');
+    expect(html).not.toContain('C:\\Users');
+  });
 });

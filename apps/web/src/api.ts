@@ -123,6 +123,13 @@ export class ApiClient {
     });
   }
 
+  async retryRun(runId: string): Promise<{ runId: string; status: string; retryOf: string }> {
+    return this.request(`/api/v1/runs/${encodeURIComponent(runId)}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmation: 'retry-as-new-run' }),
+    });
+  }
+
   async *streamEvents(runId: string, after = 0, signal?: AbortSignal): AsyncGenerator<StoredEvent> {
     const headers = this.authHeaders({ Accept: 'text/event-stream' });
     headers['Last-Event-ID'] = String(after);
