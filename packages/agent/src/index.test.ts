@@ -253,4 +253,17 @@ describe('AgentLoop', () => {
     expect((await eventStore.read('run_tool_limit')).at(-1)?.payload).toMatchObject({ code: 'MAX_TOOL_CALLS_EXCEEDED' });
     expect(runtime.execute).not.toHaveBeenCalled();
   });
+
+  it('bounds accumulated tool arguments before parsing or execution', async () => {
+    const provider = new FakeModelProvider({ events: [
+      { type: 'tool-call-delta', callId: 'large', name: 'echo', argumentsChunk: 'x'.repeat(256 * 1024 + 1) },
+      { type: 'completed', finishReason: 'tool-calls' },
+    ] });
+    const eventStore = new InMemoryEventStore();
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider });
+
+    const result = await loop.run({ runId: 'run_tool_argument_limit', config: config() });
+    expect(result).toMatchObject({ status: 'failed' });
+    expect((await eventStore.read('run_tool_argument_limit')).at(-1)?.payload).toMatchObject({ code: 'TOOL_ARGUMENT_LIMIT_EXCEEDED' });
+  });
 });

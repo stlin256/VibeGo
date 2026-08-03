@@ -31,7 +31,7 @@
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（18 个 workspace package）；
-- `pnpm test`：通过，121 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 13、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 12、auth 5、certificates 3、skill-mcp 10、daemon 15、web 5；Vitest 按 package 输出）；
+- `pnpm test`：通过，122 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 14、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 12、auth 5、certificates 3、skill-mcp 10、daemon 15、web 5；Vitest 按 package 输出）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -49,7 +49,7 @@
 - run API/SSE 已接入单用户 pairing/token、CSRF 和 LAN/TLS transport gate；HTTPS listener 与证书文件校验已 wiring，默认仍为 loopback，ACME/公网部署尚未 wiring。
 - 默认仍不发起真实请求；只有显式设置 `READY4VIBE_MODEL_API_KEY` 才启用外部 provider。key 只在进程内存中使用，不能进入仓库或 API 响应。
 - ToolRegistry/ApprovalPolicy 目前只做元数据和判定，不执行任何真实 tool；sandbox provider 已实现 verifier/resolver，真实 Docker/Podman/VM 执行器后置；tool-adapters 只在显式注入 runner/filesystem 时执行。AgentLoop/RunManager 现在接受显式 ToolRuntime，但 daemon 默认仍不注入 runtime；auth gate 与 TLS certificate loader 已接入 daemon，ACME adapter 和公网部署后置。
-- Spec 18 已落地：默认无工具；显式 runtime 的 tool-call 会经过 runtime 的 ToolExecutor 边界，并写入请求、审批、执行和输出事件；参数、轮次、工具调用数和 scheduler toolProcesses 均受限。真实 ToolExecutor runtime 的 workspace/intent 工厂和审批续接 API 后续实现。
+- Spec 18 已落地：默认无工具；显式 runtime 的 tool-call 会经过 runtime 的 ToolExecutor 边界，并写入请求、审批、执行和输出事件；参数（含单次 256 KiB arguments 上限）、轮次、工具调用数和 scheduler toolProcesses 均受限。审批续接 API 后续实现。
 - Spec 19 已定义 MCP transport boundary，下一步实现注入式 one-shot JSON-RPC channel；本阶段不启动子进程、不访问网络，生产 channel 仍必须后置接入 sandbox、approval 和 scheduler。
 - 不把 `pnpm-workspace.yaml` 的 build-script allowlist 当作业务安全策略；生产 sandbox/approval 仍按安全 spec 实现。
 

@@ -19,6 +19,8 @@ when no runtime is explicitly injected.
   Skill code directly.
 - Every call is bounded by `RunConfig.limits.maxToolCalls`, the scheduler's
   `toolProcesses` resource, the configured sandbox, and the approval policy.
+- Accumulated JSON arguments are capped at 256 KiB per call before parsing, so a
+  provider cannot grow an in-memory buffer without bound.
 - Unknown names, malformed JSON arguments, policy prompts/denials, sandbox
   failures, missing handlers, and executor errors are safe, deterministic
   failures. No approval is fabricated and no policy decision is cached by the
@@ -59,4 +61,3 @@ All events use the turn id as correlation id. A failed tool call is followed by
   tool events.
 - `pnpm typecheck`, `pnpm test`, `pnpm diff:check`, and `git diff --check` must
   pass before the standalone Git commit and push.
-

@@ -158,7 +158,7 @@ export class AgentLoop {
 
       if (controller.signal.aborted) return await cancel('user-cancelled-before-start');
       await transition('planning');
-      const messages: unknown[] = [...contextResult.messages];
+const messages: unknown[] = [...contextResult.messages];
       const toolRuntime = this.options.toolRuntime;
       const modelTools = this.options.modelProvider.capabilities.toolCalls && toolRuntime
         ? toolRuntime.descriptors.map(toModelTool)
@@ -212,9 +212,19 @@ export class AgentLoop {
               await this.append(runId, 'model.delta', 'model', turnId, { turnId, kind: 'text', text: event.text });
             } else if (event.type === 'tool-call-delta') {
               const previous = calls.get(event.callId);
+              const argumentsText = (previous?.argumentsText ?? '') + event.argumentsChunk;
+              if (Buffer.byteLength(argumentsText) > MAX_TOOL_ARGUMENT_BYTES) {
+                await this.append(runId, 'model.error', 'policy', turnId, {
+                  code: 'TOOL_ARGUMENT_LIMIT_EXCEEDED',
+                  retryable: false,
+                  safeMessage: 'The tool arguments exceeded the configured limit.',
+                });
+                controller.abort();
+                return await fail('TOOL_ARGUMENT_LIMIT_EXCEEDED', 'The tool arguments exceeded the configured limit.', false);
+              }
               const nextCall: PendingToolCall = {
                 callId: event.callId,
-                argumentsText: (previous?.argumentsText ?? '') + event.argumentsChunk,
+                argumentsText,
               };
               const nextName = event.name ?? previous?.name;
               if (nextName) nextCall.name = nextName;
@@ -419,6 +429,8 @@ interface PendingToolCall {
   name?: string;
   argumentsText: string;
 }
+
+const MAX_TOOL_ARGUMENT_BYTES = 256 * 1024;
 
 function toModelTool(descriptor: AgentToolDescriptor): unknown {
   return {
