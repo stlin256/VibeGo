@@ -1,6 +1,6 @@
 # Spec 34：长期目标控制层与 LoopX 思路整合
 
-**状态：Implemented（Phase 0；Phase 1 SQLite adapter 与 daemon 只读 projection/replay API 已实现，写 API、Web 投影和 governed admission 仍后置）**
+**状态：Implemented（Phase 0/Phase 1；daemon 只读 projection/replay API 与 Spec 35 的 Web 只读投影已实现，写 API 和 governed admission 仍后置）**
 
 **日期：2026-08-03**
 
@@ -726,8 +726,11 @@ Phase 1 已实现 `packages/storage` 的独立 `goal_events` SQLite adapter、�
 
 ### Phase 4：Web 与可选 LoopX 互操作
 
-- 在现有 Web 首屏显示 goal、Gate、selected Todo、最近 evidence 和下一步。
-- 提供受保护的 Todo/Gate 操作。
+- [Spec 35](35-goal-web-readonly-projection.md) 先在现有 Web 首屏显示 goal、Gate、
+  selected Todo、最近 evidence、quota 摘要和下一步；该切片只读、内存态，不增加
+  Goal SSE、轮询或执行能力。
+- Todo/Gate 写操作必须等到单独的受保护 API、CSRF/Origin、revision 和审计设计完成；
+  Spec 35 不提供这些按钮。
 - 如有真实需求，再实现 LoopX-compatible export/import；默认单向、只读、可重放。
 
 ## 测试与验收

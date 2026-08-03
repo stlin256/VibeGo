@@ -1,6 +1,6 @@
 # ADR 0004：原生 Goal Control 与 LoopX 协议互操作
 
-- 状态：Accepted（Phase 0 已实现；Phase 1 storage 与 daemon 只读 projection/replay 已实现，写 API/Web/Phase 2 后置）
+- 状态：Accepted（Phase 0/Phase 1 storage、daemon 只读 projection/replay 与 Spec 35 Web 只读投影已实现，写 API/Phase 2 仍后置）
 - 日期：2026-08-03
 
 ## 背景
@@ -106,6 +106,7 @@ contract schema、projection/reducer、幂等/冲突测试、claim revision 门�
 Phase 1 的独立 SQLite `goal_events` adapter、daemon 可选 store wiring 以及受保护的
 只读 projection/replay API 已通过验收。API 只读取 `goal_events` 并用
 `GoalProjectionBuilder` 重放；事件 JSON 会剥离 `claimTokenHash`，并受游标/页大小
-上限约束。仍不得把 Goal quota 接入默认 run 创建路径，也不得修改现有
+上限约束。Spec 35 只允许现有 React/Vite Web 读取这一投影，响应仅保存在组件内存中；
+Web 不创建第二条事件流，也不提供 Goal 写操作。仍不得把 Goal quota 接入默认 run 创建路径，也不得修改现有
 `run_events` 合同、AgentLoop、Scheduler、Approval 或 Sandbox。Goal 的写操作和
 配置必须继续通过后续受保护 Web/API 完成，不能要求用户手动编辑配置文件。

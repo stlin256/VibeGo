@@ -173,3 +173,17 @@ Markdown/JSONL 状态或 POSIX 文件锁。Phase 1 已实现独立的 `goal_even
 adapter、daemon 可选 wiring、受认证的 goal 列表/详情/JSON event replay API；这些
 接口仍不接入默认 run admission。Goal 的普通配置和操作
 继续通过 Web Settings/onboarding 完成，不要求手动编辑 `.env`、YAML 或数据库文件。
+
+## Spec 35：Web Goal 只读投影（已实现）
+
+详见 [Spec 35](specs/35-goal-web-readonly-projection.md)。本阶段只消费已经受认证的
+`GET /api/v1/goals` projection：在现有 React/Vite run console 中增加 Goal 卡片，展示
+Goal 状态、Todo/Gate/Evidence 摘要、quota spend、control revision 和 projection
+checksum。客户端只在内存中保存响应，不把 Goal payload 写入 URL、`localStorage` 或
+prompt；不增加 Goal SSE、轮询、scheduler、写操作或 governed admission。run 进入终态
+后显式刷新一次 projection，刷新按钮在请求期间禁用。
+
+退出条件已满足：API client、loading/empty/unavailable/ready UI、隐私渲染和
+interactive run 回归单测通过；`pnpm typecheck`、`pnpm test`、`pnpm diff:check`
+通过并完成独立 Git 提交。Goal 创建、Todo claim、Gate resolve 和 Phase 2 admission
+继续后置。

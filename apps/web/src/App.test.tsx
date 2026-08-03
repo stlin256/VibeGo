@@ -24,6 +24,16 @@ describe('web console shell', () => {
     expect(html).not.toContain('privatekey');
   });
 
+  it('keeps the interactive composer available beside a read-only Goal projection', () => {
+    const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback' as const, tlsRequired: false, boundAddresses: ['127.0.0.1' as const] }, auth: { pairingRequired: false }, storage: { kind: 'memory' as const, status: 'ready' as const }, sandbox: { availableModes: ['read-only' as const], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow' as const, 'prompt' as const, 'forbidden' as const] } };
+    const projection = { schemaVersion: 'ready4vibe_goal_api_v0', goals: [{ goal: { goalId: 'goal_12345678', title: 'Goal', objective: 'Objective', status: 'active', controlRevision: 0, createdAt: '2026-08-03T00:00:00.000Z', updatedAt: '2026-08-03T00:00:00.000Z', schemaVersion: 1 }, todos: [], gates: [], evidence: [], handoffs: [], quota: { spentTurnKeys: [], totalSpent: 0 }, lastEventId: null, lastAppendSequence: 0, sourceEventCount: 0, sourceChecksum: 'a'.repeat(64), controlRevision: 0 }] } as never;
+    const html = renderToStaticMarkup(<App health={health} goalProjection={projection} onRefreshGoalProjection={() => undefined} />);
+    expect(html).toContain('告诉 agent 下一步做什么');
+    expect(html).toContain('GOAL CONTROL · READ ONLY');
+    expect(html).not.toContain('Claim');
+    expect(html).not.toContain('Resolve gate');
+  });
+
   it('renders model setup guidance without rendering the provider key', () => {
     const html = renderToStaticMarkup(<App modelSettings={{ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' }} />);
     expect(html).toContain('MODEL ACCESS');

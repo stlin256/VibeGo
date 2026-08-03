@@ -66,6 +66,22 @@ describe('ApiClient', () => {
     expect(client.hasSession()).toBe(false);
   });
 
+  it('reads the bounded Goal projection with the existing authenticated headers', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      if (input.endsWith('/pairing/complete')) return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 2_000 });
+      return response({ schemaVersion: 'ready4vibe_goal_api_v0', goals: [] });
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    await client.completePairing('PAIR');
+    await expect(client.listGoals()).resolves.toEqual({ schemaVersion: 'ready4vibe_goal_api_v0', goals: [] });
+    expect(calls[1]?.input).toBe('http://daemon/api/v1/goals');
+    expect(calls[1]?.init?.method).toBe('GET');
+    expect(calls[1]?.init?.headers).toMatchObject({ Authorization: 'Bearer access', 'X-CSRF-Token': 'csrf' });
+    expect(calls[1]?.input).not.toContain('token');
+  });
+
   it('posts approval decisions in the body without putting credentials in the URL', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const fetcher: FetchLike = async (input, init) => {

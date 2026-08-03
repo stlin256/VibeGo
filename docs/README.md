@@ -6,7 +6,7 @@
 - 后端与 harness：读 `harness-contracts.md`、`api-contract.md`、`adr/0002-security-defaults.md`、`adr/0003-lan-access-and-codex-like-approval.md`、`specs/01-sandbox-approval.md`；
 - 运行状态与事件：读 `specs/02-run-event-contract.md`；
 - 模型与上下文：读 `specs/03-model-context-contract.md`；
-- 长期目标与 LoopX 整合：先读 [`specs/34-goal-control-plane-loopx-integration.md`](specs/34-goal-control-plane-loopx-integration.md)，再读 [`adr/0004-native-goal-control-and-loopx-interop.md`](adr/0004-native-goal-control-and-loopx-interop.md)；
+- 长期目标与 LoopX 整合：先读 [`specs/34-goal-control-plane-loopx-integration.md`](specs/34-goal-control-plane-loopx-integration.md)，再读 [`specs/35-goal-web-readonly-projection.md`](specs/35-goal-web-readonly-projection.md) 和 [`adr/0004-native-goal-control-and-loopx-interop.md`](adr/0004-native-goal-control-and-loopx-interop.md)；
 - Web 开发：读 `web-ux.md`、`api-contract.md`；
 - 贡献者：读 `testing-strategy.md`、`development-workflow.md`；
 - 调研复核：读 `open-source-research.md`。
@@ -31,5 +31,6 @@
 
 ## 当前设计与实施
 
-- [Spec 34：长期目标控制层与 LoopX 思路整合](specs/34-goal-control-plane-loopx-integration.md)：Phase 0 已实现原生 TypeScript contracts、纯 reducer、projection、claim revision 和 shouldRun；Phase 1 已实现独立 SQLite `goal_events` adapter、daemon 可选 wiring、受认证的 goal 列表/详情和 bounded JSON event replay。Goal 写 API、Web 投影操作和 governed admission 仍按门禁推进；文档解释哪些 LoopX 语义可提取、如何与现有 run/scheduler/approval/sandbox 边界协作，以及分阶段实施、验证、互操作和回滚。
+- [Spec 34：长期目标控制层与 LoopX 思路整合](specs/34-goal-control-plane-loopx-integration.md)：Phase 0 已实现原生 TypeScript contracts、纯 reducer、projection、claim revision 和 shouldRun；Phase 1 已实现独立 SQLite `goal_events` adapter、daemon 可选 wiring、受认证的 goal 列表/详情和 bounded JSON event replay。Goal 写 API、Goal 操作和 governed admission 仍按门禁推进；Web 只读投影由 Spec 35 单独定义。
 - [ADR 0004：原生 Goal Control 与 LoopX 协议互操作](adr/0004-native-goal-control-and-loopx-interop.md)：记录“不 vendor 完整 LoopX、保留单向互操作”的架构决策。
+- [Spec 35：Web Goal 只读投影](specs/35-goal-web-readonly-projection.md)：把 Phase 1 的安全 projection 接入现有 React/Vite 控制台；只读、内存态、无第二条 SSE/轮询/调度路径，并为桌面、平板和手机保留 bounded、可降级的展示边界。

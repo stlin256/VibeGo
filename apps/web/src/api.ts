@@ -1,3 +1,5 @@
+import type { GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
+
 export interface HealthResponse {
   status: 'ok' | 'degraded';
   service: string;
@@ -225,6 +227,21 @@ export interface StoredEvent {
   payload: unknown;
 }
 
+/**
+ * The daemon deliberately removes the internal claim hash before this type is
+ * exposed to the browser. Keep this projection type local to the API boundary
+ * so a future Goal write API cannot accidentally reuse it as an input.
+ */
+export type SafeGoalTodo = Omit<GoalTodo, 'claimTokenHash'>;
+export type SafeGoalProjection = Omit<GoalProjectionContract, 'todos'> & { todos: readonly SafeGoalTodo[] };
+
+export const GOAL_API_SCHEMA_VERSION = 'ready4vibe_goal_api_v0' as const;
+
+export interface GoalProjectionListResponse {
+  readonly schemaVersion: typeof GOAL_API_SCHEMA_VERSION;
+  readonly goals: readonly SafeGoalProjection[];
+}
+
 export interface PairingResult {
   accessToken: string;
   csrfToken: string;
@@ -261,6 +278,10 @@ export class ApiClient {
 
   async health(): Promise<HealthResponse> {
     return this.request<HealthResponse>('/health', { method: 'GET' }, false);
+  }
+
+  async listGoals(): Promise<GoalProjectionListResponse> {
+    return this.request<GoalProjectionListResponse>('/api/v1/goals', { method: 'GET' });
   }
 
   async certificateStatus(): Promise<CertificateStatus> {

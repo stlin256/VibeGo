@@ -1,6 +1,6 @@
-import { StrictMode, useEffect, useState, type JSX } from 'react';
+import { StrictMode, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type CertificateStatus, type GitSettingsStatus, type GoalProjectionListResponse, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -23,6 +23,11 @@ function RuntimeApp(): JSX.Element {
   const [sandboxSettingsUnavailable, setSandboxSettingsUnavailable] = useState(false);
   const [workspaces, setWorkspaces] = useState<WorkspaceRegistryStatus>();
   const [workspacesUnavailable, setWorkspacesUnavailable] = useState(false);
+  const [goalProjection, setGoalProjection] = useState<GoalProjectionListResponse>();
+  const [goalProjectionLoading, setGoalProjectionLoading] = useState(true);
+  const [goalProjectionUnavailable, setGoalProjectionUnavailable] = useState(false);
+  const [goalProjectionRefreshing, setGoalProjectionRefreshing] = useState(false);
+  const goalRefreshInFlight = useRef(false);
 
   useEffect(() => {
     saveRunProfile(profile);
@@ -88,6 +93,25 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshGoalProjection = async (): Promise<void> => {
+    if (goalRefreshInFlight.current) return;
+    goalRefreshInFlight.current = true;
+    const hasExistingProjection = goalProjection !== undefined;
+    if (hasExistingProjection) setGoalProjectionRefreshing(true);
+    else setGoalProjectionLoading(true);
+    try {
+      setGoalProjection(await client.listGoals());
+      setGoalProjectionUnavailable(false);
+    } catch {
+      setGoalProjection(undefined);
+      setGoalProjectionUnavailable(true);
+    } finally {
+      setGoalProjectionLoading(false);
+      setGoalProjectionRefreshing(false);
+      goalRefreshInFlight.current = false;
+    }
+  };
+
   useEffect(() => {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
@@ -98,6 +122,7 @@ function RuntimeApp(): JSX.Element {
         void refreshGitSettings();
         void refreshSandboxSettings();
         void refreshWorkspaces();
+        void refreshGoalProjection();
       }
     }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
@@ -113,6 +138,7 @@ function RuntimeApp(): JSX.Element {
       await refreshGitSettings();
       await refreshSandboxSettings();
       await refreshWorkspaces();
+      await refreshGoalProjection();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -125,6 +151,7 @@ function RuntimeApp(): JSX.Element {
       else setRun((current) => current ? { ...current, lastEventSeq: event.seq } : current);
       if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') setRun(await client.getRun(runId));
     }
+    await refreshGoalProjection();
   };
 
   const createRun = async (message: string): Promise<void> => {
@@ -232,7 +259,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {

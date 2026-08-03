@@ -1,6 +1,8 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useState } from 'react';
 import { DEFAULT_RUN_PROFILE, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import type { GoalProjectionListResponse } from './api.js';
+import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import './styles.css';
 
 export interface AppProps {
@@ -36,9 +38,14 @@ export interface AppProps {
   workspacesUnavailable?: boolean;
   onAddWorkspace?: (input: { id: string; path: string; label?: string }) => Promise<void> | void;
   onRemoveWorkspace?: (id: string) => Promise<void> | void;
+  goalProjection?: GoalProjectionListResponse;
+  goalProjectionLoading?: boolean;
+  goalProjectionUnavailable?: boolean;
+  goalProjectionRefreshing?: boolean;
+  onRefreshGoalProjection?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
@@ -238,6 +245,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
           {error && <div className="error-banner" role="alert">{error}</div>}
           {connected ? <>
             <section className="panel composer-panel"><div className="eyebrow">NEW RUN</div><h2>告诉 agent 下一步做什么</h2><form onSubmit={submitRun}><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="例如：运行测试，定位失败原因并给出最小修复。" rows={4} /><div className="composer-footer"><span className="muted">默认：trusted workspace · read-only</span><button type="submit">开始 run</button></div></form></section>
+            <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} />
             {run ? <RunConsole run={run} events={events} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <section className="panel empty-state"><span className="empty-icon">⌁</span><h2>还没有活动 run</h2><p className="muted">提交一个任务，实时查看 agent 的计划、输出和审批。</p></section>}
           </> : <section className="panel empty-state"><span className="empty-icon">◎</span><h2>先完成安全配对</h2><p className="muted">daemon 默认不会把 token 放进 URL、cookie 或本地存储。</p></section>}
         </section>
