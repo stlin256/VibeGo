@@ -79,6 +79,15 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/policy:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@ready4vibe/tools':
+        specifier: workspace:*
+        version: link:../tools
+
   packages/scheduler:
     dependencies:
       '@ready4vibe/contracts':
@@ -99,6 +108,8 @@ importers:
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../contracts
+
+  packages/tools: {}
 
 packages:
 
