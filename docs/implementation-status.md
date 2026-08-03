@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Phase 1/2 实施基线，SQLite/health 纵切已通过）**
+**状态：Accepted（Phase 1/2 实施基线，fake-model loop 纵切已通过）**
 
 ## 当前实施范围
 
@@ -11,12 +11,13 @@
 3. `packages/scheduler`：并发准入、workspace read/write lease、交互任务优先级、FIFO tie-break、取消和幂等资源释放；
 4. `packages/testkit`：可中断、可延迟的 fake model provider 与事件类型投影断言；fake tool/clock 在后续 agent-loop 纵切补齐；
 5. `apps/daemon`：只绑定 loopback 的最小 Node HTTP server，提供 `/health` 和 `/api/v1/health`，组合根启动时使用 SQLite EventStore；
-6. 每个包都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → daemon 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+6. `packages/agent`：fake-model 单 turn orchestrator（生命周期事件、scheduler lease、取消、失败和输出上限），不执行真实工具；
+7. 每个包都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → agent → daemon 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
-- `pnpm typecheck`：通过（5 个 package）；
-- `pnpm test`：通过，19 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、daemon 3；Vitest 按 package 输出）；
+- `pnpm typecheck`：通过（6 个 package）；
+- `pnpm test`：通过，26 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 7、daemon 3；Vitest 按 package 输出）；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
 - Node 22 会对 `node:sqlite` 输出 ExperimentalWarning；MVP 选择它是为了避免 native addon 和常驻数据库服务，后续可按 Node LTS 稳定性评估 adapter 替换。
@@ -29,6 +30,7 @@
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
 - 不把 fake model 的行为当作真实 provider 能力。
+- fake loop 目前只执行单 turn 且 `tools` 为空；不会执行 shell/filesystem/Git，也没有上下文压缩或审批等待态。
 - 不把 `pnpm-workspace.yaml` 的 build-script allowlist 当作业务安全策略；生产 sandbox/approval 仍按安全 spec 实现。
 
 ## 进入下一步的门禁
@@ -37,4 +39,4 @@
 - `pnpm test` 通过，覆盖合法/非法状态转移、并发排队、workspace lease、事件 seq、取消和资源释放；
 - `pnpm diff:check` 或等价检查无 whitespace 错误；
 - 文档中的实现状态、限制和命令与代码一致；
-- 完成后单独 Git 提交，再进入 fake-model agent loop 与 run API/SSE。
+- 完成后单独 Git 提交，再进入 run API/SSE 与上下文管理。

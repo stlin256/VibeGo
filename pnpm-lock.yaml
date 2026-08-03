@@ -24,6 +24,25 @@ importers:
         specifier: workspace:*
         version: link:../../packages/storage
 
+  packages/agent:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@ready4vibe/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
+      uuid:
+        specifier: 11.1.0
+        version: 11.1.0
+    devDependencies:
+      '@ready4vibe/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@ready4vibe/testkit':
+        specifier: workspace:*
+        version: link:../testkit
+
   packages/contracts:
     dependencies:
       zod:
