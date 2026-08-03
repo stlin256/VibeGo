@@ -145,6 +145,7 @@ packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 - 更完整的 external sandbox/VM adapter、资源限制与持久化；
 - Skill/MCP manifest 和 secret-safe 工具 allowlist；
 - 分页/高亮 diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
+- 原生 Goal Control：跨 run 的目标、Todo/Gate/evidence 投影与可选 governed preflight；
 - ACME/certificate manager、Tailscale/SSH transport adapter；
 - 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
 

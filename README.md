@@ -174,6 +174,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - Git write/patch operations and a dedicated paginated diff/log explorer;
 - Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
 - paginated/highlighted diff/log/approval views and Playwright desktop/tablet/mobile flows;
+- native Goal Control for cross-run goals, Todo/Gate/evidence projections, and optional governed preflight;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 

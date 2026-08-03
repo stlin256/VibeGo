@@ -159,3 +159,19 @@ Spec 33 adds the first presentation slice for those results: the Web Run
 Console shows bounded `tool.output` cards from the existing SSE stream, with
 safe text rendering and low-resource display limits. Pagination, highlighting,
 search/export, and inline review remain deferred.
+
+Spec 34 is the next design-only milestone: a native Goal Control bounded context
+inspired by LoopX's long-lived-goal protocol semantics without vendoring its
+Python runtime or state files. Phase 0 is contract schemas, privacy traps,
+idempotency/conflict rules, and deterministic projection fixtures; it must not
+change default run admission or the existing `run_events` contract.
+
+## Spec 34：长期目标控制层与 LoopX 思路整合（Draft）
+
+Spec 34 records a native TypeScript/SQLite Goal Control bounded context inspired
+by LoopX. It keeps ready4vibe's run execution plane, scheduler, approval, sandbox,
+workspace and SSE contracts authoritative, while adding a separate goal event
+stream for cross-run goals, Todo, project Gates, evidence, handoff and governed
+quota decisions. The first milestone is contract/fixture work and a read-only
+projection; no Python LoopX runtime, CLI, Markdown state or POSIX file lock is
+part of the default backend.
