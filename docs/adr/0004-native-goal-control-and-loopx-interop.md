@@ -1,6 +1,6 @@
 # ADR 0004：原生 Goal Control 与 LoopX 协议互操作
 
-- 状态：Draft
+- 状态：Accepted（Phase 0 已实现；Phase 1/2 后置）
 - 日期：2026-08-03
 
 ## 背景
@@ -26,6 +26,10 @@ AgentLoop、Scheduler、Approval、Sandbox、Workspace Registry 和 HTTP/SSE。
    storage。
 6. 所有 governed 自动执行必须先通过 Goal admission，再通过 ready4vibe 的
    Scheduler、Approval、Sandbox 和 Workspace 边界。
+
+本 ADR 中的“吸收”默认是对协议/状态语义进行独立实现，不是复制 LoopX 源代码。
+若未来确需复用代码，必须在单独变更中核对上游 LICENSE、版权声明和 NOTICE，并
+完成依赖、发布物和安全审查；没有完成审查前只能使用本地重写的 TypeScript 实现。
 
 ## 选择理由
 
@@ -82,9 +86,23 @@ state，也不能绕过 daemon 的 auth、approval 或 sandbox。
 - Goal event payload 需要独立的隐私扫描和长度约束。
 - 如果产品最终只支持短生命周期单 run，Goal Control 可能暂时没有足够收益。
 
+## 决策门禁
+
+进入 governed run 之前必须满足：
+
+- Goal/Todo/Gate/Evidence/Event schema 有版本号和 contract fixtures；
+- 相同 event ID 的重复写入是 no-op，payload 不同会 fail closed；
+- projection 可从 `goal_events` 完整重建，并包含 checksum/revision；
+- Goal API 不泄露绝对路径、secret、原始 transcript 或完整工具输出；
+- 关闭 Goal Control 不影响无绑定 run、现有 `run_events` 和恢复/retry 行为。
+
+任何一项未满足，都只能提供只读 projection 或显式 interactive run，不能启动
+后台 governed 自动执行。
+
 ## 后续动作
 
-实现前必须先完成 [Spec 34](../specs/34-goal-control-plane-loopx-integration.md)
-中的 Phase 0：contract schema、projection fixture、幂等/冲突测试和隐私陷阱。
-在 Phase 1 的只读 projection 通过验收前，不得把 Goal quota 接入默认 run 创建
-路径，也不得修改现有 `run_events` 合同。
+Phase 0 已按 [Spec 34](../specs/34-goal-control-plane-loopx-integration.md) 完成
+contract schema、projection/reducer、幂等/冲突测试、claim revision 门禁和隐私陷阱。
+在 Phase 1 的 SQLite/只读 projection 通过验收前，不得把 Goal quota 接入默认 run
+创建路径，也不得修改现有 `run_events` 合同。Goal 的配置和操作必须继续通过现有
+Web Settings/onboarding 与受保护 API 完成，不能要求用户手动编辑配置文件。

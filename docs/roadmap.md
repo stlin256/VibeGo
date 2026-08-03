@@ -160,18 +160,15 @@ Console shows bounded `tool.output` cards from the existing SSE stream, with
 safe text rendering and low-resource display limits. Pagination, highlighting,
 search/export, and inline review remain deferred.
 
-Spec 34 is the next design-only milestone: a native Goal Control bounded context
-inspired by LoopX's long-lived-goal protocol semantics without vendoring its
-Python runtime or state files. Phase 0 is contract schemas, privacy traps,
-idempotency/conflict rules, and deterministic projection fixtures; it must not
-change default run admission or the existing `run_events` contract.
+## Spec 34：长期目标控制层与 LoopX 思路整合（Phase 0 已实现）
 
-## Spec 34：长期目标控制层与 LoopX 思路整合（Draft）
-
-Spec 34 records a native TypeScript/SQLite Goal Control bounded context inspired
-by LoopX. It keeps ready4vibe's run execution plane, scheduler, approval, sandbox,
-workspace and SSE contracts authoritative, while adding a separate goal event
-stream for cross-run goals, Todo, project Gates, evidence, handoff and governed
-quota decisions. The first milestone is contract/fixture work and a read-only
-projection; no Python LoopX runtime, CLI, Markdown state or POSIX file lock is
-part of the default backend.
+详见 [Spec 34](specs/34-goal-control-plane-loopx-integration.md) 和
+[ADR 0004](adr/0004-native-goal-control-and-loopx-interop.md)。该方案在
+ready4vibe 内新增原生 TypeScript/SQLite Goal Control bounded context，吸收
+LoopX 的 Goal/Todo/Gate/Evidence/Handoff、事件投影和可解释 `shouldRun` 语义，
+但保留现有 run 执行平面、Scheduler、Approval、Sandbox、Workspace 和 SSE 合约
+为唯一执行事实源。Phase 0 已完成 contracts、纯 reducer、内存 event store、幂等
+claim/revision 和只读 projection 核心；默认后端不引入 Python LoopX runtime、CLI、
+Markdown/JSONL 状态或 POSIX 文件锁。下一步是独立 `goal_events` SQLite 适配器和
+受保护的只读 projection API，仍不接入默认 run admission。Goal 的普通配置和操作
+继续通过 Web Settings/onboarding 完成，不要求手动编辑 `.env`、YAML 或数据库文件。

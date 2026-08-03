@@ -192,3 +192,5 @@ export function assertTransition(from: RunStatus, to: RunStatus): void {
 export function parseRunConfig(input: unknown): RunConfig {
   return RunConfigSchema.parse(input);
 }
+
+export * from './goal.js';

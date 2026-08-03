@@ -128,6 +128,18 @@ importers:
 
   packages/execution: {}
 
+  packages/goal-control:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      uuid:
+        specifier: 11.1.0
+        version: 11.1.0
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+
   packages/model-openai:
     dependencies:
       '@ready4vibe/contracts':

@@ -1,6 +1,6 @@
 # Spec 34：长期目标控制层与 LoopX 思路整合
 
-**状态：Draft（设计方案，尚未实现）**
+**状态：Implemented（Phase 0；SQLite/daemon/Web 接入仍后置）**
 
 **日期：2026-08-03**
 
@@ -30,6 +30,27 @@ Agent，同时不改变现有 AgentLoop、工具、审批、沙箱、SSE 和安�
    governed/heartbeat 路径使用 `should-run`。
 7. 只有独立验证成功后才记录 Goal 完成和 quota spend；模型声称完成不构成
    evidence。
+
+## 整合判定：提取什么、改写什么、暂不嵌入什么
+
+这里的“整合”指吸收可验证的领域语义，不等于把 LoopX 的 Python 包复制到
+daemon。按照对 ready4vibe 后端的侵入程度分三档：
+
+| LoopX 能力/资产 | 处理方式 | ready4vibe 的落点 | 不能带入的部分 |
+| --- | --- | --- | --- |
+| Goal、Todo、Gate、Evidence、Handoff 词汇和状态关系 | 提取并用 TypeScript/Zod 重建 | `packages/contracts` + `GoalControlService` | 不把模型自由文本当作状态写入 |
+| 事件追加、幂等、冲突、replay、projection | 提取纯状态语义，改用 SQLite 事务 | `goal_events` + pure reducer/projection | 不复用 `run_events` 的 run-local 序列 |
+| `should-run`、quota reason code、周期性判断 | 只实现显式、可审计的最小子集 | Goal admission policy | 不复制完整 `quota.py` 或另起 scheduler |
+| session/runtime adapter | 只保留“Goal 选择 run”的接口形状 | daemon application service → `RunManager.start` | 不让 LoopX host bridge 执行工具 |
+| compact status/review packet | 作为未来单向 import/export | `external_projection` adapter | 不与本地 canonical state 双写 |
+| `.loopx/`、Markdown/JSONL 文件状态 | 默认不嵌入 | 可选离线转换器 | 不引入第二个状态源 |
+| CLI、installer、dashboard | 不嵌入 | 复用现有 Web/API | 不在 daemon 内启动第二套 UI/runtime |
+| POSIX `fcntl` 锁、LoopX 调度器和 host runner | 不嵌入 | SQLite `BEGIN IMMEDIATE`、现有 Scheduler/Sandbox | 不绕过 Windows/daemon 的安全边界 |
+
+因此第一阶段“可复用”的核心是协议、状态机和纯函数 reducer；运行时、文件布局、
+进程管理、锁和界面都必须适配 ready4vibe。若未来需要复制 LoopX 源码而不是重写
+语义，必须先核对上游 `LICENSE`、版权声明和 NOTICE，并把许可文件随发行物保留；
+当前方案默认不复制源代码。
 
 ## 背景与问题
 
@@ -123,6 +144,25 @@ apps/web -> daemon Goal API projection
 `packages/agent` 不直接 import `packages/goal-control`，避免执行层反向依赖
 项目控制层，也避免形成新的循环依赖。
 
+### 与当前 monorepo 的映射
+
+Phase 0 已建立 `packages/goal-control` 的纯 TypeScript 核心，但 daemon 组合根尚未
+把它接入默认 run 路径。该包不执行模型、工具、shell、文件系统、Git、MCP 或
+sandbox；仍必须通过下面的 Phase 0/1 门禁后才能成为默认能力。建议保持
+`apps/daemon` 为唯一组合根：
+
+| 计划模块 | 负责内容 | 允许依赖 |
+| --- | --- | --- |
+| `packages/contracts` | Goal/Todo/Gate/Evidence/Event/Decision 的 Zod schema、版本和错误码 | `zod`、基础类型 |
+| `packages/goal-control` | reducer、projection、`shouldRun`、claim/revision 规则 | `contracts`，不依赖 Agent/React |
+| `packages/storage` | `SqliteGoalEventStore` 适配器和事务测试 | `contracts`、Node SQLite |
+| `apps/daemon` | Goal API、RunManager 组合、验证器注入和 SSE 广播 | 上述包、现有 scheduler/auth |
+| `apps/web` | Goal projection 展示和受保护的 Todo/Gate 操作 | API contracts/UI，不访问 SQLite |
+
+实现顺序应先完成 contracts 和纯 reducer fixture，再接 storage，最后才把 governed
+admission 接到 `RunManager`。这样可以在没有 Goal Control 时继续启动和运行现有
+unbound run。
+
 ## 领域模型
 
 ### Goal
@@ -136,10 +176,11 @@ type GoalStatus = 'active' | 'paused' | 'blocked' | 'completed' | 'archived';
 
 interface GoalRecord {
   goalId: string;                 // goal_<uuidv7>
-  title: string;                  // bounded, public-safe
-  objective: string;              // compact objective
+  title: string;                  // bounded, public-safe (<= 200 chars)
+  objective: string;              // compact objective (<= 4 KiB)
   workspaceId?: string;           // optional default boundary
   status: GoalStatus;
+  controlRevision: number;        // optimistic concurrency token
   createdAt: string;
   updatedAt: string;
   schemaVersion: 1;
@@ -170,6 +211,9 @@ interface GoalTodo {
   title: string;
   priority: 0 | 1 | 2 | 3 | 4;
   claimedBy?: string;
+  claimTokenHash?: string;         // raw claim token is never persisted
+  claimedAt?: string;
+  claimExpiresAt?: string;
   boundAgentId?: string;
   requiredCapabilities?: string[];
   requiredWriteScopes?: string[];
@@ -183,6 +227,25 @@ interface GoalTodo {
 第一阶段使用显式字段，不复制 LoopX 中依赖自然语言正则推断任务类别的复杂
 规则。模型输出不能自动改变 `taskClass` 或授予 capability；这些字段必须由
 应用服务或受保护的用户写操作设置。
+
+Todo claim 使用乐观并发而不是进程内布尔锁：
+
+```ts
+interface TodoClaimRequest {
+  goalId: string;
+  todoId: string;
+  expectedRevision: number;
+  claimant: string;
+  requestId: string;
+  leaseMs: number;
+}
+```
+
+服务端在同一事务内检查 `expectedRevision`、当前状态和未过期 claim，然后追加
+`todo.claimed` 并递增 `controlRevision`，同时生成只在本地使用的不可预测
+`claimToken`；事件和 projection 只保存其 `claimTokenHash`。重复请求用 `requestId` 幂等；不同请求或陈旧 revision 返回冲突而
+不是抢占已有 claim。这样即使 daemon 未来出现多个 heartbeat 或多个 Agent，也不
+会把文件锁语义误带入应用层。
 
 ### 项目级 Gate 与工具 Approval
 
@@ -243,8 +306,10 @@ interface GoalEvent<TPayload = Record<string, unknown>> {
   eventType:
     | 'goal.created'
     | 'goal.updated'
+    | 'goal.completed'
     | 'todo.added'
     | 'todo.claimed'
+    | 'todo.claim_released'
     | 'todo.updated'
     | 'todo.blocked'
     | 'todo.deferred'
@@ -254,6 +319,7 @@ interface GoalEvent<TPayload = Record<string, unknown>> {
     | 'run.recorded'
     | 'evidence.attached'
     | 'handoff.created'
+    | 'writeback.failed'
     | 'quota.spent'
     | 'projection.refreshed';
   recordedAt: string;
@@ -265,6 +331,8 @@ interface GoalEvent<TPayload = Record<string, unknown>> {
     gateId?: string;
     evidenceId?: string;
     runId?: string;
+    bindingId?: string;
+    turnKey?: string;
     parentEventId?: string;
   };
   payload: TPayload;
@@ -279,6 +347,8 @@ interface GoalEvent<TPayload = Record<string, unknown>> {
 - 事件只能追加，不能修改或删除历史事件。
 - `refs` 只能指向紧凑 ID；不得把原始日志、凭据、路径或完整工具输出放入
   `payload`。
+- claim 必须带不可预测的本地 `claimToken`、事件中的 `claimTokenHash` 和过期时间；
+  只有持有 token 且 revision 未过期的写回才可以完成 Todo，不能凭 `todoId` 强行完成。
 - projection 必须带有 `lastEventId`、`lastAppendSequence`、
   `sourceEventCount` 和 `sourceChecksum`。
 - 非法 privacy、未知 event type、超长文本和 secret-shaped 字段必须 fail closed。
@@ -340,6 +410,10 @@ interface GoalEventStore {
 单个追加和 batch 追加都必须在 `BEGIN IMMEDIATE` 事务中完成。Goal event 的
 序列不能复用 run event 的 `seq`，因为一个 goal 会关联多个 run。
 
+追加算法固定为：开始事务 → 按 `eventId` 查找已有事件 → 已存在时比较
+`fingerprint` 并返回 no-op 或 conflict → 计算该 goal 的下一个序列 → 插入并提交。
+事件 ID 冲突不能通过覆盖旧 payload 解决；事务失败时不得向 SSE 广播半批事件。
+
 projection 第一阶段可按需从事件重放；当 goal 数量或首屏延迟证明需要时，再增加
 `goal_projections` 缓存表。缓存永远是派生数据，不能成为新的写入入口。
 
@@ -351,6 +425,7 @@ projection 第一阶段可按需从事件重放；当 goal 数量或首屏延迟
 
 ```ts
 interface GoalRunBinding {
+  bindingId: string;
   goalId: string;
   todoId?: string;
   agentId?: string;
@@ -378,6 +453,60 @@ interface GoalRunBinding {
 11. 验证失败或恢复状态：写 blocker/recovery evidence，不 spend delivery quota
 ```
 
+```mermaid
+sequenceDiagram
+  participant H as Heartbeat/用户
+  participant G as GoalControlService
+  participant R as RunManager
+  participant S as Scheduler
+  participant A as AgentLoop
+  participant V as Validator
+  H->>G: shouldRun(goalId, capabilities, revision)
+  G-->>H: GoalRunDecision
+  H->>G: claim(todoId, requestId, revision)
+  G->>R: start(config, GoalRunBinding)
+  R->>S: acquire(runId, resources, workspace)
+  S-->>R: lease 或 queued
+  R->>A: execute normal run
+  A-->>R: run_events terminal
+  R->>V: validate(snapshot, bounded artifacts)
+  V-->>G: verified outcome / blocker
+  G->>G: append goal_events + rebuild projection
+```
+
+验证器是应用层注入的独立 port，不是模型自报结果，也不是 Goal Control 自己执行
+工具：
+
+```ts
+interface GoalRunValidator {
+  validate(input: {
+    goalId: string;
+    binding: GoalRunBinding;
+    runId: string;
+    snapshot: Readonly<Record<string, unknown>>;
+  }): Promise<{
+    status: 'validated' | 'blocked' | 'stale';
+    summary: string;
+    refs: { eventIds?: string[]; artifactIds?: string[] };
+  }>;
+}
+```
+
+验证器只能消费受限的 run snapshot、测试结果、diff/artifact 引用和 hash；若需要
+执行测试或读取文件，应通过现有 Tool/Sandbox/Approval/Scheduler 端口，并把结果
+先写回 `run_events`，不能在 Goal Control 内偷偷创建进程。
+
+上述流程中 `run_events` 和 `goal_events` 的提交顺序不能互相伪装：
+
+1. `RunManager` 先按现有合约创建并执行 run，`run_events` 是执行事实源；
+2. 验证器只读取 run snapshot、受限 diff/test/artifact 摘要，生成 compact outcome；
+3. `GoalControlService` 以 `bindingId + controlRevision + turnKey` 做条件写回；
+4. Goal 写回失败时保留已完成的 run，追加 `writeback.failed`，由幂等重试修复，
+   不能重新执行旧工具调用。
+
+可视化时应明确显示“run 已完成但 Goal 写回待修复”，不能把两条事件流合并成一个
+看似原子但实际不可回滚的状态。
+
 ### Interactive run
 
 用户明确点击“开始 run”属于显式操作，不应被 quota 静默吞掉。它仍必须通过
@@ -393,6 +522,29 @@ ready4vibe 现有 `needs-recovery` 语义继续有效：
 - 不自动完成 Todo，不自动 spend quota；
 - 用户确认 retry 后创建新的 run，并通过 `refs.runId` 关联旧 run；
 - 旧 run 的不确定工具调用不能被当作已验证 evidence。
+
+### 状态不变量与失败矩阵
+
+以下不变量由 reducer 和应用服务共同保证，不能只依赖 Web UI：
+
+- `goal.completed` 只能由显式验证写回产生；仍有 blocking Gate、未完成的
+  required Todo 或未解决的 `writeback.failed` 时不得完成 Goal。
+- `Todo.status=done` 必须引用至少一个 `validated` Evidence；`observed` 或模型摘要
+  只能让 Todo 保持 open/blocked。
+- 一个 Todo 同时最多只有一个有效 claim；过期 claim 必须先追加
+  `todo.claim_released`，旧 token 不能被重用。
+- Gate 的 resolve 必须匹配当前 `controlRevision`；陈旧客户端只能得到冲突，
+  不能覆盖新决定。
+- projection 可以删除并重建；`goal_events` 一旦提交不可原地修改。
+
+| 场景 | `run_events` | `goal_events` | 是否消耗 delivery quota | 后续动作 |
+| --- | --- | --- | --- | --- |
+| Goal admission 被 Gate 阻塞 | 无新 run | 可记录 decision/状态刷新 | 否 | 等待用户 resolve |
+| admission eligible，Scheduler 无容量 | run 进入 queued | 记录 `run.recorded` 前不写完成 | 否/按产品策略只记 attempt | 等待 Scheduler，不当作 Goal blocker |
+| run 成功，验证成功 | terminal completed | `run.recorded` + evidence + todo update | 是，幂等 | 继续下一个 Todo |
+| run 成功，验证失败 | terminal completed | blocker evidence，必要时 `writeback.failed` | 否 | 人工修复或新 run |
+| daemon 重启中断 | `needs-recovery` | recovery evidence | 否 | 用户确认 retry，创建新 binding |
+| Goal 写回冲突 | terminal completed | `writeback.failed` | 否，直到修复 | 重读 projection 后幂等重试写回 |
 
 ## Quota 与 Scheduler 协作
 
@@ -412,6 +564,34 @@ ready4vibe 现有 `needs-recovery` 语义继续有效：
 
 顺序必须是：Goal admission -> Run creation -> Scheduler resource admission。
 Goal quota 不得绕过 scheduler；scheduler 也不能把项目 Gate 当成资源问题。
+
+`shouldRun` 的最小返回契约如下，供内部服务和未来 API 共用：
+
+```ts
+type GoalRunDecisionReason =
+  | 'todo-ready'
+  | 'no-open-todo'
+  | 'blocked-by-gate'
+  | 'blocked-by-health'
+  | 'paused-by-user'
+  | 'throttled-by-quota'
+  | 'stale-control-revision';
+
+interface GoalRunDecision {
+  schemaVersion: 'ready4vibe_goal_should_run_v0';
+  decision: 'eligible' | 'waiting' | 'blocked' | 'paused' | 'throttled';
+  reason: GoalRunDecisionReason;
+  goalId: string;
+  controlRevision: number;
+  selectedTodoId?: string;
+  nextCheckAt?: string;
+  turnKey?: string;
+}
+```
+
+`eligible` 只表示可以尝试创建 run，不表示已经取得模型、工具或 workspace 资源；
+资源不足仍由现有 Scheduler 返回 queued/throttled 结果。`stale-control-revision`
+必须 fail closed，并要求重新读取 projection 后再 claim。
 
 ### 最小状态集合
 
@@ -465,6 +645,24 @@ Goal API 不返回：workspace 绝对路径、原始 transcript、凭据、完�
 ready4vibe Web 仍是主要前台。LoopX 风格的 projection 是 Web 的输入，不是第二
 个 dashboard source of truth。
 
+### 配置引导与设置界面门禁
+
+Goal Control 的接入不能把用户推回手动编辑配置文件。Web 首屏沿用现有
+Settings/onboarding 入口，并按向导顺序解释：
+
+1. pairing、连接方式和 TLS/证书状态；
+2. workspace 选择或添加（只显示安全 label/id，不显示 daemon 绝对路径）；
+3. 模型 provider/model 设置（API key 只写入 daemon 的安全 secret adapter，写入后
+   不回显、不进浏览器存储）；
+4. task trust、sandbox、approval、网络和并发/资源限制；
+5. Goal/Todo/Gate 的显式确认和下一步摘要。
+
+普通用户不得需要编辑 `.env`、YAML、JSON、PEM 或 SQLite 文件才能完成配置。UI
+可以提供安全的 reset、probe、certificate guidance 和明确的 confirm/cancel 操作，
+但这些便利入口不能削弱 pairing、TLS、审批、沙箱、workspace 或 Goal revision
+门禁。Goal API 仍只接受经过 schema 校验的非 secret 字段；路径、token、环境变量
+和完整输出不从表单进入 Goal event。
+
 ## 隐私与安全边界
 
 - Goal event payload 只允许 compact text、稳定 ID、状态、hash、数量和引用。
@@ -478,12 +676,20 @@ ready4vibe Web 仍是主要前台。LoopX 风格的 projection 是 Web 的输入
 
 ## 实现阶段
 
-### Phase 0：合同和 fixture
+### Phase 0：合同和 fixture（已完成）
 
-- 在 `packages/contracts` 定义 Goal/Todo/Gate/Evidence/GoalEvent Zod schema。
-- 定义 `goal_control_projection_v0` 和 `goal_should_run_v0` JSON fixture。
-- 添加隐私陷阱、重复 event、冲突 event 和 deterministic projection 测试。
-- 不改变 daemon 行为。
+- 在 `packages/contracts` 定义 Goal/Todo/Gate/Evidence/Handoff/GoalEvent/
+  GoalProjection/GoalShouldRunDecision/GoalRunBinding Zod schema，包含
+  `schemaVersion`、`controlRevision`、`appendSequence`、privacy 和隐私扫描。
+- `packages/goal-control` 提供内存 event store、canonical JSON、deterministic
+  fingerprint、projection replay、最小 `shouldRun`、并发 claim 和 stale revision
+  fail-closed。
+- contract/reducer tests 覆盖 secret、token、环境变量、绝对路径、未知 event type、
+  重复/冲突 event、稳定 checksum、Gate/quota/admission 和未验证写回。
+- Todo claim event 只保存不可逆 hash；原始 claim token 不进入事件、projection、日志
+  或浏览器存储。
+- 不改变 daemon 默认 run admission、`run_events`、AgentLoop、Scheduler、Approval、
+  Sandbox 或 Workspace 行为。
 
 ### Phase 1：SQLite event store 与 read-only projection
 

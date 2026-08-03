@@ -47,7 +47,8 @@ The core loop is deliberately small:
 | Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
-| Web | React 19 + TypeScript + Vite responsive console with pairing, guided run settings, model onboarding, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
+| Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
+| Goals | Phase 0 native TypeScript Goal Control contracts, deterministic projection, `shouldRun`, and optimistic Todo claim/revision guards; not connected to default run admission yet |
 
 ## Quick start
 
@@ -152,12 +153,13 @@ packages/
   auth/         pairing, token, Origin/CSRF, and transport gate
   certificates/ PEM pair resolution and TLS validation
   skill-mcp/    strict Skill/MCP manifests and default-deny tool projection
+  goal-control/ native Goal/Todo/Gate/Evidence control plane (Phase 0)
   testkit/      fake providers, clocks, and event assertions
 ```
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **19 workspace packages and 187 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 201 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 
@@ -174,7 +176,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - Git write/patch operations and a dedicated paginated diff/log explorer;
 - Skill/MCP manifest and transport adapters with secret-safe tool allowlists;
 - paginated/highlighted diff/log/approval views and Playwright desktop/tablet/mobile flows;
-- native Goal Control for cross-run goals, Todo/Gate/evidence projections, and optional governed preflight;
+- SQLite/daemon/Web Goal Control phases for cross-run goals, Todo/Gate/evidence projections, and optional governed preflight (the native TypeScript Phase 0 core is already present);
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 

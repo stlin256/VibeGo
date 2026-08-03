@@ -8,6 +8,8 @@
 flowchart LR
   U[桌面/平板/手机浏览器] -->|HTTPS 或受保护 HTTP| T[Transport API + SSE]
   T --> A[Application Service]
+  A --> G[Goal Control（可选 governed）]
+  G --> GE[独立 goal_events / projection]
   A --> Q[Scheduler + Workspace Leases]
   Q --> H[Harness Orchestrator]
   H --> M[Model Port]
@@ -26,6 +28,8 @@ flowchart LR
 
 - `apps/daemon`：Node.js 单进程；负责 API、任务调度、harness、存储、workspace registry 和显式启用的工具 runtime。
 - `apps/web`：React/Vite 静态构建；开发时独立运行，生产时由 daemon 静态托管或由反代托管。
+- `packages/goal-control`：原生 TypeScript Goal/Todo/Gate/Evidence 控制平面；Phase 0
+  只提供纯 reducer、projection、claim/revision 和 `shouldRun`，不启动第二个进程。
 - 可选 `sandbox-worker`：仅在启用 Docker/VM/平台隔离时出现；MVP 不强制常驻。
 - 模型服务、MCP server、Docker/VM 均是外部进程，不进入 daemon 的核心内存模型。
 - Scheduler 默认允许 2 个 active run；provider、tool、sandbox 和 workspace write lease 共同决定实际并发。
@@ -50,6 +54,7 @@ packages/
   workspaces/             # 安全 workspace id → daemon-machine root registry
   ui/                     # 可复用 React 组件、设计 token
   testkit/                # fake model、fake tools、event assertions
+  goal-control/           # Goal/Todo/Gate/Evidence contracts、projection、admission policy
 docs/
 ```
 
@@ -64,6 +69,9 @@ docs/
 5. Context Manager 只追加新事件；超过预算时创建压缩摘要并保留原始事件引用。
 6. 每个事件带单调 `seq`，持久化后再通过 SSE 广播；客户端用 `after` 续传。
 7. 运行结束写入 `completed/failed/cancelled`，保留最终摘要、diff 和统计。
+8. 绑定 Goal 的 governed/heartbeat 路径先读取 `goal_events` projection 并执行
+   `shouldRun`/Todo claim，再创建普通 run；显式 interactive run 不被 Goal quota
+   静默拦截。Goal 写回只记录 compact evidence/reference，不复制 transcript 或工具输出。
 
 ## 低资源约束
 
@@ -72,6 +80,8 @@ docs/
 - SSE 优先于全双工 WebSocket；只有需要终端交互时才升级到 WebSocket。
 - 编辑器、图表、语法高亮等前端重组件全部懒加载。
 - 事件日志采用大小/时间保留策略；输出有字节上限，避免内存无限增长。
+- Goal projection 可从独立 `goal_events` replay；它是派生数据，不替代 `run_events`，
+  也不要求常驻队列或第二套 scheduler。
 
 ## 可扩展点
 
@@ -82,5 +92,7 @@ docs/
 - `ApprovalPolicy`：默认策略、项目规则、一次性临时授权；
 - `Transport`：本地 HTTP、反向代理、未来 ACP/CLI 适配。
 - `WorkspaceRegistry`：单用户 id/label 到 daemon-machine root 的安全映射；未来可替换为持久化或 SSH/Tailscale 远端 adapter。
+- `GoalControl`：跨 run 的目标状态、Gate、Evidence、handoff 和 governed admission；
+  只能在 daemon application service 层与 `RunManager` 协作，不能被 AgentLoop 直接依赖。
 
 扩展点必须通过版本化接口和 contract tests；不能通过 import 应用内部实现来“顺手接入”。

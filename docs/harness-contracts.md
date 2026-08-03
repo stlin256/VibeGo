@@ -166,6 +166,32 @@ interface EventStore {
 
 事件 payload 需通过 `contracts` schema 验证；事务顺序是“写事件/快照 → 提交 → 广播”。事件保留和敏感字段脱敏策略见安全 ADR。
 
+## Goal Control（Phase 0）
+
+Goal Control 是 daemon application service 层的可选控制平面，不是第二个
+AgentLoop、Scheduler 或执行器。它必须满足以下边界：
+
+- Goal/Todo/Gate/Evidence/Handoff 使用独立版本化 schema；Goal 事件进入独立的
+  `goal_events` 流，不能伪装成或污染 run-local `run_events`；
+- `GoalProjection` 可从事件重放并带 `lastEventId`、goal-local `appendSequence`、
+  `sourceChecksum` 和 `controlRevision`；相同 `eventId` + 相同内容是 no-op，内容
+  不同必须冲突；
+- governed/heartbeat 路径的顺序是 Goal `shouldRun` → Todo claim/revision →
+  `RunManager` → Scheduler/Approval/Sandbox/Workspace。Goal quota 不能绕过任何
+  执行安全门禁；明确的 interactive run 不得被 quota 静默拦截；
+- claim 使用乐观 `controlRevision` 和一次性 token。事件只保存 token hash，陈旧
+  revision、重复 claim 或未知 Todo 必须 fail closed；
+- 只有独立验证成功的 compact evidence 才能允许 Todo completion/quota spend。
+  模型自报完成、失败验证、recovery 和 retry 不能自动完成旧 Todo 或重放旧工具；
+- Goal payload 只允许 bounded text、稳定 ID、状态、hash、数量和引用；不得包含
+  transcript、tool output、workspace 绝对路径、API key、token、环境变量或私钥；
+- Phase 0/1 未验收前，Goal Control 不进入默认 run admission；普通配置和操作由
+  React Web Settings/onboarding 与受保护 API 提供，不要求用户编辑 `.env`、YAML、
+  JSON、PEM 或 SQLite 文件。
+
+Goal Control 不执行模型、工具、shell、文件系统、Git、MCP 或 sandbox；这些事实
+仍归现有执行平面所有。
+
 ## 错误模型
 
 跨包错误至少包含：`code`、`message`（用户可读）、`retryable`、`safeDetails`、`correlationId`。原始 provider 响应、命令行 secret、环境变量值不得进入 `safeDetails`。

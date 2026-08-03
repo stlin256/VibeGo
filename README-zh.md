@@ -1,24 +1,5 @@
 # VibeGo / ready4vibe 中文说明
 
-## 模型配置向导
-
-Web 控制台的 Settings 面板现在包含 Model Access 向导：输入 OpenAI-compatible
-服务地址、模型名和 API key 即可完成配置，不需要编辑 `.env` 或 YAML。API key
-只通过已认证连接发送到 daemon，成功后会清空浏览器输入框，仅保留在 daemon
-进程内存中；它不会写入 localStorage、事件、日志或 URL。daemon 重启后会再次
-提示配置，后续再接入 Windows Credential Manager 等系统密钥存储。
-
-Settings 还提供显式的“Filesystem tools”开关。开启后仅注册受路径守卫、
-审批和输出上限约束的文件读写工具；shell、MCP、网络和外部 sandbox
-不会被隐式启用。另有独立的“Git read-only tools”开关，仅注册有界的
-`git.status`、`git.diff`、`git.log` 读取；提交、checkout、reset、patch/apply、
-remote 和任意 Git 参数均不会注册。设置界面现在也会引导 Docker/Podman 探测和固定 digest
-的外部 shell 配置，不要求手动编辑配置文件；shell 没有主机回退路径。
-
-Workspace 设置已经改为下拉选择和明确的添加/删除向导。添加路径指 daemon
-所在机器上的目录，必须由用户确认；路径只保留在 daemon 进程内，不会回显到
-状态、事件、日志或浏览器存储，未知 workspace 也不会静默回退到 `default`。
-
 <p align="center">
   <img src="docs/assets/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
 </p>
@@ -66,7 +47,8 @@ flowchart LR
 | Workspace | 单用户 workspace registry、下拉选择、明确添加/删除确认和 per-run 根目录快照 |
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
-| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式非 secret 运行设置、审批卡片、恢复重试、取消、指标和 SSE |
+| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式设置、模型配置、审批卡片、恢复重试、取消、指标、tool-output inspector 和 SSE |
+| Goal Control | Phase 0 原生 TypeScript contracts、确定性 projection、`shouldRun` 和 Todo 乐观 claim/revision 守卫；尚未接入默认 run admission |
 
 ## 快速开始
 
@@ -89,6 +71,25 @@ pnpm --filter @ready4vibe/daemon start
 
 控制台内置 Settings 面板，可配置 workspace、模型、任务信任级别、sandbox、审批、网络和运行限制；常规使用不需要手动编辑 `.env` 或 YAML。API key、私钥等 secret 不会进入这个面板，后续由 daemon 侧安全 secret provider 负责。
 当传输要求 TLS 时，同一面板还会展示证书有效期和安全的下一步提示，不会要求用户粘贴或上传私钥。
+
+## 模型配置与设置向导
+
+Web 控制台的 Settings 面板包含 Model Access 向导：输入 OpenAI-compatible
+服务地址、模型名和 API key 即可完成配置，不需要编辑 `.env` 或 YAML。API key
+只通过已认证连接发送到 daemon，成功后会清空浏览器输入框，仅保留在 daemon
+进程内存中；它不会写入 localStorage、事件、日志或 URL。daemon 重启后会再次
+提示配置，后续再接入 Windows Credential Manager 等系统密钥存储。
+
+Settings 还提供显式的 Filesystem tools 开关。开启后仅注册受路径守卫、审批和
+输出上限约束的文件读写工具；shell、MCP、网络和外部 sandbox 不会被隐式启用。
+另有独立的 Git read-only tools 开关，仅注册有界的 `git.status`、`git.diff`、
+`git.log` 读取；提交、checkout、reset、patch/apply、remote 和任意 Git 参数均
+不会注册。设置界面也会引导 Docker/Podman 探测和固定 digest 的外部 shell 配置，
+不要求手动编辑配置文件，且 shell 没有主机回退路径。
+
+Workspace 设置使用下拉选择和明确的添加/删除向导。添加路径指 daemon 所在机器
+上的目录，必须由用户确认；路径只保留在 daemon 进程内，不会回显到状态、事件、
+日志或浏览器存储，未知 workspace 也不会静默回退到 `default`。
 
 ## LAN 与公网访问边界
 
@@ -125,11 +126,12 @@ packages/sandbox-runtime  Docker/Podman 命令计划与 fail-closed CLI runner �
 packages/workspaces      单用户 workspace id 到 daemon 根目录的安全 registry
 packages/auth / certificates / testkit
 packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
+packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 ```
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **19 个 workspace package、187 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、201 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 
@@ -145,7 +147,7 @@ packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 - 更完整的 external sandbox/VM adapter、资源限制与持久化；
 - Skill/MCP manifest 和 secret-safe 工具 allowlist；
 - 分页/高亮 diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
-- 原生 Goal Control：跨 run 的目标、Todo/Gate/evidence 投影与可选 governed preflight；
+- SQLite/daemon/Web Goal Control 后续阶段：跨 run 的目标、Todo/Gate/evidence 投影与可选 governed preflight（原生 TypeScript Phase 0 核心已存在）；
 - ACME/certificate manager、Tailscale/SSH transport adapter；
 - 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
 

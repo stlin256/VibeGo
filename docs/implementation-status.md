@@ -36,12 +36,13 @@
 28. `packages/workspaces` 与 `apps/daemon` 已按 `docs/specs/31-workspace-registry.md` 实现单用户、进程内 workspace 映射；Web 设置提供安全列表、添加和删除向导；运行时不回退到 default，filesystem/shell 均按 run 捕获 workspace root；
 29. `packages/tool-adapters` 与 `apps/daemon` 已按 `docs/specs/32-guided-git-readonly-tools.md` 实现独立 Git 只读开关：仅注册 status/diff/log，固定 argv、最小环境、超时/输出上限、取消与路径脱敏均受测试覆盖；不可信或 external-sandbox run 不获得主机 Git runtime；
 30. `apps/web` 已按 `docs/specs/33-guided-tool-output-inspector.md` 实现受限 tool-output inspector：仅消费现有 SSE tool.output 事件，最多显示 24 个卡片、每卡片最多 128 KiB，安全渲染 Git 文本，不新增执行权限或持久化；
-31. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+31. `packages/contracts` 与 `packages/goal-control` 已按 `docs/specs/34-goal-control-plane-loopx-integration.md` 实现 Phase 0：版本化 Goal/Todo/Gate/Evidence/Handoff/Event/Projection/Decision/Binding schema、privacy scan、内存 goal event store、canonical fingerprint、projection replay、最小 `shouldRun`、并发 claim/stale revision 门禁和 validated-writeback guard；不接入 daemon 默认 run admission，也不执行模型/工具/shell/filesystem/Git/MCP/sandbox；
+32. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
-- `pnpm typecheck`：通过（19 个 workspace package）；
-- `pnpm test`：通过，187 个测试全部通过（contracts 3、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 40、web 28；Vitest 按 package 输出）；
+- `pnpm typecheck`：通过（20 个 workspace package）；
+- `pnpm test`：通过，201 个测试全部通过（contracts 8、goal-control 11、storage 7、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 4、auth 5、certificates 5、skill-mcp 10、daemon 40、web 28；Vitest 按 package 输出）；
 - Spec 31 增加 workspace registry 4 项、daemon 3 项、Web 2 项测试；Spec 32 再增加 tool-adapters 2 项、daemon 4 项、Web 2 项；Spec 33 增加 Web 2 项；当前 Web 共 28 项；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
@@ -139,11 +140,26 @@ available to untrusted or external-sandbox runs, and no commit, patch, remote,
 checkout, reset, or arbitrary Git command is registered. API, runtime, adapter,
 and Web tests cover the gate and fail-closed behavior.
 
-The current verification baseline is 19 workspace packages and 185 passing
-tests (including 15 tool-adapter, 40 daemon, and 26 Web tests).
+The pre-Goal-Control verification baseline was 19 workspace packages and 185
+passing tests (including 15 tool-adapter, 40 daemon, and 26 Web tests).
 
 Spec 33 adds a presentation-only Web tool-output inspector. It consumes the
 existing SSE `tool.output` events, safely renders Git status/diff/log text, and
 caps the browser projection at 24 cards and 128 KiB per card without changing
-daemon capabilities or browser persistence. The verification baseline is now
-187 passing tests, including 28 Web tests.
+daemon capabilities or browser persistence. The verification baseline before
+Spec 34 was 187 passing tests, including 28 Web tests.
+
+## Spec 34 Phase 0 implementation note (2026-08-03)
+
+The native TypeScript Goal Control core now provides versioned contracts,
+privacy-safe goal events, deterministic in-memory replay, `shouldRun`, and
+optimistic Todo claim/release helpers. Concurrent claimants cannot silently
+overwrite one another: the second caller receives a stale-revision or active-
+claim conflict. Claim tokens are returned only to the caller and persisted as
+hashes. A failed or non-validated outcome cannot pass the pure completion guard,
+so it cannot create a Todo completion or quota-spend event.
+
+The verification baseline is now 20 workspace packages and 201 passing tests.
+SQLite `goal_events`, daemon application-service wiring, Goal API/Web projection,
+LoopX import/export, and governed admission remain later phases. Existing
+unbound interactive runs and the `run_events` contract are unchanged.
