@@ -21,7 +21,7 @@
 
 `contracts → fake-model loop → event storage → API/SSE → web read-only view → policy/approval → real tools → sandbox → MCP/Skills`。
 
-当前已完成 `contracts → testkit → in-memory event storage → scheduler → SQLite EventStore → daemon /health → fake-model loop`；下一步接 run API/SSE 与上下文管理。
+当前已完成 `contracts → testkit → in-memory event storage → scheduler → SQLite EventStore → daemon /health → fake-model loop → run API/SSE`；下一步接上下文管理。
 
 这样早期就能证明“远程观察和可恢复”主路径，同时把危险工具放在经过测试的边界之后。
 

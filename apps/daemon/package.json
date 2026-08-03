@@ -16,6 +16,13 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@ready4vibe/storage": "workspace:*"
+    "@ready4vibe/agent": "workspace:*",
+    "@ready4vibe/contracts": "workspace:*",
+    "@ready4vibe/scheduler": "workspace:*",
+    "@ready4vibe/storage": "workspace:*",
+    "uuid": "11.1.0"
+  },
+  "devDependencies": {
+    "@ready4vibe/testkit": "workspace:*"
   }
 }

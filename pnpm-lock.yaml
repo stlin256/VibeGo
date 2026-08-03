@@ -20,9 +20,25 @@ importers:
 
   apps/daemon:
     dependencies:
+      '@ready4vibe/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@ready4vibe/scheduler':
+        specifier: workspace:*
+        version: link:../../packages/scheduler
       '@ready4vibe/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      uuid:
+        specifier: 11.1.0
+        version: 11.1.0
+    devDependencies:
+      '@ready4vibe/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
 
   packages/agent:
     dependencies:

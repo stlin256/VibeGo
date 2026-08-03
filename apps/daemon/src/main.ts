@@ -1,5 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider } from '@ready4vibe/contracts';
+import { RunManager } from './run-manager.js';
+import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore } from '@ready4vibe/storage';
 import { createDaemonServer, isLoopbackHost, type LoopbackHost } from './server.js';
 
@@ -12,7 +15,24 @@ const port = parsePort(process.env.READY4VIBE_PORT ?? '8787');
 const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
-const server = createDaemonServer({ host, storageKind: 'sqlite' });
+const modelProvider: ModelProvider = {
+  id: 'unconfigured',
+  capabilities: { streaming: true, toolCalls: false, structuredOutput: false },
+  async *stream(_request, _signal): AsyncIterable<ModelEvent> {
+    yield {
+      type: 'error',
+      code: 'MODEL_PROVIDER_NOT_CONFIGURED',
+      retryable: false,
+      safeMessage: 'No model provider is configured for this daemon.',
+    };
+  },
+};
+const runManager = new RunManager({
+  eventStore,
+  modelProvider,
+  scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+});
+const server = createDaemonServer({ host, storageKind: 'sqlite', runManager });
 
 server.listen(port, host, () => {
   const displayHost = host === '::1' ? `[${host}]` : host;

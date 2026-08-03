@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { StoredEvent } from '@ready4vibe/contracts';
+import { RunManager } from './run-manager.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type StorageKind = 'sqlite' | 'memory';
@@ -8,6 +10,17 @@ export interface DaemonServerOptions {
   version?: string;
   storageKind?: StorageKind;
   storageStatus?: 'ready' | 'degraded';
+  runManager?: RunManager;
+  bodyLimitBytes?: number;
+}
+
+interface ResolvedDaemonServerOptions {
+  host: LoopbackHost;
+  version: string;
+  storageKind: StorageKind;
+  storageStatus: 'ready' | 'degraded';
+  bodyLimitBytes: number;
+  runManager?: RunManager;
 }
 
 export interface HealthResponse {
@@ -36,55 +49,242 @@ export interface HealthResponse {
 }
 
 const HEALTH_PATHS = new Set(['/health', '/api/v1/health']);
+const TERMINAL_EVENT_TYPES = new Set(['run.completed', 'run.failed', 'run.cancelled', 'run.needs_recovery']);
 
 export function createDaemonServer(options: DaemonServerOptions = {}): Server {
-  const resolved = {
+  const resolved: ResolvedDaemonServerOptions = {
     host: options.host ?? '127.0.0.1',
     version: options.version ?? '0.1.0',
     storageKind: options.storageKind ?? 'memory',
     storageStatus: options.storageStatus ?? 'ready',
-  } satisfies Required<DaemonServerOptions>;
+    bodyLimitBytes: options.bodyLimitBytes ?? 1024 * 1024,
+    ...(options.runManager ? { runManager: options.runManager } : {}),
+  };
 
-  return createServer((request, response) => handleRequest(request, response, resolved));
+  return createServer((request, response) => {
+    void handleRequest(request, response, resolved).catch((error: unknown) => {
+      if (response.headersSent || response.writableEnded) return;
+      if (error instanceof RequestError) {
+        writeJson(response, error.statusCode, { error: { code: error.code, message: error.safeMessage } });
+        return;
+      }
+      writeJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } });
+    });
+  });
 }
 
 export function isLoopbackHost(value: string): value is LoopbackHost {
   return value === '127.0.0.1' || value === '::1';
 }
 
-function handleRequest(
+async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
-  options: Required<DaemonServerOptions>,
-): void {
+  options: ResolvedDaemonServerOptions,
+): Promise<void> {
   const pathname = new URL(request.url ?? '/', 'http://loopback.invalid').pathname;
   if (HEALTH_PATHS.has(pathname)) {
     if (request.method !== 'GET') {
       writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
       return;
     }
-    const health: HealthResponse = {
-      status: options.storageStatus === 'ready' ? 'ok' : 'degraded',
-      service: 'ready4vibe-daemon',
-      version: options.version,
-      transport: {
-        kind: 'http-loopback',
-        tlsRequired: false,
-        boundAddresses: [options.host],
-      },
-      auth: { pairingRequired: false },
-      storage: { kind: options.storageKind, status: options.storageStatus },
-      sandbox: {
-        availableModes: ['read-only', 'workspace-write', 'external-sandbox'],
-        externalRequiredForUntrusted: true,
-      },
-      approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] },
-    };
-    writeJson(response, 200, health);
+    writeJson(response, 200, createHealthResponse(options));
     return;
   }
 
-  writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+  if (pathname === '/api/v1/runs') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.runManager) {
+      writeJson(response, 503, { error: { code: 'RUNS_UNAVAILABLE', message: 'Run manager is not configured.' } });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    try {
+      const started = await options.runManager.start(input);
+      writeJson(response, 202, started);
+    } catch (error) {
+      if (isValidationError(error)) {
+        writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'RunConfig validation failed.' } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|cancel))?$/.exec(pathname);
+  if (!runMatch) {
+    writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+    return;
+  }
+  if (!options.runManager) {
+    writeJson(response, 503, { error: { code: 'RUNS_UNAVAILABLE', message: 'Run manager is not configured.' } });
+    return;
+  }
+  const runId = decodeRunId(runMatch[1]);
+  const subresource = runMatch[2];
+  if (subresource === 'events') {
+    await handleSse(request, response, options.runManager, runId);
+    return;
+  }
+  if (subresource === 'cancel') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const outcome = await options.runManager.cancel(runId);
+    if (outcome === 'not-found') {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
+      return;
+    }
+    writeJson(response, 202, { runId, status: outcome === 'accepted' ? 'cancelling' : 'terminal' });
+    return;
+  }
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+    return;
+  }
+  const snapshot = await options.runManager.snapshot(runId);
+  if (!snapshot) {
+    writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
+    return;
+  }
+  writeJson(response, 200, snapshot);
+}
+
+function createHealthResponse(options: ResolvedDaemonServerOptions): HealthResponse {
+  return {
+    status: options.storageStatus === 'ready' ? 'ok' : 'degraded',
+    service: 'ready4vibe-daemon',
+    version: options.version,
+    transport: {
+      kind: 'http-loopback',
+      tlsRequired: false,
+      boundAddresses: [options.host],
+    },
+    auth: { pairingRequired: false },
+    storage: { kind: options.storageKind, status: options.storageStatus },
+    sandbox: {
+      availableModes: ['read-only', 'workspace-write', 'external-sandbox'],
+      externalRequiredForUntrusted: true,
+    },
+    approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] },
+  };
+}
+
+async function handleSse(request: IncomingMessage, response: ServerResponse, manager: RunManager, runId: string): Promise<void> {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+    return;
+  }
+  const url = new URL(request.url ?? '/', 'http://loopback.invalid');
+  const after = parseCursor(url.searchParams.get('after') ?? request.headers['last-event-id'] ?? null);
+  let closed = false;
+  let replayDone = false;
+  let sentSeq = after;
+  let pending: StoredEvent[] = [];
+  let heartbeat: NodeJS.Timeout | undefined;
+  let unsubscribe = (): void => undefined;
+
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    if (heartbeat) clearInterval(heartbeat);
+    unsubscribe();
+    if (!response.writableEnded) response.end();
+  };
+  const send = (event: StoredEvent): void => {
+    if (closed || event.seq <= sentSeq || response.writableEnded) return;
+    sentSeq = event.seq;
+    const safeType = event.type.replace(/[\r\n]/g, '');
+    response.write(`id: ${event.seq}\nevent: ${safeType}\ndata: ${JSON.stringify(event)}\n\n`);
+    if (TERMINAL_EVENT_TYPES.has(event.type)) close();
+  };
+  const onEvent = (event: StoredEvent): void => {
+    if (replayDone) send(event);
+    else if (event.seq > sentSeq) pending.push(event);
+  };
+  unsubscribe = manager.subscribe(runId, onEvent);
+  const snapshot = await manager.snapshot(runId);
+  if (!snapshot) {
+    unsubscribe();
+    writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
+    return;
+  }
+
+  response.writeHead(200, {
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'X-Accel-Buffering': 'no',
+  });
+  request.once('close', close);
+  const replay = await manager.readEvents(runId, after);
+  for (const event of replay) send(event);
+  replayDone = true;
+  const queued = pending;
+  pending = [];
+  for (const event of queued.sort((a, b) => a.seq - b.seq)) send(event);
+  if (closed) return;
+  heartbeat = setInterval(() => {
+    if (!closed && !response.writableEnded) response.write(': heartbeat\n\n');
+  }, 15_000);
+}
+
+function parseCursor(value: string | string[] | null): number {
+  if (value === null) return 0;
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw.trim() === '') return 0;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new RequestError(400, 'INVALID_CURSOR', 'Invalid event cursor.');
+  return parsed;
+}
+
+function decodeRunId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_RUN_ID', 'Invalid run id.');
+  try {
+    const runId = decodeURIComponent(value);
+    if (!/^run_[A-Za-z0-9_-]+$/.test(runId)) throw new Error('invalid');
+    return runId;
+  } catch {
+    throw new RequestError(400, 'INVALID_RUN_ID', 'Invalid run id.');
+  }
+}
+
+function readJson(request: IncomingMessage, limitBytes: number): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let tooLarge = false;
+    request.on('data', (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.byteLength;
+      if (size > limitBytes) {
+        tooLarge = true;
+        return;
+      }
+      chunks.push(buffer);
+    });
+    request.once('error', reject);
+    request.once('end', () => {
+      if (tooLarge) {
+        reject(new RequestError(413, 'BODY_TOO_LARGE', 'Request body is too large.'));
+        return;
+      }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown);
+      } catch {
+        reject(new RequestError(400, 'INVALID_REQUEST', 'Request body must be valid JSON.'));
+      }
+    });
+  });
+}
+
+function isValidationError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'issues' in error;
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown, extraHeaders: Record<string, string> = {}): void {
@@ -95,4 +295,11 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown, 
     ...extraHeaders,
   });
   response.end(JSON.stringify(body));
+}
+
+class RequestError extends Error {
+  constructor(readonly statusCode: number, readonly code: string, readonly safeMessage: string) {
+    super(safeMessage);
+    this.name = 'RequestError';
+  }
 }
