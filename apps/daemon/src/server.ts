@@ -1,12 +1,17 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { StoredEvent } from '@ready4vibe/contracts';
+import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import { RunManager } from './run-manager.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
+export type LanHost = '0.0.0.0' | '::';
+export type DaemonHost = LoopbackHost | LanHost;
 export type StorageKind = 'sqlite' | 'memory';
 
 export interface DaemonServerOptions {
-  host?: LoopbackHost;
+  host?: DaemonHost;
+  transportMode?: TransportMode;
+  authGate?: AuthGate;
   version?: string;
   storageKind?: StorageKind;
   storageStatus?: 'ready' | 'degraded';
@@ -15,7 +20,9 @@ export interface DaemonServerOptions {
 }
 
 interface ResolvedDaemonServerOptions {
-  host: LoopbackHost;
+  host: DaemonHost;
+  transportMode: TransportMode;
+  authGate?: AuthGate;
   version: string;
   storageKind: StorageKind;
   storageStatus: 'ready' | 'degraded';
@@ -28,12 +35,12 @@ export interface HealthResponse {
   service: 'ready4vibe-daemon';
   version: string;
   transport: {
-    kind: 'http-loopback';
-    tlsRequired: false;
-    boundAddresses: readonly LoopbackHost[];
+    kind: 'http-loopback' | 'http-lan' | 'http-tailscale' | 'ssh';
+    tlsRequired: boolean;
+    boundAddresses: readonly DaemonHost[];
   };
   auth: {
-    pairingRequired: false;
+    pairingRequired: boolean;
   };
   storage: {
     kind: StorageKind;
@@ -52,8 +59,13 @@ const HEALTH_PATHS = new Set(['/health', '/api/v1/health']);
 const TERMINAL_EVENT_TYPES = new Set(['run.completed', 'run.failed', 'run.cancelled', 'run.needs_recovery']);
 
 export function createDaemonServer(options: DaemonServerOptions = {}): Server {
+  const host = options.host ?? '127.0.0.1';
+  const transportMode = options.transportMode ?? (isLoopbackHost(host) ? 'loopback' : 'lan');
+  const authGate = options.authGate ?? (transportMode === 'loopback' ? undefined : new AuthGate({ mode: transportMode }));
   const resolved: ResolvedDaemonServerOptions = {
-    host: options.host ?? '127.0.0.1',
+    host,
+    transportMode,
+    ...(authGate ? { authGate } : {}),
     version: options.version ?? '0.1.0',
     storageKind: options.storageKind ?? 'memory',
     storageStatus: options.storageStatus ?? 'ready',
@@ -77,18 +89,82 @@ export function isLoopbackHost(value: string): value is LoopbackHost {
   return value === '127.0.0.1' || value === '::1';
 }
 
+export function isLanHost(value: string): value is LanHost {
+  return value === '0.0.0.0' || value === '::';
+}
+
 async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
   options: ResolvedDaemonServerOptions,
 ): Promise<void> {
-  const pathname = new URL(request.url ?? '/', 'http://loopback.invalid').pathname;
+  const url = new URL(request.url ?? '/', 'http://loopback.invalid');
+  const pathname = url.pathname;
   if (HEALTH_PATHS.has(pathname)) {
     if (request.method !== 'GET') {
       writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
       return;
     }
     writeJson(response, 200, createHealthResponse(options));
+    return;
+  }
+
+  const remoteAddress = request.socket.remoteAddress;
+  const authorization = firstHeader(request.headers.authorization);
+  const origin = firstHeader(request.headers.origin);
+  const csrfToken = firstHeader(request.headers['x-csrf-token']);
+  const authRequest: AuthRequest = {
+    method: request.method ?? 'GET',
+    path: request.url ?? '/',
+    secure: (request.socket as { encrypted?: boolean }).encrypted === true,
+    hasQueryToken: url.searchParams.has('token') || url.searchParams.has('access_token'),
+    ...(remoteAddress ? { remoteAddress } : {}),
+    ...(authorization ? { authorization } : {}),
+    ...(origin ? { origin } : {}),
+    ...(csrfToken ? { csrfToken } : {}),
+  };
+  const authDecision = options.authGate?.authorize(authRequest);
+  if (authDecision && !authDecision.allowed) {
+    writeAuthError(response, authDecision.failureCode ?? 'AUTH_REQUIRED');
+    return;
+  }
+
+  if (pathname === '/api/v1/pairing/start') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.authGate) {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+      return;
+    }
+    writeJson(response, 200, options.authGate.startPairing());
+    return;
+  }
+
+  if (pathname === '/api/v1/pairing/complete') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.authGate) {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isPairingInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Pairing code is required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, options.authGate.completePairing(input.code));
+    } catch (error) {
+      if (error instanceof AuthGateError) {
+        writeJson(response, error.code === 'PAIRING_EXPIRED' ? 410 : 400, { error: { code: error.code, message: 'Pairing could not be completed.' } });
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
@@ -156,16 +232,17 @@ async function handleRequest(
 }
 
 function createHealthResponse(options: ResolvedDaemonServerOptions): HealthResponse {
+  const authStatus = options.authGate?.status();
   return {
     status: options.storageStatus === 'ready' ? 'ok' : 'degraded',
     service: 'ready4vibe-daemon',
     version: options.version,
     transport: {
-      kind: 'http-loopback',
-      tlsRequired: false,
+      kind: transportKind(options.transportMode),
+      tlsRequired: authStatus?.tlsRequired ?? false,
       boundAddresses: [options.host],
     },
-    auth: { pairingRequired: false },
+    auth: { pairingRequired: authStatus?.pairingRequired ?? false },
     storage: { kind: options.storageKind, status: options.storageStatus },
     sandbox: {
       availableModes: ['read-only', 'workspace-write', 'external-sandbox'],
@@ -173,6 +250,31 @@ function createHealthResponse(options: ResolvedDaemonServerOptions): HealthRespo
     },
     approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] },
   };
+}
+
+function transportKind(mode: TransportMode): HealthResponse['transport']['kind'] {
+  if (mode === 'loopback') return 'http-loopback';
+  if (mode === 'lan') return 'http-lan';
+  if (mode === 'tailscale') return 'http-tailscale';
+  return 'ssh';
+}
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isPairingInput(value: unknown): value is { code: string } {
+  return typeof value === 'object' && value !== null && 'code' in value && typeof value.code === 'string' && value.code.length > 0 && value.code.length <= 64;
+}
+
+function writeAuthError(response: ServerResponse, code: AuthFailureCode): void {
+  const status = code === 'AUTH_REQUIRED' || code === 'INVALID_TOKEN' ? 401 : code === 'TLS_REQUIRED' ? 426 : 403;
+  const body = { error: { code, message: 'Authentication or transport policy rejected the request.' } };
+  if (status === 401) {
+    writeJson(response, status, body, { 'WWW-Authenticate': 'Bearer' });
+  } else {
+    writeJson(response, status, body);
+  }
 }
 
 async function handleSse(request: IncomingMessage, response: ServerResponse, manager: RunManager, runId: string): Promise<void> {

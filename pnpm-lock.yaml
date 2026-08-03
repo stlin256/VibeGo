@@ -23,6 +23,9 @@ importers:
       '@ready4vibe/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@ready4vibe/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -64,6 +67,8 @@ importers:
       '@ready4vibe/testkit':
         specifier: workspace:*
         version: link:../testkit
+
+  packages/auth: {}
 
   packages/context: {}
 

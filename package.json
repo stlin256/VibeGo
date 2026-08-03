@@ -7,7 +7,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "pnpm --filter @ready4vibe/contracts build && pnpm --filter @ready4vibe/storage build && pnpm --filter @ready4vibe/scheduler build && pnpm --filter @ready4vibe/testkit build && pnpm --filter @ready4vibe/context build && pnpm --filter @ready4vibe/agent build && pnpm --filter @ready4vibe/model-openai build && pnpm --filter @ready4vibe/tools build && pnpm --filter @ready4vibe/policy build && pnpm --filter @ready4vibe/sandbox build && pnpm --filter @ready4vibe/execution build && pnpm --filter @ready4vibe/tool-adapters build && pnpm --filter @ready4vibe/daemon build",
+    "build": "pnpm --filter @ready4vibe/contracts build && pnpm --filter @ready4vibe/storage build && pnpm --filter @ready4vibe/scheduler build && pnpm --filter @ready4vibe/testkit build && pnpm --filter @ready4vibe/context build && pnpm --filter @ready4vibe/agent build && pnpm --filter @ready4vibe/model-openai build && pnpm --filter @ready4vibe/tools build && pnpm --filter @ready4vibe/policy build && pnpm --filter @ready4vibe/sandbox build && pnpm --filter @ready4vibe/execution build && pnpm --filter @ready4vibe/tool-adapters build && pnpm --filter @ready4vibe/auth build && pnpm --filter @ready4vibe/daemon build",
     "typecheck": "pnpm build && pnpm --filter \"@ready4vibe/*\" typecheck",
     "test": "pnpm build && pnpm --filter \"@ready4vibe/*\" test",
     "test:coverage": "pnpm build && pnpm --filter \"@ready4vibe/*\" test -- --coverage",

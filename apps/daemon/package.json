@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@ready4vibe/agent": "workspace:*",
+    "@ready4vibe/auth": "workspace:*",
     "@ready4vibe/contracts": "workspace:*",
     "@ready4vibe/model-openai": "workspace:*",
     "@ready4vibe/scheduler": "workspace:*",

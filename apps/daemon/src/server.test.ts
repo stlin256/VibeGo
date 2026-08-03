@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
@@ -182,5 +183,40 @@ describe('daemon health server', () => {
     const oversized = await fetch(base, { method: 'POST', body: 'x'.repeat(100) });
     expect(oversized.status).toBe(413);
     expect((await oversized.json())).toMatchObject({ error: { code: 'BODY_TOO_LARGE' } });
+  });
+
+  it('gates LAN APIs behind pairing while keeping health secret-free', async () => {
+    const authGate = new AuthGate({ mode: 'lan', tlsRequired: false, randomBytes: (() => {
+      let value = 0;
+      return (size: number) => Uint8Array.from({ length: size }, () => (value += 1) % 255);
+    })() });
+    const server = createDaemonServer({ host: '0.0.0.0', transportMode: 'lan', authGate });
+    servers.push(server);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${address.port}`;
+
+    const health = await fetch(`${base}/health`);
+    expect(health.status).toBe(200);
+    expect(await health.json()).toMatchObject({ transport: { kind: 'http-lan', tlsRequired: false }, auth: { pairingRequired: true } });
+
+    const denied = await fetch(`${base}/api/v1/runs/run_missing`);
+    expect(denied.status).toBe(401);
+    expect(await denied.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
+
+    const pairingStart = await fetch(`${base}/api/v1/pairing/start`, { method: 'POST' });
+    const pairing = await pairingStart.json() as { code: string };
+    expect(pairingStart.status).toBe(200);
+    const pairingComplete = await fetch(`${base}/api/v1/pairing/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: pairing.code }),
+    });
+    const session = await pairingComplete.json() as { accessToken: string };
+    expect(pairingComplete.status).toBe(200);
+    const allowed = await fetch(`${base}/api/v1/runs/run_missing`, { headers: { authorization: `Bearer ${session.accessToken}` } });
+    expect(allowed.status).toBe(503);
+    expect(await allowed.json()).toMatchObject({ error: { code: 'RUNS_UNAVAILABLE' } });
   });
 });
