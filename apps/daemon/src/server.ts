@@ -295,7 +295,9 @@ async function handleRequest(
       writeJson(response, 200, options.workspaceRegistry.status());
     } catch (error) {
       if (error instanceof WorkspaceRegistryError) {
-        const status = error.code === 'WORKSPACE_DUPLICATE' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
+        const status = error.code === 'PERSISTENCE_FAILED'
+          ? 503
+          : error.code === 'WORKSPACE_DUPLICATE' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
         writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }
@@ -321,7 +323,9 @@ async function handleRequest(
       writeJson(response, 200, options.workspaceRegistry.status());
     } catch (error) {
       if (error instanceof WorkspaceRegistryError) {
-        const status = error.code === 'WORKSPACE_NOT_FOUND' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
+        const status = error.code === 'PERSISTENCE_FAILED'
+          ? 503
+          : error.code === 'WORKSPACE_NOT_FOUND' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
         writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }

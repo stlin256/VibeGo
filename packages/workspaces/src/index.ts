@@ -33,17 +33,28 @@ export interface WorkspaceRegistry {
   remove(id: string): void;
 }
 
+/**
+ * Daemon-owned persistence port. Implementations must store only the
+ * non-secret registration snapshot; the registry remains the authority for
+ * validation and safe status projection.
+ */
+export interface WorkspaceRegistryPersistence {
+  load(): readonly WorkspaceRegistrationInput[];
+  save(workspaces: readonly WorkspaceRegistrationInput[]): void;
+}
+
 export type WorkspaceRegistryErrorCode =
   | 'INVALID_ID'
   | 'INVALID_LABEL'
   | 'INVALID_PATH'
   | 'WORKSPACE_DUPLICATE'
   | 'WORKSPACE_NOT_FOUND'
-  | 'WORKSPACE_PROTECTED';
+  | 'WORKSPACE_PROTECTED'
+  | 'PERSISTENCE_FAILED';
 
 export class WorkspaceRegistryError extends Error {
-  constructor(readonly code: WorkspaceRegistryErrorCode, message: string) {
-    super(message);
+  constructor(readonly code: WorkspaceRegistryErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'WorkspaceRegistryError';
   }
 }
@@ -60,6 +71,7 @@ export interface WorkspaceRegistryOptions {
   readonly resolvePath?: (path: string) => string;
   readonly realpath?: (path: string) => string;
   readonly isDirectory?: (path: string) => boolean;
+  readonly persistence?: WorkspaceRegistryPersistence;
 }
 
 /**
@@ -72,6 +84,7 @@ export class InMemoryWorkspaceRegistry implements WorkspaceRegistry {
   private readonly resolvePath: (path: string) => string;
   private readonly realpath: (path: string) => string;
   private readonly isDirectory: (path: string) => boolean;
+  private readonly persistence: WorkspaceRegistryPersistence | undefined;
 
   constructor(options: WorkspaceRegistryOptions = {}) {
     this.resolvePath = options.resolvePath ?? resolve;
@@ -79,8 +92,10 @@ export class InMemoryWorkspaceRegistry implements WorkspaceRegistry {
     this.isDirectory = options.isDirectory ?? ((path) => {
       try { return statSync(path).isDirectory(); } catch { return false; }
     });
+    this.persistence = options.persistence;
     const root = this.normalizeDirectory(options.defaultRoot ?? process.cwd());
     this.entries.set('default', { id: 'default', label: displayLabel(root), root, isDefault: true });
+    this.restorePersistedEntries();
   }
 
   status(): WorkspaceRegistryStatus {
@@ -94,18 +109,65 @@ export class InMemoryWorkspaceRegistry implements WorkspaceRegistry {
   }
 
   add(input: WorkspaceRegistrationInput): WorkspaceStatus {
-    const id = validateId(input.id);
-    if (this.entries.has(id)) throw new WorkspaceRegistryError('WORKSPACE_DUPLICATE', 'That workspace id is already registered.');
-    const root = this.normalizeDirectory(input.path);
-    const label = validateLabel(input.label ?? displayLabel(root));
-    const entry: WorkspaceEntry = { id, label, root, isDefault: false };
-    this.entries.set(id, entry);
+    const entry = this.createCustomEntry(input);
+    if (this.entries.has(entry.id)) throw new WorkspaceRegistryError('WORKSPACE_DUPLICATE', 'That workspace id is already registered.');
+    this.entries.set(entry.id, entry);
+    try {
+      this.persist();
+    } catch (error) {
+      this.entries.delete(entry.id);
+      throw error;
+    }
     return this.toStatus(entry);
   }
 
   remove(id: string): void {
     if (id === 'default') throw new WorkspaceRegistryError('WORKSPACE_PROTECTED', 'The default workspace cannot be removed.');
-    if (!this.entries.delete(id)) throw new WorkspaceRegistryError('WORKSPACE_NOT_FOUND', 'Workspace was not found.');
+    const existing = this.entries.get(id);
+    if (!existing) throw new WorkspaceRegistryError('WORKSPACE_NOT_FOUND', 'Workspace was not found.');
+    this.entries.delete(id);
+    try {
+      this.persist();
+    } catch (error) {
+      this.entries.set(id, existing);
+      throw error;
+    }
+  }
+
+  private createCustomEntry(input: WorkspaceRegistrationInput): WorkspaceEntry {
+    const id = validateId(input.id);
+    if (id === 'default') throw new WorkspaceRegistryError('WORKSPACE_PROTECTED', 'The default workspace cannot be removed or overwritten.');
+    const root = this.normalizeDirectory(input.path);
+    const label = validateLabel(input.label ?? displayLabel(root));
+    return { id, label, root, isDefault: false };
+  }
+
+  private restorePersistedEntries(): void {
+    if (!this.persistence) return;
+    let persisted: readonly WorkspaceRegistrationInput[];
+    try {
+      persisted = this.persistence.load();
+      if (!Array.isArray(persisted) || persisted.length > 128) throw new Error('invalid persisted workspace list');
+      for (const input of persisted) {
+        const entry = this.createCustomEntry(input);
+        if (this.entries.has(entry.id)) throw new Error('duplicate persisted workspace id');
+        this.entries.set(entry.id, entry);
+      }
+    } catch (error) {
+      throw new WorkspaceRegistryError('PERSISTENCE_FAILED', 'Persisted workspace settings could not be restored.', { cause: error });
+    }
+  }
+
+  private persist(): void {
+    if (!this.persistence) return;
+    const snapshot = [...this.entries.values()]
+      .filter((entry) => !entry.isDefault)
+      .map((entry) => ({ id: entry.id, path: entry.root, label: entry.label }));
+    try {
+      this.persistence.save(snapshot);
+    } catch (error) {
+      throw new WorkspaceRegistryError('PERSISTENCE_FAILED', 'Workspace settings could not be saved.', { cause: error });
+    }
   }
 
   private normalizeDirectory(input: string): string {

@@ -7,8 +7,9 @@ Status: Implemented (MVP slice)
 Replace the current `workspaceId=default` placeholder with a small daemon-owned
 workspace registry. Users select a named workspace from the Web Settings panel
 and can explicitly add or remove mappings without editing `.env`, YAML, or JSON.
-The registry is single-user and process-memory in this slice; durable non-secret
-settings are a later adapter milestone.
+The registry is single-user. Spec 31 established the process-memory boundary;
+Spec 36 adds an injected SQLite adapter for durable non-secret workspace
+registrations without changing the public API.
 
 ## Safety contract
 
@@ -21,7 +22,8 @@ settings are a later adapter milestone.
 - Workspace ids are stable, short, and allowlist-shaped (`[a-z0-9][a-z0-9_-]{0,63}`).
   `default` cannot be removed or overwritten. Duplicate ids fail closed.
 - A path must resolve to an existing directory. The registry stores the
-  normalized absolute path in process memory only; all tool execution still
+  normalized absolute path in daemon-local memory and, when Spec 36 persistence
+  is enabled, in the private `daemon_settings` table; all tool execution still
   re-validates descendants with `PathGuard` and applies the existing approval,
   sandbox, and scheduler boundaries.
 - Removing a workspace affects new runs only. A run captures its runtime and
@@ -89,7 +91,7 @@ does not execute commands, read files, or grant policy permissions.
 
 ## Explicitly deferred
 
-Durable registry persistence, native OS directory pickers for remote browsers,
+Native OS directory pickers for remote browsers,
 Git write/patch tools and the dedicated diff/log explorer, MCP/Skill activation,
 public access, and Tailscale/SSH transport adapters remain separate milestones.
 
@@ -103,3 +105,6 @@ public access, and Tailscale/SSH transport adapters remain separate milestones.
 - `apps/web` replaces the free-form id field with a selector and an explicit
   add/remove form. The API and React tests cover confirmation, path redaction,
   fallback selection, and secret-free browser persistence.
+- Spec 36 wires the same registry port to a bounded SQLite settings adapter;
+  restart tests prove custom ids/labels restore while absolute roots remain
+  absent from the public status projection.

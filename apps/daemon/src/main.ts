@@ -5,7 +5,7 @@ import { AuthGate } from '@ready4vibe/auth';
 import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { SqliteEventStore, SqliteGoalEventStore } from '@ready4vibe/storage';
+import { SqliteEventStore, SqliteGoalEventStore, SqliteSettingsStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
@@ -13,6 +13,7 @@ import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { resolveDaemonTransport } from './transport-config.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { InMemoryGitSettingsManager } from './git-settings.js';
+import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -33,7 +34,26 @@ const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
-const workspaceRegistry = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
+let settingsStore: SqliteSettingsStore;
+try {
+  settingsStore = new SqliteSettingsStore(join(dataDir, 'events.sqlite'));
+} catch (error) {
+  goalEventStore.close();
+  eventStore.close();
+  throw error;
+}
+let workspaceRegistry: InMemoryWorkspaceRegistry;
+try {
+  workspaceRegistry = new InMemoryWorkspaceRegistry({
+    defaultRoot: process.cwd(),
+    persistence: new SqliteWorkspaceRegistryPersistence(settingsStore),
+  });
+} catch (error) {
+  settingsStore.close();
+  goalEventStore.close();
+  eventStore.close();
+  throw error;
+}
 const modelSettings = new InMemoryModelSettingsManager();
 const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
 const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry });
@@ -49,6 +69,7 @@ const runManager = new RunManager({
 try {
   await runManager.recoverAfterRestart();
 } catch (error) {
+  settingsStore.close();
   goalEventStore.close();
   eventStore.close();
   throw error;
@@ -76,6 +97,7 @@ server.listen(port, host, () => {
 
 const shutdown = (): void => {
   server.close(() => {
+    settingsStore.close();
     goalEventStore.close();
     eventStore.close();
   });
