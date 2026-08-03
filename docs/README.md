@@ -5,6 +5,7 @@
 - 产品/架构：先读 `product-brief.md`、`architecture.md`、`roadmap.md`；
 - 后端与 harness：读 `harness-contracts.md`、`api-contract.md`、`adr/0002-security-defaults.md`、`adr/0003-lan-access-and-codex-like-approval.md`、`specs/01-sandbox-approval.md`；
 - 运行状态与事件：读 `specs/02-run-event-contract.md`；
+- 模型与上下文：读 `specs/03-model-context-contract.md`；
 - Web 开发：读 `web-ux.md`、`api-contract.md`；
 - 贡献者：读 `testing-strategy.md`、`development-workflow.md`；
 - 调研复核：读 `open-source-research.md`。

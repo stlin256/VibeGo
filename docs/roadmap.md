@@ -8,8 +8,8 @@
 | --- | --- | --- | --- |
 | 0 | 研究与边界 | 本文档集、ADR、调研记录 | 方案评审通过；不再存在未记录的“隐含核心决策” |
 | 1 | 工程骨架 | pnpm workspace、TS config、contracts、lint/test/CI | 空 daemon 可启动，`/health` 可测，所有包有 smoke test |
-| 2 | 可恢复 loop | fake model、run 状态机、事件日志、取消/超时 | fake-model 集成测试覆盖正常、失败、取消、重连 |
-| 3 | 模型与上下文 | OpenAI-compatible adapter、流式 delta、预算和压缩 | provider contract + replay fixture + token budget tests |
+| 2 | 可恢复 loop | fake model、run 状态机、事件日志、取消/超时、并发 scheduler | fake-model 集成测试覆盖正常、失败、取消、重连、并发和 workspace lease |
+| 3 | 模型与上下文 | OpenAI-compatible adapter、流式 delta、预算和压缩、上下文来源标签 | provider contract + replay fixture + token budget/injection tests |
 | 4 | 工具与审批 | filesystem/patch/git/shell、风险分类、审批 UI API、审计 | 路径穿越、命令注入、超时、拒绝等安全测试通过 |
 | 5 | 沙箱 | host-restricted adapter、Docker adapter、资源限制 | 明确标注隔离强度；不可信任务默认不能落到 host adapter |
 | 6 | Skill/MCP | manifest loader、MCP stdio/HTTP、工具 allowlist | 恶意描述、超大 schema、断连、secret 泄漏测试通过 |
@@ -28,4 +28,3 @@
 - 是否引入 Next.js/SSR：MVP 采用静态 Vite SPA；只有真实需求出现才评估。
 - 是否采用 Redis/Postgres：单用户本地场景先不用；并发/协作需求出现时再增加 storage adapter。
 - 是否支持浏览器自动化：不属于最小 coding harness，后续作为独立工具包评估。
-

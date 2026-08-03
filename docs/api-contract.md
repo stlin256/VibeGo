@@ -38,6 +38,8 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 
 服务端 health/capability 响应必须包含 `transport.kind`、`transport.tlsRequired`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
 
+run 状态响应还应包含 `scheduler.queuePosition`、`scheduler.activeRunCount`、`scheduler.workspaceLease` 和 `scheduler.blockedReason`；这些字段用于解释并发排队，不授予客户端绕过调度器的能力。
+
 ## 创建 run 请求
 
 ```json

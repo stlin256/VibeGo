@@ -8,7 +8,8 @@
 flowchart LR
   U[桌面/平板/手机浏览器] -->|HTTPS 或受保护 HTTP| T[Transport API + SSE]
   T --> A[Application Service]
-  A --> H[Harness Orchestrator]
+  A --> Q[Scheduler + Workspace Leases]
+  Q --> H[Harness Orchestrator]
   H --> M[Model Port]
   H --> C[Context Manager]
   H --> P[Approval Policy]
@@ -27,6 +28,7 @@ flowchart LR
 - `apps/web`：React/Vite 静态构建；开发时独立运行，生产时由 daemon 静态托管或由反代托管。
 - 可选 `sandbox-worker`：仅在启用 Docker/VM/平台隔离时出现；MVP 不强制常驻。
 - 模型服务、MCP server、Docker/VM 均是外部进程，不进入 daemon 的核心内存模型。
+- Scheduler 默认允许 2 个 active run；provider、tool、sandbox 和 workspace write lease 共同决定实际并发。
 
 ## 推荐 monorepo
 
@@ -80,4 +82,3 @@ docs/
 - `Transport`：本地 HTTP、反向代理、未来 ACP/CLI 适配。
 
 扩展点必须通过版本化接口和 contract tests；不能通过 import 应用内部实现来“顺手接入”。
-

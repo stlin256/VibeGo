@@ -29,6 +29,7 @@
 - MCP client 与 Skill loader 的最小接口（可在 MVP 后打开）；
 - React + TypeScript 响应式 PWA，支持桌面三栏、平板双栏、手机单栏；
 - HTTP JSON + SSE 事件流、token 认证、连接恢复；
+- 支持并发 run：不同 workspace 可并行，同 workspace 写操作默认串行；
 - 每个模块的单元测试，以及至少一条 fake-model 端到端 harness 测试。
 
 ## 明确非目标

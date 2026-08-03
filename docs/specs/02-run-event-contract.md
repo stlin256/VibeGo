@@ -86,7 +86,35 @@ interface RunSnapshot {
 }
 ```
 
-服务端对所有 limits 做 clamp；客户端只能请求更小的值。MVP 默认同一 daemon 只允许一个 active run，其余进入 `queued`；并发能力后置到明确的 resource budget 讨论。
+服务端对所有 limits 做 clamp；客户端只能请求更小的值。MVP 支持并发 run，但由 scheduler 做全局资源准入和 workspace 写锁控制：默认最多 2 个 active run，硬上限由 daemon 配置；超过容量进入 `queued`。
+
+## 3.1 并发调度
+
+```ts
+interface SchedulerPolicy {
+  maxActiveRuns: number;       // 默认 2，不能超过服务端硬上限
+  maxActiveModelCalls: number; // provider/global semaphore
+  maxActiveToolProcesses: number;
+  maxExternalSandboxes: number;
+  workspaceWriteMode: 'exclusive' | 'worktree-only';
+}
+
+interface WorkspaceLease {
+  workspaceId: string;
+  mode: 'read' | 'write';
+  holderRunId: string;
+  acquiredAt: string;
+  expiresAt: string;
+}
+```
+
+- 不同 workspace 的 run 可以并行；同一 workspace 的多个 read-only run 可以并行。
+- 同一 workspace 的写 run 默认持有 exclusive write lease；已有写 lease 时，后续写 run 排队，不允许隐式交错修改。
+- `worktree-only` 是后续能力，只有 run 明确使用独立 Git worktree 才允许同 workspace 并发写。
+- external sandbox 仍按 workspace lease 协调，因为多个容器可能挂载同一主机工作树。
+- scheduler 采用 FIFO + 交互任务优先级；优先级只能影响排队顺序，不能绕过审批、资源或 workspace lease。
+- run 取消、超时、崩溃恢复时必须释放 lease；lease 过期由 daemon watchdog 回收并写审计事件。
+- provider/tool/sandbox 的 semaphore 都是硬上限；等待资源的 run 保持 `queued`/`planning`，不能占用模型上下文和无限内存。
 
 ## 4. 状态转移
 
@@ -194,7 +222,7 @@ interface EventStore {
 
 ## 9. 资源和并发预算
 
-MVP 默认：单 active run、每 run 一个 orchestrator、事件输出有上限、SSE 客户端有连接上限。具体默认值进入实现前的 benchmark spec；服务端必须 clamp：
+MVP 默认：最多 2 个 active run、每 run 一个 orchestrator、事件输出有上限、SSE 客户端有连接上限。具体默认值进入实现前的 benchmark spec；服务端必须 clamp：
 
 ```text
 maxTurns        ≤ 50
@@ -202,6 +230,7 @@ maxWallTimeMs   ≤ 30 min
 maxToolCalls    ≤ 200
 maxOutputBytes  ≤ 50 MiB/run
 maxContextBytes ≤ configured model budget
+maxActiveRuns   ≤ daemon hard limit
 ```
 
 超限不是静默截断任务：写 `run.failed` 或 `run.timed-out`，payload 说明哪一项触顶。
@@ -213,13 +242,15 @@ maxContextBytes ≤ configured model budget
 - event seq 单调、appendBatch 原子、重启 recovery、SSE 补发和窗口过期；
 - delta/output/diff 截断与 redaction；
 - 取消传播到模型、tool、MCP、sandbox；
-- 一个 active run 时第二个 run queued，取消/完成后按顺序唤醒；
+- 超过 active-run、provider、tool、sandbox 容量时进入 queued，资源释放后按公平顺序唤醒；
+- 同 workspace 写 lease 冲突时排队，read/read 不互相阻塞；
+- 并发 run 的事件、审批、取消、SSE 不串线，runId/correlationId 始终可追踪；
 - fake model + fake tool 正常、失败、审批、超时和 needs-recovery replay。
 
-## 11. 待讨论项
+## 11. 已收敛决策
 
-1. ID 采用 UUIDv7 还是 ULID；
-2. 事件存储首版用 SQLite 还是 append-only JSONL；
-3. 一个 daemon 是否允许用户手动提升 active run 并发数；
-4. `needs-recovery` 的 UI 是否允许逐 step 重试，还是只允许新 run 重放。
-
+1. ID 采用 UUIDv7；
+2. SQLite 为主 EventStore，JSONL 作为导出/灾备 adapter；
+3. 支持并发 run，默认最多 2 个 active run，服务端硬上限和资源 semaphore 可限制更低；
+4. 同 workspace 写操作默认 exclusive lease；worktree 并发写后置；
+5. `needs-recovery` 只允许检查后创建新 run，不自动重试未知写操作。
