@@ -169,6 +169,8 @@ importers:
 
   packages/tools: {}
 
+  packages/skill-mcp: {}
+
 packages:
 
   '@esbuild/aix-ppc64@0.25.12':

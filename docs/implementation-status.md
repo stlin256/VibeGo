@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Phase 1/2 实施基线，Web/PWA 与 LAN TLS MVP 已通过）**
+**状态：Accepted（Phase 1/2 实施基线，Web/PWA、LAN TLS 与 Skill/MCP manifest MVP 已通过）**
 
 ## 当前实施范围
 
@@ -21,12 +21,13 @@
 13. `packages/auth` 与 daemon transport gate：已按 `docs/specs/12-auth-transport.md` 实现单用户 pairing/token 和 LAN/TLS 门禁；证书/ACME adapter 后置；
 14. `apps/web`：已按 `docs/specs/13-web-pwa.md` 完成 React/TypeScript responsive run console MVP，包含 pairing、Bearer/CSRF、run composer、run console、cancel 和 fetch-based SSE resume；
 15. `packages/certificates` 与 daemon HTTPS listener 已按 `docs/specs/14-certificates-tls.md` 实现环境变量解析、PEM 读取/校验、LAN 默认 TLS fail-closed 和 HTTP/HTTPS health 标识；
-16. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → tool-adapters → auth → certificates → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+16. `packages/skill-mcp` 已按 `docs/specs/15-skill-mcp-manifests.md` 实现严格 Skill/MCP manifest 解析、stdio/HTTP transport 边界、secret-safe 检查和默认 deny 工具投影；不启动子进程或网络；
+17. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → tool-adapters → auth → certificates → skill-mcp → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
-- `pnpm typecheck`：通过（16 个 workspace package）；
-- `pnpm test`：通过，97 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 9、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、tool-adapters 9、auth 5、certificates 3、daemon 14、web 5；Vitest 按 package 输出）；
+- `pnpm typecheck`：通过（17 个 workspace package）；
+- `pnpm test`：通过，102 个测试全部通过（contracts 3、storage 6、scheduler 5、testkit 2、agent 9、context 5、model-openai 4、tools 4、policy 7、sandbox 6、execution 7、tool-adapters 9、auth 5、certificates 3、skill-mcp 5、daemon 14、web 5；Vitest 按 package 输出）；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite 产物约 203 kB（gzip JS/CSS 约 65 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -36,14 +37,14 @@
 
 - 不调用真实模型、网络、MCP、Skill 或 shell；
 - 不修改用户 workspace、Git、系统设置或证书；
-- 不实现 ACME 自动签发、Windows 证书存储、真实外部 sandbox runtime 或完整审批/diff UI；Web/PWA MVP 已提供 API/SSE 控制台，但仍不替代 daemon 安全边界；
+- 不实现 ACME 自动签发、Windows 证书存储、真实外部 sandbox runtime、MCP/Skill 外部连接或完整审批/diff UI；Web/PWA MVP 已提供 API/SSE 控制台，但仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
 - 不把 fake model 的行为当作真实 provider 能力。
 - fake loop 目前只执行单 turn 且 `tools` 为空；不会执行 shell/filesystem/Git，也没有上下文压缩或审批等待态。
-- run API/SSE 已接入单用户 pairing/token、CSRF 和 LAN/TLS transport gate；默认仍为 loopback，HTTPS listener、证书管理和公网部署尚未 wiring。
+- run API/SSE 已接入单用户 pairing/token、CSRF 和 LAN/TLS transport gate；HTTPS listener 与证书文件校验已 wiring，默认仍为 loopback，ACME/公网部署尚未 wiring。
 - 默认仍不发起真实请求；只有显式设置 `READY4VIBE_MODEL_API_KEY` 才启用外部 provider。key 只在进程内存中使用，不能进入仓库或 API 响应。
-- ToolRegistry/ApprovalPolicy 目前只做元数据和判定，不执行任何真实 tool；sandbox provider 已实现 verifier/resolver，真实 Docker/Podman/VM 执行器后置；tool-adapters 只在显式注入 runner/filesystem 时执行，daemon 尚未 wiring；auth gate 已接入 daemon，证书/ACME 尚未 wiring，默认 LAN 会因 HTTPS listener 未接入而拒绝启动。
+- ToolRegistry/ApprovalPolicy 目前只做元数据和判定，不执行任何真实 tool；sandbox provider 已实现 verifier/resolver，真实 Docker/Podman/VM 执行器后置；tool-adapters 只在显式注入 runner/filesystem 时执行，daemon 尚未 wiring；auth gate 与 TLS certificate loader 已接入 daemon，ACME adapter 和公网部署后置。
 - 不把 `pnpm-workspace.yaml` 的 build-script allowlist 当作业务安全策略；生产 sandbox/approval 仍按安全 spec 实现。
 
 ## 进入下一步的门禁

@@ -126,12 +126,13 @@ packages/
   tool-adapters/ filesystem/shell executor adapters
   auth/         pairing, token, Origin/CSRF, and transport gate
   certificates/ PEM pair resolution and TLS validation
+  skill-mcp/    strict Skill/MCP manifests and default-deny tool projection
   testkit/      fake providers, clocks, and event assertions
 ```
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **16 workspace packages and 97 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **17 workspace packages and 102 passing tests**. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 

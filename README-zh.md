@@ -99,11 +99,12 @@ packages/contracts / storage / scheduler
 packages/agent / context / model-openai
 packages/policy / sandbox / execution / tool-adapters
 packages/auth / certificates / testkit
+packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
 ```
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **16 个 workspace package、97 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **17 个 workspace package、102 项测试全部通过**。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 
