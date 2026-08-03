@@ -73,6 +73,8 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
 
+  packages/execution: {}
+
   packages/model-openai:
     dependencies:
       '@ready4vibe/contracts':
@@ -87,6 +89,12 @@ importers:
       '@ready4vibe/tools':
         specifier: workspace:*
         version: link:../tools
+
+  packages/sandbox:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/scheduler:
     dependencies:
