@@ -1,5 +1,9 @@
+import { randomUUID } from 'node:crypto';
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { InMemoryEventStore } from './index.js';
+import { InMemoryEventStore, SqliteEventStore } from './index.js';
 
 const event = (runId: string, type: string) => ({
   runId,
@@ -40,3 +44,39 @@ describe('InMemoryEventStore', () => {
   });
 });
 
+describe('SqliteEventStore', () => {
+  it('persists events across close and reopen', async () => {
+    const databasePath = join(tmpdir(), `ready4vibe-${randomUUID()}.sqlite`);
+    const first = new SqliteEventStore(databasePath);
+    await first.append(event('run_sqlite', 'run.created'));
+    await first.append(event('run_sqlite', 'run.started'));
+    first.close();
+
+    const reopened = new SqliteEventStore(databasePath);
+    await expect(reopened.read('run_sqlite')).resolves.toHaveLength(2);
+    expect(reopened.lastSeq('run_sqlite')).toBe(2);
+    reopened.close();
+    rmSync(databasePath, { force: true });
+    rmSync(`${databasePath}-wal`, { force: true });
+    rmSync(`${databasePath}-shm`, { force: true });
+  });
+
+  it('rolls back a batch when a payload cannot be encoded', async () => {
+    const store = new SqliteEventStore(':memory:');
+    const cyclic: { type: string; self?: unknown } = { type: 'invalid' };
+    cyclic.self = cyclic;
+
+    await expect(store.appendBatch([
+      event('run_atomic', 'before'),
+      { ...event('run_atomic', 'invalid'), payload: cyclic },
+    ])).rejects.toThrow('event payload must be JSON serializable');
+    expect(store.lastSeq('run_atomic')).toBe(0);
+    store.close();
+  });
+
+  it('rejects operations after close', async () => {
+    const store = new SqliteEventStore(':memory:');
+    store.close();
+    await expect(store.read('run_closed')).rejects.toThrow('event store is closed');
+  });
+});

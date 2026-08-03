@@ -18,6 +18,12 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/node@22.15.30)
 
+  apps/daemon:
+    dependencies:
+      '@ready4vibe/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+
   packages/contracts:
     dependencies:
       zod:

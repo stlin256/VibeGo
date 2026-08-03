@@ -1,6 +1,6 @@
 # HTTP/SSE API 合约
 
-**状态：Accepted（v1 设计，尚未实现）**
+**状态：Accepted（v1 设计；`/health` loopback slice 已实现，其余端点尚未实现）**
 
 Base path 为 `/api/v1`。所有请求/响应为 UTF-8 JSON；错误使用统一 envelope。生产远程访问必须使用 HTTPS 或可信隧道。
 
