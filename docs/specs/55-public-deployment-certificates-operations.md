@@ -163,3 +163,19 @@ it does not open listeners, call ACME, modify firewall/DNS, spawn a forwarder,
 or alter `AuthGate`, `AgentLoop`, `RunManager`, `Scheduler`, `Approval`,
 `Sandbox`, `WorkspaceRegistry`, `run_events` or `goal_events`. Later phases may
 consume the projection from the existing authenticated settings boundary.
+
+## 10. Phase 55b read-only projection boundary（2026-08-05）
+
+Phase 55b exposes the already computed `DeploymentReadiness` through the
+existing authenticated daemon boundary at `GET /api/v1/deployment/readiness`.
+The route is read-only, uses the current `AuthGate`/Origin/CSRF rules, and
+returns `503` with a stable bounded error when the projection is unavailable.
+It does not accept a deployment mutation, certificate material, hostname
+override, proxy header or adapter command.
+
+The conversation-first Web shell may fetch this projection and show its mode,
+status, reason code and safe next-step guidance beside the existing TLS
+certificate status. Fetch failure is a bounded unavailable state and does not
+block pairing or an interactive run. Switching deployment mode, ACME staging,
+renewal, rollback, Tailscale/SSH process management and reverse-proxy setup
+remain later explicit actions.

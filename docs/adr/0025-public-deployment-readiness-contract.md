@@ -42,3 +42,12 @@ Tailscale/SSH and certificate automation.
 
 No ACME client, DNS adapter, reverse proxy, Tailscale/SSH forwarder, daemon
 route, Web settings control, firewall change or real network smoke is included.
+
+## Phase 55b extension (read-only projection)
+
+Expose the computed readiness through `GET /api/v1/deployment/readiness` using
+the existing daemon authentication boundary. The Web shell may render the
+bounded status/reason/next-step projection next to certificate metadata, but
+the route accepts no configuration mutation and creates no run, event or
+transport side effect. A missing projection is a stable unavailable response;
+the browser must remain usable and preserve the existing interactive composer.
