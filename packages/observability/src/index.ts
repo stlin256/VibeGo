@@ -422,6 +422,7 @@ function sha256(value: string): string {
 }
 
 export * from './provider-usage.js';
+export * from './provider-usage-lifecycle.js';
 export * from './pricing.js';
 export * from './resource-collector.js';
 export * from './audit-adapter.js';

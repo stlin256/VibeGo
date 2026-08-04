@@ -143,3 +143,8 @@ failure records retain known counters and latency metadata without re-running a
 provider request. No raw response or credential crosses this port, and no
 AgentLoop, RunManager default start, `run_events` or `goal_events` behavior is
 changed.
+
+The R2 adapter is implemented in
+`packages/observability/src/provider-usage-lifecycle.ts` with 47 focused
+observability tests. It is transport-free and remains an opt-in application
+port; no default run or AgentLoop wiring was changed.

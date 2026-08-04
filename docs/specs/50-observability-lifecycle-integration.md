@@ -162,6 +162,19 @@ accepted by this boundary. It remains outside AgentLoop and the default
 RunManager start path; live provider smoke and automatic lifecycle wiring are
 deferred until the explicit release gate.
 
+## 50-R2 implementation update (2026-08-05)
+
+`packages/observability/src/provider-usage-lifecycle.ts` now implements the
+adapter and its network-free fixture. It normalizes each observation through
+the public contract, reconciles complementary `provider-usage`/`run-event`
+facts, applies the selected `PricingCatalog` revision, and appends only bounded
+model records. Unknown price dimensions remain explicit; token accuracy maps
+to exact/estimated/unknown cost accuracy, while partial failed responses retain
+known counters, latency and TTFT. A stable `usageId` payload is a no-op on
+replay and a changed payload is a conflict, including concurrent delivery.
+Writer failure is degraded and retryable. The package gate is 47 passing tests;
+no provider, tool, shell, network or credential is used.
+
 ## Acceptance matrix
 
 - interactive run outcome is unchanged when usage, sampling, pricing or audit

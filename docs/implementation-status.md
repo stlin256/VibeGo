@@ -316,8 +316,8 @@ The following work is documented but not fully implemented yet:
   cost, automatic sampling and complete lifecycle attachment remain 50-R2/R3.
   The focused observability package gate is 38 tests passed; no live runtime is
   started.
-  Spec 50-R2 is now in its documentation gate for the provider usage/cost
-  application adapter; no default run wiring or network behavior is enabled.
+  Spec 50-R2 provider usage/cost application adapter is implemented with 47
+  focused tests; no default run wiring or network behavior is enabled.
 - **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate
