@@ -1,6 +1,6 @@
 # 分阶段路线图
 
-**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 53 Phase 0/1/2/3/4 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
+**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 53 Phase 0/1/2/3/4/5 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
 
 每个阶段都是一个可回滚的 Git 提交或小提交组。完成条件包含：代码、单元测试、文档更新、验证命令和已知限制。
 
@@ -630,19 +630,21 @@ Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并�
 
 ## Spec 53–57：面向可发布与更广泛用户的 Release hardening（分阶段）
 
-新增规格均为 Proposed planning gate，除 Spec 53 Phase 0/1/2/3/4 与 Spec 57 Phase 57a 外，暂不改变当前运行时，也不替换既有
+新增规格均为 Proposed planning gate，除 Spec 53 Phase 0/1/2/3/4/5 与 Spec 57 Phase 57a 外，暂不改变当前运行时，也不替换既有
 AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 `run_events` 或 `goal_events` 的权威地位：
 
-- [Spec 53](specs/53-host-install-upgrade-backup-recovery.md)：Phase 0/1/2/3/4 已实现严格
+- [Spec 53](specs/53-host-install-upgrade-backup-recovery.md)：Phase 0/1/2/3/4/5 已实现严格，包含只写
+  staging 的 restore candidate adapter；
   host-manifest/v1、update/recovery 状态与 backup/restore/recovery/diagnostic
   contracts，以及 `SqliteBackupSnapshotAdapter` 的一致性、digest 和不可覆盖 snapshot
   写入；备份使用逻辑数据类，restore 要求确认并保留 current，safe mode 操作集合
   bounded 且排除凭据/workspace 文件。后续实现一键安装、平台签名、
   current/previous/candidate 升级、SQLite 一致性备份、restore/migration、safe mode
-  runtime 和故障诊断 adapter；Phase 3/4 不接入 installer、Web 或 daemon route，也不执行
+  runtime 和故障诊断 adapter；Phase 3/4/5 不接入 installer、Web 或 daemon route，也不执行
   restore/migration。Snapshot fixture 4 tests、restore preflight fixture 10 tests、storage
-  模块 45 tests、typecheck 与 build 已通过。
+  模块 57 tests、typecheck 与 build 已通过。Phase 5 不覆盖 current、不执行
+  migration、不写 RestoreResult，也不接入 installer、Web 或 daemon route。
 - [Spec 54](specs/54-model-provider-onboarding.md)：Phase 0/1/2/3 已实现 strict onboarding contracts、
   显式 bounded model probe、authenticated daemon probe route 和 Web Settings Probe 控件；后续定义 local/cloud 模型向导、Ollama、
   LM Studio、llama.cpp、OpenAI-compatible、Anthropic 和 DeepSeek 显式 endpoint，采用

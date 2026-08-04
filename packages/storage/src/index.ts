@@ -234,4 +234,5 @@ export * from './goal.js';
 export * from './observability.js';
 export * from './backup.js';
 export * from './restore-preflight.js';
+export * from './restore-staging.js';
 export * from './settings.js';
