@@ -61,6 +61,16 @@
 50d. Spec 42 Phase 42b-3 已将 topbar 抽出为 `apps/web/src/components/vibego/ConversationHeader.tsx`；组件只接收 locale、连接/上下文/设置快照与显式 callback，使用 Button primitive，保留 `topbar`/`topbar-actions`、`Control+N`/`Meta+N`、Settings focus-return、locale ARIA 和 ratio-first 换行，不创建 API/SSE/storage/secret 访问或第二事实源。connected/awaiting-pairing、secret/path-free focused tests、typecheck/build 通过；Web focused suite 当前 83 tests，JS/CSS gzip 为 80.54/5.82 KiB。Settings drawer 与 operation cards 仍待 42c。
 50e. Spec 42 Phase 42c-1 已将 `ApprovalCard` 与 `RecoveryCard` 抽出到 `apps/web/src/components/vibego/`；组件只消费 bounded approval/recovery projection 和显式 callback，保留 deny destructive variant、recovery new-run 语义与现有 CSS landmark，不创建 API/SSE/storage、Approval/RunManager 请求或第二事实源。details/no-details、retry、secret/path/raw-argument-free focused tests、typecheck/build 通过；Web focused suite 当前 86 tests，JS/CSS gzip 为 80.60/5.82 KiB。Goal/Memory/Tool cards 仍待后续 42c。
 50f. Spec 42 Phase 42c-2 已将 `SettingsSheet` 对话框壳抽出到 `apps/web/src/components/vibego/`；组件只消费 open/ref/bounded copy/children 与 close callback，保留 `settings-drawer`、dialog ARIA、响应式 CSS 和 App 的 focus trap/return、表单/API/secret-safe persistence 所有权，不创建 settings API、storage 或第二事实源。open/closed、ARIA、children-slot、Button primitive、secret/path-free focused tests、typecheck/build 通过；Web focused suite 当前 88 tests，JS/CSS gzip 为 80.68/5.82 KiB。Tabs、表单分组、Goal/Memory/Tool cards 仍待后续 42c。
+50g. Spec 42 Phase 42c-3 已增加 `SettingsTabs` 与 `SettingsSection` 本地组合组件：
+`App` 持有 Run/Tools/Access active-tab、字段状态、API callback、focus trap/return
+和 secret-safe persistence；组件仅负责 tablist/tabpanel ARIA、`hidden` inactive panel、
+重复表单组标题/描述及 ready/loading/degraded/unavailable 状态视觉语义。现有 workspace、
+model、memory、knowledge、MCP、tool、sandbox、run-default、TLS 与 deployment 字段和
+daemon authority 未改变；组件不访问 API/storage/secret、不创建第二 SSE 或事件事实源。
+新增 focused tests 覆盖 tab semantics、panel hiding、status variants、bounded copy 和
+secret/path-free markup；下一步仍是更深层 Goal/Memory/Tool card 抽取与 42d device/
+accessibility/bundle 验收。Web focused suite 当前 92 tests，typecheck 和 production
+build 通过，JS/CSS gzip 为 82.30/6.02 KiB。
 50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
 51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
 52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。

@@ -327,7 +327,7 @@ runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 sec
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2 已实现，42c-3/42d 后续）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3 已实现，42d 后续）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -374,8 +374,16 @@ Goal/Memory/Tool cards 仍按后续 42c 切片推进。
 42c-2 已抽取 `SettingsSheet` 对话框壳，保留 `App` 对表单状态、焦点 trap/return、
 API callback 和 secret-safe persistence 的所有权；组件只呈现 bounded copy/children
 和现有 dialog ARIA/CSS landmark，不新增 settings API 或第二事实源。Web focused gate
-当前 88 tests、JS/CSS gzip 为 80.68/5.82 KiB。Tabs、表单分组及 Goal/Memory/Tool
-cards 继续后置。
+当前 88 tests、JS/CSS gzip 为 80.68/5.82 KiB。
+
+42c-3 已增加 `SettingsTabs` 与 `SettingsSection` 本地组合组件，按 Run、Tools、
+Access 将现有设置控件分组，并统一 loading/degraded/unavailable/ready 状态的
+presentational 语义。Tabs/tabpanel 的 active state 仅由 `App` 管理；未激活面板使用
+`hidden` 保持 DOM/SSR 稳定，不新增请求、storage 或安全事实源。该切片保留所有
+已有字段、API callback、焦点 trap/return 和 secret-safe persistence，focused tests
+覆盖 ARIA、面板隐藏、状态变体和敏感信息排除。Goal/Memory/Tool cards 的更深层抽取
+以及 42d viewport/键盘/无障碍/bundle 验收仍后置。当前 Web focused gate 为 92 tests、
+typecheck 和 production build；观测到 JS gzip 82.30 KiB、CSS gzip 6.02 KiB。
 
 ## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 

@@ -141,3 +141,20 @@ not a second settings authority or a new persistence/API surface.
 Focused tests cover open/closed projection, dialog ARIA, child-slot rendering,
 Button output and secret/path-free markup; form values, focus trap/return and
 all settings API behavior remain owned by `App`.
+
+## Phase 42c-3 implementation update (2026-08-05)
+
+The Settings Sheet composition now uses local `SettingsTabs` and
+`SettingsSection` components. They are presentational and dependency-light:
+the tab component provides the tablist/tab/tabpanel ARIA contract and the
+section component provides consistent status presentation for loading,
+degraded, unavailable, and ready states. They do not import `api.ts`, read
+storage, access credentials, or create a second settings/event authority.
+
+`App` remains responsible for active-tab state, form values, validation,
+callbacks, focus trapping/return, and secret-safe persistence. Existing fields
+are grouped into Run, Tools, and Access panels without changing their names,
+callbacks, or daemon contracts. Inactive panels remain bounded and hidden in
+the DOM to keep SSR/test output deterministic. The focused component tests
+cover keyboard/ARIA attributes, inactive panel hiding, status variants and
+secret/path-free rendering.

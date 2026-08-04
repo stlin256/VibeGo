@@ -352,6 +352,26 @@ child-slot rendering, Button primitive output, and secret/path-free markup.
 Tabs, form-group extraction, and Settings operation cards remain later 42c
 slices.
 
+### Phase 42c-3 implementation update (2026-08-05)
+
+The Settings Sheet now has a local, dependency-light tab and form-group
+contract. `SettingsTabs` owns only the tablist/tab/tabpanel ARIA relationship,
+active-tab presentation, and bounded tab selection callback. `SettingsSection`
+owns the repeated heading, description, and loading/degraded/unavailable status
+semantics. `App` continues to own the selected tab state, all field values,
+validation, API callbacks, focus trap/return, and secret-safe persistence.
+
+The first composition keeps all existing settings controls but groups them into
+Run, Tools, and Access panels. Inactive panels remain in the DOM with
+`hidden`/`aria-hidden` so server-rendered copy and accessibility relationships
+stay deterministic; no settings value is written to browser storage. The
+presentational components do not import `api.ts`, create requests, or change
+the daemon's settings authority. Focused tests cover tab semantics, panel
+selection, status variants, bounded copy, and secret/path-free markup.
+The focused Web gate now passes 92 tests, typecheck and production build; the
+observed output is 82.30 KiB JS gzip and 6.02 KiB CSS gzip, within the phase
+budgets.
+
 ## 9. 退出条件
 
 本规格完成后：
