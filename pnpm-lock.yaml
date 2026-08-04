@@ -130,6 +130,12 @@ importers:
 
   packages/certificates: {}
 
+  packages/client-sdk:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/context: {}
 
   packages/contracts:

@@ -1,6 +1,6 @@
 # Spec 51: Host-first release and future client boundary
 
-- Status: 51-R3a implemented (R1-R2 complete; R3b-R4 remain planned)
+- Status: 51-R4 implemented (R1-R3a complete; R3b remains planned)
 - Date: 2026-08-04
 - Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -203,14 +203,34 @@ reverse-proxy adapters only after R3a readiness contracts are stable. Any
 renewal or rollback must use candidate/previous material and retain the
 existing daemon transport/auth authority.
 
-### 51-R4: client SDK contract (post-Web)
+### 51-R4: versioned TypeScript client SDK (implemented)
 
-Generate or hand-maintain a small versioned TypeScript client over REST/SSE,
-with replay, cancellation, pairing and degraded projection tests. Do not add
-Android/iOS/HarmonyOS UI until this contract and host release have stabilized.
+Generate or hand-maintain a small versioned TypeScript client over REST/SSE.
+The first slice keeps pairing/session credentials in process memory, uses
+relative or explicit same-origin URLs without query tokens, exposes health,
+run create/read/cancel/retry/approval operations, and provides an async SSE
+stream with `Last-Event-ID` replay, monotonic sequence de-duplication,
+bounded reconnects, cancellation and terminal-event stop. A separate
+degraded projection helper returns stable reason codes without exposing raw
+network/HTTP internals.
+
+The SDK must not read SQLite, workspace roots, secrets or sidecar state and
+must not implement AgentLoop, Scheduler, Approval, Sandbox or Goal Control.
+Do not add Android/iOS/HarmonyOS UI until this contract and Host release have
+stabilized.
 
 Exit: a client can reconnect/resume and display conversation/approval/usage
 projections without direct database or filesystem access.
+
+#### 51-R4 implementation update (2026-08-05)
+
+`@ready4vibe/client-sdk` is the first versioned package and is implemented. It is dependency-light
+(only the existing contracts package), keeps access/CSRF/session data in an
+instance field, validates bounded paths/options, and caps SSE frames and
+reconnect attempts. Its fixtures cover pairing headers, cancellation,
+replay/resume, duplicate sequence suppression, terminal stop, degraded
+projection and secret-free URLs/errors. The Web app remains the current
+consumer; native clients are still post-release.
 
 ## Acceptance matrix
 

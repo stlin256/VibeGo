@@ -143,6 +143,17 @@ reverse proxies, renewal and rollback remain explicit R3b adapters. The
 certificate package has eight focused tests; the daemon route is covered by
 the focused regression suite (152 daemon tests) and remains read-only.
 
+### Spec 51-R4 client boundary (implemented 2026-08-05)
+
+The shared client is a thin, versioned REST/SSE adapter. It stores pairing
+credentials only in the instance memory of the caller, sends CSRF only on
+mutating JSON requests, uses `Last-Event-ID`/`after` for replay, de-duplicates
+monotonic sequences and retries only bounded stream transport failures. It
+returns stable degraded projections instead of raw fetch/HTTP internals.
+It never becomes an execution authority or accesses Host files, SQLite,
+workspace paths, secrets or memory sidecars; native UIs remain consumers of
+this contract.
+
 ## 不变的事实源
 
 此 ADR 不修改或替换：
