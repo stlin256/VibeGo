@@ -99,6 +99,25 @@ describe('McpLiveActivationService', () => {
     expect(JSON.stringify(result)).not.toMatch(/secret|private/iu);
   });
 
+  it('bounds a provider that ignores the signal and records timeout without leaking the promise', async () => {
+    let aborted = false;
+    const provider = {
+      activate: vi.fn(async (_settings: unknown, signal: AbortSignal) => {
+        signal.addEventListener('abort', () => { aborted = true; }, { once: true });
+        await new Promise<McpActivationCandidate>(() => undefined);
+        return candidate();
+      }),
+    };
+    const settings = new McpSettingsManager({ settings: new InMemorySettingsStore() });
+    const binding = new McpRunBindingManager(new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() }));
+    const activation = new McpLiveActivationService({ settings, binding, provider, timeoutMs: 5 });
+    settings.patch(enabledPatch);
+    const result = await activation.activate();
+    expect(result).toMatchObject({ activated: false, status: { status: 'degraded', lastErrorCode: 'timeout' } });
+    expect(aborted).toBe(true);
+    expect(binding.status()).toMatchObject({ enabled: false });
+  });
+
   it('replaces only future run bindings on refresh', async () => {
     const first = candidate();
     const second = candidate({ snapshot: snapshot({ fingerprint: 'b'.repeat(64), capabilities: [descriptor({ version: '2.0.0', revision: '2.0.0', qualifiedName: 'demo-mcp/tool/search@2.0.0' })] }), currentRevision: 'cap-2' });

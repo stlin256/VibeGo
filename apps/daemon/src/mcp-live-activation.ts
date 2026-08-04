@@ -20,6 +20,7 @@ export interface McpLiveActivationServiceOptions {
   readonly settings: McpSettingsManager;
   readonly binding: McpRunBindingManager;
   readonly provider?: McpActivationProvider;
+  readonly timeoutMs?: number;
 }
 
 export interface McpActivationResult {
@@ -27,7 +28,7 @@ export interface McpActivationResult {
   readonly status: McpSettingsStatus;
 }
 
-export type McpLiveActivationErrorCode = 'INVALID_CANDIDATE' | 'NOT_ALLOWED' | 'STALE_REVISION';
+export type McpLiveActivationErrorCode = 'INVALID_CANDIDATE' | 'NOT_ALLOWED' | 'STALE_REVISION' | 'TIMEOUT';
 
 export class McpLiveActivationError extends Error {
   constructor(readonly code: McpLiveActivationErrorCode, message = 'The MCP activation candidate is invalid.') {
@@ -45,11 +46,13 @@ export class McpLiveActivationService {
   private readonly settings: McpSettingsManager;
   private readonly binding: McpRunBindingManager;
   private readonly provider: McpActivationProvider | undefined;
+  private readonly timeoutMs: number;
 
   constructor(options: McpLiveActivationServiceOptions) {
     this.settings = options.settings;
     this.binding = options.binding;
     this.provider = options.provider;
+    this.timeoutMs = positiveTimeout(options.timeoutMs);
   }
 
   async activate(signal?: AbortSignal): Promise<McpActivationResult> {
@@ -58,9 +61,21 @@ export class McpLiveActivationService {
       this.binding.deactivate();
       return { activated: false, status: this.settings.status() };
     }
-    const activationSignal = signal ?? new AbortController().signal;
+    const parentController = new AbortController();
+    const onAbort = (): void => parentController.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) parentController.abort();
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        parentController.abort();
+        reject(new McpLiveActivationError('TIMEOUT'));
+      }, this.timeoutMs);
+    });
     try {
-      const candidate = await this.provider.activate(settings, activationSignal);
+      const candidate = await Promise.race([this.provider.activate(settings, parentController.signal), timeout]);
       validateCandidate(settings, candidate);
       this.binding.activate(candidate.snapshot, candidate.callPort);
       const status = this.settings.recordProbeResult({
@@ -79,10 +94,13 @@ export class McpLiveActivationService {
       return { activated: true, status };
     } catch (error) {
       this.binding.deactivate();
-      const code = error instanceof McpLiveActivationError
+      const code = timedOut || error instanceof McpLiveActivationError && error.code === 'TIMEOUT' ? 'timeout' : error instanceof McpLiveActivationError
         ? error.code === 'NOT_ALLOWED' ? 'not-allowed' : error.code === 'STALE_REVISION' ? 'schema' : 'schema'
         : 'unavailable';
       return { activated: false, status: this.settings.degrade(code) };
+    } finally {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -120,4 +138,10 @@ function validateCandidate(settings: McpSettings, candidate: McpActivationCandid
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function positiveTimeout(value: number | undefined): number {
+  if (value === undefined) return 10_000;
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 120_000) throw new Error('MCP activation timeout is invalid.');
+  return value;
 }

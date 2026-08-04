@@ -466,9 +466,9 @@ The pure package bridge and opt-in daemon/RunManager composition are
 implemented and focused-tested. `McpRunBindingManager` captures a verified
 snapshot per run; the default daemon remains MCP-off until an application
 service explicitly activates a call port. Disabled/degraded status omits the
-bridge and never blocks ordinary runs. The next slice is the injected
-`McpLiveActivationService` provider gate; live transport smoke remains
-pending.
+bridge and never blocks ordinary runs. The injected
+`McpLiveActivationService` provider gate is now implemented and bounded;
+live transport smoke remains pending.
 See [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md)
 and the detailed acceptance tests in [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md).
 

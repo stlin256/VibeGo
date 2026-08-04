@@ -319,6 +319,10 @@ activation records only bounded revision/count/health metadata through the
 existing MCP settings status projection. Refresh replaces the binding for
 future runs; already captured runtimes remain unchanged.
 
+The daemon activation slice is covered by 9 focused tests (plus the existing
+3 binding tests). It does not install a default provider or claim live
+stdio/Streamable HTTP smoke.
+
 Exit: an activated MCP tool completes through the same approval/sandbox path
 as a built-in tool, while failure, recovery and retry cannot replay an old
 request.
