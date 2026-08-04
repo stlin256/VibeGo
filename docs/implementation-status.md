@@ -457,12 +457,12 @@ run and cannot restore an unknown in-flight remote request. Disabled or
 degraded MCP settings remain a no-op for normal runs. The pure package slice
 is now implemented: `McpExecutionLedger`/`McpProtocolToolCallPort` in
 `@ready4vibe/skill-mcp` and `McpToolExecutorRuntime` in
-`@ready4vibe/tool-adapters`, with 33 and 19 focused tests respectively.
+`@ready4vibe/tool-adapters`, with 36 and 19 focused tests respectively.
 `apps/daemon` now adds the opt-in `McpRunBindingManager` and includes its
 undefined runtime in the existing `composeToolRuntimes` run snapshot path;
 three binding tests cover disabled/unverified, snapshot isolation and unknown
-workspace behavior. No live MCP process/network smoke is claimed by this
-note; activation from a verified transport remains the next R4 slice.
+workspace behavior. No live MCP process/network smoke is claimed by this note;
+activation from a verified transport is available through the injected service.
 
 The R4 application activation slice is now implemented: bounded
 `McpLiveActivationService` accepts only a matching server/manifest revision,
@@ -472,3 +472,11 @@ transport. `@ready4vibe/skill-mcp` also provides the injected
 `McpSessionActivationProvider` for public initialize/tools-list/tools-call
 protocol flow; fake-channel tests pass, while real opt-in stdio/Streamable HTTP
 smoke remains pending.
+
+The R4 lifecycle slice now freezes session ownership: activation candidates
+need an explicit close port, run-captured MCP runtimes hold an idempotent lease,
+and refresh/deactivate retires old bindings until their last run releases them.
+This keeps protocol sessions from leaking or being closed under an in-flight
+run; shutdown remains best-effort and does not alter AgentLoop, RunManager's
+default start behavior, Scheduler, Approval, Sandbox, WorkspaceRegistry or
+event authorities.

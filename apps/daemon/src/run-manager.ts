@@ -154,6 +154,10 @@ export class RunManager {
       this.controllers.delete(runId);
       if (capturedMemory) void capturedMemory.dispose().catch(() => undefined);
       if (capturedKnowledge) void capturedKnowledge.dispose().catch(() => undefined);
+    }).finally(() => {
+      const dispose = (capturedToolRuntime as (ToolRuntime & { dispose?: () => Promise<void> | void }) | undefined)?.dispose;
+      if (!dispose) return;
+      return Promise.resolve().then(() => dispose()).catch(() => undefined);
     });
     // AgentLoop writes run.created synchronously before its first await, so a
     // follow-up GET can observe a real snapshot as soon as 202 is returned.

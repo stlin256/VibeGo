@@ -117,6 +117,7 @@ try {
   await runManager.recoverAfterRestart();
   await agentMemorySettings.start();
 } catch (error) {
+  await mcpRuntimeBinding.close();
   await agentMemorySettings.close();
   await agentMemoryKnowledgeSettings.close();
   await observabilityLedger.close();
@@ -154,6 +155,7 @@ server.listen(port, host, () => {
 const shutdown = (): void => {
   server.close(() => {
     void (async () => {
+      await mcpRuntimeBinding.close();
       await agentMemorySettings.close();
       await agentMemoryKnowledgeSettings.close();
       await observabilityLedger.close();

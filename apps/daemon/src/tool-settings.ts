@@ -74,7 +74,7 @@ export function composeToolRuntimes(runtimes: readonly (ToolRuntime | undefined)
       byName.set(descriptor.name, runtime);
     }
   }
-  return {
+  const composed: ToolRuntime = {
     descriptors: Object.freeze([...descriptors]),
     execute: async (request) => {
       const runtime = byName.get(request.descriptor.name);
@@ -88,6 +88,15 @@ export function composeToolRuntimes(runtimes: readonly (ToolRuntime | undefined)
     },
     approvalDetails: (request) => byName.get(request.descriptor.name)?.approvalDetails?.(request),
   };
+  const disposables = available
+    .map((runtime) => (runtime as ToolRuntime & { dispose?: () => Promise<void> | void }).dispose)
+    .filter((dispose): dispose is () => Promise<void> | void => typeof dispose === 'function');
+  if (disposables.length === 0) return composed;
+  return Object.assign(composed, {
+    dispose: async (): Promise<void> => {
+      await Promise.all(disposables.map((dispose) => Promise.resolve().then(() => dispose()).catch(() => undefined)));
+    },
+  });
 }
 
 export class ToolSettingsError extends Error {

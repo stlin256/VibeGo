@@ -1,7 +1,7 @@
 import type { McpSettings, McpSettingsStatus } from '@ready4vibe/contracts';
 import type { McpCapabilitySnapshot, McpToolCallPort } from '@ready4vibe/skill-mcp';
 import { McpSettingsManager } from './mcp-settings.js';
-import { McpRunBindingManager } from './mcp-runtime-binding.js';
+import { McpRunBindingManager, type McpBindingLifecycle } from './mcp-runtime-binding.js';
 
 export interface McpActivationCandidate {
   readonly manifestRevision: string;
@@ -9,6 +9,7 @@ export interface McpActivationCandidate {
   readonly previousRevision: string | null;
   readonly snapshot: McpCapabilitySnapshot;
   readonly callPort: McpToolCallPort;
+  readonly close?: () => Promise<void>;
 }
 
 export interface McpActivationProvider {
@@ -77,7 +78,13 @@ export class McpLiveActivationService {
     try {
       const candidate = await Promise.race([this.provider.activate(settings, parentController.signal), timeout]);
       validateCandidate(settings, candidate);
-      this.binding.activate(candidate.snapshot, candidate.callPort);
+      const lifecycle: McpBindingLifecycle = candidate.close ? { close: candidate.close } : {};
+      try {
+        this.binding.activate(candidate.snapshot, candidate.callPort, lifecycle);
+      } catch (error) {
+        if (candidate.close) await candidate.close().catch(() => undefined);
+        throw error;
+      }
       const status = this.settings.recordProbeResult({
         schemaVersion: 'ready4vibe_mcp_probe_result_v0',
         serverId: settings.serverId,

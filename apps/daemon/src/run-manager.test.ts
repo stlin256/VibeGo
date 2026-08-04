@@ -139,6 +139,26 @@ describe('RunManager restart recovery', () => {
     expect(eventStore.listRunIds()).toEqual([]);
   });
 
+  it('releases a captured disposable runtime after terminal completion without changing the run result', async () => {
+    const eventStore = new InMemoryEventStore();
+    const dispose = vi.fn(async () => undefined);
+    const runtime = {
+      descriptors: [],
+      execute: vi.fn(async () => ({ output: { ok: true } })),
+      dispose,
+    };
+    const runManager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }),
+      toolRuntimeForRun: () => runtime,
+    });
+
+    const started = await runManager.start(config);
+    await vi.waitFor(() => expect(runManager.completion(started.runId)).toMatchObject({ status: 'completed' }));
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it('recalls bounded untrusted context and queues compact write-back after terminal state', async () => {
     const eventStore = new InMemoryEventStore();
     const providers: AgentMemoryProvider[] = [];

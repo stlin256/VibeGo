@@ -76,4 +76,36 @@ describe('McpRunBindingManager', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('defers retired session close until the captured run releases its idempotent lease', async () => {
+    const workspace = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
+    const manager = new McpRunBindingManager(workspace);
+    const firstClose = vi.fn(async () => undefined);
+    const secondClose = vi.fn(async () => undefined);
+    manager.activate(snapshot('1.0.0'), { call: vi.fn(async () => ({ revision: 'first' })) }, { close: firstClose });
+    const runtime = manager.runtimeForRun(config)!;
+    manager.activate(snapshot('2.0.0'), { call: vi.fn(async () => ({ revision: 'second' })) }, { close: secondClose });
+    await Promise.resolve();
+    expect(firstClose).not.toHaveBeenCalled();
+
+    const dispose = (runtime as typeof runtime & { dispose: () => Promise<void> }).dispose;
+    await dispose();
+    await vi.waitFor(() => expect(firstClose).toHaveBeenCalledOnce());
+    await dispose();
+    expect(firstClose).toHaveBeenCalledOnce();
+
+    manager.deactivate();
+    await vi.waitFor(() => expect(secondClose).toHaveBeenCalledOnce());
+  });
+
+  it('closes active and retired bindings on shutdown and rejects future captures', async () => {
+    const workspace = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
+    const manager = new McpRunBindingManager(workspace);
+    const close = vi.fn(async () => undefined);
+    manager.activate(snapshot(), { call: vi.fn(async () => ({ ok: true })) }, { close });
+    await manager.close();
+    await manager.close();
+    expect(close).toHaveBeenCalledOnce();
+    expect(manager.runtimeForRun(config)).toBeUndefined();
+  });
 });

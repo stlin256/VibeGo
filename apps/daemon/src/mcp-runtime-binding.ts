@@ -20,6 +20,14 @@ export class McpRunBindingError extends Error {
 interface ActiveBinding {
   readonly snapshot: McpCapabilitySnapshot;
   readonly callPort: McpToolCallPort;
+  readonly close?: () => Promise<void> | void;
+  references: number;
+  retired: boolean;
+  closePromise?: Promise<void>;
+}
+
+export interface McpBindingLifecycle {
+  readonly close?: () => Promise<void> | void;
 }
 
 /**
@@ -29,6 +37,8 @@ interface ActiveBinding {
  */
 export class McpRunBindingManager {
   private binding: ActiveBinding | undefined;
+  private readonly retired = new Set<ActiveBinding>();
+  private closed = false;
 
   constructor(private readonly workspaceRegistry: WorkspaceRegistry) {}
 
@@ -40,33 +50,91 @@ export class McpRunBindingManager {
     };
   }
 
-  activate(snapshot: McpCapabilitySnapshot, callPort: McpToolCallPort): McpRunBindingStatus {
-    if (snapshot.health !== 'healthy-verified' || snapshot.capabilities.length === 0 || !callPort || typeof callPort.call !== 'function') {
+  activate(snapshot: McpCapabilitySnapshot, callPort: McpToolCallPort, lifecycle: McpBindingLifecycle = {}): McpRunBindingStatus {
+    if (this.closed || snapshot.health !== 'healthy-verified' || snapshot.capabilities.length === 0 || !callPort || typeof callPort.call !== 'function') {
       throw new McpRunBindingError('INVALID_SNAPSHOT');
     }
     const executable = snapshot.capabilities.filter((descriptor) => descriptor.kind === 'tool' && descriptor.executable === true);
     if (executable.length === 0 || executable.some((descriptor) => descriptor.serverId !== snapshot.serverId || !isSafeDescriptor(descriptor))) {
       throw new McpRunBindingError('CAPABILITY_MISMATCH');
     }
-    this.binding = { snapshot: cloneSnapshot(snapshot), callPort };
+    const previous = this.binding;
+    this.binding = {
+      snapshot: cloneSnapshot(snapshot),
+      callPort,
+      ...(lifecycle.close ? { close: lifecycle.close } : {}),
+      references: 0,
+      retired: false,
+    };
+    if (previous) this.retire(previous);
     return this.status();
   }
 
   deactivate(): McpRunBindingStatus {
+    const previous = this.binding;
     this.binding = undefined;
+    if (previous) this.retire(previous);
     return this.status();
   }
 
   runtimeForRun(config: RunConfig): ToolRuntime | undefined {
+    if (this.closed) return undefined;
     const binding = this.binding;
     if (!binding) return undefined;
     const workspaceRoot = this.workspaceRegistry.resolveRoot(config.workspaceId);
     if (!workspaceRoot) return undefined;
-    return new McpToolExecutorRuntime({
+    const runtime = new McpToolExecutorRuntime({
       snapshot: binding.snapshot,
       callPort: binding.callPort,
       resolveWorkspaceRoot: (request) => request.config.workspaceId === config.workspaceId ? workspaceRoot : '',
     });
+    binding.references += 1;
+    let released = false;
+    const release = async (): Promise<void> => {
+      if (released) return;
+      released = true;
+      this.release(binding);
+    };
+    return Object.assign(runtime, { dispose: release });
+  }
+
+  async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    const active = this.binding;
+    this.binding = undefined;
+    const bindings = [...this.retired, ...(active ? [active] : [])];
+    this.retired.clear();
+    await Promise.all(bindings.map((binding) => this.closeBinding(binding)));
+  }
+
+  private retire(binding: ActiveBinding): void {
+    if (binding.retired) return;
+    binding.retired = true;
+    this.retired.add(binding);
+    if (binding.references === 0) {
+      this.scheduleRetiredClose(binding);
+      return;
+    }
+  }
+
+  private release(binding: ActiveBinding): void {
+    if (binding.references > 0) binding.references -= 1;
+    if (binding.retired && binding.references === 0) {
+      this.scheduleRetiredClose(binding);
+    }
+  }
+
+  private scheduleRetiredClose(binding: ActiveBinding): void {
+    void this.closeBinding(binding).finally(() => this.retired.delete(binding));
+  }
+
+  private closeBinding(binding: ActiveBinding): Promise<void> {
+    if (binding.closePromise) return binding.closePromise;
+    binding.closePromise = Promise.resolve()
+      .then(() => binding.close?.())
+      .catch(() => undefined);
+    return binding.closePromise;
   }
 }
 

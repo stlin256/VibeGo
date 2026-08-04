@@ -468,9 +468,14 @@ snapshot per run; the default daemon remains MCP-off until an application
 service explicitly activates a call port. Disabled/degraded status omits the
 bridge and never blocks ordinary runs. The public-protocol
 `McpSessionActivationProvider` is now implemented behind an injected channel
-factory; the next gate is real opt-in stdio/Streamable HTTP smoke. The injected
+factory; lifecycle drain is now the gate before real opt-in stdio/Streamable HTTP
+smoke. The injected
 `McpLiveActivationService` provider gate is now implemented and bounded;
 no default provider or network/process side effect is enabled.
+The R4 session lifecycle slice is implemented: explicit candidate close
+ownership, per-run idempotent release leases, deferred drain on
+refresh/deactivate, and bounded daemon shutdown are covered by focused tests.
+Real opt-in stdio/Streamable HTTP smoke remains the following gate.
 See [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md)
 and the detailed acceptance tests in [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md).
 

@@ -81,4 +81,21 @@ describe('daemon filesystem tool settings', () => {
     await expect(runtime.execute({ descriptor: runtime.descriptors[1]!, runId: 'run', turnId: 'turn', callId: 'call', input: {}, config: config(), signal: new AbortController().signal })).resolves.toEqual({ output: 2 });
     expect(calls).toEqual(['second']);
   });
+
+  it('composes runtime disposal and keeps cleanup failures out of tool results', async () => {
+    const disposed: string[] = [];
+    const first = {
+      descriptors: [{ name: 'first', id: 'first', version: '1.0.0', risk: 'read' as const, summary: 'first' }],
+      execute: async () => ({ output: 1 }),
+      dispose: async () => { disposed.push('first'); },
+    };
+    const second = {
+      descriptors: [{ name: 'second', id: 'second', version: '1.0.0', risk: 'read' as const, summary: 'second' }],
+      execute: async () => ({ output: 2 }),
+      dispose: async () => { disposed.push('second'); throw new Error('cleanup'); },
+    };
+    const runtime = composeToolRuntimes([first, second]) as typeof first & { dispose: () => Promise<void> };
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+    expect(disposed.sort()).toEqual(['first', 'second']);
+  });
 });

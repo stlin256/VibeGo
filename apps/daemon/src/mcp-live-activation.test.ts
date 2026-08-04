@@ -132,4 +132,19 @@ describe('McpLiveActivationService', () => {
     expect(before.descriptors[0]?.version).toBe('1.0.0');
     expect(after.descriptors[0]?.version).toBe('2.0.0');
   });
+
+  it('transfers candidate close ownership and drains the retired session after run release', async () => {
+    const firstClose = vi.fn(async () => undefined);
+    const first = candidate({ close: firstClose });
+    const second = candidate({ snapshot: snapshot({ fingerprint: 'b'.repeat(64), capabilities: [descriptor({ version: '2.0.0', revision: '2.0.0', qualifiedName: 'demo-mcp/tool/search@2.0.0' })] }), currentRevision: 'cap-2' });
+    const provider = { activate: vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second) };
+    const { service: activation, settings, binding } = makeService(provider);
+    settings.patch({ ...enabledPatch, capabilityAllowlist: ['demo-mcp/tool/search@1.0.0', 'demo-mcp/tool/search@2.0.0'] });
+    await activation.activate();
+    const runtime = binding.runtimeForRun(config)!;
+    await activation.activate();
+    expect(firstClose).not.toHaveBeenCalled();
+    await (runtime as typeof runtime & { dispose: () => Promise<void> }).dispose();
+    await vi.waitFor(() => expect(firstClose).toHaveBeenCalledOnce());
+  });
 });

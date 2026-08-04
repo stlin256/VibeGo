@@ -47,6 +47,13 @@ clear replay boundary because an interrupted run can later be marked
    healthy-verified snapshot and a call port. Candidate failure deactivates
    the binding and records bounded degraded status; it never starts a default
    process or performs a fallback network call.
+8. Treat a verified protocol session as a leased resource. The activation
+   candidate's `close` operation is owned by the binding manager; refreshing or
+   deactivating retires the old binding, and the manager closes it immediately
+   only when its captured-run reference count is zero. Each run lease releases
+   exactly once in the existing RunManager completion/cancellation path. Daemon
+   shutdown closes remaining bindings best-effort; it never replays or changes
+   a run result.
 
 ## Consequences
 
@@ -61,6 +68,8 @@ clear replay boundary because an interrupted run can later be marked
   contract review; no MCP event table is introduced in R4.
 - Transport implementations can be added behind one provider port without
   changing Web settings, RunManager, AgentLoop or the execution boundary.
+- Session refresh is bounded: active runs keep their immutable call port until
+  terminal release, while future runs use only the new binding.
 
 ## Rejected alternatives
 
@@ -70,3 +79,4 @@ clear replay boundary because an interrupted run can later be marked
 - Retrying a failed remote call by default or restoring a pre-crash in-flight
   request from an untrusted transcript.
 - Persisting raw MCP request/response bodies, endpoint credentials or paths.
+- Closing a refreshed session while an already captured run still holds it.

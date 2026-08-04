@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 package and opt-in daemon binding implemented, live transport activation pending
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 package, opt-in daemon binding and injected activation implemented; live transport smoke and session drain are the remaining R4 gates
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -20,7 +20,8 @@ grant.
 - The daemon does not automatically start an MCP subprocess or connect to a
   remote server on startup.
 - Capability health, activation snapshots, cancellation and real stdio/
-  Streamable HTTP smoke tests remain to be completed.
+  Streamable HTTP smoke tests remain to be completed. Session ownership must
+  also be drained explicitly when a binding is refreshed or deactivated.
 
 ## Research gate (49-R0)
 
@@ -293,12 +294,13 @@ idempotency ledger prevents duplicate remote execution.
 existing `ToolRegistry` and sends calls through `ToolExecutorRuntime`.
 Metadata needed for idempotency is passed through the existing handler context
 as bounded run/turn/call identifiers; no AgentLoop state machine change is
-needed. The package slice has 33 skill-mcp tests and 19 tool-adapter tests.
+needed. The package slice has 36 skill-mcp tests and 19 tool-adapter tests.
 `apps/daemon` now adds `McpRunBindingManager`; it captures a verified snapshot
 per run and composes an undefined runtime by default. The daemon main path
 remains MCP-off until an application service explicitly activates a call port.
-The daemon binding slice has 3 focused tests; live transport activation/smoke
-remains pending.
+The daemon binding slice has 3 focused tests; live transport activation is now
+available through the injected service, while real transport smoke remains
+pending.
 
 #### 49-R4 application activation boundary
 
@@ -319,8 +321,22 @@ activation records only bounded revision/count/health metadata through the
 existing MCP settings status projection. Refresh replaces the binding for
 future runs; already captured runtimes remain unchanged.
 
-The daemon activation slice is covered by 9 focused tests (plus the existing
-3 binding tests). `@ready4vibe/skill-mcp` now also provides
+#### 49-R4 session ownership and drain
+
+An activation candidate may own a live protocol session and must provide an
+explicit asynchronous `close` operation. `McpRunBindingManager` transfers the
+candidate close operation into the active binding and gives each captured run
+runtime a single idempotent release lease. Refresh or deactivation retires the
+old binding: it is closed immediately when no run holds it, or after the last
+captured runtime releases it. A retired binding is never used for a new run.
+Daemon shutdown closes active and retired bindings best-effort after no new
+runs can be accepted. Session close failures are bounded diagnostics and never
+rewrite the originating run result. This is lifecycle bookkeeping only; it
+does not add a scheduler, event table, AgentLoop state transition or implicit
+retry.
+
+The daemon activation slice is covered by 10 focused tests and the binding /
+lifecycle slice by 5 focused tests. `@ready4vibe/skill-mcp` now also provides
 `McpSessionActivationProvider`, which uses the public protocol session,
 `tools/list`, capability registry and session-backed call port behind an
 injected channel factory. Its 3 activation tests use fake channels only; no
