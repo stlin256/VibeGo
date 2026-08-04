@@ -1,8 +1,8 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Phase 0/1/2/3 implemented（manifest、升级状态、SQLite snapshot adapter 与备份恢复 contract；安装器/升级器/restore runtime 仍未接入）
+- Status: Phase 0/1/2/3/4 implemented（manifest、升级状态、SQLite snapshot/preflight adapter 与备份恢复 contract；安装器/升级器/restore runtime 仍未接入）
 - Date: 2026-08-05
-- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[ADR 0028](../adr/0028-sqlite-backup-snapshot-adapter.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
+- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[ADR 0028](../adr/0028-sqlite-backup-snapshot-adapter.md)、[ADR 0029](../adr/0029-sqlite-restore-preflight.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
 ## 1. 目标
 
@@ -169,6 +169,24 @@ routes. The new snapshot fixture has 4 tests; the complete storage module has
 35 passing tests plus typecheck and build. Focused storage tests cover successful reopen/integrity, digest and
 manifest projection, schema mismatch, corrupt source, output-size limit,
 destination immutability and temporary-file cleanup.
+
+#### Phase 4 implementation update (2026-08-05)
+
+`@ready4vibe/storage` now provides a read-only
+`SqliteRestorePreflightAdapter`. It parses `backup-manifest/v1`, checks the
+snapshot size and streaming digest, runs SQLite integrity and `user_version`
+probes, compares source/target schema versions and returns the existing
+`RestorePlan` contract. Equal schemas are `compatible`; a newer target is
+`requires-migration`; a target older than the snapshot is `blocked` with a
+bounded downgrade warning.
+
+Every plan requires explicit confirmation, preserves current state and sets
+credential/workspace-file import to false. Preflight never copies or deletes a
+database, executes migration, maps workspace paths, writes a `RestoreResult`,
+exposes a path through Web, or changes run/Goal/event authorities. Focused
+tests cover compatible/migration-required/blocked plans, digest/size/schema/
+integrity failure, missing snapshot, source-target collision and no-mutation
+current preservation.
 
 ### 5.3 数据库 migration
 
