@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（实施细节仍由 Spec 39 分阶段落地）
+- 状态：Accepted（Phase 0 contract/Noop 与 Phase 1 MemoryCore HTTP adapter 已落地；其余集成仍按 Spec 39 分阶段）
 - 日期：2026-08-03
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
@@ -37,6 +37,18 @@ TencentDB 的内部 module path。
 
 Web Settings 提供普通开关和模式选择，不增加额外的逐任务安全确认。sidecar 不可用时，
 Web、RunManager 和直接模型 Provider 继续工作，并显示降级状态。
+
+### 2.1 当前 Phase 1 的适配器边界
+
+Phase 1 先落地一个 daemon-local `TencentMemoryCoreProvider`，使用原生 `fetch`
+调用公开 MemoryCore v3 HTTP API。它只负责健康检查、bounded recall 和串行 compact
+write-back，并显式校验 provider 实例的 team/agent/user/session identity；召回结果一律
+按 `untrusted` 处理。适配器超时、5xx、malformed 或 schema mismatch 时返回稳定的
+degraded 结果，不阻断 run。
+
+该实现不启动 sidecar、不依赖 upstream SDK、不注入 `ContextManager`、不修改
+`AgentLoop`/`RunManager`、不接入 Web Settings，也不改变默认 run 创建路径。后续阶段在
+完成 runtime snapshot 和 Supervisor 后，才能把它作为可选 provider 接入应用服务。
 
 ### 3. ready4vibe 保留所有执行事实源
 

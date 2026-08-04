@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop implemented；Phase 1+ Draft
+- 状态：Phase 0 contract/Noop implemented；Phase 1 MemoryCore HTTP adapter implemented（未接入 AgentLoop/默认 run 路径）；Phase 2+ Draft
 - 日期：2026-08-03
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -35,6 +35,28 @@ sidecar process, settings API, Web card, model proxy, or context injection.
 The provider remains an optional application-service port. Existing run and Goal
 authorities stay unchanged until a later phase supplies a validated provider and
 an explicit per-run runtime snapshot.
+
+## 1.2 Phase 1 implementation gate
+
+Phase 1 now contains a daemon-local `TencentMemoryCoreProvider` that uses the
+public MemoryCore v3 HTTP surface through native `fetch`; it deliberately does
+not add the upstream SDK or a sidecar process to the ready4vibe runtime. The
+adapter boundary currently provides:
+
+- explicit `team_id`/`agent_id`/`user_id`/optional `session_id` isolation fields;
+- `GET /health`, `POST /v3/atomic/search`, and
+  `POST /v3/conversation/add` handling with bearer/service headers;
+- bounded response decoding, untrusted recall items, UTF-8 byte limits, timeout
+  and malformed/schema/5xx degradation;
+- a serial, non-blocking write-back queue containing only compact summary,
+  facts, decisions, outcome, and evidence references;
+- provider-identity matching so a caller cannot use an adapter instance for a
+  different team, agent, user, or session.
+
+This is an adapter contract slice only. It is not yet wired into `ContextManager`,
+`AgentLoop`, `RunManager` snapshots, Web Settings, sidecar supervision, or the
+default run creation path. `off` and all existing unbound interactive runs keep
+their previous behavior.
 
 ## 2. 用户需求与非目标
 
@@ -493,11 +515,16 @@ AgentLoop 创建 run。
 
 ### Phase 1：MemoryCore Adapter（推荐 MVP）
 
-- 增加 TencentDB MemoryCore SDK/HTTP adapter；
-- 完成 team/agent/user/session 映射和 revision 标记；
-- 实现 recall -> `ContextItem`、终态 compact write-back；
-- 用 fake MemoryCore server/SDK mock 覆盖 timeout、malformed、retry 和 schema mismatch；
-- 在 Windows 本地验证 Node 版本、端口、子进程关闭和路径处理。
+- ✅ 已增加 daemon 原生 `fetch` 的 TencentDB MemoryCore v3 HTTP adapter，未引入
+  upstream SDK、Python runtime 或 sidecar 进程；
+- ✅ 已完成显式 team/agent/user/session 映射、health revision 读取、provider
+  identity 隔离和 bearer/service header；
+- ✅ 已完成 bounded recall、`untrusted` 结果、timeout/5xx/malformed/schema
+  fail-soft，以及串行、非阻塞的 compact write-back 队列；
+- ✅ fake fetch 测试覆盖健康响应、v3 request body、bounded mapping、身份不匹配、
+  timeout、malformed JSON、schema mismatch、upstream failure 和 write-back；
+- ⏳ `ContextItem` 注入、终态事件 wiring、重试策略、Windows sidecar 生命周期和
+  子进程端口管理留到后续 Phase 2/3，不在本提交接入默认 run 路径。
 
 ### Phase 2：Web 开关与状态
 
