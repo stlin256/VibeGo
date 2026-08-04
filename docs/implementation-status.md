@@ -50,7 +50,7 @@
 42. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6a：独立 `agent-memory-knowledge/v1` settings、SQLite/InMemory persistence、authenticated GET/PATCH/probe、lazy environment/injected provider creation、bounded `search` retrieval 和 new-run snapshot isolation。默认 disabled/off 不创建 provider、不发 HTTP、不改 prompt；knowledge errors fail-soft，Web 不显示 endpoint、secret、原始响应或绝对路径。
 43. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6b 首个切片：版本化 `agent-memory-operations/v1` 只读 projection、bounded update history、health latency、recall hit/miss、write queue counters、`GET /api/v1/settings/agent-memory/updates` 和 Web 状态摘要；运行时状态独立持久化，不进入 `run_events`、`goal_events` 或 memory payload。settings 支持显式 immutable upstream commit ref lock；候选兼容 fixture 覆盖 health/search/conversation v3 envelope 与 privacy/schema fail-closed。当前/previous/candidate 清理保护和 daemon restart recovery 规则保持不变。
 44. `packages/goal-control` 与 `apps/daemon` 已实现 Spec 40 Phase 2A：`GoalWriteService` 和六个受认证 mutation route 覆盖 Goal 创建、Todo、Gate open/resolve、Evidence 和 validated Todo completion；eventId fingerprint 提供重试 no-op/conflict，controlRevision 提供 stale fail-closed，响应剥离 claim hash，输入拒绝 secret/path/未知字段。该切片不接入默认 run admission，也不改变 `run_events`、AgentLoop、RunManager、Scheduler、Approval、Sandbox 或 WorkspaceRegistry。
-45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；Spec 51-R1 静态托管门禁已冻结（显式 dist、SPA fallback、缓存和路径安全测试），代码实现待本阶段完成；发行包 launcher 和 Android/iOS/HarmonyOS 原生客户端明确后置。
+45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；Spec 51-R1 静态托管门禁与 R2 launcher 生命周期门禁均已实现。R2 launcher 是依赖零、可注入的参数/端口/PID lease/日志脱敏/进程树停止边界，8 个 Node fixture tests 已通过；发行包/签名和 Android/iOS/HarmonyOS 原生客户端仍明确后置。
 46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
 47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；运行时采样、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
 
@@ -90,7 +90,7 @@ RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry 或 `run_events`
 
 - 不在默认路径调用真实模型、网络、MCP、Skill 或 shell；真实模型只在显式 Web/环境配置后使用；
 - 不在 daemon 启动时修改用户 workspace、Git、系统设置或证书；filesystem/shell 只有用户从已认证 Web 设置显式开启、并经过路径/审批/sandbox 守卫后才可能产生副作用；
-- Spec 51-R1 已把 React Web 静态资源以可选 dist 目录内置到 daemon；发行包 launcher 尚未实现，源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 的完整打包是下一阶段目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
+- Spec 51-R1 已把 React Web 静态资源以可选 dist 目录内置到 daemon；R2 launcher 只负责受限生命周期、URL 展示和显式浏览器打开，发行包/签名/更新仍未实现，源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 的完整打包是下一阶段目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
 - 不实现 ACME 自动签发、Windows 证书存储、VM runtime、MCP/Skill 外部连接或完整审批/diff UI；external sandbox CLI runner 已由 daemon 的显式设置 wiring，但默认关闭且不会自动拉取镜像或启动容器；Web/PWA 仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；

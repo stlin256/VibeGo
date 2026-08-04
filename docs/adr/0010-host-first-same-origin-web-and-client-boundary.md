@@ -113,6 +113,24 @@ the daemon composition passes `apps/web/dist` (overridable by
 `READY4VIBE_WEB_DIST_DIR`). Its four fixture tests pass alongside the daemon
 regression suite; no run/event/auth authority changed.
 
+### Spec 51-R2 launcher boundary (implemented 2026-08-05)
+
+This slice is deliberately a dependency-free Node launcher module. It may
+resolve a per-user data directory, reserve a bounded loopback port, spawn the
+existing daemon by argv, wait for a listening endpoint, print a relative-safe
+Host URL, and optionally open a browser only when explicitly requested. A
+non-secret PID lease prevents duplicate starts; stale leases are removed only
+when the recorded PID is no longer alive. Child output is redacted before it
+is forwarded, and stop/restart uses a process-group/Windows process-tree
+adapter selected by platform.
+
+The launcher does not enable LAN, weaken TLS/pairing, read or write workspace
+files, persist credentials, install a runtime, or create any new execution or
+event authority. `scripts/host-launcher.test.mjs` passes eight lifecycle tests
+covering platform paths, permissions, port discovery, PID lease cleanup,
+redacted logs, process-tree shutdown and disposable start/restart/stop.
+Packaging, signing, updates and rollback remain later release specs.
+
 ## 不变的事实源
 
 此 ADR 不修改或替换：

@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, and optional daemon-hosted Web dist (Spec 51-R1) are implemented and tested. The launcher/release bundle, MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, optional daemon-hosted Web dist (Spec 51-R1), and dependency-free Host launcher lifecycle (Spec 51-R2) are implemented and tested. The signed release bundle, MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -84,7 +84,8 @@ endpoint; a base URL without `/chat/completions` is intentionally rejected.
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
 path. When `pnpm build` has produced `apps/web/dist`, the daemon serves the compiled Web,
 API and SSE on one same-origin Host URL; `READY4VIBE_WEB_DIST_DIR` can point to another
-absolute dist directory. The launcher/release bundle remains tracked in Spec 51-R2.
+absolute dist directory. The development launcher is `node scripts/host-launcher.mjs`; the
+signed release bundle remains tracked in Spec 51-R2 and the later release specs.
 
 ## Host-first deployment target
 

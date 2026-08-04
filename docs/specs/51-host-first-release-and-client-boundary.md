@@ -1,6 +1,6 @@
 # Spec 51: Host-first release and future client boundary
 
-- Status: 51-R1 implemented (R2-R4 remain planned)
+- Status: 51-R2 implemented (R1 complete; R3-R4 remain planned)
 - Date: 2026-08-04
 - Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -138,12 +138,39 @@ isolation, extension asset misses, traversal, method and missing-build guards.
 The source checkout remains Vite-compatible; static serving is enabled only
 when `webDistDir` is supplied by the production composition.
 
-### 51-R2: cross-platform launcher
+### 51-R2 launcher boundary
 
-Implement launcher lifecycle tests for Windows/macOS/Linux: argument parsing,
+R2 is a small, dependency-free Node launcher module, not an installer or a
+second execution plane. It owns only process lifecycle and host presentation:
+
+- parse a bounded argv contract (`--daemon`, `--data-dir`, `--host`, `--port`,
+  `--open`, `--ready-timeout-ms`), rejecting shell fragments, relative daemon
+  paths and unsafe ports;
+- resolve a per-user data directory for Windows, macOS and Linux, create it
+  with owner-only permissions where the platform exposes them, and keep only a
+  non-secret PID lease there;
+- reserve a free loopback port (or honor an explicit bounded port), spawn the
+  daemon with an argv array and minimal inherited environment, report a
+  same-origin URL, and optionally open it only after `--open` is supplied;
+- forward only redacted child output, reject an active PID lease, clean stale
+  leases, and terminate the tracked process tree on stop/restart or launcher
+  signals.
+
+R2 does not install Node, modify workspaces, write credentials, enable LAN,
+bypass TLS/pairing, perform updates, or inspect SQLite. Platform installers,
+bundled runtime, signed artifacts and upgrade/rollback remain Spec 53/57
+work. `scripts/host-launcher.mjs` and its eight Node test fixtures implement
+this boundary. The implementation is kept injectable so Windows process-tree
+and Unix process-group behavior can be tested without pretending that one host
+fixture is a field-device result.
+
+### 51-R2: cross-platform launcher exit contract
+
+The exit contract is now implemented by `scripts/host-launcher.mjs` and its
+Node fixtures for Windows/macOS/Linux behavior. It covers argument parsing,
 port discovery, process-tree shutdown, restart, log redaction, data directory
 permissions and stale process cleanup. No installer may write user secrets or
-modify workspace files.
+modify workspace files; installer and signed artifact work remain outside R2.
 
 Exit: a disposable package starts/stops the daemon and reports a usable URL on
 each supported platform fixture.
