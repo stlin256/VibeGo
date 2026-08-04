@@ -42,12 +42,13 @@
 34. `apps/web` 的 Goal 只读投影切片按 `docs/specs/35-goal-web-readonly-projection.md` 接入现有 `ApiClient` 和 React 控制台：只消费一次 `GET /api/v1/goals`，支持 loading/unavailable/empty/ready、显式 refresh 和终态刷新；不写 Goal、不增加第二条 SSE/轮询、不把响应写入浏览器存储，也不改变 interactive run composer；
 35. `packages/storage`、`packages/workspaces` 与 `apps/daemon` 按 `docs/specs/36-durable-workspace-settings.md` 增加独立、版本化的 `daemon_settings` adapter：workspace id/label/root 可安全恢复，写失败回滚，公共状态不暴露路径；不持久化 API key，不修改 `run_events`/`goal_events` 或默认 run admission；
 36. `apps/web` 已按 `docs/specs/37-ratio-responsive-ui.md` 与 `docs/specs/38-conversation-first-web-shell.md` 实现 ratio-first、Codex-like conversation-first 壳层：对话/运行时间线优先，composer 在底部；New task 一键清空草稿并聚焦输入；设置为认证抽屉，Goal/连接/guardrail 为可收起上下文；CSS 不使用 UA/device sniffing，视觉截图不纳入仓库。
-37. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+37. `packages/contracts` 与 `apps/daemon` 已按 `docs/specs/39-tencentdb-agent-memory-integration.md` 实现 Agent Memory Phase 0：版本化 mode/identity/recall/write/status DTO、bounded strict/privacy 校验和 `NoopAgentMemoryProvider`；默认 `off` 不调用 SDK/网络/子进程、不改 prompt、不改 AgentLoop 或 run/Goal 事实源；MemoryCore/sidecar/Settings API/Web 卡片仍后置。
+38. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-03）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，233 个测试全部通过（contracts 8、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 49、web 36；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；
+- `pnpm test`：通过，240 个测试全部通过（contracts 12、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 52、web 36；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 Phase 0 覆盖 contract privacy/bounds 和 Noop provider zero-side-effect 行为；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -165,11 +166,12 @@ hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
 The verification baseline before the Web projection slice was 20 workspace packages
-and 206 passing tests. The current verification is 20 workspace packages and 233
-passing tests (Web 36, daemon 49, storage 17, workspaces 7). Specs 36–38 add
+and 206 passing tests. The current verification is 20 workspace packages and 240
+passing tests (Web 36, daemon 52, storage 17, contracts 12, workspaces 7).
+Specs 36–39 add
 durable non-secret workspace settings, ratio-first layout contracts, and the
-conversation-first composer/focus contract; screenshot files are not part of the
-repository.
+conversation-first composer/focus contract plus the Agent Memory Phase 0
+contract/Noop boundary; screenshot files are not part of the repository.
 client/component and regression tests; it keeps SQLite `goal_events` and the daemon
 list/detail/replay API as the authority. Goal write APIs, Web Goal actions, LoopX
 import/export, and governed admission remain later phases. Existing unbound

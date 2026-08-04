@@ -225,7 +225,7 @@ React smoke test、CSS contract test 和可用性为准。
 当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
 新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
 
-## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Draft）
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0 已实现）
 
 详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
@@ -238,3 +238,8 @@ Todo/Gate/Evidence、run/approval/sandbox/scheduler 仍由 ready4vibe 作为事�
 Supervisor current/previous revision 和候选健康检查 → Proxy → Knowledge。upstream
 更新采用候选 worktree 构建和蓝绿式切换，不做运行中 Node 热替换；构建或 health 失败
 保留当前版本，普通 Web 和 run 不因记忆服务不可用而中断。
+
+Phase 0 已冻结 ready4vibe 原生 `AgentMemoryMode`、identity、recall/write/status DTO
+和 `NoopAgentMemoryProvider`，并覆盖 bounded/strict/privacy contract 测试。Phase 0
+不引入 TencentDB SDK、sidecar、settings API、Web 卡片或 AgentLoop 改动；默认 `off`
+为零网络、零子进程、零 prompt 变化。后续 Phase 1 才评估 MemoryCore adapter。

@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Draft
+- 状态：Phase 0 contract/Noop implemented；Phase 1+ Draft
 - 日期：2026-08-03
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -23,6 +23,18 @@ ready4vibe 的第二个 Agent runtime。推荐方案是：
 “实时更新”在本 spec 中定义为自动检查上游、自动构建候选实例、健康检查后自动切换，
 不定义为运行中的 Node 模块热替换。热替换会破坏请求中的引用、连接和正在进行的
 Agent turn，因此不作为 ready4vibe 的运行时契约。
+
+## 1.1 Phase 0 implementation gate
+
+Phase 0 only freezes the ready4vibe-side contract and a no-op provider. It adds
+versioned `AgentMemoryMode`, explicit identity, bounded recall/write/status DTOs,
+and a `NoopAgentMemoryProvider` whose `off` mode performs no network, SDK,
+subprocess, prompt, or AgentLoop work. It does not add a TencentDB dependency,
+sidecar process, settings API, Web card, model proxy, or context injection.
+
+The provider remains an optional application-service port. Existing run and Goal
+authorities stay unchanged until a later phase supplies a validated provider and
+an explicit per-run runtime snapshot.
 
 ## 2. 用户需求与非目标
 
@@ -193,14 +205,18 @@ export interface AgentMemoryWriteRequest {
 }
 
 export interface AgentMemoryProvider {
-  readonly id: 'tencentdb-agent-memory';
-  readonly mode: Exclude<AgentMemoryMode, 'off'>;
+  readonly id: 'none' | 'tencentdb-agent-memory';
+  readonly mode: AgentMemoryMode;
   status(signal?: AbortSignal): Promise<AgentMemoryStatus>;
   recall(request: AgentMemoryRecallRequest): Promise<AgentMemoryRecallResult>;
   enqueueWrite(request: AgentMemoryWriteRequest): Promise<{ accepted: boolean; queued: boolean }>;
   close(): Promise<void>;
 }
 ```
+
+Phase 0 uses `id='none'` and `mode='off'` for `NoopAgentMemoryProvider`.
+Enabled TencentDB adapters use `id='tencentdb-agent-memory'` and a non-`off`
+mode; the provider port stays the same.
 
 `AgentMemoryStatus` 至少包含 `enabled`、`mode`、`available`、`degraded`、当前
 `revision`、`previousRevision`、`lastHealthAt`、`lastUpdateAt`、`updateState` 和稳定
