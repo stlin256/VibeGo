@@ -1,6 +1,6 @@
 # Spec 48: Approval, sandbox and shell runtime closure
 
-- Status: planned (48-R0 research gate)
+- Status: 48-R1 implementation in progress (policy compiler slice)
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 01](01-sandbox-approval.md), [Spec 10](10-sandbox-execution.md), [Spec 18](18-tool-wiring.md), [Spec 30](30-external-shell-sandbox-wiring.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -97,6 +97,23 @@ reason codes, effective sandbox/network and audit metadata.
 
 Exit: no runtime or HTTP wiring changes; all policy decisions are deterministic
 and fail closed.
+
+#### R1 contract slice (2026-08-04)
+
+The first implementation slice adds a pure compiler in `@ready4vibe/policy`.
+It accepts a server-resolved tool descriptor and a precomputed argument
+fingerprint; it never receives or stores raw tool arguments, paths, commands,
+environment values, or secrets. The compiler returns `allow | ask | deny`, a
+stable safe reason code, effective sandbox/network metadata, and bounded audit
+metadata. A request can only become stricter than the server policy.
+
+Session grants are keyed by tool id/version, workspace id, normalized argument
+fingerprint, sandbox/provider, network mode, task trust, and policy revision.
+They carry a short expiry, a bounded use count, and a visible reason. A stale
+revision, exhausted/expired grant, unknown tool, missing schema, unsupported
+sandbox, untrusted host execution, network mismatch, or privilege-like risk
+fails closed. This slice does not change `AgentLoop`, `RunManager`, HTTP,
+`run_events`, `goal_events`, Scheduler, Sandbox, or WorkspaceRegistry wiring.
 
 ### 48-R2: host-restricted process runner
 
