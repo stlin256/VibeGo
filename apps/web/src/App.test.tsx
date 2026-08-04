@@ -180,6 +180,11 @@ describe('web console shell', () => {
     const missing = renderToStaticMarkup(<App health={health} certificateStatusUnavailable />);
     expect(missing).toContain('Certificate setup is required');
     expect(missing).not.toContain('.pem');
+    const blocked = renderToStaticMarkup(<App health={health} deploymentReadiness={{ schemaVersion: 'ready4vibe_deployment_readiness_v1', mode: 'lan', status: 'blocked', reasonCode: 'certificate-required', nextStep: 'configure-certificate', affectsInteractiveRun: true, evaluatedAt: '2026-08-05T00:00:00.000Z' }} />);
+    expect(blocked).toContain('DEPLOYMENT STATUS');
+    expect(blocked).toContain('blocked · lan');
+    expect(blocked).toContain('configure-certificate');
+    expect(blocked).not.toContain('C:\\Users');
   });
 
   it('renders bounded model probe status without any credential or raw response', () => {

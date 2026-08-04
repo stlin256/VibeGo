@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import { buildDeploymentReadiness, createDeploymentProfile, DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { AuthGate } from '@ready4vibe/auth';
 import { buildCertificateReadiness, inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
@@ -29,6 +29,9 @@ if (tlsEnabled && !certificatePaths) {
 const tlsCredentials = tlsEnabled && certificatePaths ? loadTlsCredentials(certificatePaths) : undefined;
 const certificateStatus = tlsCredentials ? inspectTlsCertificate(tlsCredentials.cert) : undefined;
 const certificateReadiness = buildCertificateReadiness(certificateStatus, { tlsRequired });
+const deploymentReadiness = buildDeploymentReadiness(createDeploymentProfile(transportMode), {
+  certificate: certificateReadiness.status === 'ready' ? 'ready' : certificateReadiness.status === 'degraded' ? 'degraded' : 'blocked',
+});
 const allowedOrigins = process.env.READY4VIBE_ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
 const authGate = new AuthGate({
   mode: transportMode,
@@ -135,6 +138,7 @@ const server = createDaemonServer({
   runManager,
   ...(certificateStatus ? { certificateStatus } : {}),
   certificateReadiness,
+  deploymentReadiness,
   modelSettings,
   toolSettings,
   gitSettings,

@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -24,6 +24,7 @@ export interface RunConfigInput {
 }
 
 export type RunProfile = Pick<RunConfigInput, 'workspaceId' | 'model' | 'taskTrust' | 'sandbox' | 'approval' | 'limits'>;
+export type DeploymentReadinessStatus = DeploymentReadiness;
 
 export const DEFAULT_RUN_PROFILE: RunProfile = {
   workspaceId: 'default',
@@ -335,6 +336,10 @@ export class ApiClient {
 
   async certificateStatus(): Promise<CertificateStatus> {
     return this.request<CertificateStatus>('/api/v1/certificates/status', { method: 'GET' });
+  }
+
+  async deploymentReadiness(): Promise<DeploymentReadinessStatus> {
+    return this.request<DeploymentReadinessStatus>('/api/v1/deployment/readiness', { method: 'GET' });
   }
 
   async modelSettings(): Promise<ModelSettingsStatus> {

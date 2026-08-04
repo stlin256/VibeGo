@@ -146,6 +146,17 @@ describe('ApiClient', () => {
     expect(calls).toEqual(['/api/v1/certificates/status']);
   });
 
+  it('reads bounded deployment readiness without exposing transport secrets', async () => {
+    const calls: string[] = [];
+    const client = new ApiClient('', async (input) => {
+      calls.push(input);
+      return response({ schemaVersion: 'ready4vibe_deployment_readiness_v1', mode: 'lan', status: 'blocked', reasonCode: 'certificate-required', nextStep: 'configure-certificate', affectsInteractiveRun: true, evaluatedAt: '2026-08-05T00:00:00.000Z' });
+    });
+    await expect(client.deploymentReadiness()).resolves.toMatchObject({ mode: 'lan', status: 'blocked', reasonCode: 'certificate-required' });
+    expect(calls).toEqual(['/api/v1/deployment/readiness']);
+    expect(calls.join('')).not.toMatch(/token|secret|api[_-]?key/iu);
+  });
+
   it('configures model access through an authenticated body and exposes only safe status', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
-import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
+import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type DeploymentReadiness, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateReadiness, CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
@@ -42,6 +42,7 @@ export interface DaemonServerOptions {
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
   certificateReadiness?: CertificateReadiness;
+  deploymentReadiness?: DeploymentReadiness;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
@@ -70,6 +71,7 @@ interface ResolvedDaemonServerOptions {
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
   certificateReadiness?: CertificateReadiness;
+  deploymentReadiness?: DeploymentReadiness;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
@@ -129,6 +131,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.tls ? { tls: options.tls } : {}),
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
     ...(options.certificateReadiness ? { certificateReadiness: options.certificateReadiness } : {}),
+    ...(options.deploymentReadiness ? { deploymentReadiness: options.deploymentReadiness } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
     ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
@@ -287,6 +290,19 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateReadiness);
+    return;
+  }
+
+  if (pathname === '/api/v1/deployment/readiness') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.deploymentReadiness) {
+      writeJson(response, 503, { error: { code: 'DEPLOYMENT_READINESS_UNAVAILABLE', message: 'Deployment readiness is unavailable.' } });
+      return;
+    }
+    writeJson(response, 200, options.deploymentReadiness);
     return;
   }
 

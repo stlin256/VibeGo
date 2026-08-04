@@ -51,3 +51,8 @@ bounded status/reason/next-step projection next to certificate metadata, but
 the route accepts no configuration mutation and creates no run, event or
 transport side effect. A missing projection is a stable unavailable response;
 the browser must remain usable and preserve the existing interactive composer.
+
+The current slice is implemented by the daemon route, `ApiClient` method and
+the existing Settings drawer card. It is covered by daemon and Web focused
+gates; the route remains read-only and injection-based so tests can exercise
+unavailable readiness without starting a new transport.

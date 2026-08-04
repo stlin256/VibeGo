@@ -39,4 +39,9 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('@media (horizontal-viewport-segments: 3)');
     expect(styles).toContain('ratio-first layout above');
   });
+
+  it('keeps deployment readiness bounded beside certificate guidance', () => {
+    expect(styles).toContain('.deployment-readiness');
+    expect(styles).toContain('.deployment-readiness[data-status="blocked"]');
+  });
 });

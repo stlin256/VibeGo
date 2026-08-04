@@ -179,3 +179,10 @@ certificate status. Fetch failure is a bounded unavailable state and does not
 block pairing or an interactive run. Switching deployment mode, ACME staging,
 renewal, rollback, Tailscale/SSH process management and reverse-proxy setup
 remain later explicit actions.
+
+`apps/daemon` now serves the projection when injected by the application
+composition; missing injection returns the bounded
+`DEPLOYMENT_READINESS_UNAVAILABLE` response. `ApiClient.deploymentReadiness()`
+and the Settings drawer status card consume only the versioned fields. Focused
+daemon tests (156 total) and Web tests (68 total), daemon/Web typechecks and
+the Web production build pass.

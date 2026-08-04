@@ -352,6 +352,34 @@ describe('daemon health server', () => {
     expect(JSON.stringify(body)).not.toContain('cert.pem');
   });
 
+  it('serves deployment readiness as a bounded read-only projection and fails soft when absent', async () => {
+    const unavailable = createDaemonServer();
+    servers.push(unavailable);
+    const unavailablePort = await listen(unavailable);
+    const unavailableResponse = await fetch(`http://127.0.0.1:${unavailablePort}/api/v1/deployment/readiness`);
+    expect(unavailableResponse.status).toBe(503);
+    expect(await unavailableResponse.json()).toMatchObject({ error: { code: 'DEPLOYMENT_READINESS_UNAVAILABLE' } });
+
+    const server = createDaemonServer({
+      deploymentReadiness: {
+        schemaVersion: 'ready4vibe_deployment_readiness_v1',
+        mode: 'lan',
+        status: 'blocked',
+        reasonCode: 'certificate-required',
+        nextStep: 'configure-certificate',
+        affectsInteractiveRun: true,
+        evaluatedAt: '2026-08-05T00:00:00.000Z',
+      },
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/deployment/readiness`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ schemaVersion: 'ready4vibe_deployment_readiness_v1', mode: 'lan', status: 'blocked', reasonCode: 'certificate-required', nextStep: 'configure-certificate' });
+    expect(JSON.stringify(body)).not.toMatch(/api[_-]?key|secret|token|PRIVATE KEY|C:\\\\|\/var\//iu);
+  });
+
   it('serves authenticated read-only Goal projections and bounded event replay', async () => {
     const goalEventStore = await goalStoreForApi();
     const server = createDaemonServer({ goalEventStore });
