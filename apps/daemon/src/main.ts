@@ -68,7 +68,7 @@ try {
   eventStore.close();
   throw error;
 }
-const modelSettings = new InMemoryModelSettingsManager();
+const modelSettings = new InMemoryModelSettingsManager(process.env, undefined, undefined, settingsStore);
 let agentMemorySettings!: AgentMemorySettingsManager;
 let agentMemoryKnowledgeSettings!: AgentMemoryKnowledgeSettingsManager;
 const agentMemoryRuntime = new TencentMemoryRuntimeSupervisor({

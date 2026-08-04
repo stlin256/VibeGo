@@ -394,8 +394,8 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
               <div className="model-setup" aria-label="Model provider setup">
                 <div className="eyebrow">{t('settings.modelAccess')}</div>
                 {modelSettingsUnavailable ? <p className="muted">Model setup is unavailable until the daemon exposes the authenticated settings adapter.</p> : <>
-                  <p className="muted">{modelSettings?.configured ? `Configured via ${modelSettings.source}. The key is held by the daemon and is never shown here.` : 'Set up a provider here; no .env or YAML editing is required.'}</p>
-                  {modelSettings?.configured && <p className="muted">{modelSettings.providerId} · {modelSettings.baseUrl ?? 'URL hidden'}{modelSettings.modelName ? ` · ${modelSettings.modelName}` : ''}</p>}
+                  <p className="muted">{modelSettings?.configured ? `Configured via ${modelSettings.source}. The key is held by the daemon and is never shown here.` : modelSettings?.credentialState === 'required' ? 'Saved endpoint restored; enter the key again to enable new runs. The key is never persisted.' : 'Set up a provider here; no .env or YAML editing is required.'}</p>
+                  {modelSettings?.baseUrl && <p className="muted">{modelSettings.providerId} · {modelSettings.baseUrl}{modelSettings.modelName ? ` · ${modelSettings.modelName}` : ''}</p>}
                   <form onSubmit={(event) => { void submitModelSettings(event); }}>
                     <label>{t('settings.providerUrl')}<input type="url" value={modelBaseUrl} onChange={(event) => setModelBaseUrl(event.target.value)} placeholder="https://api.deepseek.com" autoComplete="url" /></label>
                     <label>{t('settings.apiKey')}<input type="password" value={modelApiKey} onChange={(event) => setModelApiKey(event.target.value)} placeholder={modelSettings?.configured ? 'Enter a replacement key' : 'Paste once; never stored in browser'} autoComplete="new-password" /></label>

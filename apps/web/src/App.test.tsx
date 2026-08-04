@@ -51,11 +51,18 @@ describe('web console shell', () => {
   });
 
   it('renders model setup guidance without rendering the provider key', () => {
-    const html = renderToStaticMarkup(<App modelSettings={{ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' }} />);
+    const html = renderToStaticMarkup(<App modelSettings={{ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory', credentialState: 'available' }} />);
     expect(html).toContain('MODEL ACCESS');
     expect(html).toContain('Configured via web-memory');
     expect(html).toContain('Save provider');
     expect(html).not.toContain('test-secret');
+  });
+
+  it('explains that a restored endpoint needs a credential without rendering a secret', () => {
+    const html = renderToStaticMarkup(<App modelSettings={{ configured: false, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'durable-profile', credentialState: 'required' }} />);
+    expect(html).toContain('Saved endpoint restored');
+    expect(html).toContain('https://api.deepseek.com');
+    expect(html).not.toMatch(/api[_-]?key\s*[:=]/iu);
   });
 
   it('renders the functional agent-memory settings card without secrets or paths', () => {

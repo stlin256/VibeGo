@@ -649,8 +649,9 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
   不执行 migration、不导入 credentials/workspace files、不持久化 RestoreResult，
   失败时 rollback。该 adapter 要求调用方持有独占数据库访问边界，并不接入
   installer、Web 或 daemon route。
-- [Spec 54](specs/54-model-provider-onboarding.md)：Phase 0/1/2/3 已实现 strict onboarding contracts、
-  显式 bounded model probe、authenticated daemon probe route 和 Web Settings Probe 控件；后续定义 local/cloud 模型向导、Ollama、
+- [Spec 54](specs/54-model-provider-onboarding.md)：Phase 0/1/2/3/4 已实现 strict onboarding contracts、
+  显式 bounded model probe、authenticated daemon probe route、Web Settings Probe 控件和
+  durable non-secret endpoint profile；后续定义 local/cloud 模型向导、Ollama、
   LM Studio、llama.cpp、OpenAI-compatible、Anthropic 和 DeepSeek 显式 endpoint，采用
   secret reference、bounded probe、能力快照和 run snapshot isolation；不自动下载模型。
 - [Spec 55](specs/55-public-deployment-certificates-operations.md)：Phase 55a 已实现严格的

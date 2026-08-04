@@ -54,7 +54,7 @@
 46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
 47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；运行时采样、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
 48. `docs/specs/53-host-install-upgrade-backup-recovery.md` 已实现 Phase 0/1/2/3/4/5/6：`host-manifest/v1`、`host_update_state_v1`、`backup-manifest/v1`/restore/recovery/diagnostic strict contracts、`RestoreApplyConfirmation`、`SqliteBackupSnapshotAdapter`、只读 `SqliteRestorePreflightAdapter`、`SqliteRestoreStagingAdapter` 与 `SqliteRestoreApplyAdapter` 均有 bounded/privacy/path/integrity 校验；未知字段、credential/query token、绝对路径、无效时间、跳过验证、无 previous 回滚、credential/workspace-file import、越权 safe-mode operation、损坏数据库、schema mismatch、超限输出、digest/size/integrity/preflight/staging/apply 失败、未确认/错配 plan、既有 snapshot/candidate/previous 和 swap rollback 均 fail-closed。contracts focused suite 65 tests、storage focused suite 66 tests（含 snapshot fixture 4 tests、restore preflight fixture 10 tests、restore staging fixture 12 tests 与 restore apply fixture 9 tests）、storage typecheck/build 通过。该切片不下载、验证、安装、迁移、restore result 持久化、Web/daemon route 或第二锁/调度器，也不改变 daemon、workspace、run/Goal 事实源。
-49. `docs/specs/54-model-provider-onboarding.md` 已实现 Phase 0/1/2/3：`ModelProviderDescriptor`、`ModelEndpointProfile`、`ModelCredentialRef`、capability/probe/setup-session contracts、显式 OpenAI-compatible `/models` probe、authenticated daemon probe route 和 Web Settings Probe 控件均有版本、bounded、privacy/path 校验；route 不接受 key/prompt/path/arbitrary headers，probe 不创建 run/event、不改变 provider 或 in-flight snapshot，当前仍不改 Spec 28 的默认 runtime/secret 边界。
+49. `docs/specs/54-model-provider-onboarding.md` 已实现 Phase 0/1/2/3/4：`ModelProviderDescriptor`、`ModelEndpointProfile`、`ModelCredentialRef`、`ModelSettingsProfile`、capability/probe/setup-session contracts、显式 OpenAI-compatible `/models` probe、authenticated daemon probe route、Web Settings Probe 控件和 durable non-secret endpoint profile 均有版本、bounded、privacy/path 校验；profile 只保存 provider/endpoint/model metadata，API key 仍仅在进程内或环境注入，重启后返回 `durable-profile`/`credential-required` 并 fail-closed 直到重新输入 key；route 不接受 key/prompt/path/arbitrary headers，probe 不创建 run/event、不改变 provider 或 in-flight snapshot，当前仍不改 Spec 28 的默认 runtime/secret 边界。
 50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
 51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
 52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
@@ -447,11 +447,13 @@ Approval, Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
   Storage currently has 66 passing tests (including 12 staging and 9 apply
   fixtures), and the apply adapter requires the caller's exclusive database
   access boundary.
-- **Spec 54** (`specs/54-model-provider-onboarding.md`) is Proposed. It defines
-  local/cloud provider presets, explicit endpoint paths, OS-backed credential
-  references, bounded health/model probes, model capability snapshots and
-  provider/run isolation. It does not add a provider SDK, model download path or
-  new network behavior.
+- **Spec 54** (`specs/54-model-provider-onboarding.md`) has implemented
+  Phase 0/1/2/3/4 contracts, bounded model-list probe, authenticated daemon/Web
+  probe surface and a durable non-secret endpoint profile. Restart recovery
+  restores only provider/endpoint/model metadata and marks the credential as
+  required; API keys remain process-memory/environment-only. It does not add a
+  provider SDK, model download path, automatic provider switch or new network
+  behavior.
 - **Spec 55** (`specs/55-public-deployment-certificates-operations.md`) has an
   implemented Phase 55a `deployment/v1` profile/readiness contract for explicit
   loopback/LAN/Tailscale/SSH/public modes, TLS fail-closed and bounded

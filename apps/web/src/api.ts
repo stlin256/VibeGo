@@ -165,7 +165,8 @@ export interface ModelSettingsStatus {
   providerId: string;
   baseUrl: string | null;
   modelName: string | null;
-  source: 'environment' | 'web-memory' | 'unconfigured';
+  source: 'environment' | 'web-memory' | 'durable-profile' | 'unconfigured';
+  credentialState: 'available' | 'required' | 'none';
 }
 
 export interface ModelSettingsInput {

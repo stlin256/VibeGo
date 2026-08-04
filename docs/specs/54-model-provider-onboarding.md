@@ -1,6 +1,6 @@
 # Spec 54：本地模型与云模型配置向导
 
-- Status: Phase 0/1/2/3 implemented（strict contracts + bounded probe + authenticated daemon route + Web Settings probe control；provider/run behavior remains unchanged）
+- Status: Phase 0/1/2/3/4 implemented（strict contracts + bounded probe + authenticated daemon route + Web Settings probe control + durable non-secret endpoint profile；provider/run behavior remains unchanged）
 - Date: 2026-08-04
 - Related: [Spec 28](28-model-provider-onboarding.md)、[Spec 47](47-model-context-agent-loop-productionization.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -134,6 +134,28 @@ from provider configuration and in-flight run snapshots.
 Focused Web tests cover the API request shape, bounded status rendering and
 privacy-safe knowledge-card projection; Web typecheck passes. The control is
 advisory and remains outside provider persistence and run admission.
+
+### Phase 4 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now defines a versioned `ModelSettingsProfile` that
+contains only the provider id, HTTPS endpoint, model hint, profile revision and
+timestamp. `apps/daemon` persists that profile through the existing
+`SettingsStore` under `daemon_settings`; the API key remains process-memory or
+environment supplied and is never written to SQLite.
+
+On daemon restart, a saved profile is restored as an explicit
+`durable-profile`/`credential-required` status. The endpoint and model hint can
+populate the Web setup form, but new runs remain fail-closed until the user
+provides a credential again. Configure persists the profile before swapping
+the provider, and clear deletes the profile before removing the active key, so
+a persistence failure cannot silently change runtime state. Existing runs keep
+their provider snapshot; settings changes affect only later runs.
+
+Focused contract, daemon settings-store and restart fixtures cover profile
+privacy/URL bounds, missing credentials, persistence failure, clear/reload and
+provider snapshot isolation. No model request, run/event, AgentLoop,
+Scheduler, Approval, Sandbox or WorkspaceRegistry authority changes in this
+phase.
 
 ## 5. Credential 与隐私边界
 

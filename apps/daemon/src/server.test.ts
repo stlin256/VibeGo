@@ -606,7 +606,7 @@ describe('daemon health server', () => {
     const base = `http://127.0.0.1:${port}/api/v1/settings/model`;
     const initial = await fetch(base);
     expect(initial.status).toBe(200);
-    expect(await initial.json()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    expect(await initial.json()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' });
     const configured = await fetch(base, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

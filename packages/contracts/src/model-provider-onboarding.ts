@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ProviderCapabilitySchema, ProviderEndpointPolicySchema, ProviderProtocolSchema } from './provider-usage.js';
 
 export const MODEL_PROVIDER_ONBOARDING_SCHEMA_VERSION = 'ready4vibe_model_provider_onboarding_v1' as const;
+export const MODEL_SETTINGS_PROFILE_SCHEMA_VERSION = 'ready4vibe_model_settings_profile_v1' as const;
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,127}$/u;
 const SAFE_LABEL = /^[A-Za-z0-9][A-Za-z0-9 ._:@/-]{0,255}$/u;
@@ -15,6 +16,15 @@ const RevisionSchema = z.string().min(1).max(128).regex(SAFE_REVISION).regex(CON
 const TimestampSchema = z.string().datetime({ offset: true }).max(64);
 const UnknownOrPositiveIntSchema = z.union([z.literal('unknown'), z.number().int().positive().max(10_000_000)]);
 const UnknownOrBooleanSchema = z.union([z.literal('unknown'), z.boolean()]);
+const DurableEndpointSchema = z.string().min(1).max(2_048).regex(CONTROL_TEXT)
+  .refine((value) => {
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'https:' && !parsed.username && !parsed.password && !parsed.search && !parsed.hash;
+    } catch {
+      return false;
+    }
+  }, 'durable model endpoint must be HTTPS without credentials, query parameters or fragments');
 
 export const ModelProviderKindSchema = z.enum(['local', 'cloud', 'custom']);
 export type ModelProviderKind = z.infer<typeof ModelProviderKindSchema>;
@@ -50,6 +60,17 @@ export const ModelEndpointProfileSchema = z.object({
   credentialRef: ModelCredentialRefSchema.optional(),
 }).strict();
 export type ModelEndpointProfile = z.infer<typeof ModelEndpointProfileSchema>;
+
+/** Restart-safe model metadata; credentials are deliberately not representable. */
+export const ModelSettingsProfileSchema = z.object({
+  schemaVersion: z.literal(MODEL_SETTINGS_PROFILE_SCHEMA_VERSION),
+  providerId: IdSchema,
+  baseUrl: DurableEndpointSchema,
+  modelName: LabelSchema,
+  profileRevision: RevisionSchema,
+  updatedAt: TimestampSchema,
+}).strict();
+export type ModelSettingsProfile = z.infer<typeof ModelSettingsProfileSchema>;
 
 export const ModelCapabilitySnapshotSchema = z.object({
   schemaVersion: z.literal('ready4vibe_model_capability_snapshot_v1'),
@@ -117,6 +138,10 @@ export function parseModelProviderDescriptor(input: unknown): ModelProviderDescr
 
 export function parseModelEndpointProfile(input: unknown): ModelEndpointProfile {
   return ModelEndpointProfileSchema.parse(input);
+}
+
+export function parseModelSettingsProfile(input: unknown): ModelSettingsProfile {
+  return ModelSettingsProfileSchema.parse(input);
 }
 
 export function parseModelCapabilitySnapshot(input: unknown): ModelCapabilitySnapshot {

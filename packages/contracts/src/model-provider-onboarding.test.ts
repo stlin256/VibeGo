@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ModelCapabilitySnapshotSchema, ModelEndpointProfileSchema, ModelProbeResultSchema, ModelProviderDescriptorSchema, ModelSetupSessionSchema, parseModelEndpointProfile, parseModelProbeResult } from './model-provider-onboarding.js';
+import { MODEL_SETTINGS_PROFILE_SCHEMA_VERSION, ModelCapabilitySnapshotSchema, ModelEndpointProfileSchema, ModelProbeResultSchema, ModelProviderDescriptorSchema, ModelSettingsProfileSchema, ModelSetupSessionSchema, parseModelEndpointProfile, parseModelProbeResult, parseModelSettingsProfile } from './model-provider-onboarding.js';
 
 const endpoint = {
   schemaVersion: 'ready4vibe_model_endpoint_profile_v1',
@@ -38,6 +38,21 @@ describe('model provider onboarding contracts', () => {
     expect(() => ModelProviderDescriptorSchema.parse({
       schemaVersion: 'ready4vibe_model_provider_descriptor_v1', providerId: 'deepseek', displayName: 'DeepSeek', kind: 'cloud', protocol: 'openai-compatible', endpointPolicy: { kind: 'explicit-url', baseUrl: 'https://api.deepseek.com' }, credentialModes: ['credential-ref'], capabilities: { streaming: true, toolCalls: true, structuredOutput: false, reasoning: false, promptCaching: false, audioInput: false, audioOutput: false }, maintenance: 'maintained', revision: 'r1', extra: true,
     })).toThrow();
+  });
+
+  it('accepts only restart-safe endpoint metadata and rejects secret-shaped additions', () => {
+    const profile = {
+      schemaVersion: MODEL_SETTINGS_PROFILE_SCHEMA_VERSION,
+      providerId: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      modelName: 'deepseek-v4-flash',
+      profileRevision: 'settings-1',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    };
+    expect(parseModelSettingsProfile(profile)).toEqual(profile);
+    expect(() => ModelSettingsProfileSchema.parse({ ...profile, apiKey: 'sk-never-store' })).toThrow();
+    expect(() => ModelSettingsProfileSchema.parse({ ...profile, baseUrl: 'https://api.deepseek.com?token=secret' })).toThrow();
+    expect(() => ModelSettingsProfileSchema.parse({ ...profile, baseUrl: 'C:\\models\\endpoint' })).toThrow();
   });
 
   it('keeps probe status bounded and distinguishes ready, degraded and blocked', () => {
