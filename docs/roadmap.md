@@ -643,9 +643,11 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
   显式 bounded model probe、authenticated daemon probe route 和 Web Settings Probe 控件；后续定义 local/cloud 模型向导、Ollama、
   LM Studio、llama.cpp、OpenAI-compatible、Anthropic 和 DeepSeek 显式 endpoint，采用
   secret reference、bounded probe、能力快照和 run snapshot isolation；不自动下载模型。
-- [Spec 55](specs/55-public-deployment-certificates-operations.md)：定义 loopback/LAN/
-  Tailscale/SSH/public HTTPS/reverse proxy 的部署边界，ACME HTTP-01/DNS-01 staging、续期、
-  回滚、trusted proxy 和版本化运维 runbook；不做 UPnP、自动防火墙或隐式公网暴露。
+- [Spec 55](specs/55-public-deployment-certificates-operations.md)：Phase 55a 先冻结严格的
+  `deployment/v1` profile/readiness contract，覆盖 loopback/LAN/Tailscale/SSH/public
+  direct/reverse-proxy 的显式模式、TLS fail-closed 和 bounded operational limits；ACME
+  HTTP-01/DNS-01、续期、回滚、trusted proxy adapter 和版本化运维 runbook 后置，不做 UPnP、
+  自动防火墙或隐式公网暴露。
 - [Spec 56](specs/56-i18n-accessibility-device-matrix.md)：Phase 56a 已落地
   `en-US`/`zh-CN` locale contract、独立非 secret 偏好、核心 shell accessibility 语义和
   ratio-first focused gates；Phase 56b 已落地 drawer focus scope 与 settings/guardrail
