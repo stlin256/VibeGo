@@ -2,6 +2,7 @@ import { ModelEventSchema, type ModelEvent, type ModelProvider, type ModelReques
 
 export * from './runtime.js';
 export * from './protocol.js';
+export * from './probe.js';
 
 export type FetchImplementation = (input: string, init?: RequestInit) => Promise<Response>;
 

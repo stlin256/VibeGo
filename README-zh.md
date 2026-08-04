@@ -8,7 +8,7 @@
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1）和模型 onboarding contracts（Spec 54 Phase 0）已经实现并通过测试。签名发行包、ACME/系统证书自动化、provider probe/系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1）以及模型 onboarding contracts 和显式 OpenAI-compatible model probe（Spec 54 Phase 0/1）已经实现并通过测试。签名发行包、ACME/系统证书自动化、系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -176,7 +176,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 - Goal 写 API、Web Goal 投影操作和 governed preflight（Phase 0/1 合同、存储与受认证只读 projection 已完成）；
 - ACME/certificate manager、Tailscale/SSH transport adapter；
 - Host-first 同源静态 Web 托管、跨平台 launcher/发行包和签名更新/回滚；
-- provider probe/系统密钥存储适配器，以及 Spec 54 的下一阶段向导接入；
+- 系统密钥存储适配器，以及 Spec 54 的下一阶段向导接入；
 - 在 Host/API/SSE 合约稳定后再开发 Android/iOS/HarmonyOS 原生客户端；
 - 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
 

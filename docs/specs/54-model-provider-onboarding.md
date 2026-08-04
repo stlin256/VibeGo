@@ -1,6 +1,6 @@
 # Spec 54：本地模型与云模型配置向导
 
-- Status: Phase 0 implemented（strict onboarding contracts；provider/runtime integration remains unchanged）
+- Status: Phase 0/1 implemented（strict onboarding contracts + explicit bounded model probe；settings/runtime integration remains unchanged）
 - Date: 2026-08-04
 - Related: [Spec 28](28-model-provider-onboarding.md)、[Spec 47](47-model-context-agent-loop-productionization.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -97,6 +97,18 @@ download a model, change `ModelProvider`, or alter `AgentLoop`. Existing Spec
 passes its own tests. Four focused contract tests cover secret/query/path
 rejection, unknown capability semantics, bounded probe outcomes and hashed
 setup nonces.
+
+### Phase 1 implementation update (2026-08-05)
+
+The first adapter is an explicit OpenAI-compatible model-list probe. It accepts
+one complete endpoint (for example the user-selected DeepSeek `/models` URL),
+uses the in-process credential only for the request header, sends no prompt and
+does not append a hidden path. Response bytes, model ids, timeout and status
+codes are bounded; raw upstream bodies, headers and credentials are never
+returned. A probe result is advisory and does not configure a provider, create
+a run, write an event, download a model or change an in-flight snapshot. Three
+focused adapter tests cover exact endpoint/header behavior, stable HTTP/schema
+mapping, model-not-found and response/option bounds.
 
 ## 5. Credential 与隐私边界
 

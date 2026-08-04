@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), and model onboarding contracts (Spec 54 Phase 0) are implemented and tested. The signed release bundle, ACME/OS certificate automation, provider probe/keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), and model onboarding contracts plus explicit OpenAI-compatible model probe (Spec 54 Phase 0/1) are implemented and tested. The signed release bundle, ACME/OS certificate automation, OS keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -211,7 +211,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - Goal write APIs, Web Goal projection actions, and governed preflight after the native Phase 0/1 contracts, storage, and authenticated read-only projection slice;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
 - Host-first same-origin static Web serving, cross-platform launcher/release packages, and signed update/rollback;
-- Provider probe/keychain adapters and the next Spec 54 onboarding integration slice;
+- OS keychain adapters and the next Spec 54 onboarding integration slice;
 - Android/iOS/HarmonyOS native clients after the Host/API/SSE contracts stabilize;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 
