@@ -639,8 +639,8 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
   current/previous/candidate 升级、SQLite 一致性备份、restore/migration、safe mode 和
   故障恢复。安装/升级不修改 workspace，备份默认排除 API key、private key、完整环境变量
   和 workspace 内容。
-- [Spec 54](specs/54-model-provider-onboarding.md)：Phase 0/1 已实现 strict onboarding contracts
-  与显式 bounded model probe；后续定义 local/cloud 模型向导、Ollama、
+- [Spec 54](specs/54-model-provider-onboarding.md)：Phase 0/1/2 已实现 strict onboarding contracts、
+  显式 bounded model probe 和 authenticated daemon probe route；后续定义 local/cloud 模型向导、Ollama、
   LM Studio、llama.cpp、OpenAI-compatible、Anthropic 和 DeepSeek 显式 endpoint，采用
   secret reference、bounded probe、能力快照和 run snapshot isolation；不自动下载模型。
 - [Spec 55](specs/55-public-deployment-certificates-operations.md)：定义 loopback/LAN/

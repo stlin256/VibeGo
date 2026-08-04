@@ -1,5 +1,5 @@
-import { ModelProviderSnapshotSchema, type ModelEvent, type ModelProvider, type ModelProviderSnapshot } from '@ready4vibe/contracts';
-import { OpenAICompatibleProvider } from '@ready4vibe/model-openai';
+import { ModelProviderSnapshotSchema, ModelProbeResultSchema, type ModelEvent, type ModelProbeResult, type ModelProvider, type ModelProviderSnapshot } from '@ready4vibe/contracts';
+import { OpenAICompatibleProvider, probeOpenAICompatibleModels, type ProbeFetchImplementation } from '@ready4vibe/model-openai';
 
 export type ModelSettingsSource = 'environment' | 'web-memory' | 'unconfigured';
 
@@ -33,6 +33,7 @@ export interface ModelSettingsManager {
   status(): ModelSettingsStatus;
   configure(input: ModelSettingsInput): ModelSettingsStatus;
   clear(): ModelSettingsStatus;
+  probe(input: { endpoint: string; timeoutMs?: number }): Promise<ModelProbeResult>;
   bindRun(selection: ModelRunSelection): ModelProviderBinding;
 }
 
@@ -61,7 +62,7 @@ export function createModelProvider(env: NodeJS.ProcessEnv = process.env): Model
 }
 
 export class ModelSettingsError extends Error {
-  constructor(readonly code: 'INVALID_PROVIDER' | 'INVALID_BASE_URL' | 'INVALID_API_KEY' | 'INVALID_MODEL', message: string) {
+  constructor(readonly code: 'INVALID_PROVIDER' | 'INVALID_BASE_URL' | 'INVALID_API_KEY' | 'INVALID_MODEL' | 'INVALID_PROBE_ENDPOINT', message: string) {
     super(message);
     this.name = 'ModelSettingsError';
   }
@@ -70,14 +71,20 @@ export class ModelSettingsError extends Error {
 export class InMemoryModelSettingsManager implements ModelSettingsManager {
   readonly provider: SwitchingModelProvider;
   private currentStatus: ModelSettingsStatus;
+  private currentApiKey: string | undefined;
+  private currentModelName: string | null;
   private revision = 0;
   private readonly clock: () => Date;
+  private readonly probeFetchImpl: ProbeFetchImplementation | undefined;
 
-  constructor(env: NodeJS.ProcessEnv = process.env, clock: () => Date = () => new Date()) {
+  constructor(env: NodeJS.ProcessEnv = process.env, clock: () => Date = () => new Date(), probeFetchImpl?: ProbeFetchImplementation) {
     const provider = createModelProvider(env);
     this.provider = new SwitchingModelProvider(provider);
     this.currentStatus = statusFromEnvironment(env, provider);
+    this.currentApiKey = env.READY4VIBE_MODEL_API_KEY;
+    this.currentModelName = env.READY4VIBE_MODEL_NAME ?? null;
     this.clock = clock;
+    this.probeFetchImpl = probeFetchImpl;
   }
 
   status(): ModelSettingsStatus {
@@ -92,6 +99,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
       apiKey: normalized.apiKey,
     });
     this.provider.replace(nextProvider);
+    this.currentApiKey = normalized.apiKey;
+    this.currentModelName = normalized.model;
     this.revision += 1;
     this.currentStatus = {
       configured: true,
@@ -105,6 +114,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
 
   clear(): ModelSettingsStatus {
     this.provider.replace(createUnconfiguredProvider());
+    this.currentApiKey = undefined;
+    this.currentModelName = null;
     this.revision += 1;
     this.currentStatus = {
       configured: false,
@@ -114,6 +125,32 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
       source: 'unconfigured',
     };
     return this.status();
+  }
+
+  async probe(input: { endpoint: string; timeoutMs?: number }): Promise<ModelProbeResult> {
+    if (!this.currentStatus.configured || !this.currentApiKey) {
+      return unavailableProbe(this.clock().toISOString(), 'credential-store-unavailable');
+    }
+    if (!this.currentModelName) return unavailableProbe(this.clock().toISOString(), 'model-not-found');
+    try {
+      return await probeOpenAICompatibleModels({
+        endpoint: input.endpoint,
+        providerId: this.currentStatus.providerId,
+        modelId: this.currentModelName,
+        apiKey: this.currentApiKey,
+        ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
+        ...(this.probeFetchImpl ? { fetchImpl: this.probeFetchImpl } : {}),
+        now: () => this.clock().toISOString(),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'PROBE_ENDPOINT_INVALID') {
+        throw new ModelSettingsError('INVALID_PROBE_ENDPOINT', 'A complete HTTPS model-list endpoint is required.');
+      }
+      if (error instanceof Error && error.message === 'PROBE_OPTIONS_INVALID') {
+        throw new ModelSettingsError('INVALID_PROBE_ENDPOINT', 'Probe timeout is outside the allowed range.');
+      }
+      return unavailableProbe(this.clock().toISOString(), 'protocol-mismatch');
+    }
   }
 
   bindRun(selection: ModelRunSelection): ModelProviderBinding {
@@ -200,4 +237,16 @@ function createUnconfiguredProvider(): ModelProvider {
       yield { type: 'error', code: 'MODEL_PROVIDER_NOT_CONFIGURED', retryable: false, safeMessage: 'No model provider is configured for this daemon.' };
     },
   };
+}
+
+function unavailableProbe(checkedAt: string, errorCode: NonNullable<ModelProbeResult['errorCode']>): ModelProbeResult {
+  return ModelProbeResultSchema.parse({
+    schemaVersion: 'ready4vibe_model_probe_result_v1',
+    status: 'blocked',
+    checkedAt,
+    latencyMs: null,
+    revision: null,
+    errorCode,
+    capabilities: null,
+  });
 }

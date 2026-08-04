@@ -84,4 +84,28 @@ describe('daemon model configuration', () => {
     expect(() => manager.bindRun({ provider: 'fake', name: 'token=secret-value' })).toThrowError(new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.'));
     expect(() => manager.bindRun({ provider: 'fake', name: 'model\nname' })).toThrowError(new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.'));
   });
+
+  it('probes only on explicit request, keeps the key out of the result, and does not replace the provider', async () => {
+    let calls = 0;
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async (_input, init) => {
+      calls += 1;
+      expect(init?.method).toBe('GET');
+      expect(init?.body).toBeUndefined();
+      return new Response(JSON.stringify({ data: [{ id: 'deepseek-v4-flash' }] }), { status: 200 });
+    });
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    const before = manager.provider.snapshot();
+    const result = await manager.probe({ endpoint: 'https://api.deepseek.com/models' });
+    expect(result).toMatchObject({ status: 'ready', capabilities: { modelId: 'deepseek-v4-flash' } });
+    expect(JSON.stringify(result)).not.toContain('test-secret');
+    expect(calls).toBe(1);
+    expect(manager.provider.snapshot()).toBe(before);
+  });
+
+  it('returns a bounded missing-credential result and rejects unsafe probe input', async () => {
+    const manager = new InMemoryModelSettingsManager({});
+    await expect(manager.probe({ endpoint: 'https://api.deepseek.com/models' })).resolves.toMatchObject({ status: 'blocked', errorCode: 'credential-store-unavailable' });
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    await expect(manager.probe({ endpoint: 'https://api.deepseek.com/models?token=secret' })).rejects.toThrowError(new ModelSettingsError('INVALID_PROBE_ENDPOINT', 'A complete HTTPS model-list endpoint is required.'));
+  });
 });

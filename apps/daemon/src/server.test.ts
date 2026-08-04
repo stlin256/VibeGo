@@ -593,6 +593,28 @@ describe('daemon health server', () => {
     expect(await cleared.json()).toMatchObject({ configured: false, source: 'unconfigured' });
   });
 
+  it('serves the explicit authenticated model probe without accepting or returning credentials', async () => {
+    const modelSettings = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async (input, init) => {
+      expect(input).toBe('https://api.deepseek.com/models');
+      expect(init?.method).toBe('GET');
+      return new Response(JSON.stringify({ data: [{ id: 'deepseek-v4-flash' }] }), { status: 200 });
+    });
+    modelSettings.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    const server = createDaemonServer({ modelSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/model/probe`;
+    const result = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'https://api.deepseek.com/models', timeoutMs: 5000, apiKey: 'should-be-rejected' }) });
+    const body = await result.text();
+    expect(result.status).toBe(400);
+    expect(body).not.toContain('should-be-rejected');
+    const success = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'https://api.deepseek.com/models', timeoutMs: 5000 }) });
+    const successBody = await success.text();
+    expect(success.status).toBe(200);
+    expect(successBody).not.toContain('test-secret');
+    expect(JSON.parse(successBody)).toMatchObject({ status: 'ready', capabilities: { modelId: 'deepseek-v4-flash' } });
+  });
+
   it('rejects a run whose provider selection does not match the captured daemon binding', async () => {
     const modelSettings = new InMemoryModelSettingsManager({});
     modelSettings.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });

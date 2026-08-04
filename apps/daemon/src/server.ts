@@ -638,6 +638,32 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/model/probe') {
+    if (!options.modelSettings) {
+      writeJson(response, 503, { error: { code: 'MODEL_SETTINGS_UNAVAILABLE', message: 'Model settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isModelProbeInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'A complete model-list endpoint is required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, await options.modelSettings.probe(input));
+    } catch (error) {
+      if (error instanceof ModelSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
   if (pathname === '/api/v1/settings/agent-memory') {
     if (!options.agentMemorySettings) {
       writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
@@ -1081,6 +1107,12 @@ function isModelSettingsInput(value: unknown): value is ModelSettingsInput {
     && 'baseUrl' in value && typeof value.baseUrl === 'string'
     && 'apiKey' in value && typeof value.apiKey === 'string'
     && 'model' in value && typeof value.model === 'string';
+}
+
+function isModelProbeInput(value: unknown): value is { endpoint: string; timeoutMs?: number } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || !Object.keys(value).every((key) => key === 'endpoint' || key === 'timeoutMs') || !('endpoint' in value) || typeof value.endpoint !== 'string' || value.endpoint.length === 0 || value.endpoint.length > 2_048) return false;
+  if (!('timeoutMs' in value) || value.timeoutMs === undefined) return true;
+  return typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) && value.timeoutMs >= 50 && value.timeoutMs <= 30_000;
 }
 
 function isToolSettingsInput(value: unknown): value is { filesystemEnabled: boolean } {

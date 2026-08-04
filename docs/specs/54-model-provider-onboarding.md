@@ -1,6 +1,6 @@
 # Spec 54：本地模型与云模型配置向导
 
-- Status: Phase 0/1 implemented（strict onboarding contracts + explicit bounded model probe；settings/runtime integration remains unchanged）
+- Status: Phase 0/1/2 implemented（strict contracts + explicit bounded probe + authenticated daemon route；provider/run behavior remains unchanged）
 - Date: 2026-08-04
 - Related: [Spec 28](28-model-provider-onboarding.md)、[Spec 47](47-model-context-agent-loop-productionization.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -109,6 +109,19 @@ returned. A probe result is advisory and does not configure a provider, create
 a run, write an event, download a model or change an in-flight snapshot. Three
 focused adapter tests cover exact endpoint/header behavior, stable HTTP/schema
 mapping, model-not-found and response/option bounds.
+
+### Phase 2 implementation update (2026-08-05)
+
+The daemon exposes the probe only as an authenticated, explicit `POST` action.
+The request contains a complete endpoint and bounded timeout; it never accepts
+an API key, credential value, prompt, workspace path or arbitrary headers. The
+manager reads the already configured in-process credential for one request and
+returns the versioned result, while settings status, provider selection,
+AgentLoop, RunManager, Scheduler, Approval, Sandbox and event stores remain
+unchanged. A missing provider or probe failure is a bounded result, not a Web
+500 and not a replacement provider. Daemon/model settings fixtures cover
+unknown-field rejection, credential-free request bodies, secret-free results,
+missing credentials and provider snapshot preservation.
 
 ## 5. Credential 与隐私边界
 
