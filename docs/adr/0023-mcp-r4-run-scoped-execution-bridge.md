@@ -1,6 +1,6 @@
 # ADR 0023: MCP R4 run-scoped execution bridge
 
-- Status: accepted for implementation
+- Status: implemented (opt-in run-scoped bridge; default MCP remains off)
 - Date: 2026-08-04
 - Related: [Spec 49](../specs/49-mcp-skill-transport-and-capability-lifecycle.md),
   [ADR 0021](0021-mcp-capability-snapshot-and-registry.md),

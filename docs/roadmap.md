@@ -442,9 +442,9 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2/R3 已实现，R4 contract 已冻结）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2/R3/R4 已实现）
 
-### Spec 49-R4 implementation contract (2026-08-04)
+### Spec 49-R4 implementation update (2026-08-04/2026-08-05)
 
 R4 is deliberately a run-scoped bridge. An immutable, healthy-verified MCP
 capability snapshot is captured at run creation; only executable tool
@@ -523,8 +523,9 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 R3 当前实现已落地：`@ready4vibe/contracts` 的 strict settings/status/probe schema、
 `McpSettingsManager` 的 SQLite/in-memory settings adapter、认证 daemon routes 和
 conversation-first Web 设置卡均已覆盖 focused tests。未提供默认 probe，因此默认启动、
-关闭状态和未配置 verifier 时仍不会启动子进程或发网络请求；R4 才评估 run-scoped
-ToolExecutor bridge。
+关闭状态和未配置 verifier 时仍不会启动子进程或发网络请求；R4 run-scoped
+ToolExecutor bridge、注入式 activation、session drain 与本地 live smoke 均已实现，
+默认 MCP 仍关闭。
 
 ## Spec 50：Observability lifecycle integration（R1/R2/R3/R4 已完成）
 

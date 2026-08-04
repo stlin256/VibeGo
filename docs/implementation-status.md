@@ -458,7 +458,7 @@ focused contracts, failure fixtures and release evidence are accepted.
 
 ## Spec 49-R4 implementation note (2026-08-04)
 
-The R4 contract is frozen in [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md).
+The R4 contract is implemented under [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md).
 Implementation is intentionally limited to a run-scoped adapter: an
 immutable healthy-verified MCP tool snapshot can be bound to the existing
 ToolRegistry/ToolExecutorRuntime, while Approval, Scheduler, Sandbox,
