@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3 与 42d-1 已实现；其余 42d 验收仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1 与 42d-2 已实现；其余 42d 验收仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
