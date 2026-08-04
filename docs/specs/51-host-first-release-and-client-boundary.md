@@ -2,7 +2,7 @@
 
 - Status: planned (51-R0 packaging gate)
 - Date: 2026-08-04
-- Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
+- Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
 ## Goal
 
@@ -13,6 +13,11 @@ Web server or a native client on the remote device. Android, iOS and HarmonyOS
 clients remain a later consumer of the same versioned API/SSE boundary.
 
 This Spec is about packaging and transport, not a new execution plane.
+
+The actual Tailscale/SSH adapters, ACME issuance/renewal evidence and the
+cross-component first-run/release gate are specified in Spec 52. Native mobile
+clients remain post-release consumers and are not required for the Web Host
+release.
 
 ## Current baseline and gap
 
@@ -126,7 +131,10 @@ each supported platform fixture.
 Connect the existing certificate metadata/settings UI to a safe certificate
 adapter. LAN default remains fail-closed without valid TLS unless the user
 explicitly selects development HTTP. ACME, OS certificate stores and public
-reverse proxies are optional adapters with dry-run/probe/renew/rollback tests.
+reverse proxies are optional adapters for a loopback/LAN Host, with
+dry-run/probe/renew/rollback tests. When a release profile selects a public
+domain, Spec 52 makes ACME issuance/renewal and rollback evidence a mandatory
+release gate.
 
 Exit: certificate expiry, hostname mismatch, private-key failure, renewal
 failure and rollback produce safe guidance and never print key material.

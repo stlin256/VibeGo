@@ -304,8 +304,19 @@ The following work is documented but not fully implemented yet:
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate
   Vite server; native Android/iOS/HarmonyOS clients remain post-MVP.
+- **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
+  cross-cutting capability-profile and first-run UX gate is now specified. It
+  defines preview, workspace-coding, advanced-local and custom profiles,
+  progressive capability unlock, contextual blocked-capability guidance,
+  profile/run snapshot isolation and Host-first acceptance. Its release gate
+  additionally covers Goal governed admission, real Tailscale/SSH transport,
+  ACME staging/renewal, a core Harness completeness matrix and a mandatory
+  out-of-band real LLM smoke. This is planning only; no profile resolver, new
+  default capability or run-path behavior has been implemented by this
+  documentation change. Native clients remain post-release and do not block
+  the Web/Host release.
 
-These five specs are design/planning gates only. They do not change the
+These six specs are design/planning gates only. They do not change the
 current statement that untrusted network/model/MCP/Skill/shell side effects
 are disabled unless explicitly configured through the authenticated boundary,
 and they do not modify `run_events`, `goal_events`, AgentLoop, RunManager,
@@ -351,8 +362,10 @@ AgentLoop state machine or introducing a second authority:
   network request or durable observability-ledger write occurs in this slice.
 
 R4 live smoke and Spec 50 automatic usage-ledger lifecycle attachment remain
-deferred. Goal admission, `goal_events`, Approval, Sandbox, Scheduler and
-WorkspaceRegistry behavior remain unchanged.
+deferred for the ordinary offline verification gate. A successful redacted
+live smoke is mandatory before the Spec 52 release gate; Goal admission,
+`goal_events`, Approval, Sandbox, Scheduler and WorkspaceRegistry behavior
+remain unchanged until their separately specified integration phases.
 
 ## Spec 48 R1 implementation note (2026-08-04)
 
