@@ -60,6 +60,7 @@
 52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
 53. Spec 55 Phase 55a 已实现：`packages/contracts/src/deployment-operations.ts` 提供 `deployment/v1` profile/readiness，将 loopback、LAN、Tailscale、SSH、public-direct、public-proxy 作为显式模式，LAN/public TLS 与 insecure override fail-closed，且不携带 private key、ACME/DNS credential、绝对路径或 raw adapter error；contracts focused suite 52 tests 与 typecheck 通过。本阶段不打开 listener、不接 ACME/forwarder，也不改变 AuthGate/daemon runtime。
 54. Spec 55 Phase 55b 已实现：复用现有 AuthGate 暴露只读 `GET /api/v1/deployment/readiness`，Web Settings drawer 显示 bounded mode/status/reason/next-step；缺失 projection 返回稳定 `DEPLOYMENT_READINESS_UNAVAILABLE` 并 fail-soft，不改变 pairing、interactive run、AgentLoop、run_events 或 transport listener，也不接受任何 deployment mutation。daemon focused suite 156 tests、Web focused suite 68 tests、daemon/Web typecheck 与 Web build 通过。
+55. Spec 57 Phase 57a contract boundary 已冻结：`release-manifest/v1` 与 ordered promotion state 将 immutable tag/channel、source commit、artifact digest、target、signature/attestation/SBOM refs、compatibility range 和 rollback target 设为 strict metadata；stable 需要显式 approval，published 只能 withdraw。本阶段不创建 GitHub workflow/release、不上传/签名 artifact，也不读取 credential、workspace 或运行时事实源。
 
 47a. `docs/specs/44-provider-usage-management-and-upstream-reuse.md`、`docs/adr/0013-upstream-research-and-provider-management-boundary.md`、`docs/prompts/44-provider-usage-management-implementation.md` 和 `docs/research/upstream-provider-usage.md` 已完成 Spec 44-R0：CC Switch、AxonHub、LiteLLM、Langfuse、OpenTelemetry 的 canonical URL、默认分支、pinned commit、LICENSE/NOTICE 边界、相关文件路径和语义摘要均已记录，所有复用决定均为 clean-room。没有复制上游源码、schema、UI、session 或 runtime，也未新增依赖；R1/R2/R3 的实现状态见下列条目。
 47b. Spec 44-R1 provider/usage contract slice 已完成：`packages/contracts/src/provider-usage.ts` 提供严格版本化 `ProviderDescriptor`、`ProviderCapabilitySnapshot`、`ProviderUsageObservation`、secret/path fail-closed 校验和 token 维度向后兼容扩展；`packages/observability/src/provider-usage.ts` 提供 immutable in-memory `ProviderRegistry`、capability snapshot 与纯 `normalizeProviderUsageObservation`，现有 run-event replay projection 显式保留 `dataSource`/input token semantics。测试覆盖 strictness、privacy、快照隔离、cache-inclusive/fresh、unknown counters 和幂等输入；仍不接入 AgentLoop、RunManager、daemon API 或默认 run。
@@ -454,11 +455,10 @@ Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
   typed settings/guardrail labels, eight ratio/device fixtures and strict
   compatibility/performance report projections. It does not start Playwright,
   claim emulation as real-device proof, or assert WCAG/manual evidence.
-- **Spec 57** (`specs/57-release-publishing-pipeline.md`) is Proposed. It defines
-  protected tag/channel promotion, reproducible multi-platform builds, checksum,
-  platform signing, SBOM, provenance/attestation, draft-to-stable approval and
-  withdrawn/rollback procedures. It does not create GitHub Actions, publish a
-  release or upload artifacts.
+- **Spec 57** (`specs/57-release-publishing-pipeline.md`) has a frozen Phase 57a
+  `release-manifest/v1` and ordered promotion contract for immutable tag/channel,
+  artifact checksum/target/evidence refs, stable approval and withdrawn state.
+  It does not create GitHub Actions, publish a release or upload artifacts.
 
 The research basis is recorded in
 `docs/research/53-57-release-install-model-operations-research.md`. Before any

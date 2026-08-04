@@ -1,6 +1,6 @@
 # Spec 57：Release 发布流水线与供应链证明
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
+- Status: Phase 57a contract boundary frozen（不改变当前运行时；GitHub workflow/artifact publishing remains later）
 - Date: 2026-08-04
 - Related: [Spec 46](46-automated-verification-workflow.md)、[Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 53](53-host-install-upgrade-backup-recovery.md)、[Spec 55](55-public-deployment-certificates-operations.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -170,3 +170,25 @@ Stable 发布前由人工确认：
   但 release candidate 必须附上对应的显式 evidence 或 `degraded` 说明；
 - 不复制 GitHub/Cosign/Node/Playwright 的源代码或 UI；
 - 不创建第二套版本、migration、backup、rollback 或 artifact authority。
+
+## 11. Phase 57a contract boundary（2026-08-05）
+
+Phase 57a freezes a pure `release-manifest/v1` and promotion-state contract
+before any GitHub Actions or packaging work. The manifest is an immutable
+description, not a download instruction:
+
+- channel, SemVer tag, source commit, minimum host version, database schema
+  range, rollback target and bounded artifact entries are explicit;
+- every artifact has a lowercase SHA-256 digest, safe basename, target OS/arch
+  and bounded signature/attestation/SBOM references; URLs with credentials,
+  query tokens, absolute paths and mutable `latest` references are rejected;
+- `nightly`, `preview` and `stable` tag/channel rules are validated, with
+  stable requiring a non-prerelease tag and an explicit approval transition;
+- promotion phases are ordered and immutable. A published release may only
+  move to withdrawn; it cannot be overwritten or silently republished.
+
+The contract does not create a GitHub release, upload an artifact, sign a file,
+run CI, read credentials or inspect a user workspace. It does not alter Host,
+AgentLoop, RunManager, Scheduler, Approval, Sandbox, `run_events` or
+`goal_events`; later workflow stages consume the projection as an external
+release authority.

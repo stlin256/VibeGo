@@ -655,7 +655,8 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
   catalog；Phase 56c 已实现八类 fixture、严格 compatibility/performance report
   contract 与 safe-area/fold CSS hook 的纯 Web slice；完整 catalog、WCAG 2.2 AA 人工审阅、Playwright
   device emulation 和真实设备 evidence matrix 仍后置，不以模拟器通过替代真实设备验收。
-- [Spec 57](specs/57-release-publishing-pipeline.md)：定义 tag/channel、可重复多平台构建、
+- [Spec 57](specs/57-release-publishing-pipeline.md)：Phase 57a 先冻结严格的
+  `release-manifest/v1` 与有序 promotion contract；后续接入 tag/channel、可重复多平台构建、
   checksum、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
   release evidence 和 withdrawn/rollback 流程。
 
