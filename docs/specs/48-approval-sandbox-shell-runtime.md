@@ -148,7 +148,7 @@ engine. It must probe, start a bounded container, execute a harmless fixture,
 capture redacted status and dispose deterministically. The command is never
 part of unit CI or daemon startup and never pulls an image implicitly.
 
-#### R3 contract slice (2026-08-04 design gate)
+#### R3 contract and implementation (2026-08-04)
 
 The command is `pnpm smoke:container -- --runtime <docker|podman> --image
 <name@sha256:digest> [--workspace <absolute-root>]`. The image is required to
@@ -173,6 +173,14 @@ can cover healthy engine, missing engine, wrong digest, network/resource
 violations, timeout, cancellation and deterministic cleanup without starting a
 real engine. A real smoke is explicitly invoked by the user and is excluded
 from `pnpm verify` and daemon startup.
+
+The contract is implemented by `ContainerSmokeRunner`,
+`ContainerCliRuntimeProbe` and `scripts/smoke-container.mjs`. The runner keeps
+raw probe/container output out of `ContainerSmokeReport`, maps unavailable,
+timeout, cancellation, fixture mismatch and cleanup failures to stable codes,
+and reuses the existing `ContainerCliRunner`/`ExternalSandboxExecutor` ports.
+Focused tests cover 30 `sandbox-runtime` cases plus the CLI parser/exit mapping;
+no test starts a real engine or arbitrary host command.
 
 Exit: healthy engine, missing engine, wrong digest, port/network violation,
 resource limit, timeout, cancellation and cleanup are reproducible.

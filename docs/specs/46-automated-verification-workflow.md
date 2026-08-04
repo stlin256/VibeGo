@@ -41,6 +41,11 @@ selector list when its public contract or generated `dist` output is part of
 the change. This keeps feedback fast without weakening the pre-commit
 `pnpm verify` gate.
 
+Opt-in integration commands such as `pnpm smoke:container` remain outside
+`pnpm verify`; their deterministic parser/contract tests may run through
+`pnpm test:workflow`, while a real engine smoke is explicitly invoked only by
+the user.
+
 ## Portability and failure behavior
 
 - Resolve `pnpm` as `pnpm.cmd` on Windows and `pnpm` elsewhere.

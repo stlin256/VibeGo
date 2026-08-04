@@ -407,7 +407,7 @@ opt-in R4 command. The R3 slice gate passed with 402 tests; the R1 gate passed
 with 412 tests; the current repository gate is `pnpm verify` with 420 tests
 after Spec 48-R2.
 
-## Spec 48：Approval/Sandbox/Shell runtime closure（48-R2 已实现，R3 实施中）
+## Spec 48：Approval/Sandbox/Shell runtime closure（48-R3 已实现，R4 规划）
 
 详见 [Spec 48](specs/48-approval-sandbox-shell-runtime.md) 与
 [ADR 0017](adr/0017-policy-compiler-and-bounded-approval.md)。48-R1 先交付纯
@@ -424,12 +424,12 @@ workspace realpath、最小环境、超时/输出上限和 Windows tree-terminat
 该切片 focused sandbox-runtime tests 17 个，全仓门禁当前 420 tests；真实进程、
 容器和 Web approval continuation 保持后续阶段。
 
-48-R3 先冻结 opt-in container smoke contract：`pnpm smoke:container` 只接受
+48-R3 已实现 opt-in container smoke contract：`pnpm smoke:container` 只接受
 Docker/Podman、immutable image digest 和可解析 workspace，固定执行无害 fixture，
 restricted network、`--pull=never`、`--rm`、资源/超时/输出上限和取消均由现有
 sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded、redacted 状态。
-该命令不进入 `pnpm verify`、daemon 启动或默认 run；当前先完成注入式单测，再由用户
-显式提供本地 engine/image 执行真实 smoke。
+该命令不进入 `pnpm verify`、daemon 启动或默认 run；focused sandbox-runtime 30 tests
+和 CLI workflow 7 tests 已通过，真实 engine/image smoke 仍由用户显式触发。
 
 ## Spec 49：MCP/Skill transport and capability lifecycle（规划）
 

@@ -44,7 +44,7 @@ The core loop is deliberately small:
 | Models | OpenAI-compatible provider boundary, authenticated Web onboarding, process-memory secret handling, and in-memory fake provider for deterministic tests |
 | Context | Source-labelled context manager with budget/compaction boundaries |
 | Safety | Untrusted-task external-sandbox requirement, path/argv guards, approval policy metadata |
-| Tools | Guarded filesystem read/write, opt-in Git status/diff/log reads, plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled |
+| Tools | Guarded filesystem read/write, opt-in Git status/diff/log reads, plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled; digest-pinned container smoke is explicit |
 | Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, daemon-local non-secret persistence, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
@@ -66,6 +66,9 @@ pnpm --filter @ready4vibe/web dev
 # Build and start the daemon (loopback only)
 pnpm build
 pnpm --filter @ready4vibe/daemon start
+
+# Optional local Docker/Podman smoke (digest required; never pulls an image)
+pnpm smoke:container -- --runtime docker --image ghcr.io/example/runner@sha256:<64-hex-digest>
 ```
 
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development

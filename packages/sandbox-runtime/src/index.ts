@@ -105,6 +105,7 @@ export function buildContainerLaunchPlan(request: SandboxLaunchRequest): Sandbox
     'run',
     '--rm',
     '--init',
+    '--pull=never',
     '--read-only',
     '--cap-drop=ALL',
     '--security-opt=no-new-privileges',
@@ -360,3 +361,5 @@ function mountArg(source: string, destination: string, writable: boolean): strin
   }
   return `type=bind,src=${source},dst=${destination},${writable ? 'rw' : 'readonly'}`;
 }
+
+export * from './container-smoke.js';

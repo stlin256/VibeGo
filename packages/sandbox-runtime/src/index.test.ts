@@ -35,7 +35,7 @@ describe('external sandbox runtime plan', () => {
     const plan = buildContainerLaunchPlan(request());
     expect(plan.runtime).toBe('docker');
     expect(plan.argv).toEqual(expect.arrayContaining([
-      'run', '--rm', '--init', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
+      'run', '--rm', '--init', '--pull=never', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
       '--pids-limit', '128', '--network', 'none', '--memory', '536870912b', '--cpus', '1.5', '--env', 'NODE_ENV',
       digestImage, 'node', 'run.mjs', '--mode', 'safe',
     ]));
@@ -58,6 +58,12 @@ describe('external sandbox runtime plan', () => {
     expect(() => buildContainerLaunchPlan(request({ writableRoots: [resolve(workspaceRoot, '..', 'outside')] }))).toThrowError(new SandboxRuntimeError('WRITABLE_ROOT_INVALID', 'Writable root must remain within the workspace.'));
     expect(() => buildContainerLaunchPlan(request({ command: ['sh', '-c', 'echo $HOME'] }))).toThrowError(new SandboxRuntimeError('ARGV_INVALID', 'Sandbox command contains disallowed process input.'));
     expect(() => buildContainerLaunchPlan(request({ env: { NODE_ENV: 'test', SECRET_TOKEN: 'x' } }))).toThrowError(new SandboxRuntimeError('ENV_NOT_ALLOWED', 'Sandbox environment key is not allowlisted.'));
+  });
+
+  it('rejects network and resource violations before any runner can start', () => {
+    expect(() => buildContainerLaunchPlan(request({ network: 'host' as never }))).toThrowError(new SandboxRuntimeError('NETWORK_INVALID', 'Sandbox network mode is invalid.'));
+    expect(() => buildContainerLaunchPlan(request({ limits: { maxMemoryBytes: 0 } }))).toThrowError(new SandboxRuntimeError('RESOURCE_INVALID', 'Sandbox memory limit is invalid.'));
+    expect(() => buildContainerLaunchPlan(request({ limits: { maxCpuMillis: 64_001 } }))).toThrowError(new SandboxRuntimeError('RESOURCE_INVALID', 'Sandbox CPU limit is invalid.'));
   });
 
   it('fails closed for VM, invalid resources, and missing runners', async () => {
