@@ -281,9 +281,10 @@ The following work is documented but not fully implemented yet:
   explicit OpenAI-compatible adapter and the R3 daemon bridge are implemented.
   The opt-in live model smoke remains R4; the default still makes no network
   request and no credential has been written to the repository.
-- **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): compiled
-  approval/sandbox policy, Codex-like bounded auto-approval, Windows process
-  tree/container smoke and full Web continuation. Existing adapters remain
+- **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1 policy
+  compiler is the current implementation slice; it is pure, deterministic and
+  fail-closed with exact bounded grants. Windows process tree/container smoke
+  and full Web continuation remain later phases. Existing adapters remain
   explicit and default-off.
 - **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): real
   stdio/Streamable HTTP transport, health classification, capability snapshot
@@ -346,3 +347,16 @@ AgentLoop state machine or introducing a second authority:
 R4 live smoke and Spec 50 automatic usage-ledger lifecycle attachment remain
 deferred. Goal admission, `goal_events`, Approval, Sandbox, Scheduler and
 WorkspaceRegistry behavior remain unchanged.
+
+## Spec 48 R1 implementation note (2026-08-04)
+
+Documentation now records the first policy compiler slice before runtime
+changes. The compiler is implemented and tested in `@ready4vibe/policy`; it
+returns `allow | ask | deny`, validates the server-side tool/schema and policy
+revision, computes a deterministic exact approval key from bounded metadata,
+and supports short-lived, limited-use grants only for low-risk work. It never
+stores raw arguments, commands, paths, environment values, or secrets. Existing
+`ApprovalPolicy` callers and all execution/event authorities remain unchanged;
+R2 process execution, R3 container smoke and R4 Web continuation are deferred.
+The focused policy suite has 17 tests and the repository gate now passes with
+412 tests; no live process, container, network or model credential is used.

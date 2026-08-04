@@ -1,6 +1,8 @@
 import type { ApprovalPolicy as ApprovalPolicyConfig, TaskTrust } from '@ready4vibe/contracts';
 import { ToolRegistry, type ToolDescriptor, type ToolRisk, type ToolSandboxMode } from '@ready4vibe/tools';
 
+export * from './compiler.js';
+
 export type PolicyDecision = 'allow' | 'prompt' | 'forbidden';
 
 export interface ToolIntent {

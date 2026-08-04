@@ -403,15 +403,22 @@ application service。真实 LLM smoke 只允许通过独立命令和进程外 s
 OpenAI-compatible endpoint adapter；该切片已覆盖 provider snapshot、Responses/
 Anthropic-shaped fixture replay、token/byte compaction 与 pre-stream retry，daemon
 R3 daemon/application bridge is now implemented; live smoke remains the later
-opt-in R4 command. The current full gate is `pnpm verify` with 402 tests.
+opt-in R4 command. The R3 slice gate passed with 402 tests; the current
+repository gate is `pnpm verify` with 412 tests after Spec 48-R1.
 
-## Spec 48：Approval/Sandbox/Shell runtime closure（规划）
+## Spec 48：Approval/Sandbox/Shell runtime closure（48-R1 实施中）
 
-详见 [Spec 48](specs/48-approval-sandbox-shell-runtime.md)。本阶段把 Codex-like 的
-permission profile、project trust、filesystem/network policy 和低风险短期自动审批转为
-ready4vibe 原生 policy compiler；再完成 Windows/Unix 进程树、外部容器 smoke 和 Web
-approval continuation。模型输出永远不是授权，host-restricted 不得显示为强隔离，危险工具
+详见 [Spec 48](specs/48-approval-sandbox-shell-runtime.md) 与
+[ADR 0017](adr/0017-policy-compiler-and-bounded-approval.md)。48-R1 先交付纯
+policy compiler：精确参数 fingerprint grant key、短期/限次 session grant、
+stale revision fail-closed、effective sandbox/network snapshot 与安全 reason/audit
+metadata。它不改变 AgentLoop、RunManager、HTTP、run_events、goal_events、Scheduler、
+Sandbox 或 WorkspaceRegistry。后续再完成 Windows/Unix 进程树、外部容器 smoke 和 Web
+approval continuation；模型输出永远不是授权，host-restricted 不得显示为强隔离，危险工具
 仍需审批/沙箱/调度三重门禁。
+
+48-R1 的 focused policy tests 与全仓 `pnpm verify` 已通过（当前 412 tests）；
+真实进程、容器和 Web approval continuation 保持后续阶段。
 
 ## Spec 49：MCP/Skill transport and capability lifecycle（规划）
 
