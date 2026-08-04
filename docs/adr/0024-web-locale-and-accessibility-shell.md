@@ -1,6 +1,6 @@
 # ADR 0024: Web locale preference and accessibility shell boundary
 
-- Status: Accepted for Phase 56a
+- Status: Accepted for Phase 56a; Phase 56b implemented; Phase 56c contract frozen
 - Date: 2026-08-05
 
 ## Decision
@@ -51,3 +51,19 @@ typed catalog. The focus scope is an interaction concern only: it never
 changes run/provider/Goal state or network subscriptions. The implementation
 uses a small pure index helper plus DOM wiring, so keyboard behavior remains
 unit-testable without adding a browser runtime dependency.
+
+## Phase 56c extension (contract frozen)
+
+The next Web-only slice introduces strict, privacy-safe fixture and report
+types for the eight documented ratio/device families. It is deliberately a
+pure contract and unit-test slice: no Playwright process, browser automation,
+device sniffing, daemon route, run event, or real-device pass claim is added.
+Compatibility reports default to `unverified` and are limited to bounded
+viewport/orientation/input/safe-area metadata. Performance reports carry only
+bounded timing counters and fixture metadata; absent measurements remain
+`unverified`.
+
+The report adapter rejects unknown fields, secrets, absolute paths, raw user
+content and oversized values. CSS safe-area/fold hooks remain optional
+progressive enhancement, with the existing ratio/container layout as the
+authority when a platform does not expose fold features.

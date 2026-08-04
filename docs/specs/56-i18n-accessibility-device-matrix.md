@@ -1,6 +1,6 @@
 # Spec 56：多语言、无障碍与真实设备兼容矩阵
 
-- Status: Phase 56a/56b implemented（locale/accessibility shell + focus/catalog slice；full catalog and real-device evidence remain later）
+- Status: Phase 56a/56b implemented；Phase 56c contract frozen for Web fixture/report slice（full catalog and real-device evidence remain later）
 - Date: 2026-08-04
 - Related: [Spec 37](37-ratio-responsive-ui.md)、[Spec 38](38-conversation-first-web-shell.md)、[Spec 42](42-shadcn-style-web-design-system.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -165,7 +165,7 @@ conversation-first Web shell，不新增 daemon API、device-specific backend �
   actions 保持键盘可达；focus-visible、reduced-motion 和 44px touch target 由 CSS/DOM
   focused tests 门禁。
 - Phase 56a 只声明 emulated viewport contract，不能把它当作真实设备通过；Playwright
-  projects、屏幕阅读器人工证据、完整翻译审阅和三折叠实验室证据属于后续 Phase 56b/56c。
+  projects、屏幕阅读器人工证据、完整翻译审阅和三折叠实验室证据属于后续 Phase 56c。
 
 `apps/web` now provides the bounded locale adapter, dedicated storage key,
 root-document `lang` synchronization, language selector, core shell catalog and
@@ -204,3 +204,38 @@ profile, model, guardrail and limit labels are catalog-backed in both locales.
 Focused Web tests cover the pure index/filter helpers and dialog landmarks;
 58 Web tests, typecheck and production build pass. No run/provider/Goal/SSE
 state is changed by locale or focus interactions.
+
+## 11. Phase 56c contract boundary（2026-08-05）
+
+Phase 56c first freezes a pure Web fixture/report contract for the eight
+ratio-oriented form factors. It does not start Playwright, inspect a real
+device, or change daemon/run behavior. The implementation may be used by
+focused unit tests and later release tooling, but a fixture is never evidence
+that a physical device passed.
+
+The fixture identifiers are stable and bounded:
+
+- `desktop-wide`, `desktop-portrait`, `phone`, `fold-cover`,
+  `fold-unfolded`, `fold-wide`, `tri-fold`, and `tablet`;
+- each fixture carries a bounded viewport width/height, aspect-ratio label,
+  orientation, input mode, and an optional hinge/safe-area profile;
+- no user agent, browser fingerprint, absolute path, raw transcript, user
+  content, token, API key, or environment variable may enter a fixture or
+  report.
+
+`WebCompatibilityReport` and `WebPerformanceReport` are versioned, strict
+projections. Their default result is `unverified`; only explicit bounded
+evidence can move a result to `pass`, `pass-with-known-issue`, `degraded`, or
+`blocked`. Compatibility evidence is limited to viewport/layout hooks,
+orientation, input affordance and safe-area/fold declarations. Performance
+evidence is limited to bounded timing counters and fixture metadata; it does
+not claim Core Web Vitals, hardware performance, browser permission behavior,
+or real-device/network characteristics.
+
+The report privacy boundary is fail-closed: unknown fields, secret-shaped
+values, absolute paths, oversized strings/arrays, raw error text and user
+content are rejected. A missing measurement remains `unverified`, not a
+synthetic zero or a guessed pass. The CSS layer may expose safe-area and
+fold-segment hooks through platform media features, but layout remains
+container/ratio-first and must continue to work when those features are
+absent.

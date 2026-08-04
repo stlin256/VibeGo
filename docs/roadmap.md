@@ -649,8 +649,9 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 - [Spec 56](specs/56-i18n-accessibility-device-matrix.md)：Phase 56a 已落地
   `en-US`/`zh-CN` locale contract、独立非 secret 偏好、核心 shell accessibility 语义和
   ratio-first focused gates；Phase 56b 已落地 drawer focus scope 与 settings/guardrail
-  catalog；完整 catalog、WCAG 2.2 AA 人工审阅、Playwright device emulation 和真实设备
-  evidence matrix 仍按 56c 推进，不以模拟器通过替代真实设备验收。
+  catalog；Phase 56c 先冻结八类 fixture、严格 compatibility/performance report
+  contract 与 safe-area/fold CSS hook；完整 catalog、WCAG 2.2 AA 人工审阅、Playwright
+  device emulation 和真实设备 evidence matrix 仍后置，不以模拟器通过替代真实设备验收。
 - [Spec 57](specs/57-release-publishing-pipeline.md)：定义 tag/channel、可重复多平台构建、
   checksum、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
   release evidence 和 withdrawn/rollback 流程。
