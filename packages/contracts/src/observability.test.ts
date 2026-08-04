@@ -4,11 +4,13 @@ import {
   MODEL_USAGE_SCHEMA_VERSION,
   RESOURCE_SAMPLE_SCHEMA_VERSION,
   TOOL_USAGE_SCHEMA_VERSION,
+  USAGE_ROLLUP_SCHEMA_VERSION,
   USAGE_PROJECTION_SCHEMA_VERSION,
   AuditEventSchema,
   ModelUsageRecordSchema,
   ResourceSampleSchema,
   ToolUsageRecordSchema,
+  UsageRollupSchema,
   UsageProjectionSchema,
 } from './observability.js';
 
@@ -101,6 +103,23 @@ describe('observability contracts', () => {
       sourceEventCount: 4,
       sourceChecksum: 'b'.repeat(64),
     })).toBeTruthy();
+    expect(UsageRollupSchema.parse({
+      schemaVersion: USAGE_ROLLUP_SCHEMA_VERSION,
+      rollupId: 'rollup_01',
+      period: 'hour',
+      periodStart: at,
+      periodEnd: '2026-08-04T01:00:00.000Z',
+      modelAttempts: 1,
+      modelRequests: 1,
+      input: { total: 10, knownRecords: 1, unknownRecords: 0 },
+      output: { total: 3, knownRecords: 1, unknownRecords: 0 },
+      cachedInput: { total: null, knownRecords: 0, unknownRecords: 1 },
+      reasoning: { total: null, knownRecords: 0, unknownRecords: 1 },
+      sampleCount: 1,
+      droppedSampleCount: 0,
+      auditEventCount: 1,
+      sourceChecksum: 'c'.repeat(64),
+    })).toBeTruthy();
   });
 
   it('rejects unknown fields, secret-shaped values and absolute paths', () => {
@@ -127,6 +146,16 @@ describe('observability contracts', () => {
         reasoning: { total: null, knownRecords: 0, unknownRecords: 0 },
       },
       sourceEventCount: 0, sourceChecksum: 'z'.repeat(64),
+    })).toThrow();
+    expect(() => UsageRollupSchema.parse({
+      schemaVersion: USAGE_ROLLUP_SCHEMA_VERSION,
+      rollupId: 'rollup_01', period: 'minute', periodStart: at,
+      periodEnd: '2026-08-04T01:00:00.000Z', modelAttempts: 0, modelRequests: 0,
+      input: { total: null, knownRecords: 0, unknownRecords: 0 },
+      output: { total: null, knownRecords: 0, unknownRecords: 0 },
+      cachedInput: { total: null, knownRecords: 0, unknownRecords: 0 },
+      reasoning: { total: null, knownRecords: 0, unknownRecords: 0 },
+      sampleCount: 0, droppedSampleCount: 0, auditEventCount: 0, sourceChecksum: 'c'.repeat(64),
     })).toThrow();
   });
 });

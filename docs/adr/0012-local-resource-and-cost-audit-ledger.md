@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a（contracts 与纯 projection；ledger/collector/API 仍后置）
+- 状态：Accepted for Phase 43a/43b（contracts、纯 projection、ledger/rollup 已实现；collector/API 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -21,6 +21,13 @@ projection。projection 只读取已有 `run_events` 的 bounded metadata，按 
 
 Phase 43a 不引入采样器、费用价格存储、审计持久化、daemon API 或 UI。后续阶段可以在这些
 contract 上增加独立 adapter，但必须保持 interactive run 和现有 run/Goal 事件行为不变。
+
+Phase 43b 决定先实现 `packages/observability` 的 bounded batch/rollup port，再由
+`packages/storage` 提供内存和 SQLite adapter。SQLite 只创建 `resource_samples`、
+`usage_ledger`、`audit_events`、`usage_rollups` 四张独立表，使用 `BEGIN IMMEDIATE`、
+canonical fingerprint、ID 幂等 conflict 和 audit hash chain；任一 batch 失败都回滚。usage/
+audit 是 append-only，cleanup 只处理 samples/rollups，rollup 可从原始记录重建。该阶段不把
+collector、账本写入 AgentLoop 或 daemon API。
 
 ## 决策
 

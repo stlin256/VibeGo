@@ -3,10 +3,16 @@ import { z } from 'zod';
 import {
   AuditEventSchema,
   ModelUsageRecordSchema,
+  ResourceSampleSchema,
+  ToolUsageRecordSchema,
+  UsageRollupSchema,
   UsageProjectionSchema,
   type AuditEvent,
   type ModelUsageRecord,
+  type ResourceSample,
   type StoredEvent,
+  type ToolUsageRecord,
+  type UsageRollup,
   type UsageProjection,
 } from '@ready4vibe/contracts';
 
@@ -19,6 +25,7 @@ const UNC_ABSOLUTE = /^\\\\/u;
 const POSIX_ABSOLUTE = /^\/(?!\/)/u;
 
 type EventRecord = StoredEvent<unknown>;
+export type AuditEventDraft = Omit<AuditEvent, 'appendSequence' | 'previousHash' | 'eventHash'>;
 
 interface TurnState {
   readonly turnId: string;
@@ -71,11 +78,100 @@ export function fingerprintUsageRecord(record: ModelUsageRecord): string {
   return sha256(canonicalObservabilityJson(parsed));
 }
 
+export function fingerprintResourceSample(sample: ResourceSample): string {
+  return sha256(canonicalObservabilityJson(ResourceSampleSchema.parse(sample)));
+}
+
+export function fingerprintToolUsageRecord(record: ToolUsageRecord): string {
+  return sha256(canonicalObservabilityJson(ToolUsageRecordSchema.parse(record)));
+}
+
 /** Hashes the event content excluding eventHash, which is the value derived from it. */
 export function fingerprintAuditEvent(event: AuditEvent): string {
   const parsed = AuditEventSchema.parse(event);
   const { eventHash: _eventHash, ...content } = parsed;
   return sha256(canonicalObservabilityJson(content));
+}
+
+/** Fingerprint only user/application supplied audit content for eventId idempotency. */
+export function fingerprintAuditContent(event: AuditEvent | AuditEventDraft): string {
+  const { appendSequence: _appendSequence, previousHash: _previousHash, eventHash: _eventHash, ...content } = event as AuditEvent;
+  return sha256(canonicalObservabilityJson(content));
+}
+
+const ZERO_HASH = '0'.repeat(64);
+
+/** Assigns the sequence/hash fields after validating a bounded audit draft. */
+export function sealAuditEvent(draft: AuditEventDraft, appendSequence: number, previousHash: string | null): AuditEvent {
+  const candidate = AuditEventSchema.parse({ ...draft, appendSequence, previousHash, eventHash: ZERO_HASH });
+  return { ...candidate, eventHash: fingerprintAuditEvent(candidate) };
+}
+
+export function verifyAuditChain(events: readonly AuditEvent[]): boolean {
+  try {
+    let previousHash: string | null = null;
+    let previousSequence = 0;
+    for (const candidate of events) {
+      const event = AuditEventSchema.parse(candidate);
+      if (event.appendSequence !== previousSequence + 1) return false;
+      if (event.previousHash !== previousHash) return false;
+      if (event.eventHash !== fingerprintAuditEvent(event)) return false;
+      previousHash = event.eventHash;
+      previousSequence = event.appendSequence;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Rebuilds deterministic UTC-hour rollups without reading a store or running probes. */
+export function buildUsageRollups(
+  records: readonly ModelUsageRecord[],
+  samples: readonly ResourceSample[],
+  audits: readonly AuditEvent[],
+): readonly UsageRollup[] {
+  if (records.length + samples.length + audits.length > 100_000) throw new UsageProjectionError('rollup input exceeded bounded limit');
+  const buckets = new Map<string, { records: ModelUsageRecord[]; samples: ResourceSample[]; audits: AuditEvent[] }>();
+  const bucket = (timestamp: string) => {
+    const milliseconds = Date.parse(timestamp);
+    if (!Number.isFinite(milliseconds)) throw new UsageProjectionError('rollup timestamp is invalid');
+    const start = new Date(Math.floor(milliseconds / 3_600_000) * 3_600_000).toISOString();
+    const existing = buckets.get(start) ?? { records: [], samples: [], audits: [] };
+    buckets.set(start, existing);
+    return existing;
+  };
+  for (const record of records) bucket(record.startedAt).records.push(ModelUsageRecordSchema.parse(record));
+  for (const sample of samples) bucket(sample.sampledAt).samples.push(ResourceSampleSchema.parse(sample));
+  for (const audit of audits) bucket(audit.at).audits.push(AuditEventSchema.parse(audit));
+
+  const result: UsageRollup[] = [];
+  for (const [periodStart, source] of [...buckets.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    const periodEnd = new Date(Date.parse(periodStart) + 3_600_000).toISOString();
+    const rollup: UsageRollup = {
+      schemaVersion: 'ready4vibe_usage_rollup_v1',
+      rollupId: derivedId('rollup', periodStart),
+      period: 'hour',
+      periodStart,
+      periodEnd,
+      modelAttempts: source.records.length,
+      modelRequests: new Set(source.records.map((record) => record.requestId)).size,
+      input: summarize(source.records, 'input'),
+      output: summarize(source.records, 'output'),
+      cachedInput: summarize(source.records, 'cachedInput'),
+      reasoning: summarize(source.records, 'reasoning'),
+      sampleCount: source.samples.length,
+      droppedSampleCount: sumBounded(source.samples.map((sample) => sample.droppedSampleCount)),
+      auditEventCount: source.audits.length,
+      sourceChecksum: sha256(canonicalObservabilityJson({
+        records: source.records.map((record) => [record.usageId, fingerprintUsageRecord(record)]).sort(),
+        samples: source.samples.map((sample) => [sample.sampleId, fingerprintResourceSample(sample)]).sort(),
+        audits: source.audits.map((audit) => [audit.eventId, fingerprintAuditEvent(audit)]).sort(),
+      })),
+    };
+    result.push(UsageRollupSchema.parse(rollup));
+  }
+  return Object.freeze(result);
 }
 
 /**
@@ -302,6 +398,15 @@ function summarize(records: readonly ModelUsageRecord[], key: 'input' | 'output'
     knownRecords += 1;
   }
   return { total: knownRecords > 0 ? total : null, knownRecords, unknownRecords: records.length - knownRecords };
+}
+
+function sumBounded(values: readonly number[]): number {
+  let total = 0;
+  for (const value of values) {
+    total += value;
+    if (!Number.isSafeInteger(total) || total > 1_000_000_000_000) throw new UsageProjectionError('rollup counter exceeded bounded limit');
+  }
+  return total;
 }
 
 function derivedId(prefix: string, ...parts: string[]): string {

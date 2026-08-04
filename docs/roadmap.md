@@ -334,15 +334,16 @@ Vite 和 TypeScript，迁移为 VibeGo token 驱动的 shadcn 风格 conversatio
 Approval、Goal、Memory 和 operation cards → 42d viewport/键盘/无障碍/bundle 验收。该阶段
 不改 daemon、REST/SSE、AgentLoop 或原生客户端边界。
 
-## Spec 43：资源、Token、费用与审计可观测性（Phase 43a 已冻结并实施）
+## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 
 详见 [Spec 43](specs/43-resource-usage-and-cost-audit.md) 与
 [ADR 0012](adr/0012-local-resource-and-cost-audit-ledger.md)。Phase 43a 只建立
 `resource-usage/v1`、`audit/v1` contracts，以及不连接运行时的 model usage replay
 projection；它按已有 `run_events` 的 `seq` 生成稳定 checksum，明确
-reported/estimated/unknown 精度并保持隐私脱敏。该阶段不新增 SQLite ledger、采样器、费用
-价格、daemon API 或 Web 页面，也不改变 interactive run、Goal、AgentLoop、Scheduler、
-Approval、Sandbox 或 Workspace 行为。
+reported/estimated/unknown 精度并保持隐私脱敏。Phase 43b 已增加独立 in-memory/SQLite
+ledger 与 UTC hour rollup，使用 BEGIN IMMEDIATE、ID 幂等、批量回滚和 hash-chain，但仍不接入采样器、
+daemon/API/Web，也不改变 interactive run、Goal、AgentLoop、Scheduler、Approval、Sandbox
+或 Workspace 行为。
 
-后续顺序为：43b 独立 SQLite ledger/rollup → 43c 低资源 host/tool/sandbox collectors →
+后续顺序为：43c 低资源 host/tool/sandbox collectors →
 43d token/cost normalization 与认证 API → 43e Web Usage/Audit surfaces 和实测资源预算。

@@ -19,6 +19,7 @@ export const TOOL_USAGE_SCHEMA_VERSION = 'ready4vibe_tool_usage_v1' as const;
 export const AUDIT_EVENT_SCHEMA_VERSION = 'ready4vibe_audit_event_v1' as const;
 export const PRICING_RULE_SCHEMA_VERSION = 'ready4vibe_pricing_rule_v1' as const;
 export const USAGE_PROJECTION_SCHEMA_VERSION = 'ready4vibe_usage_projection_v1' as const;
+export const USAGE_ROLLUP_SCHEMA_VERSION = 'ready4vibe_usage_rollup_v1' as const;
 
 export const ObservabilityAccuracySchema = z.enum(['reported', 'measured', 'estimated', 'unknown', 'not-applicable']);
 export type ObservabilityAccuracy = z.infer<typeof ObservabilityAccuracySchema>;
@@ -184,7 +185,7 @@ export const PricingRuleSchema = z.object({
 }).strict().superRefine(addPrivacyIssues);
 export type PricingRule = z.infer<typeof PricingRuleSchema>;
 
-const UsageDimensionSummarySchema = z.object({
+export const UsageDimensionSummarySchema = z.object({
   total: uint.nullable(),
   knownRecords: uint,
   unknownRecords: uint,
@@ -205,6 +206,25 @@ export const UsageProjectionSchema = z.object({
   sourceChecksum: z.string().regex(HEX_64),
 }).strict().superRefine(addPrivacyIssues);
 export type UsageProjection = z.infer<typeof UsageProjectionSchema>;
+
+export const UsageRollupSchema = z.object({
+  schemaVersion: z.literal(USAGE_ROLLUP_SCHEMA_VERSION),
+  rollupId: id,
+  period: z.literal('hour'),
+  periodStart: ISO_TIMESTAMP,
+  periodEnd: ISO_TIMESTAMP,
+  modelAttempts: uint,
+  modelRequests: uint,
+  input: UsageDimensionSummarySchema,
+  output: UsageDimensionSummarySchema,
+  cachedInput: UsageDimensionSummarySchema,
+  reasoning: UsageDimensionSummarySchema,
+  sampleCount: uint,
+  droppedSampleCount: uint,
+  auditEventCount: uint,
+  sourceChecksum: z.string().regex(HEX_64),
+}).strict().superRefine(addPrivacyIssues);
+export type UsageRollup = z.infer<typeof UsageRollupSchema>;
 
 /**
  * Observability contracts share a stricter privacy scanner than generic JSON:
@@ -262,4 +282,8 @@ export function parsePricingRule(value: unknown): PricingRule {
 
 export function parseUsageProjection(value: unknown): UsageProjection {
   return UsageProjectionSchema.parse(value);
+}
+
+export function parseUsageRollup(value: unknown): UsageRollup {
+  return UsageRollupSchema.parse(value);
 }

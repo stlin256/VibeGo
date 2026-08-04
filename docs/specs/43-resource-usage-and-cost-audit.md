@@ -1,6 +1,6 @@
 # Spec 43：资源、Token、费用与审计可观测性
 
-- 状态：Phase 43a 已实现（contracts 与纯 projection；运行时采样/账本/API/UI 后置）
+- 状态：Phase 43a/43b 已实现（collector、API、UI 后置）
 - 日期：2026-08-04
 - 适用范围：Host daemon、React Web、SQLite、AgentLoop 运行记录和后续原生客户端 API
 - 相关：[Spec 03：模型与上下文契约](03-model-context-contract.md)、[Spec 38：Conversation-first Web shell](38-conversation-first-web-shell.md)、[Spec 41：Host-first 发行与客户端边界](41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](42-shadcn-style-web-design-system.md)
@@ -45,6 +45,23 @@ records 和 checksum。事件里没有 provider 报告的字段时，projection 
 sandbox collector、pricing settings、daemon API、SSE、Web Usage 页面和任何 run admission
 改动。interactive run、Goal Control、`run_events`、`goal_events`、AgentLoop、Scheduler、
 Approval、Sandbox 与 WorkspaceRegistry 行为必须保持原样。
+
+## 1.2 Phase 43b 冻结范围
+
+Phase 43b 在 `packages/observability` 保留纯的 batch/rollup port，在
+`packages/storage` 提供 `InMemoryObservabilityLedger` 和 `SqliteObservabilityLedger`。两者
+都使用独立的 `resource_samples`、`usage_ledger`、`audit_events`、`usage_rollups` 表/集合；
+不读取或改写 `run_events`、`goal_events` 或 `daemon_settings` 的行。SQLite 写入统一使用
+`BEGIN IMMEDIATE`，同一 ID + 相同 canonical 内容是 no-op，不同内容是 conflict，跨资源的
+batch 在任一失败时整体回滚。
+
+Audit draft 由 ledger 分配全局 `appendSequence`、前 hash 和当前 hash；append 前验证 hash
+chain，replay/verify 失败必须 fail-closed。rollup 只由 bounded usage/sample/audit records
+重建，当前只冻结 UTC hour token/resource/event 计数和 unknown 维度，货币 pricing 留给
+Phase 43d。cleanup 只允许删除 samples/rollups，不能提供清空 usage/audit 的快捷路径。
+
+Phase 43b 仍不接入 collector、AgentLoop observer、daemon API、SSE、Web 或任何 interactive
+run admission；失败只影响 ledger 调用方，不改变模型、工具、审批或 sandbox 结果。
 
 ## 2. 事实源与边界
 
@@ -462,7 +479,7 @@ SBOM 影响，并在 ADR 中获得单独批准。
 计费，事件乱序必须先按 `seq` 稳定排序。派生的 provider/model/request 字段只使用事件中
 明确存在的 bounded 标识，缺失 token 维度和价格保持 `unknown`。
 
-### Phase 43b：SQLite ledger 与 rollup
+### Phase 43b：SQLite ledger 与 rollup（已实现）
 
 - 实现独立表、`BEGIN IMMEDIATE`、appendSequence、eventId no-op/conflict、hash chain 和 cleanup；
 - InMemory adapter 先于 SQLite adapter；
