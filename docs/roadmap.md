@@ -397,7 +397,7 @@ audit verify/replay 和只读 pricing projection；Web 以 context panel 消费�
 typecheck → test → diff:check → git diff --check，失败即停，不安装依赖、不改工作区、
 不触碰模型凭据；它复用现有 package scripts，作为每次实质性提交前的统一门禁。
 
-## Spec 47：Model/Context/AgentLoop productionization（47-R1/R2 实施中）
+## Spec 47：Model/Context/AgentLoop productionization（R1/R2/R3 已实现，R4 门禁已冻结）
 
 详见 [Spec 47](specs/47-model-context-agent-loop-productionization.md)。本阶段先以
 pinned upstream research 为 R0 门禁，再把真实 provider 的显式 endpoint、协议适配、流式
@@ -411,7 +411,11 @@ R3 daemon/application bridge is now implemented; live smoke remains the later
 opt-in R4 command for ordinary development and is mandatory for the Spec 52
 release gate. The R3 slice gate passed with 402 tests; the R1 gate passed
 with 412 tests; the current repository gate is `pnpm verify` with 420 tests
-after Spec 48-R2.
+after Spec 48-R2. R4 is frozen as the explicit `pnpm smoke:model` command:
+complete HTTPS endpoint + model + environment-variable secret reference,
+bounded replay, redacted `model-smoke/v1` report and no daemon/event/file
+side effects. Its tests are network-free and the command remains outside
+`pnpm verify`.
 
 ## Spec 48：Approval/Sandbox/Shell runtime closure（48-R4 已实现，Spec 49 规划）
 

@@ -192,6 +192,30 @@ but it is a mandatory evidence item for the Spec 52 release gate. A release
 candidate cannot claim a complete core Harness without a successful redacted
 live smoke report.
 
+## 47-R4 implementation gate (2026-08-05)
+
+The live smoke command is fixed as `pnpm smoke:model`. It requires an explicit
+complete HTTPS endpoint, model name and environment-variable secret reference:
+
+```text
+pnpm smoke:model -- --endpoint <https://provider.example/v1/chat/completions> \
+  --model <model-id> --secret-env <ENV_VAR> [--timeout-ms <100..30000>]
+```
+
+The `--secret-env` value is only a bounded reference name; the key is read from
+that process environment at invocation time and is never accepted as a command
+argument. The command sends one fixed, non-sensitive text request through the
+existing explicit-endpoint OpenAI-compatible adapter, replays the bounded
+stream, and prints one `model-smoke/v1` JSON report containing only provider,
+model, status, latency, finish reason, token counts (or `null` when unknown),
+and a stable error code. It must not print the endpoint, secret reference,
+secret value, raw response, prompt, headers or stack trace.
+
+Configuration, auth, quota, schema, timeout and network failures map to stable
+non-zero exit codes. The command builds only the model adapter package, never
+starts the daemon, never writes `run_events`/logs/files, and remains outside
+`pnpm verify`; tests use injected providers and never contact the network.
+
 ## Tests first / acceptance matrix
 
 - descriptor rejects secret-shaped fields, absolute paths, unknown protocol and

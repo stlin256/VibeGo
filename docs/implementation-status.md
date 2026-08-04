@@ -296,8 +296,9 @@ The following work is documented but not fully implemented yet:
 - **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): R1/R2
   contracts, deterministic stream replay, cancellation/retry fixtures,
   explicit OpenAI-compatible adapter and the R3 daemon bridge are implemented.
-  The opt-in live model smoke remains R4; the default still makes no network
-  request and no credential has been written to the repository.
+  The opt-in live model smoke remains R4; its explicit endpoint/model/secret-env
+  command contract is frozen in the Spec/ADR, while the default still makes no
+  network request and no credential has been written to the repository.
 - **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1 policy
   compiler and the R2 injected host-restricted process runner are implemented
   bounded slices. Container smoke and full Web continuation remain later
@@ -385,9 +386,10 @@ AgentLoop state machine or introducing a second authority:
   provider-switch isolation, safe mismatch response and event privacy. No
   network request or durable observability-ledger write occurs in this slice.
 
-R4 live smoke and Spec 50 automatic usage-ledger lifecycle attachment remain
-deferred for the ordinary offline verification gate. A successful redacted
-live smoke is mandatory before the Spec 52 release gate; Goal admission,
+R4 live smoke remains deferred for the ordinary offline verification gate; the
+implementation gate is frozen as `pnpm smoke:model` with an out-of-band
+environment secret reference and redacted report. A successful redacted live
+smoke is mandatory before the Spec 52 release gate; Goal admission,
 `goal_events`, Approval, Sandbox, Scheduler and WorkspaceRegistry behavior
 remain unchanged until their separately specified integration phases.
 
