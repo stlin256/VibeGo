@@ -1,6 +1,6 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Phase 0 implemented（manifest contract；安装器/升级器/备份恢复仍未接入）
+- Status: Phase 0/1 implemented（manifest 与纯状态契约；安装器/升级器/备份恢复仍未接入）
 - Date: 2026-08-04
 - Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -120,6 +120,17 @@ discovered
 
 升级请求（Web、定时器、CLI、未来 webhook）共享一个串行队列；运行中的 run 不做 Node
 模块热替换。新进程必须重新读取 snapshot，已运行的 run 继续使用原 snapshot。
+
+#### Phase 1 implementation update (2026-08-05)
+
+Before any installer or daemon integration, `@ready4vibe/contracts` now exposes
+the update phase enum, strict state snapshot and fail-closed transition helper.
+The helper only describes legal lifecycle movement; it does not download,
+verify, spawn, migrate, switch or roll back a process. `current`, `previous`
+and `candidate` revisions remain opaque bounded identifiers, and a transition
+cannot erase a failure or silently jump over verification/health gates. Six
+focused contract tests cover ordered gates, failure reasons, rollback
+preconditions and invalid transitions.
 
 ### 5.3 数据库 migration
 

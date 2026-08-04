@@ -55,3 +55,89 @@ export type HostInstallManifest = z.infer<typeof HostInstallManifestSchema>;
 export function parseHostInstallManifest(input: unknown): HostInstallManifest {
   return HostInstallManifestSchema.parse(input);
 }
+
+export const HostUpdatePhaseSchema = z.enum([
+  'idle',
+  'discovered',
+  'downloaded',
+  'digest-verified',
+  'signature-verified',
+  'staged',
+  'migration-preflight',
+  'candidate-started',
+  'health-checked',
+  'smoke-checked',
+  'switched',
+  'previous-draining',
+  'succeeded',
+  'failed',
+  'rollback-available',
+  'rollback-started',
+  'rollback-verified',
+  'migration-blocked',
+  'manual-recovery-required',
+]);
+export type HostUpdatePhase = z.infer<typeof HostUpdatePhaseSchema>;
+
+const UpdateRevisionSchema = z.string().min(1).max(128).regex(SAFE_TOKEN, 'revision contains unsupported characters').nullable();
+const UpdateReasonSchema = z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9._-]{0,63}$/u, 'reasonCode is not bounded').nullable();
+
+export const HostUpdateStateSchema = z.object({
+  schemaVersion: z.literal('ready4vibe_host_update_state_v1'),
+  phase: HostUpdatePhaseSchema,
+  currentRevision: UpdateRevisionSchema,
+  previousRevision: UpdateRevisionSchema,
+  candidateRevision: UpdateRevisionSchema,
+  reasonCode: UpdateReasonSchema,
+  updatedAt: z.string().datetime({ offset: true }).max(64),
+}).strict().superRefine((value, context) => {
+  const failurePhase = value.phase === 'failed' || value.phase === 'migration-blocked' || value.phase === 'manual-recovery-required' || value.phase === 'rollback-available';
+  if (failurePhase && !value.reasonCode) context.addIssue({ code: z.ZodIssueCode.custom, path: ['reasonCode'], message: 'failure states require a reasonCode' });
+  if (!failurePhase && value.reasonCode) context.addIssue({ code: z.ZodIssueCode.custom, path: ['reasonCode'], message: 'reasonCode is only allowed for failure/recovery states' });
+  if (value.phase === 'rollback-available' && !value.previousRevision) context.addIssue({ code: z.ZodIssueCode.custom, path: ['previousRevision'], message: 'rollback requires a previous revision' });
+  if (value.phase === 'idle' && (value.currentRevision || value.previousRevision || value.candidateRevision)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['phase'], message: 'idle state cannot point at a revision' });
+});
+export type HostUpdateState = z.infer<typeof HostUpdateStateSchema>;
+
+const HOST_UPDATE_TRANSITIONS: Record<HostUpdatePhase, readonly HostUpdatePhase[]> = {
+  idle: ['discovered'],
+  discovered: ['downloaded', 'failed'],
+  downloaded: ['digest-verified', 'failed'],
+  'digest-verified': ['signature-verified', 'failed'],
+  'signature-verified': ['staged', 'failed'],
+  staged: ['migration-preflight', 'failed'],
+  'migration-preflight': ['candidate-started', 'migration-blocked', 'failed'],
+  'candidate-started': ['health-checked', 'failed'],
+  'health-checked': ['smoke-checked', 'failed'],
+  'smoke-checked': ['switched', 'failed'],
+  switched: ['previous-draining', 'rollback-started'],
+  'previous-draining': ['succeeded', 'rollback-started', 'failed'],
+  succeeded: [],
+  failed: ['rollback-available', 'manual-recovery-required'],
+  'rollback-available': ['rollback-started', 'manual-recovery-required'],
+  'rollback-started': ['rollback-verified', 'manual-recovery-required'],
+  'rollback-verified': ['succeeded', 'manual-recovery-required'],
+  'migration-blocked': ['manual-recovery-required'],
+  'manual-recovery-required': [],
+};
+
+export class HostUpdateTransitionError extends Error {
+  readonly code = 'INVALID_HOST_UPDATE_TRANSITION' as const;
+
+  constructor(readonly from: HostUpdatePhase, readonly to: HostUpdatePhase) {
+    super(`invalid host update transition: ${from} -> ${to}`);
+    this.name = 'HostUpdateTransitionError';
+  }
+}
+
+export function canTransitionHostUpdate(from: HostUpdatePhase, to: HostUpdatePhase): boolean {
+  return HOST_UPDATE_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export function assertHostUpdateTransition(from: HostUpdatePhase, to: HostUpdatePhase): void {
+  if (!canTransitionHostUpdate(from, to)) throw new HostUpdateTransitionError(from, to);
+}
+
+export function parseHostUpdateState(input: unknown): HostUpdateState {
+  return HostUpdateStateSchema.parse(input);
+}

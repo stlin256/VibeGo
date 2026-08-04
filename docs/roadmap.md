@@ -634,8 +634,8 @@ Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并�
 AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 `run_events` 或 `goal_events` 的权威地位：
 
-- [Spec 53](specs/53-host-install-upgrade-backup-recovery.md)：Phase 0 已冻结严格 host-manifest/v1
-  contract；后续定义一键安装、平台签名、
+- [Spec 53](specs/53-host-install-upgrade-backup-recovery.md)：Phase 0/1 已冻结严格
+  host-manifest/v1 与 update/recovery 状态契约；后续定义一键安装、平台签名、
   current/previous/candidate 升级、SQLite 一致性备份、restore/migration、safe mode 和
   故障恢复。安装/升级不修改 workspace，备份默认排除 API key、private key、完整环境变量
   和 workspace 内容。

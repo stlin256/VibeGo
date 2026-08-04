@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HostInstallManifestSchema, HOST_INSTALL_MANIFEST_SCHEMA_VERSION, parseHostInstallManifest } from './host-release.js';
+import { HostInstallManifestSchema, HOST_INSTALL_MANIFEST_SCHEMA_VERSION, HostUpdateStateSchema, assertHostUpdateTransition, canTransitionHostUpdate, parseHostInstallManifest, parseHostUpdateState } from './host-release.js';
 
 const manifest = {
   schemaVersion: HOST_INSTALL_MANIFEST_SCHEMA_VERSION,
@@ -42,5 +42,29 @@ describe('host-manifest/v1 contract', () => {
     expect(() => HostInstallManifestSchema.parse({ ...manifest, signatureRefs: ['/tmp/signature'] })).toThrow(/absolute path/iu);
     expect(() => HostInstallManifestSchema.parse({ ...manifest, signatureRefs: ['https://user@example.test/signature'] })).toThrow(/credentials/iu);
     expect(() => HostInstallManifestSchema.parse({ ...manifest, signatureRefs: ['x'.repeat(513)] })).toThrow();
+  });
+
+  it('replays only the ordered update gates and fails closed on skipped verification', () => {
+    expect(canTransitionHostUpdate('idle', 'discovered')).toBe(true);
+    expect(canTransitionHostUpdate('discovered', 'digest-verified')).toBe(false);
+    expect(canTransitionHostUpdate('failed', 'switched')).toBe(false);
+    expect(() => assertHostUpdateTransition('staged', 'switched')).toThrow(/invalid host update transition/iu);
+    expect(() => assertHostUpdateTransition('smoke-checked', 'switched')).not.toThrow();
+  });
+
+  it('validates failure/recovery snapshots without allowing a failure to disappear', () => {
+    const state = parseHostUpdateState({
+      schemaVersion: 'ready4vibe_host_update_state_v1',
+      phase: 'rollback-available',
+      currentRevision: 'rev_new',
+      previousRevision: 'rev_old',
+      candidateRevision: 'rev_new',
+      reasonCode: 'health-failed',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    });
+    expect(state.phase).toBe('rollback-available');
+    expect(() => HostUpdateStateSchema.parse({ ...state, reasonCode: null })).toThrow(/reasonCode/iu);
+    expect(() => HostUpdateStateSchema.parse({ ...state, phase: 'idle', reasonCode: null, currentRevision: null, previousRevision: null, candidateRevision: null })).not.toThrow();
+    expect(() => HostUpdateStateSchema.parse({ ...state, phase: 'rollback-available', previousRevision: null })).toThrow(/previous revision/iu);
   });
 });
