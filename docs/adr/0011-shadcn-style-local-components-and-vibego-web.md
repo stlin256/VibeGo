@@ -129,3 +129,15 @@ are compatibility contracts for this slice.
 Focused tests cover approval details/no-details, destructive deny output,
 recovery retry presentation and secret/path/raw-argument-free markup; the
 slice adds no network, storage, SSE or runtime authority.
+
+## Phase 42c-2 implementation update (2026-08-05)
+
+The Settings Sheet shell is extracted before its forms and tabs. The local
+`SettingsSheet` component receives only open state, a ref, bounded copy, a close
+callback and children; `App` retains focus trapping/return, settings values,
+API calls, and secret-safe persistence. This is a presentational dialog shell,
+not a second settings authority or a new persistence/API surface.
+
+Focused tests cover open/closed projection, dialog ARIA, child-slot rendering,
+Button output and secret/path-free markup; form values, focus trap/return and
+all settings API behavior remain owned by `App`.

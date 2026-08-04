@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
-import { ContextRail, ConversationHeader, ConversationShell, WorkspaceRail } from './components/vibego/index.js';
+import { ContextRail, ConversationHeader, ConversationShell, SettingsSheet, WorkspaceRail } from './components/vibego/index.js';
 import { createTranslator, type Locale } from './locale.js';
 import './styles.css';
 
@@ -351,9 +351,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
       <section className="content-grid">
         <WorkspaceRail workspaceLabel={workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId} settingsOpen={settingsOpen} copy={{ navigationLabel: 'Workspace navigation', eyebrow: 'WORKSPACE', localSession: t('nav.localSession'), newTask: t('nav.newTask'), recent: 'RECENT', currentTask: t('nav.currentTask'), noOtherRuns: t('nav.noOtherRuns'), settings: t('nav.settings') }} onNewTask={startNewTask} onOpenSettings={openSettings} />
         <aside className="sidebar" aria-label="连接与运行摘要">
-          <section id="settings-drawer" ref={settingsPanelRef} className="panel settings-panel" data-open={settingsOpen} role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title" aria-hidden={!settingsOpen}>
-            <div className="settings-drawer-header"><div><div className="eyebrow">{t('settings.eyebrow')}</div><h2 id="settings-drawer-title">{t('settings.title')}</h2></div><button className="drawer-close" type="button" aria-label={t('settings.close')} onClick={() => setSettingsOpen(false)}>{t('settings.close')}</button></div>
-            <p className="muted">{t('settings.description')}</p>
+          <SettingsSheet open={settingsOpen} panelRef={settingsPanelRef} copy={{ eyebrow: t('settings.eyebrow'), title: t('settings.title'), description: t('settings.description'), close: t('settings.close') }} onClose={() => setSettingsOpen(false)}>
             <div className="settings-grid">
               <div className="workspace-setup" aria-label={t('settings.workspaceSetup')}>
                 <div className="eyebrow">{t('settings.workspaces')}</div>
@@ -481,7 +479,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
               <div className="eyebrow">DEPLOYMENT STATUS</div>
               {deploymentReadiness ? <><strong>{deploymentReadiness.status} · {deploymentReadiness.mode}</strong><p className="muted">Reason: {deploymentReadiness.reasonCode} · Next: {deploymentReadiness.nextStep}</p></> : deploymentReadinessUnavailable ? <p className="muted">Deployment readiness is unavailable; existing pairing and run controls remain usable.</p> : <p className="muted">Reading deployment readiness…</p>}
             </div>
-          </section>
+          </SettingsSheet>
           {!connected && <>
             <section className="panel connection-panel">
               <div className="eyebrow">CONNECTION</div>

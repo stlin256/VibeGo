@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3 与 42c-1 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1 与 42c-2 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -264,8 +264,8 @@ while making the next migration reversible.
 
 Focused Web tests cover variant rendering, ARIA/label forwarding, disabled and
 loading behavior, token/helper contracts and primitive isolation. The Web
-focused gate now passes 86 tests, typecheck and production build; the observed
-bundle is 80.60 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
+focused gate now passes 88 tests, typecheck and production build; the observed
+bundle is 80.68 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
 device emulation are claimed as evidence by Phase 42a.
 
 ### Phase 42b-1 implementation update (2026-08-05)
@@ -332,9 +332,25 @@ single-use approval decisions and recovery as a new run.
 The focused gate must cover approval metadata with and without sandbox details,
 recovery retry affordance, destructive deny styling, bounded markup, and the
 absence of credentials, absolute paths, raw tool arguments, or event payloads.
-Settings Sheet, Goal/Memory/Tool cards and operation persistence remain later
-42c slices. The focused Web gate now passes 86 tests with 80.60 KiB JS gzip
+Goal/Memory/Tool cards and operation persistence remain later
+42c slices. The focused Web gate now passes 88 tests with 80.68 KiB JS gzip
 and 5.82 KiB CSS gzip.
+
+### Phase 42c-2 implementation update (2026-08-05)
+
+This slice extracts the Settings Sheet shell into a typed
+`vibego/SettingsSheet.tsx` component. It owns only the dialog landmark,
+open/hidden projection, title/description/close affordance, and a bounded
+children slot. `App` continues to own settings state, form values, API
+callbacks, focus trap/return, and all secret-safe persistence behavior. The
+shell must preserve `settings-drawer`, `role="dialog"`, `aria-modal`,
+`aria-labelledby`, responsive CSS, and the existing close callback without
+creating a request, storage authority, or second settings source.
+
+The focused gate covers open and closed projections, close-button ARIA,
+child-slot rendering, Button primitive output, and secret/path-free markup.
+Tabs, form-group extraction, and Settings operation cards remain later 42c
+slices.
 
 ## 9. 退出条件
 
