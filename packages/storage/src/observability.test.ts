@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AuditEvent, ModelUsageRecord, ResourceSample, ToolUsageRecord } from '@ready4vibe/contracts';
-import { verifyAuditChain, type AuditEventDraft } from '@ready4vibe/observability';
+import { AuditApplicationAdapter, ResourceCollector, verifyAuditChain, type AuditEventDraft, type ResourceRuntime } from '@ready4vibe/observability';
 import {
   InMemoryObservabilityLedger,
   ObservabilityLedgerConflictError,
@@ -165,6 +165,34 @@ describe.each([
     const tampered: AuditEvent = { ...events[0]!, outcome: 'failed' };
     expect(verifyAuditChain([tampered])).toBe(false);
     await ledger.close();
+  });
+});
+
+describe('observability application adapters', () => {
+  it('writes collector samples and audit drafts through the existing ledger without a second table', async () => {
+    const ledger = new InMemoryObservabilityLedger();
+    const audit = new AuditApplicationAdapter(ledger, { now: () => new Date(at) });
+    const auditResult = await audit.record({
+      actor: 'system', transport: 'loopback', action: 'audit.verified', targetKind: 'audit',
+      outcome: 'succeeded', correlationId: 'corr_adapter_01',
+    });
+    const runtime: ResourceRuntime = {
+      cpuUsage: () => ({ user: 0, system: 0 }),
+      memoryUsage: () => ({ rss: 1, heapTotal: 1, heapUsed: 1, external: 0, arrayBuffers: 0 }),
+      totalmem: () => 10,
+      freemem: () => 5,
+      cpuCount: () => 1,
+      monotonicMs: () => 0,
+      now: () => new Date(at),
+    };
+    const collector = new ResourceCollector({ writer: ledger, runtime });
+    await collector.sampleOnce();
+    await collector.flush();
+
+    expect(auditResult.status).toBe('recorded');
+    expect(await ledger.listAuditEvents()).toHaveLength(1);
+    expect(await ledger.listResourceSamples()).toHaveLength(1);
+    expect(verifyAuditChain(await ledger.listAuditEvents())).toBe(true);
   });
 });
 

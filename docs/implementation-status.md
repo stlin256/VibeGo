@@ -213,3 +213,19 @@ remains a retrieval-only adapter: automatic Proxy sidecar build/switch, arbitrar
 ToolRuntime registration, approval/resource expansion and automatic sidecar
 switching remain later work; Phase 6b now supplies bounded operations history
 and compatibility fixtures without promoting Knowledge to a ToolRuntime.
+
+## Spec 44-R4 implementation note (2026-08-04)
+
+The observability package now has an explicit low-resource `ResourceCollector` and
+`AuditApplicationAdapter`. The collector uses Node CPU/memory APIs plus injected
+OS/sandbox probes, supports idle/active/detailed profiles, bounded queue capacity,
+dropped-sample accounting, and fail-soft degraded status. It never executes shell,
+PowerShell, CLI probes, or filesystem scans. The audit adapter validates bounded
+`AuditEventDraft` values, delegates append/hash-chain work to the existing ledger,
+and reports writer failures without changing the originating action result.
+
+R4 tests cover queue overflow, unsupported probes, stop/restart, privacy rejection,
+writer failure, and audit-chain integrity. No default daemon/run path, AgentLoop,
+RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events`, or
+`goal_events` behavior changed; authenticated API, Web Usage/Audit, export/import,
+and automatic sampling settings remain R5 work.

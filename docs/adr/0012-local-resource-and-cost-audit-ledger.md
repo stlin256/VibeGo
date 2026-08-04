@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b（contracts、纯 projection、ledger/rollup 已实现；collector/API 仍后置）
+- 状态：Accepted for Phase 43a/43b 与 44-R4（contracts、projection、ledger/rollup、显式 collector/audit adapter 已实现；API/Web 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -96,6 +96,21 @@ Apache-2.0；AxonHub 通用部分为 Apache-2.0，但 `llm/` 为 LGPL-3.0 且部
 为 MIT；Langfuse 非 `ee/` 部分为 MIT 但含独立许可区域；LiteLLM 非 `enterprise/` 部分为 MIT 但含
 独立许可区域。任何代码、schema、UI 或运行时 vendor 都必须重新检查相应版本 LICENSE/NOTICE、
 SBOM 和版权义务；本 ADR 不授权复制上游实现。
+
+## 44-R4 实施补充（2026-08-04）
+
+R4 将采样与审计实现为 `packages/observability` 内的可替换 application adapter：
+
+- collector 只调用 Node 内建资源 API，并接收显式注入的 OS/sandbox probe；禁止通过 shell、
+  PowerShell、Docker CLI 或目录扫描补齐数据；
+- idle/active/detailed profile、bounded queue 和 dropped count 控制资源开销；队列满、平台
+  不支持、采样停止、probe 失败或 ledger writer 失败均返回 `degraded/unknown`，不阻塞 interactive
+  run；
+- audit adapter 生成 bounded `AuditEventDraft`，继续交给现有 hash-chain/ledger，隐私拒绝
+  fail-closed，写入失败只改变 observability 状态；不新增事实源，也不修改 `run_events`、
+  `goal_events`、AgentLoop、Scheduler、Approval、Sandbox 或 WorkspaceRegistry；
+- collector 没有自动接入 daemon 默认启动路径，R4 只冻结并验证 adapter contract；认证 API、Web
+  projection、导出和长期 retention 仍由后续阶段显式接入。
 
 ## 暂不决定
 

@@ -235,6 +235,30 @@ R3 测试已覆盖规则选择和历史 revision、per-unit/flat/tiered、cache/
 舍入、未知价格、规则冲突与 restart-independent deterministic projection；下一阶段进入 R4
 resource/audit collector。
 
+### 5.4 44-R4 resource/audit collector slice
+
+44-R4 只增加显式的 observability application adapter，不把采样器接入
+`AgentLoop`、`RunManager`、默认 run 创建路径或第二套 scheduler。collector 的事实写入仍由
+现有 `ObservabilityLedger`（或结构兼容的 writer）完成；`run_events`、`goal_events`、usage
+ledger 和 audit ledger 的权威地位不变。
+
+- `ResourceCollector` 使用 Node 内建 `process.cpuUsage(previous)`、`process.memoryUsage()`、
+  `os.totalmem()`/`os.freemem()` 和注入的 OS/sandbox adapter。它不执行 shell、PowerShell、
+  `ps`、Docker CLI 或文件系统扫描；adapter 只返回 bounded CPU/disk/sandbox counters，不能
+  携带命令、环境变量、原始输出或绝对路径；不支持的平台显式标记 `unknown/degraded`。
+- 采样 profile 固定为 `idle`（60s）、`active`（5s）和 `detailed`（1s），队列容量、单批数量、
+  dropped 计数和 adapter 输出均有上限。队列满时丢弃样本并把计数带入下一条成功样本；写入、
+  probe、停止或恢复失败只产生 bounded degraded 状态，不改变 model/tool/approval 结果。
+- collector 支持 `start`、`stop`、`sampleOnce` 和状态查询；停止后不再调度新 timer，恢复只影响
+  后续样本。运行中的 interactive run 不因 observability 写入失败而阻塞或回滚。
+- `AuditApplicationAdapter` 只生成经过 `AuditEventSchema`/`sealAuditEvent` 校验的 bounded
+  `AuditEventDraft`，复用现有 canonical JSON hash chain 和 ledger append。privacy/secret/path
+  拒绝是 fail-closed；ledger writer 失败返回 `degraded`，不吞掉或改写原始 action 结果。
+
+44-R4 实现覆盖 queue full、unsupported adapter、stop/restart、writer failure、privacy rejection
+和 audit chain replay。该切片仍不提供 Usage/Audit HTTP API、Web 页面、export/import 或自动
+采样配置；这些保持 44-R5/43c 之后的显式 application service 工作。
+
 ## 6. 测试与验收
 
 - 同一 provider/message/request 的重复上报不重复计费；不同语义返回 conflict；
@@ -248,4 +272,8 @@ resource/audit collector。
 
 ## 7. 当前状态
 
-截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、认证 API 和 Web 仍是后续阶段。Spec 44-R0、R1 provider/usage contract slice、R2 reconciliation port 与 R3 pricing slice 已完成；R3 仍不把研究结论或上游仓库作为 VibeGo 运行时依赖。
+截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，
+Spec 44-R0、R1 provider/usage contract slice、R2 reconciliation port、R3 pricing slice 和
+R4 resource/audit collector slice 已完成。R4 仍是显式、可替换的 application adapter，不提供
+认证 API/Web/export，也不把研究结论或上游仓库作为 VibeGo 运行时依赖；现有 interactive run
+行为保持不变。
