@@ -41,6 +41,12 @@ clear replay boundary because an interrupted run can later be marked
 6. Keep the daemon's default composition unchanged. R4 wiring is opt-in via an
    injected run-scoped binding; disabled or degraded settings omit the MCP
    runtime and never block ordinary conversation runs.
+7. Gate activation through a daemon `McpLiveActivationService` provider port.
+   The provider may own runtime credentials and transport sessions, but the
+   service accepts only a matching server/manifest revision, an allowlisted
+   healthy-verified snapshot and a call port. Candidate failure deactivates
+   the binding and records bounded degraded status; it never starts a default
+   process or performs a fallback network call.
 
 ## Consequences
 
@@ -53,6 +59,8 @@ clear replay boundary because an interrupted run can later be marked
   old remote request automatically.
 - A later durable provider can replace the ledger only after an explicit
   contract review; no MCP event table is introduced in R4.
+- Transport implementations can be added behind one provider port without
+  changing Web settings, RunManager, AgentLoop or the execution boundary.
 
 ## Rejected alternatives
 

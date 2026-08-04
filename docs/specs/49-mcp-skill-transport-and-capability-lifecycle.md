@@ -300,6 +300,25 @@ remains MCP-off until an application service explicitly activates a call port.
 The daemon binding slice has 3 focused tests; live transport activation/smoke
 remains pending.
 
+#### 49-R4 application activation boundary
+
+`McpLiveActivationService` is the only application entry point for turning a
+verified transport result into a run binding. Its injected provider receives
+the non-secret settings snapshot and an `AbortSignal`, and may hold runtime
+credentials outside the settings/event/Web contracts. It must return a
+`manifestRevision`, a `healthy-verified` capability snapshot and an
+`McpToolCallPort`; the service checks server id, manifest revision, capability
+allowlist and executable-only descriptors before calling
+`McpRunBindingManager.activate`.
+
+Provider timeout, malformed candidate, stale revision, disallowed capability
+or transport failure deactivates the binding and records only a stable,
+bounded degraded status. It never falls back to a direct provider, starts a
+process, makes a network request, or blocks an ordinary run. A successful
+activation records only bounded revision/count/health metadata through the
+existing MCP settings status projection. Refresh replaces the binding for
+future runs; already captured runtimes remain unchanged.
+
 Exit: an activated MCP tool completes through the same approval/sandbox path
 as a built-in tool, while failure, recovery and retry cannot replay an old
 request.

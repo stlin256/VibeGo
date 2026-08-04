@@ -463,3 +463,8 @@ undefined runtime in the existing `composeToolRuntimes` run snapshot path;
 three binding tests cover disabled/unverified, snapshot isolation and unknown
 workspace behavior. No live MCP process/network smoke is claimed by this
 note; activation from a verified transport remains the next R4 slice.
+
+The next R4 application slice is specified but not yet implemented:
+`McpLiveActivationService` will accept only a matching server/manifest
+revision, allowlisted healthy-verified snapshot and injected call port, while
+provider failures remain bounded degraded and do not start default transport.
