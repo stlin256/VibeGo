@@ -1,6 +1,6 @@
 # Spec 50: Observability lifecycle integration
 
-- Status: accepted for 50-R2 (provider usage and cost application adapter)
+- Status: accepted for 50-R3 (resource sampling lifecycle adapter)
 - Date: 2026-08-04
 - Related: [Spec 43](43-resource-usage-and-cost-audit.md), [Spec 44](44-provider-usage-management-and-upstream-reuse.md), [Spec 45](45-observability-api-and-web.md), [ADR 0012](../adr/0012-local-resource-and-cost-audit-ledger.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -174,6 +174,21 @@ known counters, latency and TTFT. A stable `usageId` payload is a no-op on
 replay and a changed payload is a conflict, including concurrent delivery.
 Writer failure is degraded and retryable. The package gate is 47 passing tests;
 no provider, tool, shell, network or credential is used.
+
+## 50-R3 implementation gate (2026-08-05)
+
+The sampling adapter will own only collector lifecycle state. It starts a
+bounded `ResourceCollector` after an explicit Scheduler lease, stops and flushes
+on pause/cancel/terminal, and can start a fresh snapshot after recovery/retry.
+Disabled sampling creates no collector and performs no writer call. Queue
+overflow, unsupported Windows/macOS/Linux probes, and writer failures remain
+bounded `degraded`/`unknown` signals; no shell, PowerShell, CLI or workspace
+scan is permitted. Retention is a policy value only in this phase—automatic
+deletion is not introduced.
+
+The adapter is injected and network-free. It does not become a second
+scheduler, does not execute a run, and does not alter AgentLoop, RunManager,
+`run_events` or `goal_events`.
 
 ## Acceptance matrix
 

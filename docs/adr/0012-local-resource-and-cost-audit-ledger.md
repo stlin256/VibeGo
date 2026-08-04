@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b、44-R4、50-R1 与 50-R2（contracts、projection、ledger/rollup、显式 collector/audit adapter、lifecycle ports 和 provider usage/cost application adapter 已实现；自动 wiring/API/Web 仍后置）
+- 状态：Accepted for Phase 43a/43b、44-R4、50-R1、50-R2 与 50-R3（contracts、projection、ledger/rollup、显式 collector/audit adapter、lifecycle ports、provider usage/cost adapter 和 sampling lifecycle adapter 已实现；自动 wiring/API/Web 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -148,3 +148,14 @@ The R2 adapter is implemented in
 `packages/observability/src/provider-usage-lifecycle.ts` with 47 focused
 observability tests. It is transport-free and remains an opt-in application
 port; no default run or AgentLoop wiring was changed.
+
+## 50-R3 sampling lifecycle boundary (2026-08-05)
+
+Sampling is an injected lifecycle adapter around the existing bounded
+`ResourceCollector`. A Scheduler lease is an input fact, not a new scheduler;
+without it (or when sampling is disabled) no collector or writer call is made.
+Pause/cancel/terminal stop and flush the collector, while recovery/retry starts
+a new run-scoped snapshot. Unsupported platform probes, queue overflow and
+writer errors stay fail-soft and expose degraded/unknown state. The adapter
+never invokes shell/PowerShell/CLI, scans a workspace or changes run event
+authorities.

@@ -526,7 +526,7 @@ conversation-first Web 设置卡均已覆盖 focused tests。未提供默认 pro
 关闭状态和未配置 verifier 时仍不会启动子进程或发网络请求；R4 才评估 run-scoped
 ToolExecutor bridge。
 
-## Spec 50：Observability lifecycle integration（R1/R2 已完成，R3/R4 规划）
+## Spec 50：Observability lifecycle integration（R1/R2 已完成，R3 实施中，R4 规划）
 
 详见 [Spec 50](specs/50-observability-lifecycle-integration.md)。本阶段在 daemon
 application/RunManager 边界接入唯一 usage ledger、pricing/reconciliation、CPU/RSS/disk
@@ -554,6 +554,11 @@ AgentLoop，network-free provider usage application fixture 已通过 focused te
 边界，47 个 focused tests 通过；它不改变默认 run 创建、AgentLoop、Scheduler、
 Approval、Sandbox、WorkspaceRegistry、`run_events` 或 `goal_events`，下一步进入
 低资源采样 lifecycle（50-R3）。
+
+50-R3 文档门禁已冻结：ResourceCollector 只在显式 Scheduler lease 后启动，
+pause/cancel/terminal stop+flush，recovery/retry 重新 capture snapshot；关闭
+采样不创建 collector，unsupported/overflow/writer failure 只产生 bounded
+degraded/unknown，不执行 shell/PowerShell/CLI 或 workspace scan。
 
 ### Spec 47-R3 implementation update (2026-08-04)
 
