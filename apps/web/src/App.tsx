@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
-import { ContextRail, ConversationShell, WorkspaceRail } from './components/vibego/index.js';
+import { ContextRail, ConversationHeader, ConversationShell, WorkspaceRail } from './components/vibego/index.js';
 import { createTranslator, type Locale } from './locale.js';
 import './styles.css';
 
@@ -346,16 +346,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup"><img className="brand-mark" src="/vibego-mark.svg" alt={t('brand.name')} /><span>Vibe<span className="brand-go">Go</span></span></div>
-        <div className="topbar-actions">
-          <button className="topbar-button primary-task-button" type="button" aria-keyshortcuts="Control+N Meta+N" onClick={startNewTask}>{t('nav.newTask')}</button>
-          <button className="topbar-button context-toggle" type="button" aria-expanded={contextOpen} aria-label={contextOpen ? t('nav.hideDetails') : t('nav.showDetails')} onClick={() => setContextOpen((current) => !current)}>{contextOpen ? t('nav.hideDetails') : t('nav.showDetails')}</button>
-          <button className="topbar-button settings-toggle" type="button" aria-haspopup="dialog" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={(event) => openSettings(event.currentTarget)}>{t('nav.settings')}</button>
-          <label className="locale-control"><span>{t('locale.label')}</span><select aria-label={t('locale.label')} value={locale} onChange={(event) => onLocaleChange?.(event.target.value as Locale)}><option value="en-US">{t('locale.english')}</option><option value="zh-CN">{t('locale.chinese')}</option></select></label>
-          <div className="connection-pill" data-connected={connected}>{connected ? t('connection.connected') : t('connection.awaitingPairing')}</div>
-        </div>
-      </header>
+      <ConversationHeader connected={connected} contextOpen={contextOpen} settingsOpen={settingsOpen} locale={locale} copy={{ brandName: t('brand.name'), brandPrefix: 'Vibe', brandSuffix: 'Go', newTask: t('nav.newTask'), hideDetails: t('nav.hideDetails'), showDetails: t('nav.showDetails'), settings: t('nav.settings'), localeLabel: t('locale.label'), localeEnglish: t('locale.english'), localeChinese: t('locale.chinese'), connected: t('connection.connected'), awaitingPairing: t('connection.awaitingPairing') }} onNewTask={startNewTask} onToggleContext={() => setContextOpen((current) => !current)} onOpenSettings={openSettings} onLocaleChange={onLocaleChange} />
       <div className="sr-only" aria-live="polite" aria-label={t('accessibility.statusLabel')}>{error ?? (connected ? t('connection.connected') : t('connection.awaitingPairing'))}</div>
       <section className="content-grid">
         <WorkspaceRail workspaceLabel={workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId} settingsOpen={settingsOpen} copy={{ navigationLabel: 'Workspace navigation', eyebrow: 'WORKSPACE', localSession: t('nav.localSession'), newTask: t('nav.newTask'), recent: 'RECENT', currentTask: t('nav.currentTask'), noOtherRuns: t('nav.noOtherRuns'), settings: t('nav.settings') }} onNewTask={startNewTask} onOpenSettings={openSettings} />

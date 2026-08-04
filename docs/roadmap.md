@@ -327,7 +327,7 @@ runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 sec
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2 已实现，42b-3/42c/42d 后续）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3 已实现，42c/42d 后续）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -344,20 +344,26 @@ Button/Input/Textarea/Label/Card/Badge/Separator/Skeleton 基础 primitives。
 它们只负责 presentational rendering，不访问 API、storage 或 secret；现有
 conversation shell 尚未迁移，避免在没有组件级回归覆盖时改变交互。Phase 42b
 再按组件逐步迁移 shell，42c 迁移 Settings/operation surfaces，42d 做 viewport、
-键盘、可访问性和 bundle 验收。当前 Web focused gate 为 81 tests、typecheck
-和 production build；观测到 JS gzip 80.40 KiB、CSS gzip 5.82 KiB。
+键盘、可访问性和 bundle 验收。当前 Web focused gate 为 83 tests、typecheck
+和 production build；观测到 JS gzip 80.54 KiB、CSS gzip 5.82 KiB。
 
 Phase 42b-1 已将 conversation stream、composer、RunConsole 和 bounded
 tool-output inspector 抽出到 `components/vibego/ConversationShell.tsx`，并改用
 Phase 42a Button/Textarea primitives。所有 run/event/approval/cancel callback
 仍由 App 注入，不创建第二条 SSE 或事实源；Settings drawer 留在后续
-42b-3/42c 切片。
+42c 切片。
 
 Phase 42b-2 已将 workspace rail 与 context rail 抽出到
 `components/vibego/WorkspaceRail.tsx` 和 `ContextRail.tsx`，使用 Button/Card
 primitives，并保持既有 responsive landmarks、Goal/observability read-only
 projection 与 health metadata。组件不发请求、不读 storage/secret、不回显
-workspace path；topbar、Settings drawer 和 operation cards 留给 42b-3/42c。
+workspace path；Settings drawer 和 operation cards 留给 42c。
+
+42b-3 已将 topbar 抽取为 `components/vibego/ConversationHeader.tsx`，只接收
+locale、连接/上下文/设置快照和显式 callback；Settings drawer、operation
+cards、API/SSE 与所有安全事实源仍由 `App`/`ApiClient` 持有。该切片覆盖
+connected/awaiting-pairing、locale ARIA、快捷键提示和窄比例换行，下一步进入
+42c 的 Settings/operation surfaces。
 
 ## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 

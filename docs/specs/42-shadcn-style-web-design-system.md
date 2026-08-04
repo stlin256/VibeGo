@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1 与 42b-2 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2 与 42b-3 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -264,8 +264,8 @@ while making the next migration reversible.
 
 Focused Web tests cover variant rendering, ARIA/label forwarding, disabled and
 loading behavior, token/helper contracts and primitive isolation. The Web
-focused gate now passes 81 tests, typecheck and production build; the observed
-bundle is 80.40 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
+focused gate now passes 83 tests, typecheck and production build; the observed
+bundle is 80.54 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
 device emulation are claimed as evidence by Phase 42a.
 
 ### Phase 42b-1 implementation update (2026-08-05)
@@ -280,8 +280,8 @@ actions remain explicit callbacks owned by the existing application boundary.
 The extraction preserves the existing `run`/`StoredEvent` snapshot and SSE
 projection semantics, including the 24-card/128 KiB tool-output display cap.
 The component does not import `api.ts`, access storage, read credentials or
-create a second event stream. Topbar and the large Settings drawer remain in
-`App` for the next 42b-3/42c slices. Focused
+create a second event stream. The large Settings drawer remains in `App` for
+the next 42c slice. Focused
 Web smoke tests cover empty/running/recovery/approval composer states and
 confirm the component stays secret/path-free.
 
@@ -298,8 +298,25 @@ all server authority in `App`/`ApiClient`.
 Responsive class names and DOM landmarks remain unchanged (`workspace-rail`,
 `context-rail`, `Run context`, `Workspace navigation`). The extraction does
 not echo workspace paths, credentials, raw telemetry or event payloads, and it
-does not add a second request or event stream. Settings drawer and topbar
-remain intentionally in `App` for the next 42b-3/42c migration slice.
+does not add a second request or event stream. The Settings drawer remains
+intentionally in `App` for the next 42c migration slice.
+
+### Phase 42b-3 implementation update (2026-08-05)
+
+The existing topbar is now extracted into the typed
+`components/vibego/ConversationHeader.tsx` presentational component. It owns
+only brand/status rendering and explicit callbacks for new task, context toggle,
+settings focus return, and locale selection. It preserves the current
+`topbar`/`topbar-actions` landmarks, `Control+N`/`Meta+N` hint, connection
+status projection, and ratio-first wrapping without adding a request, storage
+write, event stream, or server authority. The Settings drawer remains in `App`
+for the later 42c slice.
+
+The focused gate adds component smoke coverage for connected and
+awaiting-pairing states, verifies Button primitive usage and locale ARIA
+semantics, and rejects credentials, absolute paths, and raw event payloads in
+the rendered markup. The observed output remains below the 110 KiB JS /
+30 KiB CSS gzip budgets.
 
 ## 9. 退出条件
 

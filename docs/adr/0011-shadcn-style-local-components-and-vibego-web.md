@@ -99,4 +99,19 @@ They accept typed metadata/projections and callbacks, use Button/Card
 primitives, and preserve the existing CSS landmarks and responsive grid. The
 context component composes the existing read-only Goal and observability
 panels; it does not fetch data or become a second API/event authority. Settings
-and topbar remain in the application shell until their own migration gate.
+remains in the application shell until the next migration gate.
+
+## Phase 42b-3 implementation update (2026-08-05)
+
+The topbar is extracted as `ConversationHeader`, while `App` keeps the
+Settings drawer and all interaction state. The component receives locale,
+connection, drawer and context snapshots plus explicit callbacks; it may use
+the local `Button` primitive and native `select` for the simple locale control.
+It must not import `api.ts`, read browser storage, access credentials, create an
+SSE channel, or own focus-return state. Existing CSS landmarks and keyboard
+shortcuts remain the compatibility contract; Settings and operation-card
+migration are not part of this slice.
+
+The focused Web gate covers connected/awaiting-pairing rendering, locale ARIA,
+Button primitive output and secret/path-free markup. The component adds no
+network, storage, SSE or runtime authority.
