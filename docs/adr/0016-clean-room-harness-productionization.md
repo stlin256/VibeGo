@@ -154,6 +154,12 @@ bounded timeout; it returns a redacted `model-smoke/v1` report with stable
 status/error codes and nullable usage counters. It never starts the daemon,
 changes run state, retries a partial stream or enters `pnpm verify`.
 
+The implementation and one redacted live evidence run are complete: the
+DeepSeek-compatible endpoint returned a bounded healthy report with nullable
+usage semantics and no endpoint, credential, prompt or raw provider response
+in the report. This evidence does not enable network access for the daemon or
+change the default fake-provider path.
+
 ## Validation
 
 Every stage must run `pnpm typecheck`, `pnpm test`, `pnpm diff:check` and

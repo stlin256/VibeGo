@@ -293,12 +293,6 @@ freezes the single-authority, run-snapshot, fail-soft and host-first decisions.
 
 The following work is documented but not fully implemented yet:
 
-- **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): R1/R2
-  contracts, deterministic stream replay, cancellation/retry fixtures,
-  explicit OpenAI-compatible adapter and the R3 daemon bridge are implemented.
-  The opt-in live model smoke remains R4; its explicit endpoint/model/secret-env
-  command contract is frozen in the Spec/ADR, while the default still makes no
-  network request and no credential has been written to the repository.
 - **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1 policy
   compiler and the R2 injected host-restricted process runner are implemented
   bounded slices. Container smoke and full Web continuation remain later
@@ -366,9 +360,10 @@ The documentation gate is now followed by a network-free model/context slice:
   token metadata without changing its state machine or event authority.
 
 `pnpm verify` previously passed with 396 tests for R1/R2. R3 now adds the
-daemon/application provider binding and application fixture; R4 opt-in live
-smoke remains deferred. Credentials remain out-of-band and the normal
-fake-provider path remains available.
+daemon/application provider binding and application fixture; R4 adds the
+explicit redacted live smoke command and seven network-free workflow tests.
+Credentials remain out-of-band and the normal fake-provider path remains
+available.
 
 ## Spec 47 R3 implementation note (2026-08-04)
 
@@ -386,10 +381,11 @@ AgentLoop state machine or introducing a second authority:
   provider-switch isolation, safe mismatch response and event privacy. No
   network request or durable observability-ledger write occurs in this slice.
 
-R4 live smoke remains deferred for the ordinary offline verification gate; the
-implementation gate is frozen as `pnpm smoke:model` with an out-of-band
-environment secret reference and redacted report. A successful redacted live
-smoke is mandatory before the Spec 52 release gate; Goal admission,
+R4 live smoke is implemented outside the ordinary offline verification gate as
+`pnpm smoke:model` with an out-of-band environment secret reference and
+redacted report. A successful redacted live smoke is mandatory before the Spec
+52 release gate; one such DeepSeek-compatible evidence run passed without
+exposing endpoint, credential, prompt or raw response. Goal admission,
 `goal_events`, Approval, Sandbox, Scheduler and WorkspaceRegistry behavior
 remain unchanged until their separately specified integration phases.
 

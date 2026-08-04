@@ -69,7 +69,17 @@ pnpm --filter @ready4vibe/daemon start
 
 # Optional local Docker/Podman smoke (digest required; never pulls an image)
 pnpm smoke:container -- --runtime docker --image ghcr.io/example/runner@sha256:<64-hex-digest>
+
+# Optional explicit live model smoke (key stays in this process environment)
+$env:READY4VIBE_MODEL_API_KEY = '<out-of-band-key>'
+pnpm smoke:model -- --endpoint https://api.deepseek.com/chat/completions --model deepseek-v4-flash --secret-env READY4VIBE_MODEL_API_KEY
 ```
+
+`pnpm smoke:model` is opt-in and outside `pnpm verify`. It makes one bounded
+OpenAI-compatible request, prints only a redacted status/latency/usage report,
+and never writes the key, endpoint, prompt, raw response, or report to the
+repository, daemon events, logs, or browser storage. Use a complete provider
+endpoint; a base URL without `/chat/completions` is intentionally rejected.
 
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
 path. The release target is a single Host URL where the daemon serves the compiled Web and

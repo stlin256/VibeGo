@@ -69,7 +69,14 @@ pnpm --filter @ready4vibe/daemon start
 
 # 可选的本地 Docker/Podman smoke（必须使用 digest，绝不会隐式拉取镜像）
 pnpm smoke:container -- --runtime docker --image ghcr.io/example/runner@sha256:<64-hex-digest>
+
+# 可选的显式真实模型 smoke（密钥只在本次进程中）
+$env:READY4VIBE_MODEL_API_KEY = '<out-of-band-key>'
+pnpm smoke:model -- --endpoint https://api.deepseek.com/chat/completions --model deepseek-v4-flash --secret-env READY4VIBE_MODEL_API_KEY
 ```
+
+`pnpm smoke:model` 只有显式调用时才会运行，不属于 `pnpm verify`。它发起一次受限的
+OpenAI-compatible 请求，只输出脱敏的状态、延迟和 usage 摘要，不会把 key、地址、提示词、原始响应或报告写入仓库、事件、日志或浏览器。必须使用完整的 provider endpoint，直接使用没有 `/chat/completions` 的基础 URL 会被拒绝。
 
 默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。最终发行目标是一个
 Host URL：daemon 同时托管编译后的 Web、API 和 SSE；launcher 与静态托管实现记录在

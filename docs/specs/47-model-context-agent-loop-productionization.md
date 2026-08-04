@@ -1,6 +1,6 @@
 # Spec 47: Model, context and AgentLoop productionization
 
-- Status: in progress (47-R3 daemon/application bridge)
+- Status: 47-R1/R2/R3/R4 implemented (R4 remains opt-in and out-of-band)
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 03](03-model-context-contract.md), [Spec 07](07-model-context.md), [Spec 08](08-agent-model-integration.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -192,9 +192,9 @@ but it is a mandatory evidence item for the Spec 52 release gate. A release
 candidate cannot claim a complete core Harness without a successful redacted
 live smoke report.
 
-## 47-R4 implementation gate (2026-08-05)
+## 47-R4 implementation update (2026-08-05)
 
-The live smoke command is fixed as `pnpm smoke:model`. It requires an explicit
+The live smoke command is implemented as `pnpm smoke:model`. It requires an explicit
 complete HTTPS endpoint, model name and environment-variable secret reference:
 
 ```text
@@ -215,6 +215,13 @@ Configuration, auth, quota, schema, timeout and network failures map to stable
 non-zero exit codes. The command builds only the model adapter package, never
 starts the daemon, never writes `run_events`/logs/files, and remains outside
 `pnpm verify`; tests use injected providers and never contact the network.
+
+The redacted live evidence run completed successfully on 2026-08-05 with the
+DeepSeek-compatible provider: `status=healthy`, `finishReason=length`, and
+reported usage `inputTokens=95`, `outputTokens=32`. The report contained no
+endpoint, secret reference/value, prompt or raw response. This is an opt-in
+release evidence command only; the daemon and ordinary verification path
+remain network-free.
 
 ## Tests first / acceptance matrix
 
@@ -247,7 +254,7 @@ starts the daemon, never writes `run_events`/logs/files, and remains outside
 
 ## 47-R1/R2 implementation update (2026-08-04)
 
-R1/R2 is being delivered as a pure contract/adapter slice. The tests cover
+R1/R2 is implemented as a pure contract/adapter slice. The tests cover
 provider descriptor privacy and endpoint policy, canonical replay of text/tool
 call/usage/terminal events, duplicate request conflict semantics, abort-aware
 retry delays, and bounded OpenAI-compatible SSE decoding. The adapter accepts
@@ -265,8 +272,9 @@ for clean-room OpenAI Responses and Anthropic-shaped fixture translation.
 objective/policy/failure/snapshot items and append-only compaction references;
 the existing AgentLoop passes `maxModelInputTokens` into that budget without
 changing its state transitions. The full repository gate currently passes with
-402 tests. R3 now adds the daemon binding/snapshot bridge; only R4 live smoke
-and later Spec 50 ledger lifecycle attachment remain deferred.
+402 tests. R3 adds the daemon binding/snapshot bridge; R4 adds the explicit
+live smoke command, while only later Spec 50 ledger lifecycle attachment
+remains deferred.
 
 ## 47-R3 implementation update (2026-08-04)
 
