@@ -1,6 +1,6 @@
 # ADR 0013：上游研究与 Provider/Usage 管理边界
 
-- 状态：Accepted for the Spec 43/44 implementation gate
+- 状态：Accepted；44-R0 research gate verified for the pinned commits below
 - 日期：2026-08-04
 - 相关：
   - [Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
@@ -22,6 +22,22 @@ CC Switch、AxonHub、LiteLLM、Langfuse 和 OpenTelemetry 对 token 分桶、�
 7. usage、resource、audit 的降级只能显示 `degraded/unknown`，不能阻塞 interactive run、静默改变 quota 或绕过现有安全门禁；
 8. future native clients 只消费稳定 projection，不读取 SQLite 或上游目录。
 
+## 44-R0 证据结果
+
+以下 pinned source 已完成 README、LICENSE/NOTICE、manifest 和相关实现路径的核对，详细文件清单与
+语义摘要见 [tracked research](../research/upstream-provider-usage.md)：
+
+| 项目 | 默认分支 | pinned commit | 许可证边界 | 复用决定 |
+| --- | --- | --- | --- | --- |
+| CC Switch | `main` | `59a2bd10407707282dcefe85b290f0ddaf4d0a74` | MIT | clean-room |
+| AxonHub | `unstable` | `31f898188cc05f13c0971d7ec9762997d9ff6c41` | Apache-2.0；`llm/` LGPL-3.0；Bedrock/frontend NOTICE | clean-room |
+| LiteLLM | `litellm_internal_staging` | `956d5177d1d915adc8084c142d9d2babad1ff7af` | MIT；`enterprise/` 独立许可 | clean-room |
+| Langfuse | `main` | `3bca62fb0db137f0a778af1ecdc8c7c1c3c5ea5d` | MIT Expat；`ee/`、部分 web/worker 和第三方组件独立许可 | clean-room |
+| OpenTelemetry Specification | `main` | `2b7a5617c0043ea0ac897a1452022eb04c72e89f` | Apache-2.0 | clean-room |
+
+R0 没有授权复制上游源码、schema、UI、品牌资源、session 文件或运行时。价格数据授权、未列出的
+内部协议、未来 commit 语义和外部 exporter 需求仍是未确认项；它们必须在实现前重新审核。
+
 ## 许可证处理
 
 - MIT/BSD/ISC/Apache-2.0：仍需锁定 commit、保留版权/NOTICE、核对依赖和记录 provenance；
@@ -42,3 +58,4 @@ CC Switch、AxonHub、LiteLLM、Langfuse 和 OpenTelemetry 对 token 分桶、�
 - 需要引入 proxy、session importer、外部 collector 或新的事实源；
 - provider usage 语义无法映射到 Spec 43 的 `ModelUsageRecord`；
 - usage/audit 降级可能影响 run、Goal、Scheduler、Approval 或 Sandbox。
+- pinned commit、LICENSE/NOTICE 或 tracked research 的 `filesRead` 发生变化。

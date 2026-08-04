@@ -1,6 +1,6 @@
 # Spec 44：Provider、Token、费用管理与上游源码复用
 
-- 状态：Accepted for research and design; implementation is gated by the phases below
+- 状态：Accepted；44-R0 上游研究门禁已完成，44-R1 及后续运行时实现仍受下方阶段门禁约束
 - 日期：2026-08-04
 - 范围：model provider registry、usage/cost normalization、pricing management、audit projections 和开源项目复用
 - 相关：
@@ -136,11 +136,29 @@ rg -n -i 'token|usage|cache|pricing|dedup|session|rollup|prune|ttft|latency' (Jo
 
 即使许可证允许复制，也不得把上游模块直接接入 AgentLoop 的核心循环、默认 run 创建路径或第二套事实源。小段代码复用必须在 ADR 中列出来源、commit、许可证、文件路径和删除/替换计划。
 
+### 4.3 44-R0 研究证据
+
+截至 2026-08-04，五个候选项目已经在固定 commit 上完成 README、LICENSE/NOTICE、构建 manifest
+和目标文件核对。完整路径、语义摘要、许可证例外和 `reuseDecision=clean-room` 记录在
+[上游调研记录](../research/upstream-provider-usage.md)。本轮没有复制源码、schema、UI、品牌资源、
+CLI session 或运行时，也没有新增上游依赖。
+
+| 项目 | pinned commit | 已确认的设计输入 | 许可证/复用约束 |
+| --- | --- | --- | --- |
+| CC Switch | `59a2bd10407707282dcefe85b290f0ddaf4d0a74` | cache-inclusive/fresh、稳定 request/message ID、dedup、TTFT/latency、rollup | MIT；不引入 Tauri、proxy 或 session 扫描 |
+| AxonHub | `31f898188cc05f13c0971d7ec9762997d9ff6c41` | cache/reasoning/TTL token 分桶、cost item、flat/per-unit/tiered/volume pricing | 根目录 Apache-2.0；`llm/` LGPL-3.0；Bedrock/NOTICE 单独处理；不复制 |
+| LiteLLM | `956d5177d1d915adc8084c142d9d2babad1ff7af` | provider normalization、pricing map 校验、retry/fallback、tier | MIT；`enterprise/` 另有许可证；不引入 Python proxy/runtime |
+| Langfuse | `3bca62fb0db137f0a778af1ecdc8c7c1c3c5ea5d` | generation、usage/cost projection、latency/TTFT、bounded tier matching | MIT Expat；`ee/` 和第三方组件另有边界；不引入常驻平台 |
+| OpenTelemetry Specification | `2b7a5617c0043ea0ac897a1452022eb04c72e89f` | resource identity、属性限制、时间序列聚合和 cardinality/memory trade-off | Apache-2.0；只借鉴规范语义，不引入 Collector/exporter |
+
+未确认项（价格数据授权、未列路径的内部协议、未来 commit 的字段语义和是否需要 session import/
+外部 exporter）不得在 44-R1 中静默假设；任何变化都要重新触发研究门禁。
+
 ## 5. 分阶段实施
 
 | 阶段 | 内容 | 退出条件 |
 | --- | --- | --- |
-| 44-R0 | 上游源码、许可证和路径证据 | `docs/research/upstream-provider-usage.md` 完成；未知项明确列出 |
+| 44-R0 | 上游源码、许可证和路径证据 | 五个 pinned checkout 的 URL/分支/commit/LICENSE/NOTICE/filesRead、clean-room 决策和未知项已记录 |
 | 44-R1 | `ProviderDescriptor`、registry、usage normalizer contract | provider contract tests、secret/path redaction、capability snapshot tests |
 | 44-R2 | 独立 `usage_ledger`、dedup/reconcile、UTC rollup | SQLite/InMemory 一致、idempotency conflict、retry attempt 和重启测试 |
 | 44-R3 | pricing catalog 与 cost engine | flat/per-unit/tiered、pricing revision、unknown cost 和历史重算测试 |
@@ -162,4 +180,4 @@ rg -n -i 'token|usage|cache|pricing|dedup|session|rollup|prune|ttft|latency' (Jo
 
 ## 7. 当前状态
 
-截至 2026-08-04，Spec 43 的 contracts/纯 projection 已完成，Phase 43b ledger/rollup 的冻结范围与实现状态以 `docs/specs/43-resource-usage-and-cost-audit.md` 和 `docs/implementation-status.md` 为准；resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44 先冻结研究和复用门禁，不能把“已写入设计文档”当作“已接入运行时”。
+截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44-R0 已完成五个 pinned source 的研究和复用门禁；44-R1 尚未开始，不能把研究结论当作运行时接入，也不能把上游仓库作为 VibeGo 依赖。
