@@ -4,6 +4,7 @@ import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type 
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import { ObservabilityPanel } from './ObservabilityPanel.js';
+import { createTranslator, type Locale } from './locale.js';
 import './styles.css';
 
 export interface AppProps {
@@ -16,6 +17,8 @@ export interface AppProps {
   onCancel?: () => void;
   onApprove?: (approvalId: string, decision: 'allow' | 'deny') => void;
   onRetry?: () => void;
+  locale?: Locale;
+  onLocaleChange?: (locale: Locale) => void;
   profile?: RunProfile;
   onProfileChange?: (profile: RunProfile) => void;
   onResetProfile?: () => void;
@@ -69,7 +72,8 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+  const t = createTranslator(locale);
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
@@ -310,29 +314,31 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand-lockup"><img className="brand-mark" src="/vibego-mark.svg" alt="VibeGo" /><span>Vibe<span className="brand-go">Go</span></span></div>
+        <div className="brand-lockup"><img className="brand-mark" src="/vibego-mark.svg" alt={t('brand.name')} /><span>Vibe<span className="brand-go">Go</span></span></div>
         <div className="topbar-actions">
-          <button className="topbar-button primary-task-button" type="button" onClick={startNewTask}>New task</button>
-          <button className="topbar-button context-toggle" type="button" aria-expanded={contextOpen} onClick={() => setContextOpen((current) => !current)}>{contextOpen ? 'Hide details' : 'Details'}</button>
-          <button className="topbar-button settings-toggle" type="button" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={() => setSettingsOpen(true)}>Settings</button>
-          <div className="connection-pill" data-connected={connected}>{connected ? '已连接' : '等待配对'}</div>
+          <button className="topbar-button primary-task-button" type="button" onClick={startNewTask}>{t('nav.newTask')}</button>
+          <button className="topbar-button context-toggle" type="button" aria-expanded={contextOpen} aria-label={contextOpen ? t('nav.hideDetails') : t('nav.showDetails')} onClick={() => setContextOpen((current) => !current)}>{contextOpen ? t('nav.hideDetails') : t('nav.showDetails')}</button>
+          <button className="topbar-button settings-toggle" type="button" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={() => setSettingsOpen(true)}>{t('nav.settings')}</button>
+          <label className="locale-control"><span>{t('locale.label')}</span><select aria-label={t('locale.label')} value={locale} onChange={(event) => onLocaleChange?.(event.target.value as Locale)}><option value="en-US">{t('locale.english')}</option><option value="zh-CN">{t('locale.chinese')}</option></select></label>
+          <div className="connection-pill" data-connected={connected}>{connected ? t('connection.connected') : t('connection.awaitingPairing')}</div>
         </div>
       </header>
+      <div className="sr-only" aria-live="polite" aria-label={t('accessibility.statusLabel')}>{error ?? (connected ? t('connection.connected') : t('connection.awaitingPairing'))}</div>
       <section className="content-grid">
         <nav className="workspace-rail" aria-label="Workspace navigation">
           <div className="eyebrow">WORKSPACE</div>
           <strong className="workspace-rail-name">{workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId}</strong>
-          <p className="muted">Local session</p>
-          <button className="rail-new-button" type="button" onClick={startNewTask}>＋ New task</button>
+          <p className="muted">{t('nav.localSession')}</p>
+          <button className="rail-new-button" type="button" onClick={startNewTask}>{t('nav.newTask')}</button>
           <div className="rail-section-label">RECENT</div>
-          <div className="rail-session active"><span className="session-dot" />Current task</div>
-          <div className="rail-session"><span className="session-dot muted-dot" />No other runs</div>
-          <button className="rail-settings-button" type="button" onClick={() => setSettingsOpen(true)}>⚙ Settings</button>
+          <div className="rail-session active"><span className="session-dot" />{t('nav.currentTask')}</div>
+          <div className="rail-session"><span className="session-dot muted-dot" />{t('nav.noOtherRuns')}</div>
+          <button className="rail-settings-button" type="button" onClick={() => setSettingsOpen(true)}>{t('nav.settings')}</button>
         </nav>
         <aside className="sidebar" aria-label="连接与运行摘要">
-          <section id="settings-drawer" className="panel settings-panel" data-open={settingsOpen} aria-label="Run settings">
-            <div className="settings-drawer-header"><div><div className="eyebrow">SETTINGS</div><h2>Run profile</h2></div><button className="drawer-close" type="button" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>Close</button></div>
-            <p className="muted">Configure this run from the console; no config file editing is required.</p>
+          <section id="settings-drawer" className="panel settings-panel" data-open={settingsOpen} aria-label={t('settings.title')}>
+            <div className="settings-drawer-header"><div><div className="eyebrow">SETTINGS</div><h2>{t('settings.title')}</h2></div><button className="drawer-close" type="button" aria-label={t('settings.close')} onClick={() => setSettingsOpen(false)}>{t('settings.close')}</button></div>
+            <p className="muted">{t('settings.description')}</p>
             <div className="settings-grid">
               <div className="workspace-setup" aria-label="Workspace setup">
                 <div className="eyebrow">WORKSPACES</div>
@@ -460,23 +466,23 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
           {!connected && <>
             <section className="panel connection-panel">
               <div className="eyebrow">CONNECTION</div>
-              <h1>连接你的本地工作区</h1>
+              <h1>{t('connection.workspaceTitle')}</h1>
               <p className="muted">Vibe Coding，随时随地；执行有边界，进度可继续。</p>
               {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
             </section>
-            <section className="panel pairing-panel"><div className="eyebrow">PAIRING</div><h2>输入一次性配对码</h2><p className="muted">配对完成后 token 只保存在当前页面内。</p><form onSubmit={submitPairing}><label htmlFor="pairing-code">Pairing code</label><input id="pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value)} autoComplete="off" inputMode="text" /><button type="submit">连接 daemon</button></form></section>
+            <section className="panel pairing-panel"><div className="eyebrow">PAIRING</div><h2>{t('connection.pairingTitle')}</h2><p className="muted">{t('connection.pairingDescription')}</p><form onSubmit={submitPairing}><label htmlFor="pairing-code">Pairing code</label><input id="pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value)} autoComplete="off" inputMode="text" /><button type="submit">{t('connection.pairingAction')}</button></form></section>
             <section className="panel safety-panel"><div className="eyebrow">GUARDRAILS</div><ul><li>不可信任务强制 external sandbox</li><li>写入与命令按策略请求审批</li><li>事件流可按 seq 断线续传</li></ul></section>
           </>}
         </aside>
         <section className="main-column">
           {error && <div className="error-banner" role="alert">{error}</div>}
           {connected ? <>
-            <section className="conversation-column" aria-label="Conversation and run timeline">
+              <section className="conversation-column" aria-label="Conversation and run timeline">
               <section className="panel conversation-stream" aria-label="Conversation stream">
-                <div className="conversation-stream-header"><div><div className="eyebrow">CONVERSATION</div><h1>What should agent do next?</h1></div><span className="muted conversation-hint">One task at a time · local workspace</span></div>
-                {run ? <RunConsole run={run} events={events} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <div className="empty-state"><span className="empty-icon">⌁</span><h2>Ready for your next task</h2><p className="muted">Describe a change, test, or explanation below. The agent’s plan, output, approvals, and recovery stay in this conversation.</p></div>}
+                <div className="conversation-stream-header"><div><div className="eyebrow">CONVERSATION</div><h1>{t('conversation.title')}</h1></div><span className="muted conversation-hint">{t('conversation.hint')}</span></div>
+                {run ? <RunConsole run={run} events={events} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <div className="empty-state"><span className="empty-icon">⌁</span><h2>{t('conversation.readyTitle')}</h2><p className="muted">{t('conversation.readyDescription')}</p></div>}
               </section>
-              <section className="panel composer-panel"><div className="eyebrow">NEW MESSAGE</div><form onSubmit={submitRun}><textarea ref={composerRef} aria-label="Task input" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask for a change, a test run, or an explanation…" rows={3} /><div className="composer-footer"><span className="muted">{profile.taskTrust === 'untrusted-content' ? 'untrusted content · external sandbox' : 'trusted workspace · read-only'}</span><button type="submit">Start run</button></div></form></section>
+              <section className="panel composer-panel"><div className="eyebrow">{t('conversation.newMessage')}</div><form onSubmit={submitRun}><textarea ref={composerRef} aria-label={t('conversation.inputLabel')} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t('conversation.inputPlaceholder')} rows={3} /><div className="composer-footer"><span className="muted">{profile.taskTrust === 'untrusted-content' ? 'untrusted content · external sandbox' : 'trusted workspace · read-only'}</span><button type="submit">{t('conversation.startRun')}</button></div></form></section>
             </section>
           </> : <section className="panel empty-state"><span className="empty-icon">◎</span><h2>先完成安全配对</h2><p className="muted">daemon 默认不会把 token 放进 URL、cookie 或本地存储。</p></section>}
         </section>

@@ -39,6 +39,10 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .toggle-row input { width: 18px; height: 18px; accent-color: var(--vibego-lime); }
 .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button:disabled { cursor: not-allowed; opacity: .48; }
+.locale-control { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: #95a9c3; font-size: 11px; }
+.locale-control span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.locale-control select { min-height: 44px; border: 1px solid #30415c; border-radius: var(--vibego-radius-sm); padding: 0 8px; color: #cbe4ff; background: #122039; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .reset-button { margin-top: 12px; color: #cbe4ff; border: 1px solid #30415c; background: transparent; }
 .reset-button:hover { background: #17243c; }
 .certificate-guidance { display: grid; gap: 4px; margin-top: 14px; border-top: 1px solid #263650; padding-top: 12px; }

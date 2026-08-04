@@ -23,4 +23,12 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.conversation-stream');
     expect(styles).toContain('.composer-panel { position: sticky;');
   });
+
+  it('keeps the Phase 56a language control and accessibility hooks bounded', () => {
+    expect(styles).toContain('.locale-control');
+    expect(styles).toContain('.locale-control select { min-height: 44px;');
+    expect(styles).toContain('.sr-only');
+    expect(styles).toContain('button { border: 0; border-radius: var(--vibego-radius-sm); min-height: 44px;');
+    expect(styles).toContain('prefers-reduced-motion');
+  });
 });

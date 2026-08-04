@@ -5,7 +5,7 @@ import { DEFAULT_RUN_PROFILE } from './api.js';
 
 describe('web console shell', () => {
   it('renders a pairing-first surface with responsive semantic controls', () => {
-    const html = renderToStaticMarkup(<App />);
+    const html = renderToStaticMarkup(<App locale="zh-CN" />);
     expect(html).toContain('输入一次性配对码');
     expect(html).toContain('pairing-code');
     expect(html).toContain('连接你的本地工作区');
@@ -188,6 +188,17 @@ describe('web console shell', () => {
     expect(html).toContain('Probe models');
     expect(html).toContain('deepseek-v4-flash');
     expect(html).not.toMatch(/api[_-]?key|Authorization|raw upstream/iu);
+  });
+
+  it('renders the explicit locale control and bounded live status in Chinese', () => {
+    const html = renderToStaticMarkup(<App locale="zh-CN" onLocaleChange={() => undefined} />);
+    expect(html).toContain('＋ 新任务');
+    expect(html).toContain('语言');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('aria-label="实时状态"');
+    expect(html).toContain('等待配对');
+    expect(html).not.toContain('vibego.locale.v1');
+    expect(html).not.toMatch(/api[_-]?key|Authorization|C:\\Users/iu);
   });
 
   it('renders an explicit approval card with allow and deny controls', () => {

@@ -1,6 +1,6 @@
 # Spec 56：多语言、无障碍与真实设备兼容矩阵
 
-- Status: Phase 56a implementation planned（locale/accessibility shell slice；full catalog and real-device evidence remain later）
+- Status: Phase 56a implemented（locale/accessibility shell slice；full catalog and real-device evidence remain later）
 - Date: 2026-08-04
 - Related: [Spec 37](37-ratio-responsive-ui.md)、[Spec 38](38-conversation-first-web-shell.md)、[Spec 42](42-shadcn-style-web-design-system.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -146,7 +146,7 @@ conversation、approval、settings、Goal、recovery、SSE reconnect 和 error s
 - 不在本阶段实现原生移动客户端、语音助手或完整 RTL 设计系统；
 - 不将截图、录屏、屏幕阅读器日志或性能 trace 中的 secret/raw transcript 纳入仓库。
 
-## 9. Phase 56a implementation boundary（2026-08-05）
+## 9. Phase 56a implementation update（2026-08-05）
 
 Phase 56a 先把 locale 和 accessibility 的运行时边界落到现有
 conversation-first Web shell，不新增 daemon API、device-specific backend 或第二套
@@ -166,3 +166,10 @@ conversation-first Web shell，不新增 daemon API、device-specific backend �
   focused tests 门禁。
 - Phase 56a 只声明 emulated viewport contract，不能把它当作真实设备通过；Playwright
   projects、屏幕阅读器人工证据、完整翻译审阅和三折叠实验室证据属于后续 Phase 56b/56c。
+
+`apps/web` now provides the bounded locale adapter, dedicated storage key,
+root-document `lang` synchronization, language selector, core shell catalog and
+live-status landmark. Web-focused tests cover locale precedence, invalid/secret-
+shaped storage values, reset behavior, translated rendering and privacy-safe
+Chinese shell output; the existing ratio/reduced-motion CSS gates remain in
+place. This slice does not claim full catalog coverage or real-device pass.
