@@ -1,6 +1,6 @@
 # Spec 50: Observability lifecycle integration
 
-- Status: planned (50-R0 research gate)
+- Status: accepted for 50-R1 (application ports and lifecycle fixture)
 - Date: 2026-08-04
 - Related: [Spec 43](43-resource-usage-and-cost-audit.md), [Spec 44](44-provider-usage-management-and-upstream-reuse.md), [Spec 45](45-observability-api-and-web.md), [ADR 0012](../adr/0012-local-resource-and-cost-audit-ledger.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -122,6 +122,24 @@ verification; never auto-upload telemetry.
 
 Exit: Web and future clients consume versioned projections, pagination is
 bounded, and audit verification distinguishes valid, degraded and unknown.
+
+## 50-R1 implementation update (2026-08-05)
+
+The application boundary now has a pure `ObservabilityLifecycleRecorder` and
+an injected writer port. It accepts only bounded lifecycle observations and
+derives one idempotent model/tool/resource/audit batch per logical attempt.
+Create, retry, pause, cancel, recover and terminal transitions are represented
+in the fixture without calling a provider, tool, shell or filesystem. Replayed
+logical attempts are no-ops when their canonical payload is unchanged and
+fail-closed conflicts when it changes. Disabled sampling emits no resource
+sample. Writer failures return a bounded `degraded` result and never change the
+originating run outcome. Secret-shaped fields, environment values and absolute
+paths are rejected before the writer is called.
+
+This is an application-port slice only: the default `RunManager.start()` path,
+`AgentLoop`, `run_events`, `goal_events`, `Scheduler`, `Approval`, `Sandbox` and
+`WorkspaceRegistry` remain unchanged. Automatic lifecycle wiring is deferred to
+50-R2/R3 after provider usage and resource sampling acceptance.
 
 ## Acceptance matrix
 

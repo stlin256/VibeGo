@@ -526,13 +526,21 @@ conversation-first Web 设置卡均已覆盖 focused tests。未提供默认 pro
 关闭状态和未配置 verifier 时仍不会启动子进程或发网络请求；R4 才评估 run-scoped
 ToolExecutor bridge。
 
-## Spec 50：Observability lifecycle integration（规划）
+## Spec 50：Observability lifecycle integration（50-R1 已完成，R2/R3/R4 规划）
 
 详见 [Spec 50](specs/50-observability-lifecycle-integration.md)。本阶段在 daemon
 application/RunManager 边界接入唯一 usage ledger、pricing/reconciliation、CPU/RSS/disk
 采样和 audit hash-chain；`run_events`、`goal_events`、ledger 与 Web projection 保持独立。
 采样队列、价格缺失和 writer 故障都 fail-soft，用户看到 `unknown/degraded` 而不是虚假的 0；
 任何重试只重试 ledger append，不重试模型/tool/shell。
+
+50-R1 已交付纯 application-port/lifecycle fixture：`packages/observability`
+中的 `ObservabilityLifecycleRecorder` 对 create/retry/pause/cancel/recover/
+terminal 做 bounded replay，按 logical attempt 生成一次 usage/tool/resource/
+audit batch；重复 payload 是 no-op，冲突 fail-closed，关闭采样不写 resource，
+writer 失败只返回 degraded。该切片不接入默认 RunManager.start，不修改
+AgentLoop、Scheduler、Approval、Sandbox、WorkspaceRegistry、`run_events` 或
+`goal_events`；下一步先做 provider usage/cost wiring（50-R2）。
 
 ### Spec 47-R3 implementation update (2026-08-04)
 

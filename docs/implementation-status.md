@@ -308,10 +308,12 @@ The following work is documented but not fully implemented yet:
   authenticated non-secret MCP settings/status contract and Web card; its
   injected probe remains off by default, so the daemon still does not
   auto-start a process or access MCP transport on startup.
-- **Spec 50** (`specs/50-observability-lifecycle-integration.md`): automatic
-  RunManager/application lifecycle wiring for usage, cost, resource samples
-  and audit. Current ledgers, collector and API projection are available, but
-  sampling and complete lifecycle attachment are not default.
+- **Spec 50** (`specs/50-observability-lifecycle-integration.md`): 50-R1 now
+  provides a pure application lifecycle recorder/fixture with bounded
+  idempotency, conflict detection, disabled-sampling no-op and fail-soft writer
+  errors. It is not wired into the default RunManager path; provider usage,
+
+  cost, automatic sampling and complete lifecycle attachment remain 50-R2/R3.
 - **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate

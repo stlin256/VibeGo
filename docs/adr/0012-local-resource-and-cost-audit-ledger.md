@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b 与 44-R4（contracts、projection、ledger/rollup、显式 collector/audit adapter 已实现；API/Web 仍后置）
+- 状态：Accepted for Phase 43a/43b、44-R4 与 50-R1（contracts、projection、ledger/rollup、显式 collector/audit adapter 和 application lifecycle ports 已实现；自动 wiring/API/Web 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -116,3 +116,15 @@ R4 将采样与审计实现为 `packages/observability` 内的可替换 applicat
 
 默认采样间隔、货币、保留天数、external sandbox 精确归因、价格导入格式和第一版是否包含审计
 导出/完整性校验，统一由 Spec 43 第 11 节讨论后冻结；这些选择不阻塞 Phase 43a。
+
+## 50-R1 application lifecycle boundary (2026-08-05)
+
+`packages/observability` owns a pure `ObservabilityLifecycleRecorder` port.
+The recorder receives bounded, already-redacted lifecycle facts and sends one
+idempotent batch to the existing observability writer for each logical attempt.
+It is a fixture/application adapter, not a second event source: no provider,
+tool, shell, filesystem, scheduler or run event is executed or persisted by
+this layer. Disabled sampling produces no resource record; replay with the
+same fingerprint is a no-op and a changed payload is a conflict. Writer errors
+are reported as degraded and never alter the source run result. The default
+RunManager and AgentLoop wiring remains intentionally unchanged until 50-R2/R3.
