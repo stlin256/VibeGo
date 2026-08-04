@@ -63,7 +63,7 @@
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，357 个测试全部通过（contracts 28、goal-control 17、storage 30、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、observability 17、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 112、web 41）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试、Phase 6a Knowledge settings/probe/run snapshot/Web/SQLite recovery，以及 Phase 6b operations/fixture/lock/recovery 测试；Spec 40 覆盖 mutation replay、重试 no-op/conflict、stale revision、validated completion、safe error、LAN auth、方法门禁和 SQLite 重启幂等；Spec 44-R1/R2/R3 覆盖 provider descriptor strictness、privacy、capability snapshot isolation、usage normalizer、token semantics、usage ID dedup、cross-source reconciliation、retry isolation、conflict fail-closed、pricing mode/revision、BigInt cost items 和 unknown cost；
+- `pnpm test`：通过，379 个测试全部通过（contracts 30、goal-control 17、storage 31、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、observability 29、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 116、web 44）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试、Phase 6a Knowledge settings/probe/run snapshot/Web/SQLite recovery，以及 Phase 6b operations/fixture/lock/recovery 测试；Spec 40 覆盖 mutation replay、重试 no-op/conflict、stale revision、validated completion、safe error、LAN auth、方法门禁和 SQLite 重启幂等；Spec 44-R1/R2/R3 覆盖 provider descriptor strictness、privacy、capability snapshot isolation、usage normalizer、token semantics、usage ID dedup、cross-source reconciliation、retry isolation、conflict fail-closed、pricing mode/revision、BigInt cost items 和 unknown cost；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -264,3 +264,41 @@ script exposed as `pnpm verify` runs the existing typecheck, test,
 diff-check, and Git diff-check commands in a deterministic fail-fast order; it
 does not install dependencies, mutate the worktree, or expose environment
 secrets.
+
+## Harness research and planned productionization (2026-08-04)
+
+`docs/research/upstream-harness-implementations.md` records a clean-room study
+of pinned Codex, OpenHands, Aider, Goose, MCP TypeScript SDK, LiteLLM,
+Langfuse, Continue and OpenTelemetry checkouts. The checkouts are outside the
+product tree or under ignored `.research/`; no upstream source, prompt, schema,
+UI, proxy, scheduler or runtime was copied. [ADR 0016](adr/0016-clean-room-harness-productionization.md)
+freezes the single-authority, run-snapshot, fail-soft and host-first decisions.
+
+The following work is documented but not implemented yet:
+
+- **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): real
+  provider/context/stream replay, multi-turn AgentLoop verification and an
+  opt-in live model smoke. The current default still uses fake/mock providers;
+  no credential has been written to the repository.
+- **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): compiled
+  approval/sandbox policy, Codex-like bounded auto-approval, Windows process
+  tree/container smoke and full Web continuation. Existing adapters remain
+  explicit and default-off.
+- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): real
+  stdio/Streamable HTTP transport, health classification, capability snapshot
+  and ToolRegistry activation. Current MCP/Skill transport remains injected
+  one-shot and does not auto-start or access the network.
+- **Spec 50** (`specs/50-observability-lifecycle-integration.md`): automatic
+  RunManager/application lifecycle wiring for usage, cost, resource samples
+  and audit. Current ledgers, collector and API projection are available, but
+  sampling and complete lifecycle attachment are not default.
+- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
+  static Web serving, cross-platform launcher, LAN/public certificate adapter
+  and a future versioned client SDK. Current development still uses a separate
+  Vite server; native Android/iOS/HarmonyOS clients remain post-MVP.
+
+These five specs are design/planning gates only. They do not change the
+current statement that untrusted network/model/MCP/Skill/shell side effects
+are disabled unless explicitly configured through the authenticated boundary,
+and they do not modify `run_events`, `goal_events`, AgentLoop, RunManager,
+Scheduler, Approval, Sandbox or WorkspaceRegistry in this documentation pass.

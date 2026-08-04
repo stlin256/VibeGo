@@ -68,3 +68,12 @@ Python runtime、CLI session 扫描或外部常驻服务。
 模板要求记录 URL、pinned commit、读取路径、许可证/NOTICE、设计借鉴与复用决定。没有这些
 证据时只能 clean-room 重实现，不能复制代码；用户提到的 `axonhub/ccswitch` 也必须先确认
 canonical repository。
+
+## Harness 全链路调研入口（Specs 47–51）
+
+Codex、OpenHands、Aider、Goose、MCP TypeScript SDK、LiteLLM、Langfuse、Continue 和
+OpenTelemetry 的 pinned checkout、文件级观察、能力矩阵与 clean-room 约束已经独立记录在
+[`research/upstream-harness-implementations.md`](research/upstream-harness-implementations.md)。
+后续开发 Agent 必须先读取该报告，再按 [ADR 0016](adr/0016-clean-room-harness-productionization.md)
+和 Specs 47–51 的 R0 门禁推进。该报告不会把临时 clone、上游 prompt、schema、UI、proxy、
+scheduler 或运行时带入 ready4vibe。
