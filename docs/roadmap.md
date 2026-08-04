@@ -348,7 +348,7 @@ daemon/API/Web，也不改变 interactive run、Goal、AgentLoop、Scheduler、A
 后续顺序为：43c 低资源 host/tool/sandbox collectors →
 43d token/cost normalization 与认证 API → 43e Web Usage/Audit surfaces 和实测资源预算。
 
-## Spec 44：Provider/Usage 管理与上游源码复用门禁（44-R0/44-R1 已完成）
+## Spec 44：Provider/Usage 管理与上游源码复用门禁（44-R0/44-R1/44-R2 已完成）
 
 详见 [Spec 44](specs/44-provider-usage-management-and-upstream-reuse.md)、
 [ADR 0013](adr/0013-upstream-research-and-provider-management-boundary.md) 和
@@ -361,7 +361,8 @@ session 扫描或第二套事实源。
 44-R0 已在 [上游调研记录](research/upstream-provider-usage.md) 中固定五个 canonical repository 的
 commit、许可证、文件路径、语义摘要和 clean-room 决策；本阶段没有复制上游代码或新增运行时依赖。
 44-R1 已完成纯 schema/registry/normalizer 与单元测试；这些实现不接入 AgentLoop 或默认 run。
-退出顺序为：44-R2 独立 ledger 与 rollup → 44-R3 pricing →
+Spec 43b 已提供唯一独立 ledger/rollup，44-R2 已补齐 provider usage 的 bounded reconciliation、
+去重和 conflict port，不创建第二套账本。退出顺序为：44-R3 pricing →
 44-R4 resource/audit collectors → 44-R5 认证 API、Web Usage/Audit 和显式导入。任何上游
 commit、许可证、路径或语义变化都重新触发 R0；当前 Spec 43 的 contracts/ledger 实现状态以其
 Spec 和 `implementation-status.md` 为准，现有 interactive run 行为保持不变。

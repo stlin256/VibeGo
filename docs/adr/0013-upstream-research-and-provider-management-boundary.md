@@ -32,6 +32,12 @@ normalizer 显式填充。
 和纯内存 normalizer 均位于 `packages/contracts`/`packages/observability`，没有接入默认 run、
 AgentLoop、RunManager、daemon API 或第二套事实源；R2 才允许进入独立 ledger/dedup/reconcile。
 
+44-R2 已复用 Spec 43b 已实现的独立 `usage_ledger`/UTC rollup 作为唯一账本，新增能力只允许是
+`packages/observability` 的纯 reconciliation port。该 port 以 usage ID 和 bounded semantic key
+做去重/合并，遇到不同事实直接 conflict，不能静默覆盖或创建第二套 scheduler/事实源；reconciled
+record 必须显式保留来源 IDs，且不改变 run、Goal、AgentLoop、Scheduler、Approval、Sandbox 或
+WorkspaceRegistry 的权威地位。
+
 ## 44-R0 证据结果
 
 以下 pinned source 已完成 README、LICENSE/NOTICE、manifest 和相关实现路径的核对，详细文件清单与

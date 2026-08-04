@@ -1,6 +1,6 @@
 # Spec 44：Provider、Token、费用管理与上游源码复用
 
-- 状态：Accepted；44-R0 上游研究门禁与 44-R1 provider/usage contract slice 已完成，44-R2 及后续运行时实现仍受下方阶段门禁约束
+- 状态：Accepted；44-R0、44-R1 provider/usage contract slice 与 44-R2 reconciliation slice 已完成，后续运行时实现仍受下方阶段门禁约束
 - 日期：2026-08-04
 - 范围：model provider registry、usage/cost normalization、pricing management、audit projections 和开源项目复用
 - 相关：
@@ -194,6 +194,25 @@ snapshot 和 `ProviderUsageObservation` → `ModelUsageRecord` normalizer；`Mod
 reconciliation metadata；现有 `run_events` replay projection 也显式标记 `dataSource=run-event`
 与未知 input token semantics。该切片没有新增运行时依赖，也没有改变 interactive run 行为。
 
+### 5.2 44-R2 reconciliation slice
+
+Spec 43b 已提供独立的 InMemory/SQLite `usage_ledger`、`BEGIN IMMEDIATE`、same-content no-op、
+different-content conflict、批量原子性、重启 replay 和 UTC rollup；44-R2 不再创建第二张账本。
+本切片补齐 provider usage 在进入账本前的纯 reconciliation port：
+
+- 先按 `usageId` 做严格去重；相同 canonical record 是 no-op，不同内容是 fail-closed conflict；
+- 再按 `runId/turnId/requestId/attempt` 形成 bounded semantic key，对 `provider-usage`、
+  `session-import`、`run-event` 记录按明确优先级合并；不同 token/status/identity 事实不猜测，直接
+  返回 conflict；
+- 合并结果只保留一条 logical `ModelUsageRecord`，`dataSource=reconciled`，并保留 bounded
+  `reconciledFrom` usage IDs；缺失 token 维度保持 unknown，不填零；每个 retry attempt 仍是独立 key；
+- reconciliation 是纯内存、纯函数，不读取 prompt/transcript/tool output，不调用模型、工具、文件系统、
+  Git、MCP、sandbox，也不改变 `run_events`、`goal_events`、AgentLoop 或默认 run 创建路径；失败只能
+  影响 ledger 输入并返回 bounded conflict。
+
+R2 测试覆盖同 ID 幂等/冲突、跨来源合并、token 冲突 fail-closed、retry 隔离、稳定排序和 privacy
+redaction；该 port 仍只作为显式 observability application service 能力，尚未接入默认 run。
+
 ## 6. 测试与验收
 
 - 同一 provider/message/request 的重复上报不重复计费；不同语义返回 conflict；
@@ -207,4 +226,4 @@ reconciliation metadata；现有 `run_events` replay projection 也显式标记 
 
 ## 7. 当前状态
 
-截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44-R0 与 44-R1 provider/usage contract slice 已完成；R1 仍是独立的 schema/registry/normalizer bounded context，不能把研究结论当作运行时接入，也不能把上游仓库作为 VibeGo 依赖。
+截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44-R0、R1 provider/usage contract slice 与 R2 reconciliation port 已完成；R2 仍不把研究结论或上游仓库作为 VibeGo 运行时依赖。
