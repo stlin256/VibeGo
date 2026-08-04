@@ -145,7 +145,7 @@ export type ModelEvent =
   | { type: 'tool-call-delta'; callId: string; name?: string; argumentsChunk: string }
   | { type: 'usage'; inputTokens?: number; outputTokens?: number }
   | { type: 'completed'; finishReason: 'stop' | 'tool-calls' | 'length' | 'content-filter' }
-  | { type: 'error'; code: string; retryable: boolean; safeMessage: string };
+  | { type: 'error'; code: string; retryable: boolean; safeMessage: string; retryAfterMs?: number };
 
 export interface ModelRequest {
   model: string;
@@ -201,3 +201,4 @@ export * from './agent-memory-knowledge-settings.js';
 export * from './observability.js';
 export * from './observability-api.js';
 export * from './provider-usage.js';
+export * from './model-runtime.js';

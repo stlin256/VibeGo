@@ -1,0 +1,171 @@
+# Spec 51: Host-first release and future client boundary
+
+- Status: planned (51-R0 packaging gate)
+- Date: 2026-08-04
+- Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
+
+## Goal
+
+Make the normal deployment experience host-first and cross-platform: one host
+machine runs the daemon and serves the React Web app; a remote user opens the
+displayed URL in a browser. The user should not install Node.js, pnpm, a second
+Web server or a native client on the remote device. Android, iOS and HarmonyOS
+clients remain a later consumer of the same versioned API/SSE boundary.
+
+This Spec is about packaging and transport, not a new execution plane.
+
+## Current baseline and gap
+
+- The daemon and Vite Web app run independently in development.
+- Same-origin API/SSE, pairing, CSRF and LAN/TLS contracts are documented and
+  tested, but Web static assets are not yet bundled into the daemon release.
+- Certificate metadata/status is available; ACME issuance/renewal and a
+  cross-platform launcher remain explicit adapters.
+- Native mobile clients do not exist and must not be pulled into the Web MVP.
+
+## Research and packaging gate (51-R0)
+
+Read the host/local/remote backend sections of the pinned OpenHands study and
+the existing host-first ADR. Confirm the license and packaging terms of every
+bundled runtime or asset. Do not vendor Codex/OpenHands UI, a Tauri shell,
+Python/Rust runtime or a cloud proxy. Record target OS/CPU artifacts and their
+reproducible build inputs.
+
+## Host-first contract
+
+### Single origin
+
+The release daemon serves:
+
+```text
+GET /                  -> hashed React/Vite index and assets
+GET /health            -> bounded daemon/storage/auth/transport status
+/api/v1/*              -> authenticated versioned REST APIs
+run SSE                -> authenticated seq/Last-Event-ID replay
+```
+
+The Web uses relative API paths and does not require CORS, a Vite port or a
+second server in production. Development may use Vite with an explicit proxy,
+but the dev server is not a deployment requirement.
+
+### Launcher and runtime
+
+Provide a signed or checksum-verifiable launcher for Windows, macOS and Linux
+that:
+
+- starts one daemon process with a per-install data directory;
+- discovers a free local port or honors a bounded explicit port;
+- prints a loopback/LAN URL and pairing instructions without credentials;
+- opens the local browser only when explicitly requested;
+- forwards signals, records safe exit status and cleans child processes;
+- supports daemon restart/recovery without changing SQLite authorities.
+
+The packaging strategy may use a bundled Node runtime or a platform-native
+single executable, but the choice must be measured for memory/upgrade/support
+cost and documented. The browser device never executes the harness.
+
+### LAN and public HTTPS
+
+Loopback remains the default. LAN exposure requires explicit opt-in, pairing
+and a valid certificate or a clearly labelled development HTTP mode. Public
+HTTPS requires a valid certificate, authentication, CSRF/origin checks,
+rate/connection limits and a safe certificate renewal adapter. Private keys are
+read into protected process memory only and never returned to Web/settings,
+events, logs or backups.
+
+Tailscale and SSH are reserved transport adapters. They must reuse REST/SSE,
+pairing/session identity, Approval and run contracts rather than create a
+second protocol or bypass the daemon security gate.
+
+### Remote browser UX
+
+The host URL opens the conversation-first shell immediately. Settings,
+provider/sandbox configuration and certificate guidance are authenticated
+drawers/sheets, not manual file editing. Desktop, portrait desktop, phone,
+foldable and tablet layouts are CSS ratio variants of the same API client; no
+device sniffing or device-specific backend behavior is allowed.
+
+## Future native-client boundary
+
+Android, iOS and HarmonyOS are post-MVP adapters. Their first release may
+consume only:
+
+- versioned REST/SSE projections and explicit mutation APIs;
+- device pairing/session refresh and bounded push/notification metadata;
+- conversation/run/approval/usage projections;
+- capability and transport health status.
+
+Native clients must not read SQLite, memory sidecars, workspace roots, secrets
+or raw event stores, and must not reimplement AgentLoop, ContextManager,
+Scheduler, Approval, Sandbox or Goal Control. A TypeScript client SDK may be
+published before native UI work to freeze the API boundary.
+
+## Implementation phases
+
+### 51-R1: static Web serving and origin tests
+
+Write fixture tests for asset lookup, cache headers, SPA fallback, API/SSE
+origin, missing build output and path traversal. Add a production daemon mode
+that serves a built Web directory without changing the development server.
+
+Exit: a clean build can be opened through one host URL; API and SSE remain
+authenticated and relative.
+
+### 51-R2: cross-platform launcher
+
+Implement launcher lifecycle tests for Windows/macOS/Linux: argument parsing,
+port discovery, process-tree shutdown, restart, log redaction, data directory
+permissions and stale process cleanup. No installer may write user secrets or
+modify workspace files.
+
+Exit: a disposable package starts/stops the daemon and reports a usable URL on
+each supported platform fixture.
+
+### 51-R3: guided LAN/public certificate flow
+
+Connect the existing certificate metadata/settings UI to a safe certificate
+adapter. LAN default remains fail-closed without valid TLS unless the user
+explicitly selects development HTTP. ACME, OS certificate stores and public
+reverse proxies are optional adapters with dry-run/probe/renew/rollback tests.
+
+Exit: certificate expiry, hostname mismatch, private-key failure, renewal
+failure and rollback produce safe guidance and never print key material.
+
+### 51-R4: client SDK contract (post-Web)
+
+Generate or hand-maintain a small versioned TypeScript client over REST/SSE,
+with replay, cancellation, pairing and degraded projection tests. Do not add
+Android/iOS/HarmonyOS UI until this contract and host release have stabilized.
+
+Exit: a client can reconnect/resume and display conversation/approval/usage
+projections without direct database or filesystem access.
+
+## Acceptance matrix
+
+- remote browser needs only a URL and user pairing; no Node/pnpm installation;
+- one daemon process serves Web, REST and SSE on one origin;
+- loopback remains default; LAN/public exposure is explicit and authenticated;
+- TLS/private-key errors are fail-closed and secret-free;
+- launcher restart preserves run/settings/Goal event authorities;
+- static asset/API path traversal and origin/CSRF tests pass;
+- future client API never exposes SQLite, secrets, absolute paths or raw events;
+- `pnpm typecheck`, `pnpm test`, `pnpm diff:check` and `git diff --check` pass.
+
+## Non-goals and boundaries
+
+- no native mobile UI, desktop Tauri shell or second Web backend in this phase;
+- no implicit public exposure, UPnP port forwarding or certificate download;
+- no Tailscale/SSH implementation before the shared API/client contract;
+- no cloud-hosted execution, multi-user tenancy or server-side proxy;
+- no copy of OpenHands/Codex frontend or launcher code.
+
+## Implementation-agent handoff prompt
+
+> Read this Spec, Spec 41, ADR 0010 and the pinned host/backend research.
+> Preserve dirty worktree changes and write static-serving/launcher fixtures
+> first. Keep the daemon as the only execution authority, use relative
+> same-origin REST/SSE paths, and make LAN/public TLS explicit and fail-closed.
+> Do not build mobile clients, vendor a Tauri/Python/Rust runtime, expose
+> secrets/paths, or create a second scheduler/protocol. Update the Spec, ADR,
+> roadmap and implementation status before committing, then run the full
+> verification gate.

@@ -391,3 +391,46 @@ audit verify/replay 和只读 pricing projection；Web 以 context panel 消费�
 [ADR 0015](adr/0015-automated-verification-workflow.md)。`pnpm verify` 固定执行
 typecheck → test → diff:check → git diff --check，失败即停，不安装依赖、不改工作区、
 不触碰模型凭据；它复用现有 package scripts，作为每次实质性提交前的统一门禁。
+
+## Spec 47：Model/Context/AgentLoop productionization（47-R1/R2 实施中）
+
+详见 [Spec 47](specs/47-model-context-agent-loop-productionization.md)。本阶段先以
+pinned upstream research 为 R0 门禁，再把真实 provider 的显式 endpoint、协议适配、流式
+replay、取消/重试、ContextManager 字节/token budget 和 AgentLoop 多轮验证接入现有
+application service。真实 LLM smoke 只允许通过独立命令和进程外 secret 触发，`pnpm verify`
+绝不联网；任何 provider、usage 或 context 故障都不能覆盖原始 run/tool/approval 结果。
+当前先完成无网络的 contract、stream replay、retry/cancellation fixture 和显式
+OpenAI-compatible endpoint adapter；该切片已覆盖 provider snapshot、Responses/
+Anthropic-shaped fixture replay、token/byte compaction 与 pre-stream retry，daemon
+bridge 与 live smoke 保持在后续 R3/R4。当前全仓 `pnpm verify` 为 396 tests 通过。
+
+## Spec 48：Approval/Sandbox/Shell runtime closure（规划）
+
+详见 [Spec 48](specs/48-approval-sandbox-shell-runtime.md)。本阶段把 Codex-like 的
+permission profile、project trust、filesystem/network policy 和低风险短期自动审批转为
+ready4vibe 原生 policy compiler；再完成 Windows/Unix 进程树、外部容器 smoke 和 Web
+approval continuation。模型输出永远不是授权，host-restricted 不得显示为强隔离，危险工具
+仍需审批/沙箱/调度三重门禁。
+
+## Spec 49：MCP/Skill transport and capability lifecycle（规划）
+
+详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
+manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
+progress、cancellation、health（failed/connectivity-only/verified）、能力快照和 ToolRegistry
+激活。关闭状态不得发起子进程/网络请求，MCP/Skill 失败只能 degraded，不能绕过 Approval、
+Sandbox 或 Scheduler。
+
+## Spec 50：Observability lifecycle integration（规划）
+
+详见 [Spec 50](specs/50-observability-lifecycle-integration.md)。本阶段在 daemon
+application/RunManager 边界接入唯一 usage ledger、pricing/reconciliation、CPU/RSS/disk
+采样和 audit hash-chain；`run_events`、`goal_events`、ledger 与 Web projection 保持独立。
+采样队列、价格缺失和 writer 故障都 fail-soft，用户看到 `unknown/degraded` 而不是虚假的 0；
+任何重试只重试 ledger append，不重试模型/tool/shell。
+
+## Spec 51：Host-first release and client boundary（规划）
+
+详见 [Spec 51](specs/51-host-first-release-and-client-boundary.md) 与现有 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md)。本阶段完成 daemon 静态托管 React Web、跨平台 launcher、单 Host URL、LAN/public TLS/certificate adapter 和未来 TypeScript client SDK。远程用户只需浏览器 URL 与 pairing；Android/iOS/HarmonyOS UI 后置，不读取 SQLite/sidecar，不复制 AgentLoop/Approval/Sandbox。
+
+上述 Spec 47–51 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
+Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。

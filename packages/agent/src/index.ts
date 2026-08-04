@@ -131,7 +131,10 @@ export class AgentLoop {
       await this.append(runId, 'run.created', 'user', correlationId, { config });
       let contextResult: ReturnType<ContextManager['build']>;
       try {
-        const context = new ContextManager(config.limits.maxContextBytes, [
+        const context = new ContextManager({
+          maxBytes: config.limits.maxContextBytes,
+          maxTokens: config.limits.maxModelInputTokens,
+        }, [
           ...(request.contextItems ?? []),
           {
             id: `${runId}:user-message`,
@@ -153,6 +156,7 @@ export class AgentLoop {
           droppedCount: contextResult.droppedCount,
           droppedItemIds: contextResult.droppedItemIds,
           bytes: contextResult.bytes,
+          tokens: contextResult.tokens,
         });
       }
       await transition('queued');

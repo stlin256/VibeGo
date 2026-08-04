@@ -203,6 +203,10 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 Start with a spec or an issue-sized boundary, keep the change modular, add tests before wiring new side effects, update the relevant documentation before committing, and run:
 
 ```powershell
+# Inner loop: build dependencies, then typecheck/test only the changed package.
+pnpm check:module -- @ready4vibe/model-openai
+
+# Full pre-commit gate.
 pnpm typecheck
 pnpm test
 pnpm diff:check

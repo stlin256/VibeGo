@@ -9,7 +9,7 @@
 - 长期目标与 LoopX 整合：先读 [`specs/34-goal-control-plane-loopx-integration.md`](specs/34-goal-control-plane-loopx-integration.md)，再读 [`specs/35-goal-web-readonly-projection.md`](specs/35-goal-web-readonly-projection.md) 和 [`adr/0004-native-goal-control-and-loopx-interop.md`](adr/0004-native-goal-control-and-loopx-interop.md)；
 - Web 开发：读 `web-ux.md`、`api-contract.md`；
 - 贡献者：读 `testing-strategy.md`、`development-workflow.md`；
-- 调研复核：读 `open-source-research.md`。
+- 调研复核：先读 `open-source-research.md`、[`research/upstream-provider-usage.md`](research/upstream-provider-usage.md) 和 [`research/upstream-harness-implementations.md`](research/upstream-harness-implementations.md)。
 
 ## 文档状态标记
 
@@ -43,4 +43,12 @@
 - [Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI](specs/42-shadcn-style-web-design-system.md) 与 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)：保留 VibeGo 品牌和 ratio/conversation-first 布局，组件库优先采用 shadcn registry/Radix 等成熟实现；仅在有记录的理由下自定义 primitive，原生客户端仍后置。
 - [Spec 43：资源、Token、费用与审计可观测性](specs/43-resource-usage-and-cost-audit.md) 与 [ADR 0012](adr/0012-local-resource-and-cost-audit-ledger.md)：独立记录 CPU/内存/磁盘、run/tool/sandbox 资源、token 分桶、缓存语义、版本化价格、费用精度和 hash-chain 审计；参考 AxonHub/CC Switch，但不引入其 proxy、Tauri、Python 或完整服务。
 - [Spec 44：Provider、Token、费用管理与上游源码复用](specs/44-provider-usage-management-and-upstream-reuse.md) 与 [ADR 0013](adr/0013-upstream-research-and-provider-management-boundary.md)：定义上游源码读取、许可证/NOTICE、provenance、clean-room 复用与 provider/usage 扩展门禁；开发 Agent 提示词在 [prompts/44-provider-usage-management-implementation.md](prompts/44-provider-usage-management-implementation.md)，证据模板在 [research/upstream-provider-usage.md](research/upstream-provider-usage.md)。
+- [Spec 45：Observability API 与 Web Usage/Audit projection](specs/45-observability-api-and-web.md) 与 [ADR 0014](adr/0014-observability-api-and-web-projection.md)：把现有 ledger 以认证、bounded、可降级 projection 暴露给 conversation-first Web；不改变 run/Goal/AgentLoop/Scheduler/Approval/Sandbox 事实源。
+- [Spec 46：Automated verification workflow](specs/46-automated-verification-workflow.md) 与 [ADR 0015](adr/0015-automated-verification-workflow.md)：固定 `pnpm verify` 的 typecheck → test → diff-check → Git diff-check 顺序，并提供 `pnpm check:module -- <package>` 的依赖闭包构建与包级 typecheck/test，不安装依赖、不访问模型、不输出环境 secret。
+- [Harness 上游实现研究](research/upstream-harness-implementations.md) 与 [ADR 0016](adr/0016-clean-room-harness-productionization.md)：基于 Codex、OpenHands、Aider、Goose、MCP TypeScript SDK、LiteLLM、Langfuse、Continue 和 OpenTelemetry 的 pinned checkout，冻结 clean-room、单一执行事实源、run snapshot、degraded 和 host-first 边界。
+- [Spec 47：Model/Context/AgentLoop productionization](specs/47-model-context-agent-loop-productionization.md)：真实 provider/context/streaming loop、可选 live smoke 和无 secret 验证。
+- [Spec 48：Approval/Sandbox/Shell runtime closure](specs/48-approval-sandbox-shell-runtime.md)：Codex-like compiled policy、低风险自动审批边界、Windows/容器运行时和恢复门禁。
+- [Spec 49：MCP/Skill transport and capability lifecycle](specs/49-mcp-skill-transport-and-capability-lifecycle.md)：stdio/Streamable HTTP、健康分级、能力快照、取消与 ToolRegistry 激活。
+- [Spec 50：Observability lifecycle integration](specs/50-observability-lifecycle-integration.md)：将 usage/cost/resource/audit ledger 在 application/RunManager 边界接入，保持 fail-soft 与隐私约束。
+- [Spec 51：Host-first release and client boundary](specs/51-host-first-release-and-client-boundary.md)：daemon 静态托管 Web、跨平台 launcher、LAN/public TLS 适配与后置 Android/iOS/HarmonyOS client SDK 边界。
 - [TencentDB 融合实施提示词](prompts/39-tencentdb-agent-memory-implementation.md)：可直接交给另一位开发者或 Agent，按 Contract → MemoryCore → Web Settings → Supervisor → Proxy/Knowledge 顺序实施，并保留 dirty worktree。
