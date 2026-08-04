@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import './styles.css';
@@ -24,6 +24,12 @@ export interface AppProps {
   modelSettingsUnavailable?: boolean;
   onConfigureModel?: (input: ModelSettingsInput) => Promise<void> | void;
   onClearModelSettings?: () => Promise<void> | void;
+  agentMemorySettings?: AgentMemorySettingsStatus;
+  agentMemorySettingsUnavailable?: boolean;
+  onPatchAgentMemorySettings?: (input: AgentMemorySettingsPatchInput) => Promise<void> | void;
+  onProbeAgentMemory?: () => Promise<void> | void;
+  onUpdateAgentMemory?: () => Promise<void> | void;
+  onRollbackAgentMemory?: () => Promise<void> | void;
   toolSettings?: ToolSettingsStatus;
   toolSettingsUnavailable?: boolean;
   onSetFilesystemToolsEnabled?: (enabled: boolean) => Promise<void> | void;
@@ -45,11 +51,22 @@ export interface AppProps {
   onRefreshGoalProjection?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
   const [modelApiKey, setModelApiKey] = useState('');
+  const [memoryEnabled, setMemoryEnabled] = useState(false);
+  const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('memory-core');
+  const [memoryTeamId, setMemoryTeamId] = useState('vibego');
+  const [memoryAgentId, setMemoryAgentId] = useState('vibego-local-agent');
+  const [memoryUserId, setMemoryUserId] = useState('local-user');
+  const [memoryUpstreamRepo, setMemoryUpstreamRepo] = useState('https://github.com/TencentCloud/TencentDB-Agent-Memory');
+  const [memoryUpstreamRef, setMemoryUpstreamRef] = useState('feat/server_team');
+  const [memoryAutoUpdate, setMemoryAutoUpdate] = useState(true);
+  const [memoryIntervalMinutes, setMemoryIntervalMinutes] = useState(60);
+  const [memoryFallback, setMemoryFallback] = useState(true);
+  const [memoryBusy, setMemoryBusy] = useState(false);
   const [toolToggleBusy, setToolToggleBusy] = useState(false);
   const [gitToggleBusy, setGitToggleBusy] = useState(false);
   const [sandboxProvider, setSandboxProvider] = useState<'docker' | 'podman'>('docker');
@@ -67,6 +84,20 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
   }, [modelSettings?.baseUrl]);
+  useEffect(() => {
+    const settings = agentMemorySettings?.settings;
+    if (!settings) return;
+    setMemoryEnabled(settings.enabled);
+    setMemoryMode(settings.mode);
+    setMemoryTeamId(settings.teamId);
+    setMemoryAgentId(settings.agentId);
+    setMemoryUserId(settings.userId);
+    setMemoryUpstreamRepo(settings.upstreamRepo);
+    setMemoryUpstreamRef(settings.upstreamRef);
+    setMemoryAutoUpdate(settings.autoUpdate);
+    setMemoryIntervalMinutes(settings.updateIntervalMinutes);
+    setMemoryFallback(settings.fallbackToDirectProvider);
+  }, [agentMemorySettings?.settings]);
   useEffect(() => {
     if (sandboxSettings?.provider) setSandboxProvider(sandboxSettings.provider);
     if (sandboxSettings?.imageDigest) setSandboxImageDigest(sandboxSettings.imageDigest);
@@ -93,6 +124,18 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     } catch {
       // The parent renders a safe error; keep the field for an intentional retry.
     }
+  };
+  const saveAgentMemorySettings = async (): Promise<void> => {
+    if (!onPatchAgentMemorySettings) return;
+    setMemoryBusy(true);
+    try {
+      await onPatchAgentMemorySettings({ enabled: memoryEnabled, mode: memoryMode, teamId: memoryTeamId, agentId: memoryAgentId, userId: memoryUserId, upstreamRepo: memoryUpstreamRepo, upstreamRef: memoryUpstreamRef, autoUpdate: memoryAutoUpdate, updateIntervalMinutes: memoryIntervalMinutes, fallbackToDirectProvider: memoryFallback });
+    } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setMemoryBusy(false); }
+  };
+  const runAgentMemoryAction = async (action?: () => Promise<void> | void): Promise<void> => {
+    if (!action) return;
+    setMemoryBusy(true);
+    try { await action(); } catch { /* Parent renders a safe error. */ } finally { setMemoryBusy(false); }
   };
   const toggleFilesystemTools = async (enabled: boolean): Promise<void> => {
     if (!onSetFilesystemToolsEnabled) return;
@@ -223,6 +266,21 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                     <div className="inline-actions"><button type="submit" disabled={!modelApiKey}>Save provider</button>{modelSettings?.configured && <button className="cancel-button" type="button" onClick={() => { void (async () => { await onClearModelSettings?.(); setModelApiKey(''); })(); }}>Clear daemon key</button>}</div>
                   </form>
                 </>}
+              </div>
+              <div className="tool-setup memory-setup" aria-label="Agent memory setup">
+                <div className="eyebrow">AGENT MEMORY</div>
+                {agentMemorySettingsUnavailable ? <p className="muted">Agent memory settings are unavailable; normal runs are unaffected.</p> : agentMemorySettings ? <>
+                  <label className="toggle-row"><input type="checkbox" checked={memoryEnabled} disabled={memoryBusy} onChange={(event) => setMemoryEnabled(event.target.checked)} /><span>Enable optional long-term memory</span></label>
+                  <p className="muted">Memory is an untrusted retrieval enhancement. It never grants tools, bypasses approval, or changes Goal/run facts.</p>
+                  <div className="inline-actions"><label>Mode<select value={memoryMode} disabled={memoryBusy} onChange={(event) => setMemoryMode(event.target.value as AgentMemorySettingsMode)}><option value="memory-core">MemoryCore</option><option value="proxy">Proxy (later)</option><option value="full-stack">Full stack (later)</option><option value="off">Off</option></select></label><label>Interval (min)<input type="number" min={5} max={1440} value={memoryIntervalMinutes} disabled={memoryBusy} onChange={(event) => setMemoryIntervalMinutes(Math.max(5, Math.min(1440, Number(event.target.value) || 60)))} /></label></div>
+                  <div className="inline-actions"><label>Team ID<input value={memoryTeamId} disabled={memoryBusy} onChange={(event) => setMemoryTeamId(event.target.value)} /></label><label>Agent ID<input value={memoryAgentId} disabled={memoryBusy} onChange={(event) => setMemoryAgentId(event.target.value)} /></label><label>User ID<input value={memoryUserId} disabled={memoryBusy} onChange={(event) => setMemoryUserId(event.target.value)} /></label></div>
+                  <label>Upstream repository<input value={memoryUpstreamRepo} disabled={memoryBusy} onChange={(event) => setMemoryUpstreamRepo(event.target.value)} /></label>
+                  <label>Upstream ref<input value={memoryUpstreamRef} disabled={memoryBusy} onChange={(event) => setMemoryUpstreamRef(event.target.value)} /></label>
+                  <label className="toggle-row"><input type="checkbox" checked={memoryAutoUpdate} disabled={memoryBusy} onChange={(event) => setMemoryAutoUpdate(event.target.checked)} /><span>Allow scheduled upstream checks</span></label>
+                  <label className="toggle-row"><input type="checkbox" checked={memoryFallback} disabled={memoryBusy} onChange={(event) => setMemoryFallback(event.target.checked)} /><span>Fall back to direct provider when memory is unavailable</span></label>
+                  <p className="muted">Status: {agentMemorySettings.status.updateState} · {agentMemorySettings.status.available ? 'ready' : agentMemorySettings.status.degraded ? 'degraded' : 'disabled'} · current {agentMemorySettings.currentRevision ?? 'none'} · previous {agentMemorySettings.previousRevision ?? 'none'}</p>
+                  <div className="inline-actions"><button type="button" disabled={memoryBusy} onClick={() => { void saveAgentMemorySettings(); }}>Save memory settings</button><button type="button" disabled={memoryBusy} onClick={() => { void runAgentMemoryAction(onProbeAgentMemory); }}>Probe</button><button type="button" disabled={memoryBusy} onClick={() => { void runAgentMemoryAction(onUpdateAgentMemory); }}>Update</button><button className="cancel-button" type="button" disabled={memoryBusy} onClick={() => { void runAgentMemoryAction(onRollbackAgentMemory); }}>Roll back</button></div>
+                </> : <p className="muted">Pair with the daemon to configure optional memory.</p>}
               </div>
               <div className="tool-setup" aria-label="Filesystem tool setup">
                 <div className="eyebrow">TOOL ACCESS</div>

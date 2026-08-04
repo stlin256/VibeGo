@@ -8,7 +8,7 @@ import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider, type Mod
 import { InMemoryApprovalBroker } from '@ready4vibe/agent';
 import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { InMemoryEventStore } from '@ready4vibe/storage';
+import { InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
 import { RunManager } from './run-manager.js';
 import { InMemoryModelSettingsManager } from './model-config.js';
@@ -18,6 +18,7 @@ import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { InMemoryGitSettingsManager } from './git-settings.js';
 import { InMemoryGoalEventStore, createGoalEvent } from '@ready4vibe/goal-control';
+import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -485,6 +486,34 @@ describe('daemon health server', () => {
     const cleared = await fetch(base, { method: 'DELETE' });
     expect(cleared.status).toBe(200);
     expect(await cleared.json()).toMatchObject({ configured: false, source: 'unconfigured' });
+  });
+
+  it('serves durable agent-memory settings and keeps provider secrets/paths out of the API', async () => {
+    const manager = new AgentMemorySettingsManager({ settings: new InMemorySettingsStore() });
+    const server = createDaemonServer({ agentMemorySettings: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/agent-memory`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({ settings: { enabled: false, mode: 'memory-core' }, status: { updateState: 'disabled' } });
+    const patched = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo', upstreamRef: 'feat/server_team' }) });
+    const patchedBody = await patched.text();
+    expect(patched.status).toBe(200);
+    expect(patchedBody).not.toContain('apiKey');
+    expect(patchedBody).not.toContain('C:\\Users');
+    expect(JSON.parse(patchedBody)).toMatchObject({ settings: { enabled: true, userId: 'user_demo' }, status: { degraded: true, lastErrorCode: 'unavailable' } });
+    const malformed = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'secret' }) });
+    expect(malformed.status).toBe(400);
+    const probe = await fetch(`${base}/probe`, { method: 'POST' });
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toMatchObject({ status: { degraded: true } });
+    const update = await fetch(`${base}/update`, { method: 'POST' });
+    expect(update.status).toBe(200);
+    expect(await update.json()).toMatchObject({ status: { lastErrorCode: 'update' } });
+    const rollback = await fetch(`${base}/rollback`, { method: 'POST' });
+    expect(rollback.status).toBe(200);
+    expect(await rollback.json()).toMatchObject({ status: { lastErrorCode: 'rollback' } });
   });
 
   it('serves explicit filesystem tool settings without exposing the workspace path', async () => {

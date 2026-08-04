@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AgentMemoryItemSchema,
   AgentMemoryRecallRequestSchema,
+  AgentMemorySettingsPatchSchema,
+  AgentMemorySettingsSchema,
+  AgentMemorySettingsStatusSchema,
   AgentMemoryStatusSchema,
   AgentMemoryWriteRequestSchema,
   findAgentMemoryPrivacyViolations,
@@ -41,5 +44,21 @@ describe('agent memory contracts', () => {
     const value = AgentMemoryWriteRequestSchema.parse({ identity, runId: 'run_12345678', summary: 'Completed tests.', facts: ['All unit tests pass.'], decisions: ['Keep memory optional.'], evidenceRefs: ['evt_123'], outcome: 'completed' });
     expect(value.outcome).toBe('completed');
     expect(() => AgentMemoryWriteRequestSchema.parse({ identity, runId: 'run_12345678', summary: 'x', facts: Array.from({ length: 65 }, () => 'fact'), outcome: 'failed' })).toThrow();
+  });
+
+  it('validates the non-secret durable settings and status boundary', () => {
+    const settings = AgentMemorySettingsSchema.parse({
+      schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'memory-core',
+      teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo',
+      upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team',
+      autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true,
+    });
+    expect(settings.mode).toBe('memory-core');
+    expect(AgentMemorySettingsPatchSchema.parse({ enabled: true, updateIntervalMinutes: 15 })).toEqual({ enabled: true, updateIntervalMinutes: 15 });
+    expect(() => AgentMemorySettingsPatchSchema.parse({})).toThrow();
+    expect(() => AgentMemorySettingsSchema.parse({ ...settings, upstreamRepo: 'C:\\secret\\repo' })).toThrow();
+    expect(() => AgentMemorySettingsSchema.parse({ ...settings, apiKey: 'secret' })).toThrow();
+    expect(() => AgentMemorySettingsSchema.parse({ ...settings, enabled: true, mode: 'off' })).toThrow();
+    expect(AgentMemorySettingsStatusSchema.parse({ schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null })).toMatchObject({ settings: { userId: 'user_demo' } });
   });
 });

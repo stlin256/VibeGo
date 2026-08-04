@@ -159,7 +159,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 244 passing tests**. Agent Memory Phase 0 contracts/Noop and the Phase 1 MemoryCore HTTP adapter are implemented behind an optional boundary; ContextManager, Web Settings, and sidecar supervision remain staged work. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 253 passing tests**. Agent Memory Phase 0 contracts/Noop, the Phase 1 MemoryCore HTTP adapter, and the Phase 2 durable settings/status boundary are implemented; AgentLoop injection and sidecar supervision remain staged work. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 

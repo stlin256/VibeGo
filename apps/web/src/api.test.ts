@@ -137,6 +137,21 @@ describe('ApiClient', () => {
     expect(calls[2]?.init?.method).toBe('DELETE');
   });
 
+  it('uses the authenticated agent-memory settings/probe/update/rollback endpoints without secrets', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = { schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'memory-core', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null };
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.agentMemorySettings();
+    await client.patchAgentMemorySettings({ enabled: true });
+    await client.probeAgentMemory();
+    await client.updateAgentMemory();
+    await client.rollbackAgentMemory();
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/agent-memory', '/api/v1/settings/agent-memory', '/api/v1/settings/agent-memory/probe', '/api/v1/settings/agent-memory/update', '/api/v1/settings/agent-memory/rollback']);
+    expect(calls[1]?.init?.method).toBe('PATCH');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true }));
+    expect(calls.map((call) => call.input).join('')).not.toContain('apiKey');
+  });
+
   it('toggles filesystem tools through the authenticated settings endpoint', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

@@ -14,6 +14,7 @@ import { resolveDaemonTransport } from './transport-config.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { InMemoryGitSettingsManager } from './git-settings.js';
 import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
+import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -55,6 +56,15 @@ try {
   throw error;
 }
 const modelSettings = new InMemoryModelSettingsManager();
+let agentMemorySettings: AgentMemorySettingsManager;
+try {
+  agentMemorySettings = new AgentMemorySettingsManager({ settings: settingsStore });
+} catch (error) {
+  settingsStore.close();
+  goalEventStore.close();
+  eventStore.close();
+  throw error;
+}
 const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
 const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry });
 const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry });
@@ -69,6 +79,7 @@ const runManager = new RunManager({
 try {
   await runManager.recoverAfterRestart();
 } catch (error) {
+  await agentMemorySettings.close();
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -86,6 +97,7 @@ const server = createDaemonServer({
   gitSettings,
   sandboxSettings,
   workspaceRegistry,
+  agentMemorySettings,
   goalEventStore,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
@@ -97,9 +109,11 @@ server.listen(port, host, () => {
 
 const shutdown = (): void => {
   server.close(() => {
-    settingsStore.close();
-    goalEventStore.close();
-    eventStore.close();
+    void agentMemorySettings.close().finally(() => {
+      settingsStore.close();
+      goalEventStore.close();
+      eventStore.close();
+    });
   });
 };
 process.once('SIGINT', shutdown);

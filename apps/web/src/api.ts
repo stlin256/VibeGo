@@ -1,4 +1,4 @@
-import type { GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
+import type { AgentMemoryMode, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -217,6 +217,10 @@ export interface SandboxSettingsStatus {
   capabilities: { version: string; networkModes: readonly ('restricted' | 'enabled')[]; maxMemoryBytes: number; maxCpuMillis: number } | null;
 }
 
+export type AgentMemorySettingsStatus = AgentMemorySettingsStatusContract;
+export type AgentMemorySettingsMode = AgentMemoryMode;
+export type AgentMemorySettingsPatchInput = AgentMemorySettingsPatch;
+
 export interface StoredEvent {
   version: 1;
   id: string;
@@ -298,6 +302,26 @@ export class ApiClient {
 
   async clearModelSettings(): Promise<ModelSettingsStatus> {
     return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'DELETE' });
+  }
+
+  async agentMemorySettings(): Promise<AgentMemorySettingsStatus> {
+    return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory', { method: 'GET' });
+  }
+
+  async patchAgentMemorySettings(input: AgentMemorySettingsPatchInput): Promise<AgentMemorySettingsStatus> {
+    return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async probeAgentMemory(): Promise<AgentMemorySettingsStatus> {
+    return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory/probe', { method: 'POST' });
+  }
+
+  async updateAgentMemory(): Promise<AgentMemorySettingsStatus> {
+    return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory/update', { method: 'POST' });
+  }
+
+  async rollbackAgentMemory(): Promise<AgentMemorySettingsStatus> {
+    return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory/rollback', { method: 'POST' });
   }
 
   async toolSettings(): Promise<ToolSettingsStatus> {

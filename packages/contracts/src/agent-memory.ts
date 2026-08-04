@@ -16,6 +16,8 @@ const boundedText = (max: number) => z.string().min(1).max(max).regex(CONTROL_TE
 const safeId = z.string().min(1).max(128).regex(SAFE_ID);
 const optionalDateTime = z.string().datetime({ offset: true }).nullable();
 const revision = z.string().min(1).max(128).regex(REVISION);
+const UPSTREAM_REPOSITORY = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/u;
+const UPSTREAM_REF = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,127}$/u;
 
 export const AgentMemoryModeSchema = z.enum(['off', 'memory-core', 'proxy', 'full-stack']);
 export type AgentMemoryMode = z.infer<typeof AgentMemoryModeSchema>;
@@ -114,6 +116,43 @@ export const AgentMemoryStatusSchema = z.object({
 }).strict().superRefine(addPrivacyIssues);
 export type AgentMemoryStatus = z.infer<typeof AgentMemoryStatusSchema>;
 
+export const AGENT_MEMORY_SETTINGS_SCHEMA_VERSION = 'ready4vibe_agent_memory_settings_v1' as const;
+const AgentMemorySettingsFieldsSchema = z.object({
+  enabled: z.boolean(),
+  mode: AgentMemoryModeSchema,
+  teamId: safeId,
+  agentId: safeId,
+  userId: safeId,
+  upstreamRepo: z.string().min(1).max(2_048).regex(UPSTREAM_REPOSITORY),
+  upstreamRef: z.string().min(1).max(128).regex(UPSTREAM_REF),
+  autoUpdate: z.boolean(),
+  updateIntervalMinutes: z.number().int().min(5).max(24 * 60),
+  fallbackToDirectProvider: z.boolean(),
+}).strict();
+export const AgentMemorySettingsSchema = AgentMemorySettingsFieldsSchema.extend({
+  schemaVersion: z.literal(AGENT_MEMORY_SETTINGS_SCHEMA_VERSION),
+}).strict().superRefine((value, context) => {
+  if (value.enabled && value.mode === 'off') context.addIssue({ code: z.ZodIssueCode.custom, message: 'enabled memory must select a non-off mode' });
+  addPrivacyIssues(value, context);
+});
+export type AgentMemorySettings = z.infer<typeof AgentMemorySettingsSchema>;
+
+export const AgentMemorySettingsPatchSchema = AgentMemorySettingsFieldsSchema.partial().strict().superRefine((value, context) => {
+  if (Object.keys(value).length === 0) context.addIssue({ code: z.ZodIssueCode.custom, message: 'at least one agent memory setting is required' });
+  addPrivacyIssues(value, context);
+});
+export type AgentMemorySettingsPatch = z.infer<typeof AgentMemorySettingsPatchSchema>;
+
+export const AGENT_MEMORY_SETTINGS_STATUS_SCHEMA_VERSION = 'ready4vibe_agent_memory_settings_status_v0' as const;
+export const AgentMemorySettingsStatusSchema = z.object({
+  schemaVersion: z.literal(AGENT_MEMORY_SETTINGS_STATUS_SCHEMA_VERSION),
+  settings: AgentMemorySettingsSchema,
+  status: AgentMemoryStatusSchema,
+  currentRevision: revision.nullable(),
+  previousRevision: revision.nullable(),
+}).strict().superRefine(addPrivacyIssues);
+export type AgentMemorySettingsStatus = z.infer<typeof AgentMemorySettingsStatusSchema>;
+
 export const AgentMemoryWriteResultSchema = z.object({
   accepted: z.boolean(),
   queued: z.boolean(),
@@ -180,4 +219,16 @@ export function parseAgentMemoryWriteRequest(value: unknown): AgentMemoryWriteRe
 
 export function parseAgentMemoryStatus(value: unknown): AgentMemoryStatus {
   return AgentMemoryStatusSchema.parse(value);
+}
+
+export function parseAgentMemorySettings(value: unknown): AgentMemorySettings {
+  return AgentMemorySettingsSchema.parse(value);
+}
+
+export function parseAgentMemorySettingsPatch(value: unknown): AgentMemorySettingsPatch {
+  return AgentMemorySettingsPatchSchema.parse(value);
+}
+
+export function parseAgentMemorySettingsStatus(value: unknown): AgentMemorySettingsStatus {
+  return AgentMemorySettingsStatusSchema.parse(value);
 }

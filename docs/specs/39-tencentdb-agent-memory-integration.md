@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop implemented；Phase 1 MemoryCore HTTP adapter implemented（未接入 AgentLoop/默认 run 路径）；Phase 2+ Draft
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API implemented（未接入 AgentLoop/默认 run 路径）；Phase 3+ Draft
 - 日期：2026-08-03
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -57,6 +57,20 @@ This is an adapter contract slice only. It is not yet wired into `ContextManager
 `AgentLoop`, `RunManager` snapshots, Web Settings, sidecar supervision, or the
 default run creation path. `off` and all existing unbound interactive runs keep
 their previous behavior.
+
+## 1.3 Phase 2 implementation gate
+
+Phase 2 adds a durable, non-secret `agent-memory/v1` settings snapshot and an
+authenticated daemon API. It stores only the enabled/mode/identity/upstream
+policy fields described by this spec; MemoryCore credentials, environment
+variables, absolute paths, and sidecar logs are never accepted or returned.
+
+The API can report status and probe the configured provider. Update and rollback
+are explicit capability calls: until the Phase 3 supervisor exists they return a
+stable degraded/update code and do not mutate the current revision. The Web
+surface is a small Settings card that edits the same snapshot and displays
+bounded health/revision state; it does not create a second scheduler, SSE stream,
+or run admission gate.
 
 ## 2. 用户需求与非目标
 
@@ -526,12 +540,15 @@ AgentLoop 创建 run。
 - ⏳ `ContextItem` 注入、终态事件 wiring、重试策略、Windows sidecar 生命周期和
   子进程端口管理留到后续 Phase 2/3，不在本提交接入默认 run 路径。
 
-### Phase 2：Web 开关与状态
+### Phase 2：Web 开关与状态（已实现）
 
-- 接入 `daemon_settings` namespace `agent-memory/v1`；
-- 增加 GET/PATCH/probe API 和 Settings drawer 卡片；
-- 验证开关只影响新 run，关闭后不启动 sidecar、不改 prompt；
-- 将 degraded 状态做成非阻塞的 Web banner/status，不改变现有 run 表单。
+- ✅ 接入 `daemon_settings` 的 `agent-memory`/`v1` 版本化非 secret snapshot；
+- ✅ 增加受现有 auth/CSRF/Origin 门禁保护的 GET/PATCH/probe/update/rollback API；
+- ✅ Settings drawer 提供开关、模式、identity、upstream policy、健康状态、立即 probe、
+  更新和回退按钮；
+- ✅ 开关只改变后续设置和状态，不启动 sidecar、不改变 prompt、不修改 AgentLoop、
+  Goal、Scheduler、Approval、Sandbox 或默认 run 创建路径；
+- ✅ MemoryCore 未配置或不可用时返回 bounded degraded 状态，Web 和普通 run 继续可用。
 
 ### Phase 3：Runtime Supervisor 与自动更新
 

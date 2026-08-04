@@ -58,6 +58,17 @@ describe('web console shell', () => {
     expect(html).not.toContain('test-secret');
   });
 
+  it('renders the functional agent-memory settings card without secrets or paths', () => {
+    const html = renderToStaticMarkup(<App agentMemorySettings={{ schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'memory-core', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null }} onPatchAgentMemorySettings={() => undefined} onProbeAgentMemory={() => undefined} onUpdateAgentMemory={() => undefined} onRollbackAgentMemory={() => undefined} />);
+    expect(html).toContain('AGENT MEMORY');
+    expect(html).toContain('Enable optional long-term memory');
+    expect(html).toContain('Save memory settings');
+    expect(html).toContain('Probe');
+    expect(html).toContain('Roll back');
+    expect(html).not.toContain('apiKey');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders an explicit guarded filesystem toggle without an absolute path', () => {
     const html = renderToStaticMarkup(<App toolSettings={{ filesystemEnabled: false, workspaceLabel: 'workspace', availableTools: [] }} onSetFilesystemToolsEnabled={() => undefined} />);
     expect(html).toContain('Enable guarded filesystem tools');

@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop 与 Phase 1 MemoryCore HTTP adapter 已落地；其余集成仍按 Spec 39 分阶段）
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter 与 Phase 2 settings/status API 已落地；其余集成仍按 Spec 39 分阶段）
 - 日期：2026-08-03
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 

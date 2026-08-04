@@ -10,6 +10,7 @@ import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
 import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
+import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, type GoalProjectionStore } from './goal-api.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
@@ -39,6 +40,7 @@ export interface DaemonServerOptions {
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
+  agentMemorySettings?: AgentMemorySettingsManager;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -58,6 +60,7 @@ interface ResolvedDaemonServerOptions {
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
+  agentMemorySettings?: AgentMemorySettingsManager;
 }
 
 export interface HealthResponse {
@@ -109,6 +112,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
     ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
+    ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -365,6 +369,50 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/agent-memory') {
+    if (!options.agentMemorySettings) {
+      writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.agentMemorySettings.status());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or PATCH required' } }, { Allow: 'GET, PATCH' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    try {
+      writeJson(response, 200, options.agentMemorySettings.patch(input));
+    } catch (error) {
+      if (error instanceof AgentMemorySettingsError) {
+        const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  const agentMemoryAction = /^\/api\/v1\/settings\/agent-memory\/(probe|update|rollback)$/u.exec(pathname)?.[1];
+  if (agentMemoryAction) {
+    if (!options.agentMemorySettings) {
+      writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const result = agentMemoryAction === 'probe'
+      ? await options.agentMemorySettings.probe()
+      : agentMemoryAction === 'update' ? await options.agentMemorySettings.update() : await options.agentMemorySettings.rollback();
+    writeJson(response, 200, result);
     return;
   }
 

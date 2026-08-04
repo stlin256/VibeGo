@@ -225,7 +225,7 @@ React smoke test、CSS contract test 和可用性为准。
 当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
 新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
 
-## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0 + Phase 1 adapter 已实现）
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–2 已实现）
 
 详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
@@ -245,3 +245,8 @@ Phase 0 已冻结 ready4vibe 原生 `AgentMemoryMode`、identity、recall/write/
 读取、bounded/untrusted recall、身份隔离、降级处理和串行 compact write-back 均已覆盖
 测试。该切片不引入 upstream SDK、sidecar、settings API、Web 卡片或 AgentLoop/RunManager
 改动；默认 `off` 和现有 unbound interactive run 仍为零网络、零子进程、零 prompt 变化。
+
+Phase 2 已增加 `agent-memory/v1` 的非 secret durable settings snapshot、认证 API
+（GET/PATCH/probe/update/rollback）和 Settings drawer 状态卡片。当前没有 sidecar
+Supervisor，因此 update/rollback 会明确返回稳定的 degraded/update 状态，不会伪造
+revision 切换；MemoryCore 未配置或不可用也不会阻塞 Web/run。
