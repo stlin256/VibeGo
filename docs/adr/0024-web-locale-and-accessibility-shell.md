@@ -1,6 +1,6 @@
 # ADR 0024: Web locale preference and accessibility shell boundary
 
-- Status: Accepted for Phase 56a; Phase 56b implemented; Phase 56c contract frozen
+- Status: Accepted for Phase 56a; Phase 56b and Phase 56c pure Web slice implemented
 - Date: 2026-08-05
 
 ## Decision
@@ -52,9 +52,9 @@ changes run/provider/Goal state or network subscriptions. The implementation
 uses a small pure index helper plus DOM wiring, so keyboard behavior remains
 unit-testable without adding a browser runtime dependency.
 
-## Phase 56c extension (contract frozen)
+## Phase 56c extension (implemented pure Web slice)
 
-The next Web-only slice introduces strict, privacy-safe fixture and report
+This Web-only slice introduces strict, privacy-safe fixture and report
 types for the eight documented ratio/device families. It is deliberately a
 pure contract and unit-test slice: no Playwright process, browser automation,
 device sniffing, daemon route, run event, or real-device pass claim is added.
@@ -67,3 +67,9 @@ The report adapter rejects unknown fields, secrets, absolute paths, raw user
 content and oversized values. CSS safe-area/fold hooks remain optional
 progressive enhancement, with the existing ratio/container layout as the
 authority when a platform does not expose fold features.
+
+The implementation lives in `apps/web/src/device-matrix.ts` and
+`apps/web/src/performance-report.ts`; it is covered by the Web focused test
+suite and does not add a daemon route, browser automation, or a second state
+machine. The Web CSS only exposes optional platform hooks, so missing fold
+features keep the normal ratio-first composition.

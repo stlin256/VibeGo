@@ -365,6 +365,19 @@ body { overflow-x: hidden; }
 .composer-panel { position: sticky; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 2; padding: 16px 18px; }
 .composer-panel textarea { min-height: 88px; }
 
+/* Spec 56c: optional platform fold/safe-area hooks. Browsers that do not
+   expose viewport segments simply use the ratio-first layout above. These
+   variables are layout hints only; they never select a device-specific
+   component tree or a second conversation state. */
+:root { --vibego-safe-area-bottom: env(safe-area-inset-bottom, 0px); --vibego-fold-gap-inline: env(viewport-segment-left 1 0, 0px); }
+@media (horizontal-viewport-segments: 2) {
+  .app-shell { padding-inline-start: max(14px, var(--vibego-fold-gap-inline)); }
+  .composer-panel { scroll-margin-inline-start: var(--vibego-fold-gap-inline); }
+}
+@media (horizontal-viewport-segments: 3) {
+  .app-shell { padding-inline: max(10px, var(--vibego-fold-gap-inline)); }
+}
+
 @media (max-width: 599px) {
   .conversation-column { min-height: 0; }
   .conversation-stream { min-height: 420px; }

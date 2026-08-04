@@ -1,6 +1,6 @@
 # Spec 56：多语言、无障碍与真实设备兼容矩阵
 
-- Status: Phase 56a/56b implemented；Phase 56c contract frozen for Web fixture/report slice（full catalog and real-device evidence remain later）
+- Status: Phase 56a/56b implemented；Phase 56c pure Web fixture/report slice implemented（full catalog and real-device evidence remain later）
 - Date: 2026-08-04
 - Related: [Spec 37](37-ratio-responsive-ui.md)、[Spec 38](38-conversation-first-web-shell.md)、[Spec 42](42-shadcn-style-web-design-system.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -205,9 +205,9 @@ Focused Web tests cover the pure index/filter helpers and dialog landmarks;
 58 Web tests, typecheck and production build pass. No run/provider/Goal/SSE
 state is changed by locale or focus interactions.
 
-## 11. Phase 56c contract boundary（2026-08-05）
+## 11. Phase 56c implementation boundary（2026-08-05）
 
-Phase 56c first freezes a pure Web fixture/report contract for the eight
+Phase 56c implements the pure Web fixture/report contract for the eight
 ratio-oriented form factors. It does not start Playwright, inspect a real
 device, or change daemon/run behavior. The implementation may be used by
 focused unit tests and later release tooling, but a fixture is never evidence
@@ -239,3 +239,14 @@ synthetic zero or a guessed pass. The CSS layer may expose safe-area and
 fold-segment hooks through platform media features, but layout remains
 container/ratio-first and must continue to work when those features are
 absent.
+
+`apps/web/src/device-matrix.ts` now provides the stable fixture registry,
+strict parser and unverified compatibility-report factory. The parser rejects
+unknown fields, invalid geometry, unsafe text, absolute paths, secrets and
+oversized evidence. `apps/web/src/performance-report.ts` provides the matching
+bounded timing projection with null-by-default measurements. The Web CSS keeps
+optional `safe-area-inset-*` and `horizontal-viewport-segments` hooks while the
+existing ratio/container rules remain authoritative. Focused Web tests cover
+the fixtures, privacy boundary, default-unverified behavior, report bounds
+and CSS hooks; the Web package currently passes 66 tests, typecheck and
+production build. No Playwright or physical-device evidence is claimed.

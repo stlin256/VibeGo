@@ -57,7 +57,7 @@
 49. `docs/specs/54-model-provider-onboarding.md` 已实现 Phase 0/1/2/3：`ModelProviderDescriptor`、`ModelEndpointProfile`、`ModelCredentialRef`、capability/probe/setup-session contracts、显式 OpenAI-compatible `/models` probe、authenticated daemon probe route 和 Web Settings Probe 控件均有版本、bounded、privacy/path 校验；route 不接受 key/prompt/path/arbitrary headers，probe 不创建 run/event、不改变 provider 或 in-flight snapshot，当前仍不改 Spec 28 的默认 runtime/secret 边界。
 50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
 51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
-52. Spec 56 Phase 56c contract 已冻结：八类 ratio/device fixture、严格的 `WebCompatibilityReport`/`WebPerformanceReport`、默认 `unverified`、privacy/path/secret 边界和可选 safe-area/fold CSS hook；当前只进入纯 Web contract 与 focused unit-test 实现，不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
+52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
 
 47a. `docs/specs/44-provider-usage-management-and-upstream-reuse.md`、`docs/adr/0013-upstream-research-and-provider-management-boundary.md`、`docs/prompts/44-provider-usage-management-implementation.md` 和 `docs/research/upstream-provider-usage.md` 已完成 Spec 44-R0：CC Switch、AxonHub、LiteLLM、Langfuse、OpenTelemetry 的 canonical URL、默认分支、pinned commit、LICENSE/NOTICE 边界、相关文件路径和语义摘要均已记录，所有复用决定均为 clean-room。没有复制上游源码、schema、UI、session 或 runtime，也未新增依赖；R1/R2/R3 的实现状态见下列条目。
 47b. Spec 44-R1 provider/usage contract slice 已完成：`packages/contracts/src/provider-usage.ts` 提供严格版本化 `ProviderDescriptor`、`ProviderCapabilitySnapshot`、`ProviderUsageObservation`、secret/path fail-closed 校验和 token 维度向后兼容扩展；`packages/observability/src/provider-usage.ts` 提供 immutable in-memory `ProviderRegistry`、capability snapshot 与纯 `normalizeProviderUsageObservation`，现有 run-event replay projection 显式保留 `dataSource`/input token semantics。测试覆盖 strictness、privacy、快照隔离、cache-inclusive/fresh、unknown counters 和幂等输入；仍不接入 AgentLoop、RunManager、daemon API 或默认 run。
@@ -445,7 +445,7 @@ Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
   and versioned `docs/operations` runbooks. It does not expose a public listener,
   install a proxy, change firewall rules or perform ACME calls.
 - **Spec 56** (`specs/56-i18n-accessibility-device-matrix.md`) has implemented
-  Phase 56a/56b and a frozen Phase 56c contract. The current slice covers
+  Phase 56a/56b and an implemented Phase 56c pure Web slice. The current slice covers
   `en-US`/`zh-CN`, bounded accessibility semantics, the settings focus scope,
   typed settings/guardrail labels, eight ratio/device fixtures and strict
   compatibility/performance report projections. It does not start Playwright,

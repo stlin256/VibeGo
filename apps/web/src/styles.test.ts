@@ -31,4 +31,12 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('button { border: 0; border-radius: var(--vibego-radius-sm); min-height: 44px;');
     expect(styles).toContain('prefers-reduced-motion');
   });
+
+  it('keeps Phase 56c safe-area and fold-segment hooks optional', () => {
+    expect(styles).toContain('env(safe-area-inset-bottom');
+    expect(styles).toContain('env(viewport-segment-left 1 0');
+    expect(styles).toContain('@media (horizontal-viewport-segments: 2)');
+    expect(styles).toContain('@media (horizontal-viewport-segments: 3)');
+    expect(styles).toContain('ratio-first layout above');
+  });
 });
