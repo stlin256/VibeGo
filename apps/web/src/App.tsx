@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import { ObservabilityPanel } from './ObservabilityPanel.js';
@@ -23,8 +23,10 @@ export interface AppProps {
   certificateStatusUnavailable?: boolean;
   modelSettings?: ModelSettingsStatus;
   modelSettingsUnavailable?: boolean;
+  modelProbe?: ModelProbeResult;
   onConfigureModel?: (input: ModelSettingsInput) => Promise<void> | void;
   onClearModelSettings?: () => Promise<void> | void;
+  onProbeModel?: (endpoint: string) => Promise<void> | void;
   agentMemorySettings?: AgentMemorySettingsStatus;
   agentMemorySettingsUnavailable?: boolean;
   onPatchAgentMemorySettings?: (input: AgentMemorySettingsPatchInput) => Promise<void> | void;
@@ -67,11 +69,13 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
   const [modelApiKey, setModelApiKey] = useState('');
+  const [modelProbeEndpoint, setModelProbeEndpoint] = useState('https://api.deepseek.com/models');
+  const [modelProbeBusy, setModelProbeBusy] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('off');
   const [memoryTeamId, setMemoryTeamId] = useState('vibego');
@@ -115,6 +119,9 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
+  }, [modelSettings?.baseUrl]);
+  useEffect(() => {
+    if (modelSettings?.baseUrl) setModelProbeEndpoint(`${modelSettings.baseUrl.replace(/\/$/u, '')}/models`);
   }, [modelSettings?.baseUrl]);
   useEffect(() => {
     const settings = agentMemorySettings?.settings;
@@ -178,6 +185,14 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     } catch {
       // The parent renders a safe error; keep the field for an intentional retry.
     }
+  };
+  const submitModelProbe = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!onProbeModel || !modelProbeEndpoint.trim()) return;
+    setModelProbeBusy(true);
+    try { await onProbeModel(modelProbeEndpoint.trim()); }
+    catch { /* The parent renders a bounded error. */ }
+    finally { setModelProbeBusy(false); }
   };
   const saveAgentMemorySettings = async (): Promise<void> => {
     if (!onPatchAgentMemorySettings) return;
@@ -345,6 +360,10 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                     <label>Provider URL<input type="url" value={modelBaseUrl} onChange={(event) => setModelBaseUrl(event.target.value)} placeholder="https://api.deepseek.com" autoComplete="url" /></label>
                     <label>API key<input type="password" value={modelApiKey} onChange={(event) => setModelApiKey(event.target.value)} placeholder={modelSettings?.configured ? 'Enter a replacement key' : 'Paste once; never stored in browser'} autoComplete="new-password" /></label>
                     <div className="inline-actions"><button type="submit" disabled={!modelApiKey}>Save provider</button>{modelSettings?.configured && <button className="cancel-button" type="button" onClick={() => { void (async () => { await onClearModelSettings?.(); setModelApiKey(''); })(); }}>Clear daemon key</button>}</div>
+                  </form>
+                  <form onSubmit={(event) => { void submitModelProbe(event); }}>
+                    <label>Model list endpoint<input type="url" value={modelProbeEndpoint} onChange={(event) => setModelProbeEndpoint(event.target.value)} placeholder="https://api.deepseek.com/models" autoComplete="url" /></label>
+                    <div className="inline-actions"><button type="submit" disabled={!onProbeModel || modelProbeBusy || !modelProbeEndpoint.trim()}>Probe models</button>{modelProbe && <span className="muted">{modelProbe.status}{modelProbe.errorCode ? ` · ${modelProbe.errorCode}` : modelProbe.capabilities ? ` · ${modelProbe.capabilities.modelId}` : ''}</span>}</div>
                   </form>
                 </>}
               </div>

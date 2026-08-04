@@ -79,8 +79,12 @@ describe('web console shell', () => {
     expect(html).toContain('Retrieve once for each new run');
     expect(html).toContain('Save knowledge settings');
     expect(html).toContain('Probe knowledge');
-    expect(html).not.toContain('endpoint');
-    expect(html).not.toContain('C:\\Users');
+    const knowledgeStart = html.indexOf('knowledge-setup');
+    const mcpStart = html.indexOf('mcp-setup');
+    const knowledgeHtml = html.slice(knowledgeStart, mcpStart);
+    expect(knowledgeHtml).not.toMatch(/https?:\/\//iu);
+    expect(knowledgeHtml).not.toMatch(/api[_-]?key|Authorization|raw upstream/iu);
+    expect(knowledgeHtml).not.toContain('C:\\Users');
   });
 
   it('renders the optional MCP status card without endpoint URLs, commands, or secrets', () => {
@@ -176,6 +180,14 @@ describe('web console shell', () => {
     const missing = renderToStaticMarkup(<App health={health} certificateStatusUnavailable />);
     expect(missing).toContain('Certificate setup is required');
     expect(missing).not.toContain('.pem');
+  });
+
+  it('renders bounded model probe status without any credential or raw response', () => {
+    const html = renderToStaticMarkup(<App modelProbe={{ schemaVersion: 'ready4vibe_model_probe_result_v1', status: 'ready', checkedAt: '2026-08-05T00:00:00.000Z', latencyMs: 7, revision: 'probe-v1', errorCode: null, capabilities: { schemaVersion: 'ready4vibe_model_capability_snapshot_v1', providerId: 'openai-compatible', modelId: 'deepseek-v4-flash', descriptorRevision: 'probe-v1', capturedAt: '2026-08-05T00:00:00.000Z', streaming: 'unknown', toolCalls: 'unknown', vision: 'unknown', embeddings: 'unknown', contextLimit: 'unknown', outputLimit: 'unknown' } }} onProbeModel={() => undefined} />);
+    expect(html).toContain('Model list endpoint');
+    expect(html).toContain('Probe models');
+    expect(html).toContain('deepseek-v4-flash');
+    expect(html).not.toMatch(/api[_-]?key|Authorization|raw upstream/iu);
   });
 
   it('renders an explicit approval card with allow and deny controls', () => {

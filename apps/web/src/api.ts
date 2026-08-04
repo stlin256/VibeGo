@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -174,6 +174,8 @@ export interface ModelSettingsInput {
   model: string;
 }
 
+export type ModelProbeResult = ModelProbeResultContract;
+
 export interface ToolSettingsStatus {
   filesystemEnabled: boolean;
   workspaceLabel: string;
@@ -345,6 +347,10 @@ export class ApiClient {
 
   async clearModelSettings(): Promise<ModelSettingsStatus> {
     return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'DELETE' });
+  }
+
+  async probeModel(endpoint: string, timeoutMs = 5_000): Promise<ModelProbeResult> {
+    return this.request<ModelProbeResult>('/api/v1/settings/model/probe', { method: 'POST', body: JSON.stringify({ endpoint, timeoutMs }) });
   }
 
   async agentMemorySettings(): Promise<AgentMemorySettingsStatus> {

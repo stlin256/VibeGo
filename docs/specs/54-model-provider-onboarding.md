@@ -1,6 +1,6 @@
 # Spec 54：本地模型与云模型配置向导
 
-- Status: Phase 0/1/2 implemented（strict contracts + explicit bounded probe + authenticated daemon route；provider/run behavior remains unchanged）
+- Status: Phase 0/1/2/3 implemented（strict contracts + bounded probe + authenticated daemon route + Web Settings probe control；provider/run behavior remains unchanged）
 - Date: 2026-08-04
 - Related: [Spec 28](28-model-provider-onboarding.md)、[Spec 47](47-model-context-agent-loop-productionization.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -122,6 +122,18 @@ unchanged. A missing provider or probe failure is a bounded result, not a Web
 500 and not a replacement provider. Daemon/model settings fixtures cover
 unknown-field rejection, credential-free request bodies, secret-free results,
 missing credentials and provider snapshot preservation.
+
+### Phase 3 implementation update (2026-08-05)
+
+The existing conversation-first Settings drawer adds one model-list endpoint
+field and an explicit Probe button. It renders only the versioned status,
+stable error code and bounded capability summary; it never renders a key,
+Authorization header, raw upstream body or a stored probe response. Probe state
+is in Web memory only, is non-blocking for run creation, and remains separate
+from provider configuration and in-flight run snapshots.
+Focused Web tests cover the API request shape, bounded status rendering and
+privacy-safe knowledge-card projection; Web typecheck passes. The control is
+advisory and remains outside provider persistence and run admission.
 
 ## 5. Credential 与隐私边界
 

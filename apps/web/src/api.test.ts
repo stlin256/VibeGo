@@ -163,6 +163,18 @@ describe('ApiClient', () => {
     expect(calls[2]?.init?.method).toBe('DELETE');
   });
 
+  it('uses the explicit model probe endpoint without accepting browser credentials', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ schemaVersion: 'ready4vibe_model_probe_result_v1', status: 'ready', checkedAt: '2026-08-05T00:00:00.000Z', latencyMs: 7, revision: 'probe-v1', errorCode: null, capabilities: { schemaVersion: 'ready4vibe_model_capability_snapshot_v1', providerId: 'openai-compatible', modelId: 'deepseek-v4-flash', descriptorRevision: 'probe-v1', capturedAt: '2026-08-05T00:00:00.000Z', streaming: 'unknown', toolCalls: 'unknown', vision: 'unknown', embeddings: 'unknown', contextLimit: 'unknown', outputLimit: 'unknown' } });
+    });
+    await expect(client.probeModel('https://api.deepseek.com/models')).resolves.toMatchObject({ status: 'ready' });
+    expect(calls[0]?.input).toBe('/api/v1/settings/model/probe');
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({ endpoint: 'https://api.deepseek.com/models', timeoutMs: 5000 }));
+    expect(String(calls[0]?.init?.body)).not.toContain('apiKey');
+  });
+
   it('uses the authenticated agent-memory settings/probe/update/rollback endpoints without secrets', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const status = { schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'off', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null };
