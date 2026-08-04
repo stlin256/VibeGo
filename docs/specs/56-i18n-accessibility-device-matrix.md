@@ -173,3 +173,5 @@ live-status landmark. Web-focused tests cover locale precedence, invalid/secret-
 shaped storage values, reset behavior, translated rendering and privacy-safe
 Chinese shell output; the existing ratio/reduced-motion CSS gates remain in
 place. This slice does not claim full catalog coverage or real-device pass.
+Unknown runtime message keys use a stable English `Unavailable` fallback rather
+than rendering the key itself.

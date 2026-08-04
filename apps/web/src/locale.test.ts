@@ -43,6 +43,7 @@ describe('Web locale adapter', () => {
     expect(translate('conversation.startRun')).toBe('开始运行');
     expect(translate('locale.english')).toBe('English');
     expect(translate('nav.newTask')).not.toContain('nav.newTask');
+    expect((translate as (key: string) => string)('missing.message')).toBe('Unavailable');
   });
 
   it('updates only the document language and does not carry execution state', () => {

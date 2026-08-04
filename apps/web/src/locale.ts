@@ -121,7 +121,7 @@ export function localeFromLanguage(language: unknown): Locale {
 
 export function createTranslator(locale: Locale): (key: MessageKey) => string {
   const selected = CATALOGS[resolveLocale(locale)];
-  return (key: MessageKey): string => selected[key] ?? EN_US[key] ?? key;
+  return (key: MessageKey): string => selected[key] ?? EN_US[key] ?? 'Unavailable';
 }
 
 export function loadLocale(storage: LocaleStorage | undefined = browserStorage(), language: unknown = browserLanguage()): Locale {
