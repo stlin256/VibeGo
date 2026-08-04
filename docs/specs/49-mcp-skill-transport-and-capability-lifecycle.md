@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1 transport slice implemented; R2+ pending
+- Status: 49-R1 and 49-R2 implemented; R3+ pending
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -135,6 +135,50 @@ changes during a run.
 
 Exit: no MCP/Skill descriptor reaches the AgentLoop without a snapshot and
 policy decision.
+
+#### 49-R2 contract slice
+
+The first R2 slice is a pure `@ready4vibe/skill-mcp` bounded context. It
+accepts an already decoded, untrusted capability advertisement and returns an
+immutable, versioned `McpCapabilitySnapshot`; it does not call a channel,
+start a server, register the existing ToolRegistry or execute a tool.
+
+- Every descriptor carries `schemaVersion`, server id/revision, capability kind,
+  stable name/revision, source, bounded summary/schema, manifest-owned risk,
+  required sandbox/network mode and approval mode.
+- A descriptor is admitted only when the manifest server and declared tool are
+  allowlisted, the protocol version is compatible, health is
+  `healthy-verified`, the JSON Schema is bounded/compatible, and the advertised
+  revision matches the immutable manifest revision. Server-provided risk or
+  approval metadata cannot weaken the manifest/policy decision.
+- Duplicate `(server, kind, name, revision)` entries fail closed. A refresh
+  that changes a name's revision is a conflict rather than an in-place update;
+  callers create a new snapshot and explicitly bind future runs to it.
+- Health observations use a monotonic `checkId`; stale observations cannot
+  replace a newer failed or verified status. `captureRunSnapshot()` deep-freezes
+  descriptors and retains the fingerprint so later registry refreshes cannot
+  mutate an in-flight run.
+- Capability errors expose stable codes only. Raw advertisements, schema
+  bodies, headers, environment values, secrets and absolute paths are not
+  retained in the registry or returned in errors.
+
+R2 remains a capability projection boundary. Approval, Scheduler, Sandbox,
+ToolExecutor, AgentLoop, `run_events` and `goal_events` remain the only
+authorities for execution and durable run facts.
+
+#### 49-R2 implementation record (2026-08-04)
+
+`@ready4vibe/skill-mcp` now exports `McpCapabilityRegistry`, bounded
+`McpCapabilityDescriptor`/`McpCapabilitySnapshot` contracts and
+`mcpCapabilityReference()`. The registry accepts only an explicitly
+allowlisted manifest plus a verified advertisement, validates protocol and
+JSON Schema bounds, preserves manifest-owned risk/sandbox/network/approval
+metadata, rejects duplicate or conflicting revisions, ignores stale health
+observations and deep-freezes run snapshots with deterministic SHA-256
+fingerprints. Resources and prompts are read-only descriptors only when their
+references are explicitly allowlisted. The focused package suite has 27 tests;
+no channel, process, network request, ToolRegistry, Approval, Scheduler or
+Sandbox is invoked.
 
 ### 49-R3: optional daemon settings and Web status
 

@@ -83,6 +83,8 @@ export interface ManifestAllowlist {
   readonly skills?: readonly string[];
   readonly mcpServers?: readonly string[];
   readonly mcpTools?: readonly string[];
+  /** Optional references for read-only resources/prompts in R2 snapshots. */
+  readonly mcpCapabilities?: readonly string[];
 }
 
 export interface PublicMcpTool {
@@ -163,11 +165,13 @@ export class IntegrationAllowlist {
   private readonly skills: ReadonlySet<string>;
   private readonly mcpServers: ReadonlySet<string>;
   private readonly mcpTools: ReadonlySet<string>;
+  private readonly mcpCapabilities: ReadonlySet<string>;
 
   constructor(allowlist: ManifestAllowlist = {}) {
     this.skills = new Set(allowlist.skills ?? []);
     this.mcpServers = new Set(allowlist.mcpServers ?? []);
     this.mcpTools = new Set(allowlist.mcpTools ?? []);
+    this.mcpCapabilities = new Set(allowlist.mcpCapabilities ?? []);
   }
 
   allowsSkill(manifest: SkillManifest): boolean {
@@ -176,6 +180,10 @@ export class IntegrationAllowlist {
 
   allowsMcpServer(manifest: McpServerManifest): boolean {
     return this.mcpServers.has(manifestReference(manifest.id, manifest.version));
+  }
+
+  allowsMcpCapability(reference: string): boolean {
+    return this.mcpCapabilities.has(reference);
   }
 
   publicTools(manifest: McpServerManifest): readonly PublicMcpTool[] {
@@ -632,3 +640,4 @@ function safeTransportMessage(code: McpTransportErrorCode): string {
 }
 
 export * from './transport.js';
+export * from './capability.js';

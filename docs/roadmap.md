@@ -437,7 +437,7 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（R1 已实现）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2 已实现）
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
 manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
@@ -451,6 +451,19 @@ initialize、progress、request-id、401/403/429/5xx、timeout、malformed/overs
 和 deterministic close 都只返回稳定错误/健康元数据。`@ready4vibe/skill-mcp` focused
 20 tests 已通过；该切片不自动启动、不激活工具，也不进入默认 run，后续 R2 再做
 capability snapshot/registry。
+
+49-R2 先实现纯 capability projection：校验协议/schema/summary 上限、manifest
+声明的 risk/sandbox/network/approval、server/tool allowlist、重复/冲突 revision
+和单调 health checkId，生成可重建 fingerprint 的 immutable run snapshot。该切片不
+调用 transport、不注册第二套 ToolRegistry、不改变现有 AgentLoop/RunManager/Approval/
+Scheduler/Sandbox 或 run/goal 事件事实源；R3 才评估 daemon/Web status，R4 才接入
+现有 ToolExecutor。
+
+49-R2 已完成：`McpCapabilityRegistry` 以 27 个 focused tests 固化
+allowlist、协议/schema/privacy、manifest-owned risk 与 network/approval/sandbox
+门禁、单调 health checkId、重复/冲突 revision、read-only resource/prompt 和
+immutable run snapshot/fingerprint。该纯 projection 不调用 MCP transport，也不改变
+任何现有执行或事件权威；后续进入 R3 daemon/Web status。
 
 ## Spec 50：Observability lifecycle integration（规划）
 
