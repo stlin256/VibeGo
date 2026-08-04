@@ -47,6 +47,13 @@ request.
 - existing callers can migrate incrementally because the legacy adapter remains
   available until the later runtime integration slice.
 
+The follow-up continuation path remains owned by the existing AgentLoop,
+RunManager, ApprovalBroker and authenticated Web endpoint. Spec 48-R4 verifies
+that an untrusted external-sandbox request reaches a bounded
+`approval.required` card, consumes one exact runtime grant, and resumes only
+the same run; the compiler is not replaced by a second scheduler or approval
+authority.
+
 ## Rejected alternatives
 
 - storing raw arguments in approval grants or events;

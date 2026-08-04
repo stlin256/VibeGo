@@ -407,7 +407,7 @@ opt-in R4 command. The R3 slice gate passed with 402 tests; the R1 gate passed
 with 412 tests; the current repository gate is `pnpm verify` with 420 tests
 after Spec 48-R2.
 
-## Spec 48：Approval/Sandbox/Shell runtime closure（48-R3 已实现，R4 规划）
+## Spec 48：Approval/Sandbox/Shell runtime closure（48-R4 已实现，Spec 49 规划）
 
 详见 [Spec 48](specs/48-approval-sandbox-shell-runtime.md) 与
 [ADR 0017](adr/0017-policy-compiler-and-bounded-approval.md)。48-R1 先交付纯
@@ -430,6 +430,11 @@ restricted network、`--pull=never`、`--rm`、资源/超时/输出上限和取�
 sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded、redacted 状态。
 该命令不进入 `pnpm verify`、daemon 启动或默认 run；focused sandbox-runtime 30 tests
 和 CLI workflow 7 tests 已通过，真实 engine/image smoke 仍由用户显式触发。
+
+48-R4 已补齐不可信任务的 approval continuation 集成验证：外部 digest sandbox
+和 restricted network 先进入 `approval.required`，Web allow 只恢复同一 run 的一次
+显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
+旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
 ## Spec 49：MCP/Skill transport and capability lifecycle（规划）
 
