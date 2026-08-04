@@ -1,8 +1,8 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Phase 0/1/2/3/4/5 implemented（manifest、升级状态、SQLite snapshot/preflight/staging adapter 与备份恢复 contract；安装器/升级器/current restore runtime 仍未接入）
+- Status: Phase 0/1/2/3/4/5/6 implemented（manifest、升级状态、SQLite snapshot/preflight/staging/apply adapter 与备份恢复 contract；安装器/升级器/daemon route 仍未接入）
 - Date: 2026-08-05
-- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[ADR 0028](../adr/0028-sqlite-backup-snapshot-adapter.md)、[ADR 0029](../adr/0029-sqlite-restore-preflight.md)、[ADR 0030](../adr/0030-sqlite-restore-staging-adapter.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
+- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[ADR 0028](../adr/0028-sqlite-backup-snapshot-adapter.md)、[ADR 0029](../adr/0029-sqlite-restore-preflight.md)、[ADR 0030](../adr/0030-sqlite-restore-staging-adapter.md)、[ADR 0031](../adr/0031-sqlite-restore-apply-adapter.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
 ## 1. 目标
 
@@ -202,8 +202,32 @@ candidate, cleans temporary files on every failure, and remains bounded by the
 manifest size/digest, SQLite `integrity_check` and `user_version`. It does not
 run migration, map workspaces, import credentials/files, switch a data pointer,
 write `RestoreResult`, or modify daemon/run/Goal authorities. The staging
-fixture has 12 tests; the complete storage module now passes 57 tests plus
+fixture has 12 tests; the complete storage module now passes 66 tests plus
 typecheck and build.
+
+#### Phase 6 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now provides a versioned
+`RestoreApplyConfirmation`. `@ready4vibe/storage` provides a
+`SqliteRestoreApplyAdapter` that accepts only a parsed, compatible
+`RestorePlan` and a confirmation whose `planId` and explicit approval match.
+It verifies the staged candidate again, preserves current as a new immutable
+previous hard-link, prepares a verified current candidate, and performs a
+guarded swap with rollback when the swap fails.
+
+Phase 6 returns a bounded `RestoreResult` in memory; it does not persist the
+result or expose local paths. It rejects migration-required/blocked plans,
+missing or pre-existing previous targets, duplicate application, credential or
+workspace-file import, unapproved requests and any schema/digest/integrity
+failure. The caller must hold an exclusive database access boundary while the
+swap runs; the adapter does not create a second lock or scheduler. It does not
+add a Web route, alter daemon startup, or change
+AgentLoop, RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry,
+`run_events` or `goal_events` authority.
+
+The confirmation fixture adds 2 contract tests and the apply fixture adds 9
+storage tests; the contracts module now passes 65 tests and the storage module
+now passes 66 tests plus typecheck/build.
 
 ### 5.3 数据库 migration
 

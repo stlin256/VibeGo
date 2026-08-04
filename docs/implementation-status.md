@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Agent Memory Phase 6b 与 Goal Control Phase 2A 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
+**状态：Accepted（Agent Memory Phase 6b 与 Goal Control Phase 2A 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
 
 ## 当前实施范围
 
@@ -53,7 +53,7 @@
 45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；Spec 51-R1 静态托管、R2 launcher 生命周期、R3a certificate readiness projection 和 R4 versioned client SDK 均已实现。R2 launcher 是依赖零、可注入的参数/端口/PID lease/日志脱敏/进程树停止边界，8 个 Node fixture tests 已通过；certificate package 8 个 focused tests、daemon focused gate 152 tests、client SDK 5 个 focused tests 已通过。发行包/签名、R3b ACME/OS-store/renewal、R4 native UI 和 Android/iOS/HarmonyOS 原生客户端仍明确后置。
 46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
 47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；运行时采样、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
-48. `docs/specs/53-host-install-upgrade-backup-recovery.md` 已实现 Phase 0/1/2/3/4/5：`host-manifest/v1`、`host_update_state_v1`、`backup-manifest/v1`/restore/recovery/diagnostic strict contracts、`SqliteBackupSnapshotAdapter`、只读 `SqliteRestorePreflightAdapter` 与 `SqliteRestoreStagingAdapter` 均有 bounded/privacy/path/integrity 校验；未知字段、credential/query token、绝对路径、无效时间、跳过验证、无 previous 回滚、credential/workspace-file import、越权 safe-mode operation、损坏数据库、schema mismatch、超限输出、digest/size/integrity/preflight/staging 失败和覆盖既有 snapshot/candidate 均 fail-closed。contracts focused suite 63 tests、storage focused suite 57 tests（含 snapshot fixture 4 tests、restore preflight fixture 10 tests 与 restore staging fixture 12 tests）、storage typecheck/build 通过。该切片不下载、验证、安装、迁移、restore、打包、切换或回滚 artifact，也不改变 daemon、workspace、run/Goal 事实源。
+48. `docs/specs/53-host-install-upgrade-backup-recovery.md` 已实现 Phase 0/1/2/3/4/5/6：`host-manifest/v1`、`host_update_state_v1`、`backup-manifest/v1`/restore/recovery/diagnostic strict contracts、`RestoreApplyConfirmation`、`SqliteBackupSnapshotAdapter`、只读 `SqliteRestorePreflightAdapter`、`SqliteRestoreStagingAdapter` 与 `SqliteRestoreApplyAdapter` 均有 bounded/privacy/path/integrity 校验；未知字段、credential/query token、绝对路径、无效时间、跳过验证、无 previous 回滚、credential/workspace-file import、越权 safe-mode operation、损坏数据库、schema mismatch、超限输出、digest/size/integrity/preflight/staging/apply 失败、未确认/错配 plan、既有 snapshot/candidate/previous 和 swap rollback 均 fail-closed。contracts focused suite 65 tests、storage focused suite 66 tests（含 snapshot fixture 4 tests、restore preflight fixture 10 tests、restore staging fixture 12 tests 与 restore apply fixture 9 tests）、storage typecheck/build 通过。该切片不下载、验证、安装、迁移、restore result 持久化、Web/daemon route 或第二锁/调度器，也不改变 daemon、workspace、run/Goal 事实源。
 49. `docs/specs/54-model-provider-onboarding.md` 已实现 Phase 0/1/2/3：`ModelProviderDescriptor`、`ModelEndpointProfile`、`ModelCredentialRef`、capability/probe/setup-session contracts、显式 OpenAI-compatible `/models` probe、authenticated daemon probe route 和 Web Settings Probe 控件均有版本、bounded、privacy/path 校验；route 不接受 key/prompt/path/arbitrary headers，probe 不创建 run/event、不改变 provider 或 in-flight snapshot，当前仍不改 Spec 28 的默认 runtime/secret 边界。
 50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
 51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
@@ -428,19 +428,25 @@ passes with 420 tests; no arbitrary host command is started by the test suite.
 ## Spec 53–57 planning status (2026-08-05)
 
 The following release-hardening specifications remain planning gates unless
-explicitly noted below. Spec 53 Phase 0/1/2/3/4/5 and Spec 57 Phase 57a are
-implemented; the Phase 5 staging adapter remains a storage-only candidate step;
+explicitly noted below. Spec 53 Phase 0/1/2/3/4/5/6 and Spec 57 Phase 57a are
+implemented; the Phase 5 staging adapter remains a storage-only candidate step,
+while Phase 6 apply remains an explicit caller-confirmed storage/application
+adapter;
 this change does not modify the existing AgentLoop, RunManager, Scheduler,
 Approval, Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
 
 - **Spec 53** (`specs/53-host-install-upgrade-backup-recovery.md`) has implemented
-  Phase 0/1/2/3/4/5 contracts, `SqliteBackupSnapshotAdapter`, read-only
-  `SqliteRestorePreflightAdapter` and `SqliteRestoreStagingAdapter` for
-  integrity-checked, digest-bound, immutable local snapshots and reviewable
-  restore plans/candidates. The Phase 5 adapter is storage-only and does not switch current,
-  migrate, import credentials/files, write `RestoreResult`, expose a route or
-  change daemon/run/Goal authorities. Storage currently has 57 passing tests
-  (including 12 staging fixtures).
+  Phase 0/1/2/3/4/5/6 contracts, `SqliteBackupSnapshotAdapter`, read-only
+  `SqliteRestorePreflightAdapter`, `SqliteRestoreStagingAdapter` and
+  `SqliteRestoreApplyAdapter` for integrity-checked, digest-bound, immutable
+  local snapshots and reviewable restore plans/candidates. Phase 5 remains
+  storage-only and does not switch current; Phase 6 requires explicit caller
+  confirmation, preserves current as previous, returns only an in-memory
+  bounded `RestoreResult`, and does not migrate or import credentials/files,
+  persist a result, expose a route or change daemon/run/Goal authorities.
+  Storage currently has 66 passing tests (including 12 staging and 9 apply
+  fixtures), and the apply adapter requires the caller's exclusive database
+  access boundary.
 - **Spec 54** (`specs/54-model-provider-onboarding.md`) is Proposed. It defines
   local/cloud provider presets, explicit endpoint paths, OS-backed credential
   references, bounded health/model probes, model capability snapshots and

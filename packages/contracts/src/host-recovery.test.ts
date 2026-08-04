@@ -4,16 +4,19 @@ import {
   DIAGNOSTIC_BUNDLE_SCHEMA_VERSION,
   RECOVERY_STATUS_SCHEMA_VERSION,
   RESTORE_PLAN_SCHEMA_VERSION,
+  RESTORE_APPLY_CONFIRMATION_SCHEMA_VERSION,
   RESTORE_RESULT_SCHEMA_VERSION,
   BackupManifestSchema,
   DiagnosticBundleDescriptorSchema,
   RecoveryStatusSchema,
   RestorePlanSchema,
+  RestoreApplyConfirmationSchema,
   RestoreResultSchema,
   parseBackupManifest,
   parseDiagnosticBundleDescriptor,
   parseRecoveryStatus,
   parseRestorePlan,
+  parseRestoreApplyConfirmation,
   parseRestoreResult,
 } from './host-recovery.js';
 
@@ -76,6 +79,30 @@ describe('host backup, restore and recovery contracts', () => {
     expect(() => RestorePlanSchema.parse({ ...restorePlan, importWorkspaceFiles: true })).toThrow();
     expect(() => RestorePlanSchema.parse({ ...restorePlan, compatibility: 'blocked', warnings: [] })).toThrow(/warning/iu);
     expect(() => RestorePlanSchema.parse({ ...restorePlan, workspaceBindings: [restorePlan.workspaceBindings[0], restorePlan.workspaceBindings[0]] })).toThrow(/unique/iu);
+  });
+
+  it('accepts only a versioned explicit restore approval', () => {
+    const confirmation = {
+      schemaVersion: RESTORE_APPLY_CONFIRMATION_SCHEMA_VERSION,
+      confirmationId: 'confirm_20260805',
+      planId: restorePlan.planId,
+      approved: true as const,
+      confirmedAt: '2026-08-05T00:01:30.000Z',
+    };
+    expect(parseRestoreApplyConfirmation(confirmation)).toEqual(confirmation);
+    expect(() => RestoreApplyConfirmationSchema.parse({ ...confirmation, approved: false })).toThrow();
+  });
+
+  it('rejects unsafe approval fields and unknown properties', () => {
+    const confirmation = {
+      schemaVersion: RESTORE_APPLY_CONFIRMATION_SCHEMA_VERSION,
+      confirmationId: 'confirm_20260805',
+      planId: restorePlan.planId,
+      approved: true as const,
+      confirmedAt: '2026-08-05T00:01:30.000Z',
+    };
+    expect(() => RestoreApplyConfirmationSchema.parse({ ...confirmation, apiKey: 'sk-test' })).toThrow();
+    expect(() => RestoreApplyConfirmationSchema.parse({ ...confirmation, confirmationId: 'C:\\secret' })).toThrow();
   });
 
   it('keeps restore results fail-closed and preserves the previous revision', () => {

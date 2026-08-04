@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const BACKUP_MANIFEST_SCHEMA_VERSION = 'ready4vibe_backup_manifest_v1' as const;
 export const RESTORE_PLAN_SCHEMA_VERSION = 'ready4vibe_restore_plan_v1' as const;
+export const RESTORE_APPLY_CONFIRMATION_SCHEMA_VERSION = 'ready4vibe_restore_apply_confirmation_v1' as const;
 export const RESTORE_RESULT_SCHEMA_VERSION = 'ready4vibe_restore_result_v1' as const;
 export const RECOVERY_STATUS_SCHEMA_VERSION = 'ready4vibe_recovery_status_v1' as const;
 export const DIAGNOSTIC_BUNDLE_SCHEMA_VERSION = 'ready4vibe_diagnostic_bundle_v1' as const;
@@ -11,6 +12,7 @@ const SAFE_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const WORKSPACE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
 const BACKUP_ID = /^backup_[A-Za-z0-9_-]{8,128}$/u;
 const RESTORE_PLAN_ID = /^restore_[A-Za-z0-9_-]{8,128}$/u;
+const RESTORE_CONFIRMATION_ID = /^confirm_[A-Za-z0-9_-]{8,128}$/u;
 const DIAGNOSTIC_ID = /^diag_[A-Za-z0-9_-]{8,128}$/u;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
@@ -116,6 +118,17 @@ export const RestorePlanSchema = z.object({
   addPrivacyIssues(value, context);
 });
 export type RestorePlan = z.infer<typeof RestorePlanSchema>;
+
+export const RestoreApplyConfirmationSchema = z.object({
+  schemaVersion: z.literal(RESTORE_APPLY_CONFIRMATION_SCHEMA_VERSION),
+  confirmationId: z.string().regex(RESTORE_CONFIRMATION_ID, 'confirmationId is not bounded'),
+  planId: z.string().regex(RESTORE_PLAN_ID, 'planId is not bounded'),
+  approved: z.literal(true),
+  confirmedAt: timestamp,
+}).strict().superRefine((value, context) => {
+  addPrivacyIssues(value, context);
+});
+export type RestoreApplyConfirmation = z.infer<typeof RestoreApplyConfirmationSchema>;
 
 export const RestoreResultStatusSchema = z.enum(['staged', 'applied', 'rejected', 'failed', 'manual-recovery-required']);
 export type RestoreResultStatus = z.infer<typeof RestoreResultStatusSchema>;
@@ -265,6 +278,10 @@ export function parseBackupManifest(input: unknown): BackupManifest {
 
 export function parseRestorePlan(input: unknown): RestorePlan {
   return RestorePlanSchema.parse(input);
+}
+
+export function parseRestoreApplyConfirmation(input: unknown): RestoreApplyConfirmation {
+  return RestoreApplyConfirmationSchema.parse(input);
 }
 
 export function parseRestoreResult(input: unknown): RestoreResult {
