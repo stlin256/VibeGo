@@ -16,6 +16,7 @@ import { InMemoryGitSettingsManager } from './git-settings.js';
 import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervisor.js';
+import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -58,6 +59,7 @@ try {
 }
 const modelSettings = new InMemoryModelSettingsManager();
 let agentMemorySettings!: AgentMemorySettingsManager;
+let agentMemoryKnowledgeSettings!: AgentMemoryKnowledgeSettingsManager;
 const agentMemoryRuntime = new TencentMemoryRuntimeSupervisor({
   runtimeRoot: join(dataDir, 'agent-memory-runtime'),
   settings: () => agentMemorySettings.settingsSnapshot(),
@@ -71,7 +73,12 @@ try {
     // settings, Web responses, events, or the memory sidecar state directory.
     modelProviderFactory: () => modelSettings.provider.snapshot(),
   });
+  agentMemoryKnowledgeSettings = new AgentMemoryKnowledgeSettingsManager({
+    settings: settingsStore,
+    environment: process.env,
+  });
 } catch (error) {
+  if (agentMemorySettings) await agentMemorySettings.close().catch(() => undefined);
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -87,6 +94,7 @@ const runManager = new RunManager({
   toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   agentMemorySettings,
+  agentMemoryKnowledgeSettings,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {
@@ -94,6 +102,7 @@ try {
   await agentMemorySettings.start();
 } catch (error) {
   await agentMemorySettings.close();
+  await agentMemoryKnowledgeSettings.close();
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -112,6 +121,7 @@ const server = createDaemonServer({
   sandboxSettings,
   workspaceRegistry,
   agentMemorySettings,
+  agentMemoryKnowledgeSettings,
   goalEventStore,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
@@ -124,9 +134,11 @@ server.listen(port, host, () => {
 const shutdown = (): void => {
   server.close(() => {
     void agentMemorySettings.close().finally(() => {
-      settingsStore.close();
-      goalEventStore.close();
-      eventStore.close();
+      void agentMemoryKnowledgeSettings.close().finally(() => {
+        settingsStore.close();
+        goalEventStore.close();
+        eventStore.close();
+      });
     });
   });
 };

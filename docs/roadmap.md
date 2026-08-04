@@ -231,7 +231,8 @@ React smoke test、CSS contract test 和可用性为准。
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
 TencentDB Agent Memory 独立 sidecar + ready4vibe 原生 `AgentMemoryProvider` + Web
 开关 + GitHub 上游自动构建/切换/回滚。`off` 模式保持现有行为，`memory-core` 是首选
-MVP；`proxy` 已完成显式 endpoint adapter，`full-stack` 与 Knowledge 后置。TencentDB 只负责长期记忆和知识派生层，Goal/
+MVP；`proxy` 已完成显式 endpoint adapter，Knowledge 已完成可选 settings/run context，完整
+`full-stack` 与 Knowledge 工具化后置。TencentDB 只负责长期记忆和知识派生层，Goal/
 Todo/Gate/Evidence、run/approval/sandbox/scheduler 仍由 ready4vibe 作为事实源。
 
 实现顺序为：contract/Noop → MemoryCore adapter → Web Settings/status →
@@ -275,5 +276,7 @@ Phase 5 同时增加独立的 MemoryKnowledge 只读 adapter：它通过 `/v3/to
 `/v3/tools/call` 提供 Wiki/CodeGraph descriptor 和静态只读白名单，执行 bounded、
 可取消、privacy-checked 的调用，并转换为 untrusted retrieval `ContextItem`。它不注册
 任意 ToolRuntime，不进入默认 run 创建路径，也不改变 Goal/run/Scheduler/Approval/Sandbox
-事实源。Knowledge 应用服务配置、审批/资源预算、Proxy sidecar 自动构建/切换和运营 history
-仍是后续阶段。
+事实源。Phase 6a 已增加独立 `agent-memory-knowledge/v1` 资源 settings、认证 probe、
+`autoRetrieve=false` 默认值和新 run snapshot 的可选 bounded context 注入；它仍不注册
+任意 ToolRuntime，结果仍受 ContextManager 字节预算和 untrusted trust 标记约束。Proxy
+sidecar 自动构建/切换、Knowledge 工具化和运营 history 仍是后续阶段。

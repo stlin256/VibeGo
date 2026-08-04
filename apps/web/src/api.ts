@@ -1,4 +1,4 @@
-import type { AgentMemoryMode, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -220,6 +220,8 @@ export interface SandboxSettingsStatus {
 export type AgentMemorySettingsStatus = AgentMemorySettingsStatusContract;
 export type AgentMemorySettingsMode = AgentMemoryMode;
 export type AgentMemorySettingsPatchInput = AgentMemorySettingsPatch;
+export type AgentMemoryKnowledgeSettingsStatus = AgentMemoryKnowledgeSettingsStatusContract;
+export type AgentMemoryKnowledgeSettingsPatchInput = AgentMemoryKnowledgeSettingsPatch;
 
 export interface StoredEvent {
   version: 1;
@@ -322,6 +324,18 @@ export class ApiClient {
 
   async rollbackAgentMemory(): Promise<AgentMemorySettingsStatus> {
     return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory/rollback', { method: 'POST' });
+  }
+
+  async agentMemoryKnowledgeSettings(): Promise<AgentMemoryKnowledgeSettingsStatus> {
+    return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge', { method: 'GET' });
+  }
+
+  async patchAgentMemoryKnowledgeSettings(input: AgentMemoryKnowledgeSettingsPatchInput): Promise<AgentMemoryKnowledgeSettingsStatus> {
+    return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async probeAgentMemoryKnowledge(): Promise<AgentMemoryKnowledgeSettingsStatus> {
+    return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge/probe', { method: 'POST' });
   }
 
   async toolSettings(): Promise<ToolSettingsStatus> {

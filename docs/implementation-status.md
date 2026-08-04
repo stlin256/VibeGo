@@ -47,12 +47,13 @@
 39. `apps/daemon` 已实现 Agent Memory Phase 3 `TencentMemoryRuntimeSupervisor`：current/previous/candidate 不可变目录、upstream ref/manifest 兼容检查、frozen install、build/typecheck、临时端口 health、MemoryCore smoke、原子切换、串行 update/rollback/timer/webhook queue、切换后回退、bounded `state/update.json` 重启恢复和 Windows 子进程/端口生命周期测试；supervisor 只在 application-service 边界工作，不动态加载 upstream，不修改既有 run/Goal 事实源。
 40. `apps/daemon` 已实现 Agent Memory Phase 4 bounded run integration：RunManager 为新 run 冻结 provider/identity/revision snapshot，bounded recall 转为 `ContextItem(source='retrieval')` 并交给 ContextManager 裁剪；终态只异步提交 compact summary/outcome/evidence refs，recall/write failure 不改变 run 结果，settings toggle 不影响已启动 run。
 41. `apps/daemon` 与 `packages/model-openai` 已实现 Agent Memory Phase 5 显式 Proxy adapter：MemoryProxy 使用完整 chat path 和 `/health`，identity headers 经过 bounded 校验，Proxy-owned recall/write 为 validated no-op；新 run 冻结 dual memory/model provider，Proxy 首字节前失败可按策略回退直连，部分流不会重放，4xx/secret/privacy/timeout/并发均有测试。`apps/daemon` 同时提供独立 `MemoryKnowledgeProvider`：只读 Wiki/CodeGraph descriptor 与工具白名单经 `/v3/tools/list`/`/v3/tools/call` 适配，bounded/cancellable/privacy-checked 结果转换为 untrusted retrieval `ContextItem`，不注册任意 ToolRuntime，也不接入默认 run 路径。
-42. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+42. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6a：独立 `agent-memory-knowledge/v1` settings、SQLite/InMemory persistence、authenticated GET/PATCH/probe、lazy environment/injected provider creation、bounded `search` retrieval 和 new-run snapshot isolation。默认 disabled/off 不创建 provider、不发 HTTP、不改 prompt；knowledge errors fail-soft，Web 不显示 endpoint、secret、原始响应或绝对路径。
+43. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，288 个测试全部通过（contracts 15、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 95、web 38；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试；
+- `pnpm test`：通过，297 个测试全部通过（contracts 17、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 102、web 40；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试，以及 Phase 6a Knowledge settings/probe/run snapshot/Web 测试；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -170,8 +171,8 @@ hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
 The verification baseline before the Web projection slice was 20 workspace packages
-and 206 passing tests. The current verification is 20 workspace packages and 288
-passing tests (Web 38, daemon 95, storage 17, contracts 15, workspaces 7).
+and 206 passing tests. The current verification is 20 workspace packages and 297
+passing tests (Web 40, daemon 102, storage 17, contracts 17, workspaces 7).
 Specs 36–39 add
 durable non-secret workspace settings, ratio-first layout contracts, and the
 conversation-first composer/focus contract plus the Agent Memory Phase 0
@@ -196,5 +197,7 @@ bounded/cancellable/privacy-checked HTTP decoding, and converts accepted output
 to untrusted retrieval `ContextItem` candidates. It is not an arbitrary
 `ToolRuntime`, is not on the default run creation path, and does not change
 Goal/run/Scheduler/Approval/Sandbox authorities. Knowledge application-service
-configuration, approval/resource budgets, automatic Proxy sidecar build/switch,
-and operations history remain later work.
+settings and optional run injection are implemented as Phase 6a. Knowledge
+remains a retrieval-only adapter: automatic Proxy sidecar build/switch, arbitrary
+ToolRuntime registration, approval/resource expansion and operations history
+remain later work.

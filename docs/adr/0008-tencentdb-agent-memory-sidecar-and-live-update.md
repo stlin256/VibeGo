@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration 与 Phase 5 Proxy/MemoryKnowledge adapter 已落地；Knowledge 工具化仍后置）
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy/MemoryKnowledge adapter 与 Phase 6a Knowledge settings/run context 已落地；Knowledge 工具化仍后置）
 - 日期：2026-08-04
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
@@ -178,6 +178,31 @@ malformed/schema、secret-shaped 内容或绝对路径都只产生 bounded degra
 本阶段不把知识资源 ID、sidecar endpoint 或 credential 加入 durable settings，也不在
 默认 run 创建路径自动触发知识检索；后续应用服务必须先补充显式资源配置、审批/资源预算
 和回归测试，才可将它作为可选的 run context source。
+
+### 7.3 Phase 6a 的 Knowledge settings 与 application-service 边界
+
+Phase 6a 使用独立的 `agent-memory-knowledge/v1` settings，不修改既有
+`agent-memory/v1` schema。仅保存 `enabled`、`knowledgeId`、`autoRetrieve` 和 bounded
+`maxItems/maxBytes/timeoutMs`；endpoint、service id、credential、原始 tool response、
+绝对路径和完整 transcript 留在 daemon/adapter 边界之外。默认关闭且不自动发网络请求。
+
+通过现有认证 API 提供 GET/PATCH 与 probe。probe 只执行 `tools/list` 并返回脱敏的 resource
+type/name、只读 descriptor 摘要、健康时间和稳定错误码。RunManager 可选接收
+knowledge settings manager，在新 run 创建时冻结 provider/resource/limits；只有
+`autoRetrieve=true` 才执行一次 bounded retrieval，结果标记为 untrusted retrieval
+context 后交给 ContextManager。settings 切换不影响在途 run。
+
+这个 application-service port 不修改 AgentLoop 核心状态机，也不让 MemoryKnowledge 成为
+任意 ToolRuntime；所有错误均 fail-soft，不能覆盖模型/tool/approval 原始结果。Goal、
+`goal_events`、`run_events`、Scheduler、Approval、Sandbox、WorkspaceRegistry 仍是事实源。
+
+Phase 6a 已按上述边界实现：settings manager 使用现有 `daemon_settings` 事务，provider
+只从注入依赖或 daemon 环境惰性创建；新 run 在 RunManager application-service 层冻结
+provider、resource ID 和 limits，`search` 召回结果经过现有 ContextManager 前的 bounded
+untrusted projection。关闭、sidecar down、timeout、schema/privacy 和 probe 失败均只返回
+脱敏 degraded status。Web 仅展示资源 ID、限额、descriptor 摘要和 probe 状态；未增加新的
+逐 run 确认，也未修改 AgentLoop、run_events/goal_events、Scheduler、Approval、Sandbox
+或 WorkspaceRegistry。
 
 ## 被拒绝的方案
 

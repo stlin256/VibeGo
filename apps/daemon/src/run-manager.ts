@@ -2,6 +2,9 @@ import { v7 as uuidv7 } from 'uuid';
 import {
   AgentMemoryRecallRequestSchema,
   AgentMemoryRecallResultSchema,
+  AgentMemoryKnowledgeCallRequestSchema,
+  AgentMemoryKnowledgeResultSchema,
+  type AgentMemoryKnowledgeToolList,
   AgentMemoryWriteRequestSchema,
   parseRunConfig,
   type AgentMemoryRecallResult,
@@ -17,6 +20,9 @@ import type { ContextItem } from '@ready4vibe/context';
 import { AgentLoop, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ToolRuntime } from '@ready4vibe/agent';
 import { Scheduler } from '@ready4vibe/scheduler';
 import type { AgentMemoryRunSnapshot, AgentMemorySettingsManager } from './agent-memory-settings.js';
+import type { AgentMemoryKnowledgeRunSnapshot } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import { knowledgeResultToContextItems } from './memory-knowledge-provider.js';
 
 export type RunEventListener = (event: StoredEvent) => void;
 
@@ -50,6 +56,7 @@ export interface RunManagerOptions {
   schedulerPolicy?: SchedulerPolicy;
   workspaceExists?: (workspaceId: string) => boolean;
   agentMemorySettings?: AgentMemorySettingsManager;
+  agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
 }
 
 export class RunManagerError extends Error {
@@ -68,6 +75,7 @@ export class RunManager {
   private readonly toolRuntimeForRun: (config: RunConfig) => ToolRuntime | undefined;
   private readonly workspaceExists: (workspaceId: string) => boolean;
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
+  private readonly agentMemoryKnowledgeSettings: AgentMemoryKnowledgeSettingsManager | undefined;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
@@ -77,6 +85,7 @@ export class RunManager {
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
+    this.agentMemoryKnowledgeSettings = options.agentMemoryKnowledgeSettings;
     this.scheduler = options.scheduler ?? new Scheduler(options.schedulerPolicy ?? {
       maxActiveRuns: 2,
       maxActiveModelCalls: 2,
@@ -102,8 +111,12 @@ export class RunManager {
     this.controllers.set(runId, controller);
     const capturedToolRuntime = this.toolRuntimeForRun(config);
     const capturedMemory = this.agentMemorySettings?.createRunSnapshot(config.createdBySessionId);
+    const capturedKnowledge = this.agentMemoryKnowledgeSettings?.createRunSnapshot();
     const memoryContext = capturedMemory
       ? await this.recallMemory(capturedMemory, config, runId, controller.signal)
+      : [];
+    const knowledgeContext = capturedKnowledge
+      ? await this.recallKnowledge(capturedKnowledge, config, runId, controller.signal)
       : [];
     const promise = this.agentLoop.run({
       runId,
@@ -111,19 +124,25 @@ export class RunManager {
       signal: controller.signal,
       modelProvider: capturedMemory?.modelProvider ?? this.modelProviderForRun(),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
-      ...(memoryContext.length > 0 ? { contextItems: memoryContext } : {}),
+      ...([...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...memoryContext, ...knowledgeContext] } : {}),
     });
     void promise.then((result) => {
       this.completions.set(runId, result);
       this.controllers.delete(runId);
       if (capturedMemory) {
         void this.writeMemory(capturedMemory, config, result)
-          .finally(() => capturedMemory.dispose())
+          .finally(async () => {
+            await capturedMemory.dispose();
+            await capturedKnowledge?.dispose();
+          })
           .catch(() => undefined);
+      } else if (capturedKnowledge) {
+        void capturedKnowledge.dispose().catch(() => undefined);
       }
     }).catch(() => {
       this.controllers.delete(runId);
       if (capturedMemory) void capturedMemory.dispose().catch(() => undefined);
+      if (capturedKnowledge) void capturedKnowledge.dispose().catch(() => undefined);
     });
     // AgentLoop writes run.created synchronously before its first await, so a
     // follow-up GET can observe a real snapshot as soon as 202 is returned.
@@ -308,6 +327,53 @@ export class RunManager {
       // state; run_events already contains the authoritative terminal result.
     }
   }
+
+  private async recallKnowledge(
+    snapshot: AgentMemoryKnowledgeRunSnapshot,
+    config: RunConfig,
+    runId: string,
+    parentSignal: AbortSignal,
+  ): Promise<readonly ContextItem[]> {
+    const controller = new AbortController();
+    const onAbort = (): void => controller.abort();
+    parentSignal.addEventListener('abort', onAbort, { once: true });
+    let resolveTimeout!: () => void;
+    const timeout = new Promise<void>((resolve) => { resolveTimeout = resolve; });
+    const timer = setTimeout(() => {
+      controller.abort();
+      resolveTimeout();
+    }, snapshot.timeoutMs);
+    try {
+      const listed = await Promise.race([
+        snapshot.provider.listTools({ knowledgeId: snapshot.knowledgeId, signal: controller.signal }),
+        timeout.then(() => undefined),
+      ]) as AgentMemoryKnowledgeToolList | undefined;
+      if (!listed || listed.degraded || !listed.tools.some((tool) => tool.name === 'search')) return [];
+      const request = AgentMemoryKnowledgeCallRequestSchema.parse({
+        knowledgeId: snapshot.knowledgeId,
+        toolName: 'search',
+        params: { query: truncateUtf8(config.userMessage, KNOWLEDGE_QUERY_MAX_BYTES) },
+        maxItems: snapshot.maxItems,
+        maxBytes: Math.min(snapshot.maxBytes, Math.max(256, Math.floor(config.limits.maxContextBytes / 2))),
+        signal: controller.signal,
+      });
+      const result = await Promise.race([
+        snapshot.provider.call(request),
+        timeout.then(() => undefined),
+      ]);
+      if (!result) return [];
+      const parsed = AgentMemoryKnowledgeResultSchema.parse(result);
+      if (parsed.degraded) return [];
+      return knowledgeResultToContextItems(parsed, runId);
+    } catch {
+      // Knowledge is an optional retrieval enhancement. Timeouts, protocol
+      // errors, privacy failures, and sidecar outages never fail the run.
+      return [];
+    } finally {
+      clearTimeout(timer);
+      parentSignal.removeEventListener('abort', onAbort);
+    }
+  }
 }
 
 export class ObservableEventStore implements EventStore {
@@ -400,6 +466,7 @@ const MEMORY_RECALL_MAX_BYTES = 8 * 1024;
 const MEMORY_QUERY_MAX_BYTES = 8 * 1024;
 const MEMORY_WRITE_SUMMARY_MAX_BYTES = 8 * 1024;
 const MEMORY_RECALL_TIMEOUT_MS = 750;
+const KNOWLEDGE_QUERY_MAX_BYTES = 8 * 1024;
 const SAFE_WORKSPACE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
 
 function toMemoryContextItems(result: AgentMemoryRecallResult, runId: string): ContextItem[] {

@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import './styles.css';
@@ -30,6 +30,10 @@ export interface AppProps {
   onProbeAgentMemory?: () => Promise<void> | void;
   onUpdateAgentMemory?: () => Promise<void> | void;
   onRollbackAgentMemory?: () => Promise<void> | void;
+  agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsStatus;
+  agentMemoryKnowledgeSettingsUnavailable?: boolean;
+  onPatchAgentMemoryKnowledgeSettings?: (input: AgentMemoryKnowledgeSettingsPatchInput) => Promise<void> | void;
+  onProbeAgentMemoryKnowledge?: () => Promise<void> | void;
   toolSettings?: ToolSettingsStatus;
   toolSettingsUnavailable?: boolean;
   onSetFilesystemToolsEnabled?: (enabled: boolean) => Promise<void> | void;
@@ -51,7 +55,7 @@ export interface AppProps {
   onRefreshGoalProjection?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
@@ -67,6 +71,13 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [memoryIntervalMinutes, setMemoryIntervalMinutes] = useState(60);
   const [memoryFallback, setMemoryFallback] = useState(true);
   const [memoryBusy, setMemoryBusy] = useState(false);
+  const [knowledgeEnabled, setKnowledgeEnabled] = useState(false);
+  const [knowledgeId, setKnowledgeId] = useState('wiki_demo');
+  const [knowledgeAutoRetrieve, setKnowledgeAutoRetrieve] = useState(false);
+  const [knowledgeMaxItems, setKnowledgeMaxItems] = useState(8);
+  const [knowledgeMaxBytes, setKnowledgeMaxBytes] = useState(8 * 1024);
+  const [knowledgeTimeoutMs, setKnowledgeTimeoutMs] = useState(750);
+  const [knowledgeBusy, setKnowledgeBusy] = useState(false);
   const [toolToggleBusy, setToolToggleBusy] = useState(false);
   const [gitToggleBusy, setGitToggleBusy] = useState(false);
   const [sandboxProvider, setSandboxProvider] = useState<'docker' | 'podman'>('docker');
@@ -98,6 +109,16 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setMemoryIntervalMinutes(settings.updateIntervalMinutes);
     setMemoryFallback(settings.fallbackToDirectProvider);
   }, [agentMemorySettings?.settings]);
+  useEffect(() => {
+    const settings = agentMemoryKnowledgeSettings?.settings;
+    if (!settings) return;
+    setKnowledgeEnabled(settings.enabled);
+    setKnowledgeId(settings.knowledgeId);
+    setKnowledgeAutoRetrieve(settings.autoRetrieve);
+    setKnowledgeMaxItems(settings.maxItems);
+    setKnowledgeMaxBytes(settings.maxBytes);
+    setKnowledgeTimeoutMs(settings.timeoutMs);
+  }, [agentMemoryKnowledgeSettings?.settings]);
   useEffect(() => {
     if (sandboxSettings?.provider) setSandboxProvider(sandboxSettings.provider);
     if (sandboxSettings?.imageDigest) setSandboxImageDigest(sandboxSettings.imageDigest);
@@ -136,6 +157,18 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     if (!action) return;
     setMemoryBusy(true);
     try { await action(); } catch { /* Parent renders a safe error. */ } finally { setMemoryBusy(false); }
+  };
+  const saveAgentMemoryKnowledgeSettings = async (): Promise<void> => {
+    if (!onPatchAgentMemoryKnowledgeSettings) return;
+    setKnowledgeBusy(true);
+    try {
+      await onPatchAgentMemoryKnowledgeSettings({ enabled: knowledgeEnabled, knowledgeId, autoRetrieve: knowledgeAutoRetrieve, maxItems: knowledgeMaxItems, maxBytes: knowledgeMaxBytes, timeoutMs: knowledgeTimeoutMs });
+    } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setKnowledgeBusy(false); }
+  };
+  const probeAgentMemoryKnowledge = async (): Promise<void> => {
+    if (!onProbeAgentMemoryKnowledge) return;
+    setKnowledgeBusy(true);
+    try { await onProbeAgentMemoryKnowledge(); } catch { /* Parent renders a safe error. */ } finally { setKnowledgeBusy(false); }
   };
   const toggleFilesystemTools = async (enabled: boolean): Promise<void> => {
     if (!onSetFilesystemToolsEnabled) return;
@@ -282,6 +315,19 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                   <div className="inline-actions"><button type="button" disabled={memoryBusy} onClick={() => { void saveAgentMemorySettings(); }}>Save memory settings</button><button type="button" disabled={memoryBusy} onClick={() => { void runAgentMemoryAction(onProbeAgentMemory); }}>Probe</button><button type="button" disabled={memoryBusy} onClick={() => { void runAgentMemoryAction(onUpdateAgentMemory); }}>Update</button><button className="cancel-button" type="button" disabled={memoryBusy} onClick={() => { void runAgentMemoryAction(onRollbackAgentMemory); }}>Roll back</button></div>
                 </> : <p className="muted">Pair with the daemon to configure optional memory.</p>}
               </div>
+              <div className="tool-setup knowledge-setup" aria-label="Agent memory knowledge setup">
+                <div className="eyebrow">KNOWLEDGE RETRIEVAL</div>
+                {agentMemoryKnowledgeSettingsUnavailable ? <p className="muted">Knowledge settings are unavailable; normal runs are unaffected.</p> : agentMemoryKnowledgeSettings ? <>
+                  <label className="toggle-row"><input type="checkbox" checked={knowledgeEnabled} disabled={knowledgeBusy} onChange={(event) => setKnowledgeEnabled(event.target.checked)} /><span>Enable optional knowledge resource</span></label>
+                  <p className="muted">Only explicit, bounded Wiki/CodeGraph retrieval is allowed. Results are untrusted context and never become tools or permissions.</p>
+                  <label>Resource ID<input value={knowledgeId} disabled={knowledgeBusy} onChange={(event) => setKnowledgeId(event.target.value)} placeholder="wiki_demo" autoComplete="off" /></label>
+                  <label className="toggle-row"><input type="checkbox" checked={knowledgeAutoRetrieve} disabled={knowledgeBusy || !knowledgeEnabled} onChange={(event) => setKnowledgeAutoRetrieve(event.target.checked)} /><span>Retrieve once for each new run</span></label>
+                  <div className="inline-actions"><label>Max items<input type="number" min={1} max={64} value={knowledgeMaxItems} disabled={knowledgeBusy} onChange={(event) => setKnowledgeMaxItems(clampKnowledgeLimit(event.target.value, 1, 64, 8))} /></label><label>Max bytes<input type="number" min={256} max={131072} value={knowledgeMaxBytes} disabled={knowledgeBusy} onChange={(event) => setKnowledgeMaxBytes(clampKnowledgeLimit(event.target.value, 256, 131072, 8192))} /></label><label>Timeout (ms)<input type="number" min={50} max={10000} value={knowledgeTimeoutMs} disabled={knowledgeBusy} onChange={(event) => setKnowledgeTimeoutMs(clampKnowledgeLimit(event.target.value, 50, 10000, 750))} /></label></div>
+                  <p className="muted">Status: {agentMemoryKnowledgeSettings.available ? 'ready' : agentMemoryKnowledgeSettings.degraded ? `degraded${agentMemoryKnowledgeSettings.lastErrorCode ? ` · ${agentMemoryKnowledgeSettings.lastErrorCode}` : ''}` : 'not probed'} · {agentMemoryKnowledgeSettings.resourceName ?? 'resource not probed'} · revision {agentMemoryKnowledgeSettings.sourceRevision ?? 'none'}</p>
+                  {agentMemoryKnowledgeSettings.tools.length > 0 && <p className="muted">Read-only tools: {agentMemoryKnowledgeSettings.tools.map((tool) => tool.name).join(', ')}</p>}
+                  <div className="inline-actions"><button type="button" disabled={knowledgeBusy} onClick={() => { void saveAgentMemoryKnowledgeSettings(); }}>Save knowledge settings</button><button type="button" disabled={knowledgeBusy || !knowledgeEnabled} onClick={() => { void probeAgentMemoryKnowledge(); }}>Probe knowledge</button></div>
+                </> : <p className="muted">Pair with the daemon to configure optional knowledge retrieval.</p>}
+              </div>
               <div className="tool-setup" aria-label="Filesystem tool setup">
                 <div className="eyebrow">TOOL ACCESS</div>
                 {toolSettingsUnavailable ? <p className="muted">Tool settings are unavailable until the daemon exposes the authenticated adapter.</p> : toolSettings ? <>
@@ -371,6 +417,12 @@ function clampLimit(key: keyof RunProfile['limits'], value: string): number {
   if (!Number.isFinite(parsed)) return 1;
   const maximum = key === 'maxTurns' ? 50 : key === 'maxWallTimeMs' ? 1_800_000 : key === 'maxToolCalls' ? 200 : Number.MAX_SAFE_INTEGER;
   return Math.min(maximum, Math.max(1, Math.floor(parsed)));
+}
+
+function clampKnowledgeLimit(value: string, minimum: number, maximum: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.floor(parsed)));
 }
 
 const MAX_TOOL_OUTPUT_CARDS = 24;

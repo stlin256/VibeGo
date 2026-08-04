@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy 与 MemoryKnowledge adapter implemented；Knowledge 工具化与运营增强仍后置
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy 与 MemoryKnowledge adapter、Phase 6a Knowledge settings/run context implemented；Knowledge 工具化与运营增强仍后置
 - 日期：2026-08-04
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -109,7 +109,7 @@ scheduler, SSE stream, or run admission gate.
 | --- | --- | --- | --- |
 | MemoryCore | L0/L1/L2/L3 记忆、记忆元数据、召回和写回 | Node.js/TypeScript；Node >=22.16；HTTP Gateway 默认 `8420`；SQLite/本地文件 | 首选方式：独立进程 + `@tencentdb-agent-memory/memory-sdk-ts-v2` |
 | MemoryProxy | 透明转发 OpenAI/Anthropic，请求前注入记忆、请求后写回 | 默认端口 `8096`；对上游模型提供代理入口 | 可选兼容方式：专用 Proxy Provider，不直接拼接现有 Provider URL |
-| MemoryKnowledge | Wiki、CodeGraph、异步索引及知识工具 | 默认端口 `8421`；`/v3/tools/list`、`/v3/tools/call` | daemon-local 只读 Adapter；应用服务注入后置，不改变 Goal 事实源 |
+| MemoryKnowledge | Wiki、CodeGraph、异步索引及知识工具 | 默认端口 `8421`；`/v3/tools/list`、`/v3/tools/call` | daemon-local 只读 Adapter；Phase 6a 可选注入 bounded context，不改变 Goal 事实源 |
 
 MemoryCore v3 请求需要 `teamId`、`agentId`、`userId`，`sessionId` 可选。ready4vibe
 必须显式维护这组身份映射，不从原始 prompt 或任意浏览器字段推导。MemoryCore 负责
@@ -393,9 +393,9 @@ data-plane recall/write port and does not import upstream modules. The adapter:
   candidates. The caller must still pass them through `ContextManager`; raw
   output is not written to run/Goal events and the adapter does not register a
   `ToolRuntime` or grant approval/sandbox authority;
-- remains daemon-local in this phase. Knowledge resource settings, automatic
-  sidecar supervision and automatic run injection are deferred until a later
-  application-service slice supplies explicit resource policy and tests.
+- remains daemon-local in this phase. Resource settings and optional new-run
+  injection are supplied by the Phase 6a application service; automatic sidecar
+  supervision and arbitrary ToolRuntime registration remain deferred.
 
 ## 9. Runtime Supervisor 与 revision 切换
 
@@ -645,7 +645,70 @@ AgentLoop 创建 run。
 - ✅ 覆盖 unknown/management tool、timeout、5xx、malformed/schema、超大响应、AbortSignal
   和 secret/绝对路径 privacy fixture；不把它接入默认 run 创建路径。
 
-### Phase 6：运营与上游兼容
+### Phase 6a：Knowledge resource settings 与可选 run context
+
+Phase 6a 为 MemoryKnowledge 增加独立的 `agent-memory-knowledge/v1` daemon
+settings 和可选的 bounded run context 注入。它不扩展 `agent-memory/v1`，避免把
+知识资源生命周期与 MemoryCore/Proxy revision 混成一个 settings snapshot。持久化字段为：
+
+```ts
+interface AgentMemoryKnowledgeSettingsV1 {
+  schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1';
+  enabled: boolean;
+  knowledgeId: string;
+  autoRetrieve: boolean;
+  maxItems: number;
+  maxBytes: number;
+  timeoutMs: number;
+}
+```
+
+默认值是 `enabled=false`、`autoRetrieve=false`；resource ID 由用户显式填写，不能从
+prompt、workspace 路径或浏览器身份推导。endpoint、service id 和任何 credential 仍由
+daemon 运行时环境/adapter 提供，不写入 Web response、事件或浏览器存储。settings
+使用独立 namespace/key 和现有 `daemon_settings` 事务边界，未知字段、secret-shaped
+字段、绝对路径、过大限额和非法 ID fail-closed。
+
+增加受现有认证/CSRF/Origin 门禁保护的：
+
+- `GET/PATCH /api/v1/settings/agent-memory/knowledge`；
+- `POST /api/v1/settings/agent-memory/knowledge/probe`，只执行 bounded `tools/list`；
+
+响应只返回 enabled、resource ID、autoRetrieve、limits、resource type/name、只读 tool
+descriptor 摘要、健康时间和稳定 error code，不返回 endpoint、原始响应、绝对路径或
+secret。`autoRetrieve` 只影响新 run；已经创建的 run 冻结 knowledge provider、resource
+ID、revision/descriptor 和 limits。
+
+启用 `autoRetrieve` 后，RunManager 在 AgentLoop 首次模型请求前，以 user message 形成
+bounded query，调用 adapter 的只读 `tools/list` + `tools/call`，将结果转换为
+`ContextItem(source='retrieval', trust='untrusted')`，再交给现有 ContextManager 字节预算
+和裁剪逻辑。knowledge timeout、sidecar down、5xx、schema/privacy/limit failure 都返回
+空 context/degraded telemetry，不阻塞 run；不把结果注册为 ToolRuntime，也不授予
+Approval、Sandbox、Scheduler、Workspace 或 Goal 权限。关闭开关后不创建 provider、不发
+HTTP、不改变默认 interactive run。
+
+#### Phase 6a implementation status (implemented)
+
+- `packages/contracts` exports strict versioned settings, patch, status and run
+  snapshot contracts. IDs, limits, secret-shaped fields and absolute paths are
+  rejected before persistence or transport.
+- `apps/daemon` persists the independent namespace with SQLite/InMemory stores,
+  lazily creates the provider from injected dependencies or daemon environment,
+  and exposes authenticated GET/PATCH/probe routes. The default resource is the
+  explicit bounded fixture `wiki_demo`; endpoint/service ID/credentials remain
+  process-local.
+- `RunManager` freezes the provider/resource/limits for new runs only. It calls
+  the read-only `search` descriptor before `tools/call`, converts successful
+  results to untrusted retrieval context, and fail-softs on timeout, degraded
+  protocol, privacy or sidecar errors. No AgentLoop state-machine, event store,
+  scheduler, approval, sandbox or workspace authority changed.
+- Web Settings exposes the resource ID, auto-retrieve toggle, limits, health and
+  probe action without rendering endpoint, credential, raw response or path.
+- Contract, manager, API, run isolation and Web render tests cover off mode,
+  persistence, probe degradation, bounded context injection and settings
+  snapshot isolation.
+
+### Phase 6b：运营与上游兼容
 
 - 记录 bounded update history、health latency、recall hit/miss、write queue 状态；
 - 针对 upstream 每次 schema/API 变化增加 adapter contract fixture；
@@ -706,7 +769,7 @@ AgentLoop 创建 run。
 
 尚未冻结的产品选择包括：上游默认 ref（branch/tag/commit）、定时检查周期、是否允许
 Proxy 失败时直连 fallback、MemoryKnowledge 的首批查询类型，以及 user/agent ID 与
-未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–4。
+未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–6a。
 
 ## 15. 参考链接
 

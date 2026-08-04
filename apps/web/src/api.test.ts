@@ -152,6 +152,19 @@ describe('ApiClient', () => {
     expect(calls.map((call) => call.input).join('')).not.toContain('apiKey');
   });
 
+  it('uses the independent bounded knowledge settings and probe endpoints', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1', enabled: false, knowledgeId: 'wiki_demo', autoRetrieve: false, maxItems: 8, maxBytes: 8192, timeoutMs: 750 }, available: false, degraded: false, resourceType: null, resourceName: null, sourceRevision: null, tools: [], lastHealthAt: null, lastErrorCode: null };
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.agentMemoryKnowledgeSettings();
+    await client.patchAgentMemoryKnowledgeSettings({ enabled: true, autoRetrieve: true, knowledgeId: 'wiki_demo' });
+    await client.probeAgentMemoryKnowledge();
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/agent-memory/knowledge', '/api/v1/settings/agent-memory/knowledge', '/api/v1/settings/agent-memory/knowledge/probe']);
+    expect(calls[1]?.init?.method).toBe('PATCH');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true, autoRetrieve: true, knowledgeId: 'wiki_demo' }));
+    expect(calls.map((call) => call.input).join('')).not.toMatch(/endpoint|api[_-]?key/iu);
+  });
+
   it('toggles filesystem tools through the authenticated settings endpoint', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

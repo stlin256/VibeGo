@@ -69,6 +69,18 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\Users');
   });
 
+  it('renders the optional knowledge settings card with bounded controls', () => {
+    const html = renderToStaticMarkup(<App agentMemoryKnowledgeSettings={{ schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1', enabled: false, knowledgeId: 'wiki_demo', autoRetrieve: false, maxItems: 8, maxBytes: 8192, timeoutMs: 750 }, available: false, degraded: false, resourceType: null, resourceName: null, sourceRevision: null, tools: [], lastHealthAt: null, lastErrorCode: null }} onPatchAgentMemoryKnowledgeSettings={() => undefined} onProbeAgentMemoryKnowledge={() => undefined} />);
+    expect(html).toContain('KNOWLEDGE RETRIEVAL');
+    expect(html).toContain('Enable optional knowledge resource');
+    expect(html).toContain('Resource ID');
+    expect(html).toContain('Retrieve once for each new run');
+    expect(html).toContain('Save knowledge settings');
+    expect(html).toContain('Probe knowledge');
+    expect(html).not.toContain('endpoint');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders an explicit guarded filesystem toggle without an absolute path', () => {
     const html = renderToStaticMarkup(<App toolSettings={{ filesystemEnabled: false, workspaceLabel: 'workspace', availableTools: [] }} onSetFilesystemToolsEnabled={() => undefined} />);
     expect(html).toContain('Enable guarded filesystem tools');
