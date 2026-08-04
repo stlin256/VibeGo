@@ -6,11 +6,13 @@ import {
   AgentMemoryKnowledgeResultSchema,
   type AgentMemoryKnowledgeToolList,
   AgentMemoryWriteRequestSchema,
+  ModelProviderSnapshotSchema,
   parseRunConfig,
   type AgentMemoryRecallResult,
   type AgentMemoryWriteRequest,
   type EventStore,
   type ModelProvider,
+  type ModelProviderSnapshot,
   type RunConfig,
   type RunStatus,
   type SchedulerPolicy,
@@ -22,6 +24,7 @@ import { Scheduler } from '@ready4vibe/scheduler';
 import type { AgentMemoryRunSnapshot, AgentMemorySettingsManager } from './agent-memory-settings.js';
 import type { AgentMemoryKnowledgeRunSnapshot } from '@ready4vibe/contracts';
 import type { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import type { ModelProviderBinding } from './model-config.js';
 import { knowledgeResultToContextItems } from './memory-knowledge-provider.js';
 
 export type RunEventListener = (event: StoredEvent) => void;
@@ -31,6 +34,7 @@ export interface RunSnapshot {
   runId: string;
   status: RunStatus;
   config: RunConfig;
+  modelSnapshot?: ModelProviderSnapshot;
   lastEventSeq: number;
   output: string;
   approvals: readonly ApprovalRequest[];
@@ -48,7 +52,8 @@ export interface RunSnapshot {
 export interface RunManagerOptions {
   eventStore: EventStore;
   modelProvider: ModelProvider;
-  modelProviderForRun?: () => ModelProvider;
+  modelProviderForRun?: (config: RunConfig) => ModelProvider;
+  modelBindingForRun?: (config: RunConfig) => ModelProviderBinding;
   toolRuntime?: ToolRuntime;
   toolRuntimeForRun?: (config: RunConfig) => ToolRuntime | undefined;
   approvalBroker?: ApprovalBroker;
@@ -71,7 +76,8 @@ export class RunManager {
   readonly scheduler: Scheduler;
   readonly approvalBroker: ApprovalBroker;
   private readonly agentLoop: AgentLoop;
-  private readonly modelProviderForRun: () => ModelProvider;
+  private readonly modelProviderForRun: (config: RunConfig) => ModelProvider;
+  private readonly modelBindingForRun: ((config: RunConfig) => ModelProviderBinding) | undefined;
   private readonly toolRuntimeForRun: (config: RunConfig) => ToolRuntime | undefined;
   private readonly workspaceExists: (workspaceId: string) => boolean;
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
@@ -82,6 +88,7 @@ export class RunManager {
   constructor(options: RunManagerOptions) {
     this.eventStore = new ObservableEventStore(options.eventStore);
     this.modelProviderForRun = options.modelProviderForRun ?? (() => options.modelProvider);
+    this.modelBindingForRun = options.modelBindingForRun;
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
@@ -106,6 +113,9 @@ export class RunManager {
   async start(input: unknown): Promise<{ runId: string; status: 'queued' }> {
     const config = parseRunConfig(input);
     if (!this.workspaceExists(config.workspaceId)) throw new RunManagerError('WORKSPACE_NOT_FOUND', 'Workspace was not found.');
+    const capturedModelBinding: { provider: ModelProvider; snapshot?: ModelProviderSnapshot } = this.modelBindingForRun
+      ? this.modelBindingForRun(config)
+      : { provider: this.modelProviderForRun(config) };
     const runId = `run_${uuidv7()}`;
     const controller = new AbortController();
     this.controllers.set(runId, controller);
@@ -122,7 +132,8 @@ export class RunManager {
       runId,
       config,
       signal: controller.signal,
-      modelProvider: capturedMemory?.modelProvider ?? this.modelProviderForRun(),
+      modelProvider: capturedMemory?.modelProvider ?? capturedModelBinding.provider,
+      ...(!capturedMemory?.modelProvider && capturedModelBinding.snapshot ? { modelSnapshot: capturedModelBinding.snapshot } : {}),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
       ...([...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...memoryContext, ...knowledgeContext] } : {}),
     });
@@ -167,6 +178,7 @@ export class RunManager {
     const created = events.find((event) => event.type === 'run.created');
     const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
     if (!config) return undefined;
+    const modelSnapshot = readModelSnapshot(created?.payload);
     let status: RunStatus = 'created';
     let output = '';
     let final: RunSnapshot['final'];
@@ -196,6 +208,7 @@ export class RunManager {
       runId,
       status,
       config,
+      ...(modelSnapshot ? { modelSnapshot } : {}),
       lastEventSeq: events.at(-1)?.seq ?? 0,
       output,
       approvals: this.approvalBroker.pending(runId),
@@ -426,6 +439,12 @@ function isTerminal(status: RunStatus): boolean {
 
 function isRunConfigPayload(value: unknown): value is { config: RunConfig } {
   return typeof value === 'object' && value !== null && 'config' in value;
+}
+
+function readModelSnapshot(value: unknown): ModelProviderSnapshot | undefined {
+  if (typeof value !== 'object' || value === null || !('modelSnapshot' in value)) return undefined;
+  const parsed = ModelProviderSnapshotSchema.safeParse(value.modelSnapshot);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function isStatusPayload(value: unknown): value is { to: RunStatus } {

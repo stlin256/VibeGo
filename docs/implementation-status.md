@@ -274,14 +274,13 @@ product tree or under ignored `.research/`; no upstream source, prompt, schema,
 UI, proxy, scheduler or runtime was copied. [ADR 0016](adr/0016-clean-room-harness-productionization.md)
 freezes the single-authority, run-snapshot, fail-soft and host-first decisions.
 
-The following work is documented but not implemented yet:
+The following work is documented but not fully implemented yet:
 
 - **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): R1/R2
-  contract, deterministic stream replay, cancellation/retry fixtures and the
-  explicit OpenAI-compatible adapter are in progress. The daemon bridge,
-  multi-turn application verification and opt-in live model smoke remain R3/R4;
-  the current default still uses fake/mock providers and no credential has
-  been written to the repository.
+  contracts, deterministic stream replay, cancellation/retry fixtures,
+  explicit OpenAI-compatible adapter and the R3 daemon bridge are implemented.
+  The opt-in live model smoke remains R4; the default still makes no network
+  request and no credential has been written to the repository.
 - **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): compiled
   approval/sandbox policy, Codex-like bounded auto-approval, Windows process
   tree/container smoke and full Web continuation. Existing adapters remain
@@ -323,6 +322,27 @@ The documentation gate is now followed by a network-free model/context slice:
   existing AgentLoop supplies the model input-token limit and records bounded
   token metadata without changing its state machine or event authority.
 
-`pnpm verify` passes with 396 tests. R3 daemon/application provider wiring and
-R4 opt-in live smoke are intentionally not implemented; credentials remain
-out-of-band and the normal fake-provider path remains available.
+`pnpm verify` previously passed with 396 tests for R1/R2. R3 now adds the
+daemon/application provider binding and application fixture; R4 opt-in live
+smoke remains deferred. Credentials remain out-of-band and the normal
+fake-provider path remains available.
+
+## Spec 47 R3 implementation note (2026-08-04)
+
+The daemon application bridge is now implemented without changing the
+AgentLoop state machine or introducing a second authority:
+
+- `InMemoryModelSettingsManager.bindRun()` returns an in-memory provider and a
+  validated secret-free `ModelProviderSnapshot`;
+- `RunManager` captures the binding before `run.created`, rejects a configured
+  provider mismatch at the authenticated boundary, and keeps the binding for
+  the lifetime of the run;
+- `AgentLoop` records the snapshot in `run.created` and bounded provider,
+  request and descriptor-revision metadata in `model.requested`;
+- daemon tests cover a fake-fetch OpenAI-compatible two-turn/tool-call run,
+  provider-switch isolation, safe mismatch response and event privacy. No
+  network request or durable observability-ledger write occurs in this slice.
+
+R4 live smoke and Spec 50 automatic usage-ledger lifecycle attachment remain
+deferred. Goal admission, `goal_events`, Approval, Sandbox, Scheduler and
+WorkspaceRegistry behavior remain unchanged.

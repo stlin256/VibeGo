@@ -489,6 +489,30 @@ describe('daemon health server', () => {
     expect(await cleared.json()).toMatchObject({ configured: false, source: 'unconfigured' });
   });
 
+  it('rejects a run whose provider selection does not match the captured daemon binding', async () => {
+    const modelSettings = new InMemoryModelSettingsManager({});
+    modelSettings.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    const eventStore = new InMemoryEventStore();
+    const manager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }),
+      modelBindingForRun: (config) => modelSettings.bindRun(config.model),
+    });
+    const server = createDaemonServer({ runManager: manager, modelSettings });
+    servers.push(server);
+    const port = await listen(server);
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(runConfig()),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: { code: 'INVALID_PROVIDER', message: 'The requested model provider is not configured for this daemon.' } });
+    expect(eventStore.listRunIds()).toEqual([]);
+  });
+
   it('serves durable agent-memory settings and keeps provider secrets/paths out of the API', async () => {
     const manager = new AgentMemorySettingsManager({ settings: new InMemorySettingsStore() });
     const server = createDaemonServer({ agentMemorySettings: manager });

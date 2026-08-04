@@ -50,4 +50,38 @@ describe('daemon model configuration', () => {
     expect(before.id).toBe('unconfigured');
     expect(manager.provider.snapshot().id).toBe('openai-compatible');
   });
+
+  it('binds a requested model to a validated secret-free provider snapshot', () => {
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-04T12:00:00.000Z'));
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+
+    const binding = manager.bindRun({ provider: 'openai-compatible', name: 'deepseek-v4-flash' });
+    expect(binding.provider).toBe(manager.provider.snapshot());
+    expect(binding.snapshot).toMatchObject({
+      schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
+      providerId: 'openai-compatible',
+      model: 'deepseek-v4-flash',
+      pricingModel: 'deepseek-v4-flash',
+      endpointPolicy: { kind: 'explicit-url', baseUrl: 'https://api.deepseek.com' },
+      capturedAt: '2026-08-04T12:00:00.000Z',
+    });
+    expect(JSON.stringify(binding.snapshot)).not.toContain('test-secret');
+  });
+
+  it('fails closed when a configured provider does not match the run selection', () => {
+    const manager = new InMemoryModelSettingsManager({});
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+
+    expect(() => manager.bindRun({ provider: 'anthropic', name: 'claude' })).toThrowError(new ModelSettingsError(
+      'INVALID_PROVIDER',
+      'The requested model provider is not configured for this daemon.',
+    ));
+    expect(manager.provider.snapshot().id).toBe('openai-compatible');
+  });
+
+  it('rejects secret-shaped or control-character model selections before snapshot creation', () => {
+    const manager = new InMemoryModelSettingsManager({});
+    expect(() => manager.bindRun({ provider: 'fake', name: 'token=secret-value' })).toThrowError(new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.'));
+    expect(() => manager.bindRun({ provider: 'fake', name: 'model\nname' })).toThrowError(new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.'));
+  });
 });

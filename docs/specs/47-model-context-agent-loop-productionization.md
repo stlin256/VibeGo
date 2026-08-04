@@ -1,6 +1,6 @@
 # Spec 47: Model, context and AgentLoop productionization
 
-- Status: in progress (47-R1/R2 contract and explicit adapter slice)
+- Status: in progress (47-R3 daemon/application bridge)
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 03](03-model-context-contract.md), [Spec 07](07-model-context.md), [Spec 08](08-agent-model-integration.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -25,9 +25,11 @@ host tools by default.
 - The daemon can be configured with a provider, but the repository has not yet
   completed a real LLM API smoke run.
 - The AgentLoop supports multiple turns/tool calls in its contract, while the
-  verified daemon path is still primarily a fake/single-turn path.
-- Usage normalization exists as an observability contract but is not yet
-  automatically attached to every run attempt.
+  verified daemon path still needs a real provider binding and multi-turn
+  application fixture.
+- Usage normalization exists as an observability contract. R3 will make every
+  model attempt identify its provider/request in bounded `run_events`; the
+  durable usage ledger attachment remains the separate Spec 50 boundary.
 
 ## Research gate (47-R0)
 
@@ -148,6 +150,27 @@ observability port, while `run_events` remains the run authority.
 Exit: fake and mock-provider multi-turn/tool-call tests pass, interactive runs
 remain unbound by Goal quota, and cancellation/recovery never repeats a tool.
 
+#### R3 slice boundary (2026-08-04)
+
+The bridge is application-owned and deliberately small:
+
+- `ModelSettingsManager` resolves a requested model provider into a
+  secret-free `ModelProviderSnapshot` and an in-memory provider binding;
+- `RunManager` captures that binding once before starting `AgentLoop`, and
+  rejects a configured-provider mismatch without creating a run;
+- `AgentLoop` records the optional snapshot in the bounded `run.created`
+  payload and adds provider/request identifiers to `model.requested`;
+- the existing scheduler, workspace lease, approval broker, sandbox runtime,
+  `run_events` store and Goal Control remain authoritative;
+- a fake-fetch OpenAI-compatible fixture proves two turns and a tool call
+  through the daemon application service, while provider switching affects only
+  later runs.
+
+No usage ledger writer, Goal admission, live network smoke, or new scheduler is
+introduced by this slice. A provider binding failure is a safe 4xx at the
+authenticated run boundary; an upstream model failure remains the original
+run/model error and is not replaced by observability metadata.
+
 ### 47-R4: opt-in live smoke and diagnostics
 
 Add a separately named command (for example `pnpm smoke:model`) that runs only
@@ -213,7 +236,24 @@ for clean-room OpenAI Responses and Anthropic-shaped fixture translation.
 objective/policy/failure/snapshot items and append-only compaction references;
 the existing AgentLoop passes `maxModelInputTokens` into that budget without
 changing its state transitions. The full repository gate currently passes with
-396 tests. R3 application-provider wiring and R4 live smoke remain deferred.
+402 tests. R3 now adds the daemon binding/snapshot bridge; only R4 live smoke
+and later Spec 50 ledger lifecycle attachment remain deferred.
+
+## 47-R3 implementation update (2026-08-04)
+
+The daemon bridge is implemented as an application-service adapter:
+
+- `InMemoryModelSettingsManager.bindRun()` returns an in-memory provider and a
+  validated `ModelProviderSnapshot` with no API key, headers or absolute path;
+- `RunManager` captures that binding before creating a run and passes the
+  snapshot to the existing `AgentLoop`; configured provider mismatches fail at
+  the authenticated run boundary before `run.created`;
+- `AgentLoop` records the snapshot in `run.created` and bounded provider,
+  request and descriptor-revision metadata in `model.requested` while keeping
+  `run_events` authoritative;
+- daemon tests exercise a fake-fetch OpenAI-compatible two-turn tool call,
+  provider-switch isolation and the safe mismatch response. The fixture never
+  contacts a network and no observability-ledger writer was added.
 
 ## Implementation-agent handoff prompt
 

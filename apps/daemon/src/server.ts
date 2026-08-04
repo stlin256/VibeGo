@@ -839,6 +839,10 @@ async function handleRequest(
         writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'RunConfig validation failed.' } });
         return;
       }
+      if (error instanceof ModelSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
       if (error instanceof RunManagerError) {
         writeJson(response, 400, { error: { code: error.code, message: error.message } });
         return;

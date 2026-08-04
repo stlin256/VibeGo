@@ -402,7 +402,8 @@ application service。真实 LLM smoke 只允许通过独立命令和进程外 s
 当前先完成无网络的 contract、stream replay、retry/cancellation fixture 和显式
 OpenAI-compatible endpoint adapter；该切片已覆盖 provider snapshot、Responses/
 Anthropic-shaped fixture replay、token/byte compaction 与 pre-stream retry，daemon
-bridge 与 live smoke 保持在后续 R3/R4。当前全仓 `pnpm verify` 为 396 tests 通过。
+R3 daemon/application bridge is now implemented; live smoke remains the later
+opt-in R4 command. The current full gate is `pnpm verify` with 402 tests.
 
 ## Spec 48：Approval/Sandbox/Shell runtime closure（规划）
 
@@ -427,6 +428,16 @@ application/RunManager 边界接入唯一 usage ledger、pricing/reconciliation�
 采样和 audit hash-chain；`run_events`、`goal_events`、ledger 与 Web projection 保持独立。
 采样队列、价格缺失和 writer 故障都 fail-soft，用户看到 `unknown/degraded` 而不是虚假的 0；
 任何重试只重试 ledger append，不重试模型/tool/shell。
+
+### Spec 47-R3 implementation update (2026-08-04)
+
+The daemon/application bridge now resolves an explicit provider binding,
+freezes a secret-free provider snapshot per run, and verifies a fake-fetch
+two-turn/tool-call path through `RunManager` and the existing `AgentLoop`.
+Provider switching is isolated to later runs and mismatched configured
+providers fail before `run.created`. This slice keeps Goal admission, Approval,
+Sandbox, Scheduler, WorkspaceRegistry and the durable usage ledger unchanged;
+live provider smoke remains the later opt-in R4 command.
 
 ## Spec 51：Host-first release and client boundary（规划）
 
