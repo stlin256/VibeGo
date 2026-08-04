@@ -436,7 +436,7 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（R1 实施中）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1 已实现）
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
 manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
@@ -444,11 +444,12 @@ progress、cancellation、health（failed/connectivity-only/verified）、能力
 激活。关闭状态不得发起子进程/网络请求，MCP/Skill 失败只能 degraded，不能绕过 Approval、
 Sandbox 或 Scheduler。
 
-49-R1 先交付注入式 transport/session 边界：stdio 使用 argv/env allowlist 与 JSONL
+49-R1 已交付注入式 transport/session 边界：stdio 使用 argv/env allowlist 与 JSONL
 framing，Streamable HTTP 使用精确 manifest URL、bounded headers/response 和可取消 fetch；
 initialize、progress、request-id、401/403/429/5xx、timeout、malformed/oversized、disconnect
-和 deterministic close 都只返回稳定错误/健康元数据。该切片不自动启动、不激活工具，也不进入
-默认 run；后续 R2 再做 capability snapshot/registry。
+和 deterministic close 都只返回稳定错误/健康元数据。`@ready4vibe/skill-mcp` focused
+20 tests 已通过；该切片不自动启动、不激活工具，也不进入默认 run，后续 R2 再做
+capability snapshot/registry。
 
 ## Spec 50：Observability lifecycle integration（规划）
 

@@ -64,7 +64,7 @@
 
 50. Spec 48-R4 的不可信任务审批续接集成 fixture 已补齐：`untrusted-content` + `external-sandbox` + digest image 先产生 `approval.required`，经认证 approve 后只在同一 run 的显式 continuation 点执行一次注入式 container runner；duplicate/deny/cancel/runtime unavailable 均 fail-closed，Web approval card 只展示 bounded provider/digest/network 元数据，不改变 AgentLoop 核心状态机或现有事件事实源。
 
-51. Spec 49-R1 transport slice 实施中：先在 `packages/skill-mcp` 增加注入式 stdio/Streamable HTTP channel factory 与 bounded `McpProtocolSession` contract，覆盖 initialize、progress、request id、timeout/cancel、auth/status 映射和 deterministic close；transport 不创建 ToolRegistry、Approval、Scheduler、Sandbox 或 daemon startup side effect。
+51. Spec 49-R1 transport slice 已实现：`packages/skill-mcp` 提供注入式 `McpStdioChannelFactory`、`McpStreamableHttpChannelFactory` 与 bounded `McpProtocolSession`，覆盖 initialize、progress、request id、timeout/cancel、401/403/429/5xx、malformed/oversized/disconnect 和 deterministic close；20 个 skill-mcp focused tests 已通过。transport 不创建 ToolRegistry、Approval、Scheduler、Sandbox 或 daemon startup side effect；R2 capability snapshot/registry 仍未实现。
 
 ## 验证结果（2026-08-04）
 
@@ -291,10 +291,11 @@ The following work is documented but not fully implemented yet:
   compiler and the R2 injected host-restricted process runner are implemented
   bounded slices. Container smoke and full Web continuation remain later
   phases. Existing daemon shell wiring remains explicit and default-off.
-- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): real
-  stdio/Streamable HTTP transport, health classification, capability snapshot
-  and ToolRegistry activation. Current MCP/Skill transport remains injected
-  one-shot and does not auto-start or access the network.
+- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): R1
+  injected stdio/Streamable HTTP transport and protocol session are now
+  implemented behind fake spawn/fetch ports; capability health classification,
+  snapshot and ToolRegistry activation remain later phases. The daemon still
+  does not auto-start or access MCP transport on startup.
 - **Spec 50** (`specs/50-observability-lifecycle-integration.md`): automatic
   RunManager/application lifecycle wiring for usage, cost, resource samples
   and audit. Current ledgers, collector and API projection are available, but

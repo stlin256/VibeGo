@@ -40,6 +40,17 @@ over tools, approval or sandbox policy.
 - Capability validation, approval and resource scheduling still need the R2/R4
   slices before any MCP tool can execute.
 
+## R1 implementation record
+
+`@ready4vibe/skill-mcp` now ships the decision as native TypeScript: the stdio
+and Streamable HTTP factories accept only injected spawn/fetch ports, while
+`McpProtocolSession` owns initialize, bounded request correlation, progress,
+timeout/cancellation and idempotent close. HTTP status classes are mapped to
+stable `MCP_HTTP_401`, `MCP_HTTP_403`, `MCP_HTTP_429`, `MCP_HTTP_5XX` and bounded
+4xx codes; raw response bodies, headers and runtime auth values never enter an
+error message. The focused package suite uses fake child/fetch ports and does
+not start a process or make a network request.
+
 ## Rejected alternatives
 
 - auto-starting every manifest during daemon boot;
