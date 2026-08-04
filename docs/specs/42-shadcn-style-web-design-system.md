@@ -386,6 +386,26 @@ This slice does not claim screen-reader/manual, Playwright, contrast, or
 physical-device evidence. Existing `hidden` panel, reduced-motion, safe-area,
 ratio and 44px touch-target contracts remain unchanged.
 
+### Phase 42d-2 implementation update (2026-08-05)
+
+The repository now has a fixed `check:web` gate for the Web module. It reuses
+the existing dependency-closure build/typecheck/focused-test runner, then
+checks the generated JavaScript and CSS gzip budgets and runs `git diff --check`.
+The script accepts no arbitrary shell fragments, does not invoke the full
+workspace test suite, and never reads model credentials, browser storage,
+workspace paths, or runtime event data. Bundle inspection is limited to the
+generated `apps/web/dist/assets` files and returns bounded sizes for CI/local
+diagnostics.
+
+The final local run completed with 94 Web tests, JS 80.41 KiB gzip and CSS
+5.90 KiB gzip under the 110/30 KiB budgets; `test:workflow` also passed its 31
+script tests. Vite's informational asset line remains separately recorded by
+the module build and is not used as a second gate.
+
+The gate is a repeatable build/test contract, not visual or physical-device
+evidence. Playwright, screen-reader/manual review, and real-device reports
+remain later acceptance work.
+
 ## 9. 退出条件
 
 本规格完成后：

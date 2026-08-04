@@ -390,6 +390,13 @@ typecheck 和 production build；观测到 JS gzip 82.52 KiB、CSS gzip 6.06 KiB
 覆盖，不创建浏览器请求或第二状态源。该切片只证明自动化键盘语义，不替代真实屏幕
 阅读器、Playwright viewport、对比度或物理设备验收。
 
+42d-2 已固定 `pnpm check:web`：复用 `check:module -- @ready4vibe/web` 的依赖闭包
+build/typecheck/focused tests，再检查 `apps/web/dist/assets` 的 JS/CSS gzip budget 与
+`git diff --check`。脚本只接受固定模块流程，不运行全仓测试、不读取 secret 或运行时事实源；
+它是可重复的工程门禁，不是 viewport、屏幕阅读器或真实设备通过证据。
+最近一次 `check:web` 通过：Web focused 94 tests、typecheck/build、JS 80.41 KiB gzip、
+CSS 5.90 KiB gzip；`test:workflow` 的 31 个脚本测试也通过。
+
 ## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 
 详见 [Spec 43](specs/43-resource-usage-and-cost-audit.md) 与

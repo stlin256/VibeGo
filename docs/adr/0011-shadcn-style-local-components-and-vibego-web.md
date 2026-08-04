@@ -171,3 +171,15 @@ request, storage write, or settings authority moved into the component.
 This is an automated keyboard contract only. Manual assistive-technology,
 contrast, Playwright viewport, and physical-device evidence remain explicitly
 out of scope until the later 42d acceptance slices.
+
+## Phase 42d-2 implementation update (2026-08-05)
+
+Web validation is exposed as the repository-level `check:web` script. It
+delegates module build/typecheck/focused tests to the existing bounded
+`check:module` runner, then validates gzip budgets and whitespace errors. The
+budget reader consumes only generated Web assets and returns stable metadata;
+it has no access to secrets, daemon state, browser storage, or user content.
+
+This automation intentionally does not imply viewport, contrast, screen-reader
+or physical-device compatibility. Those require separate evidence and remain
+outside this slice.

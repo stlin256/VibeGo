@@ -75,6 +75,12 @@ build 通过，JS/CSS gzip 为 82.52/6.06 KiB。
 键盘导航与单一 roving `tabIndex=0`；纯 resolver 和组件 contract tests 通过。该切片不宣称
 屏幕阅读器人工、Playwright、对比度或真实设备证据，也不改变 API、settings、run、SSE 或
 事件事实源。
+50i. Spec 42 Phase 42d-2 已增加固定 `check:web` 门禁：复用 Web 依赖闭包
+build/typecheck/focused tests，检查生成资产 JS/CSS gzip budget，并运行 `git diff --check`。
+脚本不运行全仓测试、不读取 secret、workspace、browser storage 或 daemon/run/Goal 事实源；
+bundle 报告只包含 bounded asset size metadata。Playwright、屏幕阅读器和真实设备证据仍后置。
+最近一次 `pnpm check:web` 通过 Web focused 94 tests、typecheck/build、JS/CSS gzip
+80.41/5.90 KiB；`pnpm test:workflow` 通过 31 个脚本 tests。
 50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
 51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
 52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
