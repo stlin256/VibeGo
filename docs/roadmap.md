@@ -646,9 +646,10 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 - [Spec 55](specs/55-public-deployment-certificates-operations.md)：定义 loopback/LAN/
   Tailscale/SSH/public HTTPS/reverse proxy 的部署边界，ACME HTTP-01/DNS-01 staging、续期、
   回滚、trusted proxy 和版本化运维 runbook；不做 UPnP、自动防火墙或隐式公网暴露。
-- [Spec 56](specs/56-i18n-accessibility-device-matrix.md)：定义 `en-US`/`zh-CN` message
-  catalog、WCAG 2.2 AA、键盘/屏幕阅读器/reduced motion、Playwright emulation 与真实
-  desktop/phone/foldable/wide-fold/tri-fold/tablet 兼容矩阵；模拟设备不得冒充真实通过。
+- [Spec 56](specs/56-i18n-accessibility-device-matrix.md)：Phase 56a 先落地
+  `en-US`/`zh-CN` locale contract、独立非 secret 偏好、核心 shell accessibility 语义和
+  ratio-first focused gates；完整 message catalog、WCAG 2.2 AA 人工审阅、Playwright
+  device emulation 和真实设备 evidence matrix 仍按 56b/56c 推进，不以模拟器通过替代真实设备验收。
 - [Spec 57](specs/57-release-publishing-pipeline.md)：定义 tag/channel、可重复多平台构建、
   checksum、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
   release evidence 和 withdrawn/rollback 流程。

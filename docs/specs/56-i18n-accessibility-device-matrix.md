@@ -1,6 +1,6 @@
 # Spec 56：多语言、无障碍与真实设备兼容矩阵
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
+- Status: Phase 56a implementation planned（locale/accessibility shell slice；full catalog and real-device evidence remain later）
 - Date: 2026-08-04
 - Related: [Spec 37](37-ratio-responsive-ui.md)、[Spec 38](38-conversation-first-web-shell.md)、[Spec 42](42-shadcn-style-web-design-system.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -145,3 +145,24 @@ conversation、approval、settings、Goal、recovery、SSE reconnect 和 error s
 - 不以自动 axe 通过代替人工辅助技术验收；
 - 不在本阶段实现原生移动客户端、语音助手或完整 RTL 设计系统；
 - 不将截图、录屏、屏幕阅读器日志或性能 trace 中的 secret/raw transcript 纳入仓库。
+
+## 9. Phase 56a implementation boundary（2026-08-05）
+
+Phase 56a 先把 locale 和 accessibility 的运行时边界落到现有
+conversation-first Web shell，不新增 daemon API、device-specific backend 或第二套
+状态机：
+
+- `Locale` 只允许 `en-US | zh-CN`。显式 Web 偏好优先，其次是浏览器语言，最后回退
+  `en-US`；pairing/session preference 和更多语言后置。
+- locale 偏好使用独立的 `vibego.locale.v1` 非 secret browser-storage key，不能与
+  `RunProfile`、pairing token、credential、run/Goal event 或 URL 混用；损坏、超长或
+  secret-shaped 值 fail closed 到 `en-US`。
+- 初始 catalog 覆盖品牌、New task、composer、connection、settings、approval、error
+  status 和可见的 icon/button accessible name。缺少 key 必须使用稳定英文 fallback，不能
+  把 message key 本身展示给用户。
+- 根节点同步 `lang`，语言切换不重建 run、provider、Goal 或 SSE；当前 run 和草稿保持不变。
+- 核心状态区使用 bounded `aria-live`，icon-only controls 有 accessible name，primary
+  actions 保持键盘可达；focus-visible、reduced-motion 和 44px touch target 由 CSS/DOM
+  focused tests 门禁。
+- Phase 56a 只声明 emulated viewport contract，不能把它当作真实设备通过；Playwright
+  projects、屏幕阅读器人工证据、完整翻译审阅和三折叠实验室证据属于后续 Phase 56b/56c。
