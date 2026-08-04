@@ -1,8 +1,8 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Phase 0/1/2 implemented（manifest、升级状态与备份恢复纯 contract；安装器/升级器/备份恢复 runtime 仍未接入）
+- Status: Phase 0/1/2/3 implemented（manifest、升级状态、SQLite snapshot adapter 与备份恢复 contract；安装器/升级器/restore runtime 仍未接入）
 - Date: 2026-08-05
-- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
+- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[ADR 0028](../adr/0028-sqlite-backup-snapshot-adapter.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
 ## 1. 目标
 
@@ -149,6 +149,26 @@ enter safe mode. Focused tests cover privacy/path/unknown-field rejection,
 backup entry identity, restore invariants, recovery operation bounds and
 redacted diagnostic descriptors. The new fixture has 6 tests; the full
 contracts module now passes 63 tests, typecheck and build.
+
+#### Phase 3 implementation update (2026-08-05)
+
+`@ready4vibe/storage` now provides an explicit `SqliteBackupSnapshotAdapter`.
+It checks the source database, runs SQLite `VACUUM INTO` in a caller-selected
+staging directory, verifies `PRAGMA integrity_check` on the snapshot, reads the
+bounded `user_version`, streams a SHA-256 digest and emits a validated
+`backup-manifest/v1` with only the `sqlite-database` logical data class. The
+destination is immutable: an existing target is rejected, writes go through a
+temporary file and an atomic no-replace link commit, and the temporary file is
+removed on failure.
+
+The adapter is an internal storage operation. It does not expose its absolute
+snapshot path through contracts/Web, and it never copies workspace files,
+credentials, raw environment values or event payloads into a Web response. It
+does not implement restore, migration, encryption, installer/updater or daemon
+routes. The new snapshot fixture has 4 tests; the complete storage module has
+35 passing tests plus typecheck and build. Focused storage tests cover successful reopen/integrity, digest and
+manifest projection, schema mismatch, corrupt source, output-size limit,
+destination immutability and temporary-file cleanup.
 
 ### 5.3 数据库 migration
 

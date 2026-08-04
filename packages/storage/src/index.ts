@@ -232,4 +232,5 @@ export class SqliteEventStore implements EventStore {
 
 export * from './goal.js';
 export * from './observability.js';
+export * from './backup.js';
 export * from './settings.js';
