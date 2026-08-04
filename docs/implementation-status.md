@@ -62,6 +62,8 @@
 
 49. `packages/sandbox-runtime` 与根脚本已实现 Spec 48-R3：`ContainerSmokeRunner`/`ContainerCliRuntimeProbe` 和显式 `pnpm smoke:container` 只接受 Docker/Podman、immutable digest 与解析后的 workspace，固定 restricted-network `sh -c "printf ready4vibe-smoke"` fixture，强制 `--pull=never`、`--rm`、`--init`、资源/超时/输出上限和取消；report 仅返回 versioned、redacted 状态，默认不进入 `pnpm verify`、daemon 启动或 run 创建路径。sandbox-runtime focused 30 tests 与 CLI workflow 7 tests 已通过；真实 engine smoke 仍需用户显式执行。
 
+50. Spec 48-R4 的不可信任务审批续接集成 fixture 已补齐：`untrusted-content` + `external-sandbox` + digest image 先产生 `approval.required`，经认证 approve 后只在同一 run 的显式 continuation 点执行一次注入式 container runner；duplicate/deny/cancel/runtime unavailable 均 fail-closed，Web approval card 只展示 bounded provider/digest/network 元数据，不改变 AgentLoop 核心状态机或现有事件事实源。
+
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；

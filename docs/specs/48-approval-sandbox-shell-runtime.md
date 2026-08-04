@@ -193,6 +193,19 @@ conflict. Approval resumption re-enters the same run only at the explicit
 continuation point and never replays an old tool call. If the broker/runtime is
 unavailable, the run remains paused or fails closed.
 
+#### R4 implementation slice (2026-08-04)
+
+The existing AgentLoop/RunManager approval broker and authenticated
+`POST /api/v1/runs/:runId/approve` path now have a Spec48-specific integration
+fixture: `taskTrust=untrusted-content`, `sandbox.mode=external-sandbox`,
+restricted network, digest image and `approval=untrusted` must emit a bounded
+`approval.required` card before the injected container process runner is
+called. A single Web allow decision grants the exact runtime intent, resumes
+the same run once and executes the fixed test runner; deny, cancel, duplicate
+decision and unavailable-runtime paths remain fail-closed. The fixture asserts
+that no host fallback or second tool execution occurs and that approval
+details contain only provider/digest/network metadata.
+
 Exit: untrusted-task end-to-end fixture demonstrates ask → approve → execute →
 bounded result, and ask → deny/cancel/restart paths do not execute the command.
 

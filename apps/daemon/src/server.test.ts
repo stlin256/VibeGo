@@ -145,6 +145,22 @@ class ApprovalModelProvider implements ModelProvider {
   }
 }
 
+class UntrustedApprovalModelProvider implements ModelProvider {
+  readonly id = 'untrusted-approval-model';
+  readonly capabilities = { streaming: true, toolCalls: true, structuredOutput: true } as const;
+  private turn = 0;
+
+  async *stream(_request: ModelRequest, _signal: AbortSignal): AsyncIterable<ModelEvent> {
+    if (this.turn++ === 0) {
+      yield { type: 'tool-call-delta', callId: 'untrusted-shell', name: 'shell.exec', argumentsChunk: JSON.stringify({ argv: ['printf', 'approved'] }) };
+      yield { type: 'completed', finishReason: 'tool-calls' };
+      return;
+    }
+    yield { type: 'text-delta', text: 'approved' };
+    yield { type: 'completed', finishReason: 'stop' };
+  }
+}
+
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(async (server) => {
     if (server.listening) {
@@ -179,6 +195,62 @@ describe('daemon health server', () => {
     expect((await manager.snapshot(started.runId))?.output).toBe('approved');
     const repeated = await fetch(`http://127.0.0.1:${port}/api/v1/runs/${started.runId}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approvalId: pending.approvalId, decision: 'deny' }) });
     expect(repeated.status).toBe(409);
+  });
+
+  it('keeps an untrusted external-sandbox tool behind approval and executes it once after Web allow', async () => {
+    const provider = new UntrustedApprovalModelProvider();
+    const processCalls: unknown[] = [];
+    const workspaceRegistry = new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
+    const sandboxSettings = new InMemorySandboxSettingsManager({
+      workspaceRegistry,
+      probe: { probe: async () => ({ detected: true, healthy: true, version: 'fixture' }) },
+      processRunner: {
+        run: async (plan) => {
+          processCalls.push(plan);
+          return { exitCode: 0, stdout: 'approved', stderr: '', truncated: false, timedOut: false, cancelled: false };
+        },
+      },
+    });
+    const imageDigest = `ghcr.io/ready4vibe/runner@sha256:${'c'.repeat(64)}`;
+    await sandboxSettings.probe('docker');
+    await sandboxSettings.configure({ provider: 'docker', imageDigest, network: 'restricted', resources: {}, enabled: true });
+    const manager = new RunManager({
+      eventStore: new InMemoryEventStore(),
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: provider,
+      toolRuntimeForRun: (config) => sandboxSettings.runtimeForRun(config),
+      approvalBroker: new InMemoryApprovalBroker({ timeoutMs: 2_000 }),
+      workspaceExists: (workspaceId) => workspaceId === 'default',
+    });
+    const server = createDaemonServer({ runManager: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const started = await manager.start({
+      ...runConfig('default'),
+      taskTrust: 'untrusted-content',
+      sandbox: { mode: 'external-sandbox', provider: 'docker', network: 'restricted' },
+      approval: 'untrusted',
+      limits: { ...runConfig('default').limits, maxTurns: 2 },
+    });
+
+    await vi.waitFor(() => expect(manager.snapshot(started.runId).then((snapshot) => snapshot?.approvals)).resolves.toHaveLength(1));
+    const pending = (await manager.snapshot(started.runId))!.approvals[0]!;
+    expect(pending).toMatchObject({ toolId: 'shell.exec', risk: 'destructive', details: { sandboxProvider: 'docker', sandboxImageDigest: imageDigest, network: 'restricted' } });
+    expect(processCalls).toHaveLength(0);
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/runs/${started.runId}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approvalId: pending.approvalId, decision: 'allow' }) });
+    expect(response.status).toBe(202);
+    await vi.waitFor(() => expect(manager.completion(started.runId)?.status).toBe('completed'));
+    expect((await manager.snapshot(started.runId))?.output).toBe('approved');
+    expect(processCalls).toHaveLength(1);
+    expect((processCalls[0] as { runtime?: string; argv?: readonly string[] }).runtime).toBe('docker');
+    expect((processCalls[0] as { argv?: readonly string[] }).argv).toEqual(expect.arrayContaining(['docker', 'run', '--rm', '--init', '--pull=never', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit', '128', '--network', 'none', '--memory', '536870912b', '--cpus', '2', imageDigest, 'printf', 'approved']));
+
+    const repeated = await fetch(`http://127.0.0.1:${port}/api/v1/runs/${started.runId}/approve`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approvalId: pending.approvalId, decision: 'deny' }) });
+    expect(repeated.status).toBe(409);
+    const events = await manager.eventStore.read(started.runId);
+    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining(['approval.required', 'approval.decided', 'tool.completed', 'run.completed']));
+    expect(events.filter((event) => event.type === 'tool.started')).toHaveLength(2);
   });
 
   it('keeps tools opt-in while forwarding an explicitly injected runtime', async () => {
