@@ -457,6 +457,9 @@ run and cannot restore an unknown in-flight remote request. Disabled or
 degraded MCP settings remain a no-op for normal runs. The pure package slice
 is now implemented: `McpExecutionLedger`/`McpProtocolToolCallPort` in
 `@ready4vibe/skill-mcp` and `McpToolExecutorRuntime` in
-`@ready4vibe/tool-adapters`, with 33 and 19 focused tests respectively. No
-default daemon wiring or live MCP process/network smoke is claimed by this
-note; those remain the next R4 application slice.
+`@ready4vibe/tool-adapters`, with 33 and 19 focused tests respectively.
+`apps/daemon` now adds the opt-in `McpRunBindingManager` and includes its
+undefined runtime in the existing `composeToolRuntimes` run snapshot path;
+three binding tests cover disabled/unverified, snapshot isolation and unknown
+workspace behavior. No live MCP process/network smoke is claimed by this
+note; activation from a verified transport remains the next R4 slice.

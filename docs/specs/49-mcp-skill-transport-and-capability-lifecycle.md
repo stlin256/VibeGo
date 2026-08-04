@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 pure bridge slice implemented, daemon wiring pending
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 package and opt-in daemon binding implemented, live transport activation pending
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -294,7 +294,11 @@ existing `ToolRegistry` and sends calls through `ToolExecutorRuntime`.
 Metadata needed for idempotency is passed through the existing handler context
 as bounded run/turn/call identifiers; no AgentLoop state machine change is
 needed. The package slice has 33 skill-mcp tests and 19 tool-adapter tests.
-Daemon/RunManager opt-in composition and live transport smoke remain pending.
+`apps/daemon` now adds `McpRunBindingManager`; it captures a verified snapshot
+per run and composes an undefined runtime by default. The daemon main path
+remains MCP-off until an application service explicitly activates a call port.
+The daemon binding slice has 3 focused tests; live transport activation/smoke
+remains pending.
 
 Exit: an activated MCP tool completes through the same approval/sandbox path
 as a built-in tool, while failure, recovery and retry cannot replay an old

@@ -18,6 +18,7 @@ import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervisor.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsManager } from './mcp-settings.js';
+import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { GoalWriteService } from '@ready4vibe/goal-control';
 
 const transport = resolveDaemonTransport();
@@ -98,12 +99,15 @@ const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry }
 // persist non-secret intent and request a later injected probe without causing
 // a child process or network request during daemon startup.
 const mcpSettings = new McpSettingsManager({ settings: settingsStore });
+// R4 is opt-in: until an application service activates a verified snapshot,
+// this manager contributes no runtime and performs no transport side effect.
+const mcpRuntimeBinding = new McpRunBindingManager(workspaceRegistry);
 const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
   modelBindingForRun: (config) => modelSettings.bindRun(config.model),
-  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
+  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config), mcpRuntimeBinding.runtimeForRun(config)]),
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
