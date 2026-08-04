@@ -42,3 +42,12 @@ added behind the same contract later.
 
 This ADR does not add a second transport, server-side translation service,
 screen-reader automation, RTL layout, native mobile app or full catalog rewrite.
+
+## Phase 56b extension
+
+The next Web-only extension adds a deterministic focus scope to the existing
+Settings drawer and moves the core settings/guardrail labels into the same
+typed catalog. The focus scope is an interaction concern only: it never
+changes run/provider/Goal state or network subscriptions. The implementation
+uses a small pure index helper plus DOM wiring, so keyboard behavior remains
+unit-testable without adding a browser runtime dependency.

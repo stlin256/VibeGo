@@ -175,3 +175,24 @@ Chinese shell output; the existing ratio/reduced-motion CSS gates remain in
 place. This slice does not claim full catalog coverage or real-device pass.
 Unknown runtime message keys use a stable English `Unavailable` fallback rather
 than rendering the key itself.
+
+## 10. Phase 56b implementation boundary（2026-08-05）
+
+Phase 56b extends the same Web-only boundary with a focus contract and a
+bounded settings catalog:
+
+- The Settings drawer is a semantic dialog. Opening it focuses the close
+  action; `Tab`/`Shift+Tab` cycle only through enabled controls inside the
+  drawer; `Escape` closes it; closing returns focus to the button that opened
+  it. Focus behavior must be deterministic when the drawer has no optional
+  provider/tool cards.
+- The settings trigger exposes `aria-controls`, `aria-expanded`, and a dialog
+  relationship; the drawer exposes `role=dialog`, `aria-modal=true`, and a
+  stable labelled heading. The shortcut for New task remains visible to
+  assistive technology without intercepting text input.
+- Core settings/guardrail labels and actions use typed message keys in both
+  supported catalogs. Runtime fallback remains stable English and never emits
+  a key, raw error, path, or secret.
+- Focus helpers are pure and bounded in unit tests; DOM rendering tests assert
+  the semantic landmarks. This phase still does not claim screen-reader/manual
+  pass, visual regression pass, or real-device compatibility.
