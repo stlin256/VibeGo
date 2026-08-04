@@ -327,7 +327,7 @@ runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 sec
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（设计已接受，Phase 42a 待开始）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a 已实现，42b/42c/42d 后续）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -338,6 +338,14 @@ Vite 和 TypeScript，迁移为 VibeGo token 驱动的 shadcn 风格 conversatio
 阶段顺序为：42a token/组件库接入与基础 primitives → 42b 对话 shell → 42c Settings、
 Approval、Goal、Memory 和 operation cards → 42d viewport/键盘/无障碍/bundle 验收。该阶段
 不改 daemon、REST/SSE、AgentLoop 或原生客户端边界。
+
+Phase 42a 已建立 semantic VibeGo tokens、轻量 `cn`/variant helper 以及
+Button/Input/Textarea/Label/Card/Badge/Separator/Skeleton 基础 primitives。
+它们只负责 presentational rendering，不访问 API、storage 或 secret；现有
+conversation shell 尚未迁移，避免在没有组件级回归覆盖时改变交互。Phase 42b
+再按组件逐步迁移 shell，42c 迁移 Settings/operation surfaces，42d 做 viewport、
+键盘、可访问性和 bundle 验收。当前 Web focused gate 为 76 tests、typecheck
+和 production build；观测到 JS gzip 79.42 KiB、CSS gzip 5.82 KiB。
 
 ## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 

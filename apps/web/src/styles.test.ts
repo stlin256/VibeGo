@@ -44,4 +44,14 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.deployment-readiness');
     expect(styles).toContain('.deployment-readiness[data-status="blocked"]');
   });
+
+  it('keeps the Phase 42a semantic token and primitive contracts brand-aware', () => {
+    expect(styles).toContain('--background: var(--vibego-ink)');
+    expect(styles).toContain('--primary: var(--vibego-cyan)');
+    expect(styles).toContain('--destructive: #bd665a');
+    expect(styles).toContain('.ui-button--size-icon { width: 44px;');
+    expect(styles).toContain('.ui-card {');
+    expect(styles).toContain('.ui-skeleton {');
+    expect(styles).toContain('.ui-button__spinner');
+  });
 });

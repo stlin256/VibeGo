@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（设计已确定；组件迁移待实现）
+- 状态：Accepted（Phase 42a 已实现；conversation shell 与业务组件迁移仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -243,6 +243,30 @@ UI 状态分三层：
 - 对比 Web bundle 和低资源指标；
 - 删除未使用旧 CSS 和临时组件；
 - 在独立 Git 提交后进入 Host-first static serving 实现。
+
+### Phase 42a implementation update (2026-08-05)
+
+Phase 42a is now implemented as a dependency-light foundation for the Web
+surface. `apps/web/src/styles.css` exposes semantic shadcn-style tokens while
+retaining the VibeGo cyan/indigo/violet/lime brand mapping. The new
+`apps/web/src/lib/cn.ts` helper performs bounded class composition without a
+runtime styling framework, and `apps/web/src/components/ui/` contains tested
+Button, Input, Textarea, Label, Card, Badge, Separator and Skeleton primitives.
+
+The primitives are presentational only: they do not import `api.ts`, access
+browser storage, read credentials, or issue network requests. They preserve
+44px touch targets, focus-visible rings, disabled/loading/destructive variants,
+reduced-motion compatibility and semantic HTML. Existing App composition is
+intentionally not migrated in this slice; Phase 42b will replace business
+markup incrementally after each composition component has its own contract
+test. This keeps the current conversation-first behavior and bundle stable
+while making the next migration reversible.
+
+Focused Web tests cover variant rendering, ARIA/label forwarding, disabled and
+loading behavior, token/helper contracts and primitive isolation. The Web
+focused gate currently passes 76 tests, typecheck and production build; the
+observed bundle is 79.42 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
+device emulation are claimed as evidence by Phase 42a.
 
 ## 9. 退出条件
 

@@ -66,3 +66,19 @@ VibeGo 需要明确的业务组合行为时，才允许新增本地实现。任�
 
 先做 token/primitives，再做 conversation shell，再做 Settings/Approval/Goal/Memory cards，
 最后删除重复旧 CSS。每个阶段独立更新文档、测试、typecheck、bundle 检查和 Git 提交。
+
+## Phase 42a implementation update (2026-08-05)
+
+The first slice uses local, dependency-free primitives rather than adding a
+full UI runtime. Semantic tokens live in `styles.css`; `cn()` and a small
+variant helper live under `src/lib`; the UI primitives live under
+`src/components/ui`. This is compatible with the shadcn source-owned model
+and keeps the initial bundle/resource budget predictable. Radix or generated
+shadcn source may be introduced later only when a primitive needs focus
+management that native HTML cannot safely provide.
+
+Phase 42a deliberately does not rewrite `App.tsx`. Business composition,
+daemon callbacks and responsive shell behavior remain unchanged until Phase
+42b has component-level regression coverage. The accepted boundaries around
+secrets, API access, Host-first same-origin delivery and the existing runtime
+authorities are unchanged.
