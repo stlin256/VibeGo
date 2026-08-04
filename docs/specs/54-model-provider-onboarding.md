@@ -1,6 +1,6 @@
 # Spec 54：本地模型与云模型配置向导
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
+- Status: Phase 0 implemented（strict onboarding contracts；provider/runtime integration remains unchanged）
 - Date: 2026-08-04
 - Related: [Spec 28](28-model-provider-onboarding.md)、[Spec 47](47-model-context-agent-loop-productionization.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -86,6 +86,17 @@ model_download_required | credential_store_unavailable
 
 所有 contract 拒绝未知字段、API key/token、private key、完整环境 map、绝对路径、query
 secret 和超长值。`ModelProviderSnapshot` 在 `run.created` 前冻结，设置切换只影响新 run。
+
+### Phase 0 implementation boundary (2026-08-05)
+
+`@ready4vibe/contracts` now freezes the descriptor/profile/credential,
+capability, probe and setup-session shapes. These contracts describe user
+intent and bounded status only; they do not read a keychain, call a provider,
+download a model, change `ModelProvider`, or alter `AgentLoop`. Existing Spec
+28 Web/provider behavior remains the authority until a later adapter phase
+passes its own tests. Four focused contract tests cover secret/query/path
+rejection, unknown capability semantics, bounded probe outcomes and hashed
+setup nonces.
 
 ## 5. Credential 与隐私边界
 

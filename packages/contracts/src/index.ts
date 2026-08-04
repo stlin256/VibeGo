@@ -204,3 +204,4 @@ export * from './provider-usage.js';
 export * from './model-runtime.js';
 export * from './mcp-settings.js';
 export * from './host-release.js';
+export * from './model-provider-onboarding.js';
