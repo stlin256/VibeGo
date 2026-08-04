@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import { ObservabilityPanel } from './ObservabilityPanel.js';
@@ -36,6 +36,10 @@ export interface AppProps {
   agentMemoryKnowledgeSettingsUnavailable?: boolean;
   onPatchAgentMemoryKnowledgeSettings?: (input: AgentMemoryKnowledgeSettingsPatchInput) => Promise<void> | void;
   onProbeAgentMemoryKnowledge?: () => Promise<void> | void;
+  mcpSettings?: McpSettingsStatus;
+  mcpSettingsUnavailable?: boolean;
+  onPatchMcpSettings?: (input: McpSettingsPatchInput) => Promise<void> | void;
+  onProbeMcp?: () => Promise<void> | void;
   toolSettings?: ToolSettingsStatus;
   toolSettingsUnavailable?: boolean;
   onSetFilesystemToolsEnabled?: (enabled: boolean) => Promise<void> | void;
@@ -63,7 +67,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
@@ -87,6 +91,14 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [knowledgeMaxBytes, setKnowledgeMaxBytes] = useState(8 * 1024);
   const [knowledgeTimeoutMs, setKnowledgeTimeoutMs] = useState(750);
   const [knowledgeBusy, setKnowledgeBusy] = useState(false);
+  const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [mcpServerId, setMcpServerId] = useState('local-mcp');
+  const [mcpServerVersion, setMcpServerVersion] = useState('1.0.0');
+  const [mcpTransport, setMcpTransport] = useState<'stdio' | 'streamable-http'>('stdio');
+  const [mcpEndpointLabel, setMcpEndpointLabel] = useState('Local MCP server');
+  const [mcpManifestRevision, setMcpManifestRevision] = useState('unconfigured');
+  const [mcpCapabilityAllowlist, setMcpCapabilityAllowlist] = useState('');
+  const [mcpBusy, setMcpBusy] = useState(false);
   const [toolToggleBusy, setToolToggleBusy] = useState(false);
   const [gitToggleBusy, setGitToggleBusy] = useState(false);
   const [sandboxProvider, setSandboxProvider] = useState<'docker' | 'podman'>('docker');
@@ -129,6 +141,17 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setKnowledgeMaxBytes(settings.maxBytes);
     setKnowledgeTimeoutMs(settings.timeoutMs);
   }, [agentMemoryKnowledgeSettings?.settings]);
+  useEffect(() => {
+    const settings = mcpSettings?.settings;
+    if (!settings) return;
+    setMcpEnabled(settings.enabled);
+    setMcpServerId(settings.serverId);
+    setMcpServerVersion(settings.serverVersion);
+    setMcpTransport(settings.transport);
+    setMcpEndpointLabel(settings.endpointLabel);
+    setMcpManifestRevision(settings.manifestRevision);
+    setMcpCapabilityAllowlist(settings.capabilityAllowlist.join(', '));
+  }, [mcpSettings?.settings]);
   useEffect(() => {
     if (sandboxSettings?.provider) setSandboxProvider(sandboxSettings.provider);
     if (sandboxSettings?.imageDigest) setSandboxImageDigest(sandboxSettings.imageDigest);
@@ -181,6 +204,19 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     if (!onProbeAgentMemoryKnowledge) return;
     setKnowledgeBusy(true);
     try { await onProbeAgentMemoryKnowledge(); } catch { /* Parent renders a safe error. */ } finally { setKnowledgeBusy(false); }
+  };
+  const saveMcpSettings = async (): Promise<void> => {
+    if (!onPatchMcpSettings) return;
+    setMcpBusy(true);
+    try {
+      const capabilityAllowlist = mcpCapabilityAllowlist.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 128);
+      await onPatchMcpSettings({ enabled: mcpEnabled, serverId: mcpServerId, serverVersion: mcpServerVersion, transport: mcpTransport, endpointLabel: mcpEndpointLabel, manifestRevision: mcpManifestRevision, capabilityAllowlist });
+    } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setMcpBusy(false); }
+  };
+  const probeMcp = async (): Promise<void> => {
+    if (!onProbeMcp) return;
+    setMcpBusy(true);
+    try { await onProbeMcp(); } catch { /* Parent renders a safe error. */ } finally { setMcpBusy(false); }
   };
   const toggleFilesystemTools = async (enabled: boolean): Promise<void> => {
     if (!onSetFilesystemToolsEnabled) return;
@@ -342,6 +378,19 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                   {agentMemoryKnowledgeSettings.tools.length > 0 && <p className="muted">Read-only tools: {agentMemoryKnowledgeSettings.tools.map((tool) => tool.name).join(', ')}</p>}
                   <div className="inline-actions"><button type="button" disabled={knowledgeBusy} onClick={() => { void saveAgentMemoryKnowledgeSettings(); }}>Save knowledge settings</button><button type="button" disabled={knowledgeBusy || !knowledgeEnabled} onClick={() => { void probeAgentMemoryKnowledge(); }}>Probe knowledge</button></div>
                 </> : <p className="muted">Pair with the daemon to configure optional knowledge retrieval.</p>}
+              </div>
+              <div className="tool-setup mcp-setup" aria-label="MCP and Skill setup">
+                <div className="eyebrow">MCP / SKILL</div>
+                {mcpSettingsUnavailable ? <p className="muted">MCP settings are unavailable; normal runs are unaffected.</p> : mcpSettings ? <>
+                  <label className="toggle-row"><input type="checkbox" checked={mcpEnabled} disabled={mcpBusy} onChange={(event) => setMcpEnabled(event.target.checked)} /><span>Enable optional MCP integration</span></label>
+                  <p className="muted">MCP stays outside the default run path. Capabilities remain untrusted until a later explicit activation review.</p>
+                  <div className="inline-actions"><label>Server ID<input value={mcpServerId} disabled={mcpBusy} onChange={(event) => setMcpServerId(event.target.value)} /></label><label>Server version<input value={mcpServerVersion} disabled={mcpBusy} onChange={(event) => setMcpServerVersion(event.target.value)} /></label><label>Transport<select value={mcpTransport} disabled={mcpBusy} onChange={(event) => setMcpTransport(event.target.value as 'stdio' | 'streamable-http')}><option value="stdio">stdio</option><option value="streamable-http">Streamable HTTP</option></select></label></div>
+                  <label>Endpoint label<input value={mcpEndpointLabel} disabled={mcpBusy} onChange={(event) => setMcpEndpointLabel(event.target.value)} placeholder="Local MCP server" /></label>
+                  <label>Manifest revision<input value={mcpManifestRevision} disabled={mcpBusy} onChange={(event) => setMcpManifestRevision(event.target.value)} /></label>
+                  <label>Capability references<input value={mcpCapabilityAllowlist} disabled={mcpBusy} onChange={(event) => setMcpCapabilityAllowlist(event.target.value)} placeholder="server/tool/name@1.0.0, …" /></label>
+                  <p className="muted">Status: {mcpSettings.status} · {mcpSettings.health ?? 'not probed'} · revision {mcpSettings.currentRevision ?? 'none'} · capabilities {mcpSettings.capabilityCount} · next {mcpSettings.nextAction}{mcpSettings.lastErrorCode ? ` · ${mcpSettings.lastErrorCode}` : ''}</p>
+                  <div className="inline-actions"><button type="button" disabled={mcpBusy} onClick={() => { void saveMcpSettings(); }}>Save MCP settings</button><button type="button" disabled={mcpBusy || !mcpEnabled} onClick={() => { void probeMcp(); }}>Probe MCP</button></div>
+                </> : <p className="muted">Pair with the daemon to configure optional MCP/Skill status.</p>}
               </div>
               <div className="tool-setup" aria-label="Filesystem tool setup">
                 <div className="eyebrow">TOOL ACCESS</div>

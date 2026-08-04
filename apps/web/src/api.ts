@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -223,6 +223,8 @@ export type AgentMemorySettingsPatchInput = AgentMemorySettingsPatch;
 export type AgentMemoryOperationsStatus = AgentMemoryOperations;
 export type AgentMemoryKnowledgeSettingsStatus = AgentMemoryKnowledgeSettingsStatusContract;
 export type AgentMemoryKnowledgeSettingsPatchInput = AgentMemoryKnowledgeSettingsPatch;
+export type McpSettingsStatus = McpSettingsStatusContract;
+export type McpSettingsPatchInput = McpSettingsPatch;
 
 export type UsageSummary = ObservabilityUsageSummary;
 export type UsageTimeseries = ObservabilityTimeseries;
@@ -379,6 +381,18 @@ export class ApiClient {
 
   async probeAgentMemoryKnowledge(): Promise<AgentMemoryKnowledgeSettingsStatus> {
     return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge/probe', { method: 'POST' });
+  }
+
+  async mcpSettings(): Promise<McpSettingsStatus> {
+    return this.request<McpSettingsStatus>('/api/v1/settings/mcp', { method: 'GET' });
+  }
+
+  async patchMcpSettings(input: McpSettingsPatchInput): Promise<McpSettingsStatus> {
+    return this.request<McpSettingsStatus>('/api/v1/settings/mcp', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async probeMcp(): Promise<McpSettingsStatus> {
+    return this.request<McpSettingsStatus>('/api/v1/settings/mcp/probe', { method: 'POST' });
   }
 
   async toolSettings(): Promise<ToolSettingsStatus> {

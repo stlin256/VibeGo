@@ -442,7 +442,7 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2 已实现，R3 进行中）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2/R3 已实现，R4 规划中）
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
 manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
@@ -480,6 +480,12 @@ no-op；启用但没有注入 verifier 时返回 bounded `degraded`，不阻塞�
 该切片不启动 MCP 子进程、不发网络请求、不注册 ToolRegistry，也不修改
 AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 `run_events` 或 `goal_events`。详见 [ADR 0022](adr/0022-mcp-r3-settings-and-status-boundary.md)。
+
+R3 当前实现已落地：`@ready4vibe/contracts` 的 strict settings/status/probe schema、
+`McpSettingsManager` 的 SQLite/in-memory settings adapter、认证 daemon routes 和
+conversation-first Web 设置卡均已覆盖 focused tests。未提供默认 probe，因此默认启动、
+关闭状态和未配置 verifier 时仍不会启动子进程或发网络请求；R4 才评估 run-scoped
+ToolExecutor bridge。
 
 ## Spec 50：Observability lifecycle integration（规划）
 

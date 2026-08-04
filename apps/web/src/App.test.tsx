@@ -83,6 +83,20 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\Users');
   });
 
+  it('renders the optional MCP status card without endpoint URLs, commands, or secrets', () => {
+    const html = renderToStaticMarkup(<App mcpSettings={{
+      schemaVersion: 'ready4vibe_mcp_settings_status_v0',
+      settings: { schemaVersion: 'ready4vibe_mcp_settings_v1', enabled: false, serverId: 'local-mcp', serverVersion: '1.0.0', transport: 'stdio', endpointLabel: 'Local MCP server', manifestRevision: 'unconfigured', capabilityAllowlist: [] },
+      status: 'disabled', health: null, available: false, degraded: false, currentRevision: null, previousRevision: null, capabilityCount: 0, lastHealthAt: null, lastErrorCode: 'disabled', nextAction: 'enable',
+    }} onPatchMcpSettings={() => undefined} onProbeMcp={() => undefined} />);
+    expect(html).toContain('MCP / SKILL');
+    expect(html).toContain('Enable optional MCP integration');
+    expect(html).toContain('Save MCP settings');
+    expect(html).toContain('Probe MCP');
+    expect(html).not.toContain('apiKey');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders an explicit guarded filesystem toggle without an absolute path', () => {
     const html = renderToStaticMarkup(<App toolSettings={{ filesystemEnabled: false, workspaceLabel: 'workspace', availableTools: [] }} onSetFilesystemToolsEnabled={() => undefined} />);
     expect(html).toContain('Enable guarded filesystem tools');

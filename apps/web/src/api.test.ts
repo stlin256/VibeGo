@@ -204,6 +204,23 @@ describe('ApiClient', () => {
     expect(calls.map((call) => call.input).join('')).not.toMatch(/endpoint|api[_-]?key/iu);
   });
 
+  it('uses the authenticated MCP settings and explicit probe endpoints without raw transport data', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = {
+      schemaVersion: 'ready4vibe_mcp_settings_status_v0',
+      settings: { schemaVersion: 'ready4vibe_mcp_settings_v1', enabled: false, serverId: 'local-mcp', serverVersion: '1.0.0', transport: 'stdio', endpointLabel: 'Local MCP server', manifestRevision: 'unconfigured', capabilityAllowlist: [] },
+      status: 'disabled', health: null, available: false, degraded: false, currentRevision: null, previousRevision: null, capabilityCount: 0, lastHealthAt: null, lastErrorCode: 'disabled', nextAction: 'enable',
+    };
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.mcpSettings();
+    await client.patchMcpSettings({ enabled: true });
+    await client.probeMcp();
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/mcp', '/api/v1/settings/mcp', '/api/v1/settings/mcp/probe']);
+    expect(calls[1]?.init?.method).toBe('PATCH');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true }));
+    expect(calls.map((call) => call.input).join('')).not.toMatch(/api[_-]?key|token|secret|C:\\private/iu);
+  });
+
   it('toggles filesystem tools through the authenticated settings endpoint', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {
