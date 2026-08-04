@@ -21,6 +21,21 @@ function responseFromChunks(chunks: readonly string[], status = 200): Response {
 }
 
 describe('OpenAICompatibleProvider', () => {
+  it('uses a complete explicit endpoint without rewriting its path', async () => {
+    let called: string | undefined;
+    const provider = new OpenAICompatibleProvider({
+      id: 'deepseek',
+      endpoint: 'https://api.deepseek.com/anthropic/v1/chat/completions',
+      apiKey: 'test-secret',
+      fetchImpl: async (input) => {
+        called = input;
+        return responseFromChunks(['data: [DONE]\n\n']);
+      },
+    });
+    for await (const _event of provider.stream(request, new AbortController().signal)) { /* drain */ }
+    expect(called).toBe('https://api.deepseek.com/anthropic/v1/chat/completions');
+  });
+
   it('sends a streaming request and parses split SSE frames', async () => {
     let capturedInit: RequestInit | undefined;
     const provider = new OpenAICompatibleProvider({
@@ -65,6 +80,19 @@ describe('OpenAICompatibleProvider', () => {
     expect(JSON.stringify(events)).not.toContain('secret provider body');
   });
 
+  it('clamps Retry-After metadata without exposing response headers', async () => {
+    const provider = new OpenAICompatibleProvider({
+      id: 'deepseek',
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      apiKey: 'test-secret',
+      fetchImpl: async () => new Response('provider body', { status: 429, headers: { 'retry-after': '60' } }),
+    });
+    const events = [];
+    for await (const event of provider.stream(request, new AbortController().signal)) events.push(event);
+    expect(events).toEqual([{ type: 'error', code: 'MODEL_HTTP_429', retryable: true, safeMessage: 'The model provider returned HTTP 429.', retryAfterMs: 30_000 }]);
+    expect(JSON.stringify(events)).not.toContain('retry-after');
+  });
+
   it('requires HTTPS unless insecure HTTP is explicit', () => {
     expect(() => new OpenAICompatibleProvider({ id: 'local', baseUrl: 'http://127.0.0.1:8080', apiKey: 'x' })).toThrow('requires HTTPS');
     expect(() => new OpenAICompatibleProvider({ id: 'local', baseUrl: 'http://127.0.0.1:8080', apiKey: 'x', allowInsecureHttp: true })).not.toThrow();
@@ -85,5 +113,24 @@ describe('OpenAICompatibleProvider', () => {
     const events = [];
     for await (const event of provider.stream(request, new AbortController().signal)) events.push(event);
     expect(events).toEqual([{ type: 'error', code: 'MODEL_MALFORMED_JSON', retryable: false, safeMessage: 'The model provider returned malformed JSON.' }]);
+  });
+
+  it('honors an already-aborted signal without emitting provider data', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let capturedSignal: AbortSignal | undefined;
+    const provider = new OpenAICompatibleProvider({
+      id: 'deepseek',
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      apiKey: 'test-secret',
+      fetchImpl: async (_input, init) => {
+        capturedSignal = init?.signal as AbortSignal | undefined;
+        return responseFromChunks(['data: {"choices":[{"delta":{"content":"must-not-appear"}}]}\n\n']);
+      },
+    });
+    const events = [];
+    for await (const event of provider.stream(request, controller.signal)) events.push(event);
+    expect(capturedSignal).toBe(controller.signal);
+    expect(events).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 # Spec 47: Model, context and AgentLoop productionization
 
-- Status: planned (47-R0 research gate)
+- Status: in progress (47-R1/R2 contract and explicit adapter slice)
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 03](03-model-context-contract.md), [Spec 07](07-model-context.md), [Spec 08](08-agent-model-integration.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -36,6 +36,21 @@ Before implementation, the agent must read the pinned files listed in
 provider or stream semantics in that document. It must also re-check the
 provider's current API documentation and license. The agent must not copy
 Codex/Aider/Goose prompts, message schemas, client code or session files.
+
+### 47-R0 review note (2026-08-04)
+
+The pinned clean-room study was re-read before implementation. The available
+evidence confirms three boundaries used by this slice: provider wire formats
+must be explicit adapters, canonical conversation state must remain separate
+from provider messages, and retry/cancellation must be observable without
+replaying a tool action. No upstream source, prompt, schema or runtime is
+copied. The local research checkouts remain ignored under `.research/`.
+
+The first implementation slice is deliberately network-free: it adds versioned
+provider/replay contracts, deterministic stream replay and bounded retry
+planning, then hardens the OpenAI-compatible adapter behind injected fetch.
+It does not change daemon settings, run creation, AgentLoop state transitions,
+`run_events`, or the default fake-provider path.
 
 ## Contract requirements
 
@@ -177,6 +192,28 @@ network, auth, schema or quota without blocking normal Web startup.
   SandboxAdapter or WorkspaceRegistry authority;
 - no promise that a provider's reported usage is billing-exact when the
   provider returns incomplete fields.
+
+## 47-R1/R2 implementation update (2026-08-04)
+
+R1/R2 is being delivered as a pure contract/adapter slice. The tests cover
+provider descriptor privacy and endpoint policy, canonical replay of text/tool
+call/usage/terminal events, duplicate request conflict semantics, abort-aware
+retry delays, and bounded OpenAI-compatible SSE decoding. The adapter accepts
+an explicit complete endpoint; legacy base URL construction remains only as a
+compatibility path and is covered by a deprecation-safe test. No live key or
+provider response is persisted, and `pnpm verify` never performs a network
+request.
+
+The current implementation consists of `packages/contracts/src/model-runtime.ts`
+for versioned provider snapshot/request/event/retry DTOs,
+`packages/model-openai/src/runtime.ts` for deterministic replay, request
+idempotency and pre-stream retry, and `packages/model-openai/src/protocol.ts`
+for clean-room OpenAI Responses and Anthropic-shaped fixture translation.
+`ContextManager` now supports independent byte/token/item budgets, protected
+objective/policy/failure/snapshot items and append-only compaction references;
+the existing AgentLoop passes `maxModelInputTokens` into that budget without
+changing its state transitions. The full repository gate currently passes with
+396 tests. R3 application-provider wiring and R4 live smoke remain deferred.
 
 ## Implementation-agent handoff prompt
 

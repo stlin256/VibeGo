@@ -1,4 +1,7 @@
-import type { ModelEvent, ModelProvider, ModelRequest } from '@ready4vibe/contracts';
+import { ModelEventSchema, type ModelEvent, type ModelProvider, type ModelRequest } from '@ready4vibe/contracts';
+
+export * from './runtime.js';
+export * from './protocol.js';
 
 export type FetchImplementation = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -15,7 +18,12 @@ export interface OpenAIChatCompletionsStreamOptions {
 
 export interface OpenAICompatibleProviderOptions {
   id: string;
-  baseUrl: string;
+  /** Complete chat-completions URL. Preferred for new providers. */
+  endpoint?: string;
+  /** Legacy base URL compatibility path; use `endpoint` for explicit routing. */
+  baseUrl?: string;
+  /** Explicit path appended to the legacy base URL when `endpoint` is omitted. */
+  chatCompletionsPath?: string;
   apiKey: string;
   allowInsecureHttp?: boolean;
   fetchImpl?: FetchImplementation;
@@ -30,15 +38,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
   constructor(options: OpenAICompatibleProviderOptions) {
     if (!options.id || !options.apiKey) throw new Error('provider id and api key are required');
-    const url = new URL(options.baseUrl);
-    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && options.allowInsecureHttp === true)) {
-      throw new Error('OpenAI-compatible provider requires HTTPS unless allowInsecureHttp is explicit');
-    }
-    if (url.username || url.password || url.hash || url.search) {
-      throw new Error('OpenAI-compatible provider URL must not contain credentials, query parameters, or fragments');
-    }
+    if (!options.endpoint && !options.baseUrl) throw new Error('provider endpoint or base URL is required');
+    const endpoint = options.endpoint ?? joinLegacyEndpoint(options.baseUrl as string, options.chatCompletionsPath);
+    validateEndpoint(endpoint, options.allowInsecureHttp === true);
     this.id = options.id;
-    this.endpoint = `${url.toString().replace(/\/$/, '')}/chat/completions`;
+    this.endpoint = endpoint;
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
   }
@@ -90,8 +94,9 @@ export async function* streamOpenAIChatCompletions(options: OpenAIChatCompletion
     if (!options.signal.aborted) yield {
       type: 'error',
       code: `${prefix}_HTTP_${response.status}`,
-      retryable: response.status >= 500,
+      retryable: response.status === 429 || response.status >= 500,
       safeMessage: `${label} returned HTTP ${response.status}.`,
+      ...(response.status === 429 ? parseRetryAfter(response.headers.get('retry-after')) : {}),
     };
     return;
   }
@@ -115,6 +120,10 @@ export async function* streamOpenAIChatCompletions(options: OpenAIChatCompletion
         return;
       }
       for (const event of translateChunk(payload)) {
+        if (!ModelEventSchema.safeParse(event).success) {
+          if (!options.signal.aborted) yield { type: 'error', code: `${prefix}_SCHEMA_MISMATCH`, retryable: false, safeMessage: `${label} returned an unsupported event.` };
+          return;
+        }
         if (event.type === 'completed') completed = true;
         yield event;
       }
@@ -196,4 +205,27 @@ async function* readSseData(body: ReadableStream<Uint8Array>, signal: AbortSigna
   } finally {
     reader.releaseLock();
   }
+}
+
+function joinLegacyEndpoint(baseUrl: string, path = '/chat/completions'): string {
+  const base = baseUrl.replace(/\/$/u, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+}
+
+function validateEndpoint(endpoint: string, allowInsecureHttp: boolean): void {
+  const url = new URL(endpoint);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && allowInsecureHttp)) {
+    throw new Error('OpenAI-compatible provider requires HTTPS unless allowInsecureHttp is explicit');
+  }
+  if (url.username || url.password || url.hash || url.search) {
+    throw new Error('OpenAI-compatible provider URL must not contain credentials, query parameters, or fragments');
+  }
+}
+
+function parseRetryAfter(value: string | null): { retryAfterMs?: number } {
+  if (!value) return {};
+  const seconds = Number(value.trim());
+  if (!Number.isFinite(seconds) || seconds < 0) return {};
+  return { retryAfterMs: Math.min(30_000, Math.trunc(seconds * 1_000)) };
 }

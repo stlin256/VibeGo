@@ -392,13 +392,17 @@ audit verify/replay 和只读 pricing projection；Web 以 context panel 消费�
 typecheck → test → diff:check → git diff --check，失败即停，不安装依赖、不改工作区、
 不触碰模型凭据；它复用现有 package scripts，作为每次实质性提交前的统一门禁。
 
-## Spec 47：Model/Context/AgentLoop productionization（规划）
+## Spec 47：Model/Context/AgentLoop productionization（47-R1/R2 实施中）
 
 详见 [Spec 47](specs/47-model-context-agent-loop-productionization.md)。本阶段先以
 pinned upstream research 为 R0 门禁，再把真实 provider 的显式 endpoint、协议适配、流式
 replay、取消/重试、ContextManager 字节/token budget 和 AgentLoop 多轮验证接入现有
 application service。真实 LLM smoke 只允许通过独立命令和进程外 secret 触发，`pnpm verify`
 绝不联网；任何 provider、usage 或 context 故障都不能覆盖原始 run/tool/approval 结果。
+当前先完成无网络的 contract、stream replay、retry/cancellation fixture 和显式
+OpenAI-compatible endpoint adapter；该切片已覆盖 provider snapshot、Responses/
+Anthropic-shaped fixture replay、token/byte compaction 与 pre-stream retry，daemon
+bridge 与 live smoke 保持在后续 R3/R4。当前全仓 `pnpm verify` 为 396 tests 通过。
 
 ## Spec 48：Approval/Sandbox/Shell runtime closure（规划）
 

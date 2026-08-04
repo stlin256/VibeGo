@@ -276,10 +276,12 @@ freezes the single-authority, run-snapshot, fail-soft and host-first decisions.
 
 The following work is documented but not implemented yet:
 
-- **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): real
-  provider/context/stream replay, multi-turn AgentLoop verification and an
-  opt-in live model smoke. The current default still uses fake/mock providers;
-  no credential has been written to the repository.
+- **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): R1/R2
+  contract, deterministic stream replay, cancellation/retry fixtures and the
+  explicit OpenAI-compatible adapter are in progress. The daemon bridge,
+  multi-turn application verification and opt-in live model smoke remain R3/R4;
+  the current default still uses fake/mock providers and no credential has
+  been written to the repository.
 - **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): compiled
   approval/sandbox policy, Codex-like bounded auto-approval, Windows process
   tree/container smoke and full Web continuation. Existing adapters remain
@@ -302,3 +304,25 @@ current statement that untrusted network/model/MCP/Skill/shell side effects
 are disabled unless explicitly configured through the authenticated boundary,
 and they do not modify `run_events`, `goal_events`, AgentLoop, RunManager,
 Scheduler, Approval, Sandbox or WorkspaceRegistry in this documentation pass.
+
+## Spec 47 R1/R2 implementation note (2026-08-04)
+
+The documentation gate is now followed by a network-free model/context slice:
+
+- `packages/contracts/src/model-runtime.ts` adds bounded provider snapshot,
+  canonical request/event, replay result and retry-plan schemas with secret/path
+  rejection and strict versions.
+- `packages/model-openai/src/runtime.ts` adds deterministic stream replay,
+  request idempotency conflict detection, abort-aware retry planning and a
+  no-partial-stream-replay provider wrapper.
+- `packages/model-openai/src/protocol.ts` adds pure OpenAI Responses and
+  Anthropic-shaped fixture translators; no provider SDK or upstream source is
+  vendored.
+- `packages/context/src/index.ts` adds independent byte/token/item budgets,
+  protected context categories and append-only compaction references. The
+  existing AgentLoop supplies the model input-token limit and records bounded
+  token metadata without changing its state machine or event authority.
+
+`pnpm verify` passes with 396 tests. R3 daemon/application provider wiring and
+R4 opt-in live smoke are intentionally not implemented; credentials remain
+out-of-band and the normal fake-provider path remains available.

@@ -173,6 +173,18 @@ describe('AgentLoop', () => {
     expect((await eventStore.read('run_context_too_large')).at(-1)?.payload).toMatchObject({ code: 'CONTEXT_BUDGET_EXCEEDED' });
   });
 
+  it('enforces the model input token budget before scheduling', async () => {
+    const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
+    const eventStore = new InMemoryEventStore();
+    const loop = new AgentLoop({ eventStore, scheduler, modelProvider: provider });
+
+    const result = await loop.run({ runId: 'run_context_token_limit', config: config({ limits: { ...config().limits, maxModelInputTokens: 1 } }) });
+    expect(result.status).toBe('failed');
+    expect(scheduler.activeCount()).toBe(0);
+    expect((await eventStore.read('run_context_token_limit')).at(-1)?.payload).toMatchObject({ code: 'CONTEXT_BUDGET_EXCEEDED' });
+  });
+
   it('passes public tool descriptors and continues with bounded tool output', async () => {
     const provider = new SequenceModelProvider([
       [

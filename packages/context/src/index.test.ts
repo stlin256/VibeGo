@@ -47,4 +47,29 @@ describe('ContextManager', () => {
     manager.add(item('same', 'a'));
     expect(() => manager.add(item('same', 'b'))).toThrow('duplicate context item');
   });
+
+  it('enforces a token budget independently from the byte budget', () => {
+    const manager = new ContextManager({ maxBytes: 1_000, maxTokens: 5, tokenEstimator: () => 4 }, [
+      item('old', 'old history', { role: 'assistant', source: 'model' }),
+      item('latest', 'latest objective', { preserve: 'objective' }),
+    ]);
+    const result = manager.build();
+    expect(result.tokens).toBe(4);
+    expect(result.messages.map((message) => message.content)).toEqual(['latest objective']);
+    expect(result.droppedItemIds).toEqual(['old']);
+  });
+
+  it('keeps policy/failure items protected and records append-only compaction references', () => {
+    const manager = new ContextManager({ maxBytes: 180, maxTokens: 100 }, [
+      item('objective', 'fix the test', { preserve: 'objective', sequence: 10 }),
+      item('approval', 'approval denied', { preserve: 'approval', role: 'tool', source: 'tool', trust: 'untrusted', sequence: 11 }),
+      item('old', 'old '.repeat(30), { role: 'assistant', source: 'model', sequence: 12 }),
+    ]);
+    const built = manager.build();
+    expect(built.messages.map((message) => message.content)).toEqual(['fix the test', '[BEGIN_UNTRUSTED_CONTENT source=tool]\napproval denied\n[END_UNTRUSTED_CONTENT]']);
+    const compaction = manager.compact({ id: 'compaction-1', summary: 'Older assistant history was bounded.', sequence: 13 });
+    expect(compaction).toMatchObject({ compacted: true, sourceSeqStart: 12, sourceSeqEnd: 12, sourceItemIds: ['old'] });
+    expect(manager.size()).toBe(4);
+    expect(manager.build().messages.some((message) => message.content.includes('Older assistant history'))).toBe(true);
+  });
 });

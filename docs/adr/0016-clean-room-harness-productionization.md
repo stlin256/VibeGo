@@ -105,6 +105,26 @@ probe, smoke test or migration leaves the current implementation active. No
 run, Goal event, usage ledger or certificate rollback replays old tool calls or
 changes historical records.
 
+### Current implementation slice: Spec 47 R1/R2
+
+The first model/context slice is intentionally below the daemon application
+boundary. It uses native TypeScript contracts and injected fetch/clock ports for
+deterministic replay, cancellation and retry tests. Provider endpoints are
+explicit and secret-free in durable descriptors; the actual credential remains
+an out-of-band runtime input. Context compaction preserves protected user and
+policy items while marking untrusted content, and no adapter is allowed to
+execute tools or alter approval/sandbox decisions. The daemon and existing
+interactive run path remain unchanged until the later R3 application bridge
+passes its own regression gate.
+
+The accepted R1/R2 code is limited to `contracts`, `context`,
+`model-openai`, and the existing AgentLoop's context-budget input. It adds no
+network dependency, provider SDK, daemon route or credential persistence. The
+retry wrapper refuses to replay a partial stream, and the protocol fixtures are
+pure translators rather than copied upstream schemas. The repository gate
+passes with 396 tests; the unchanged daemon path is the rollback boundary for
+the next R3 bridge.
+
 ## Validation
 
 Every stage must run `pnpm typecheck`, `pnpm test`, `pnpm diff:check` and
