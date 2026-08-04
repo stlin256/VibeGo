@@ -1,6 +1,6 @@
 # Spec 45：Observability API 与 Web Usage/Audit projection
 
-- 状态：Draft for implementation（45-R0）
+- 状态：Accepted（45-R5 基础 projection 已实现；自动采样设置、export/import 与 pricing catalog wiring 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43](43-resource-usage-and-cost-audit.md)、[Spec 44](44-provider-usage-management-and-upstream-reuse.md)、[Spec 38](38-conversation-first-web-shell.md)、[API contract](../api-contract.md)
 

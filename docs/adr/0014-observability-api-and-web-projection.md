@@ -1,6 +1,6 @@
 # ADR 0014：Observability API 与 Web projection 边界
 
-- 状态：Accepted for 45-R0
+- 状态：Accepted for 45-R5 基础 projection
 - 日期：2026-08-04
 
 ## 决策

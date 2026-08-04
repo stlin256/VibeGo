@@ -20,6 +20,7 @@ import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-se
 import { McpSettingsManager } from './mcp-settings.js';
 import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { GoalWriteService } from '@ready4vibe/goal-control';
+import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -45,6 +46,9 @@ mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
 const observabilityLedger = new SqliteObservabilityLedger(join(dataDir, 'events.sqlite'));
+const observabilityUsageObserver = new RunUsageObserver({
+  adapter: new ProviderUsageLifecycleAdapter({ writer: observabilityLedger }),
+});
 const goalWriteService = new GoalWriteService(goalEventStore, { producer: 'daemon-goal-api' });
 let settingsStore: SqliteSettingsStore;
 try {
@@ -115,6 +119,7 @@ const runManager = new RunManager({
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
+  observabilityUsageObserver,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {

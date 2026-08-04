@@ -327,7 +327,7 @@ runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 sec
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1 已实现，42d 后续）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现，后续 42d 验收仍规划）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -408,8 +408,9 @@ ledger 与 UTC hour rollup，使用 BEGIN IMMEDIATE、ID 幂等、批量回滚�
 daemon/API/Web，也不改变 interactive run、Goal、AgentLoop、Scheduler、Approval、Sandbox
 或 Workspace 行为。
 
-后续顺序为：43c 低资源 host/tool/sandbox collectors →
-43d token/cost normalization 与认证 API → 43e Web Usage/Audit surfaces 和实测资源预算。
+后续顺序为：43c 低资源 host/tool/sandbox collectors → pricing settings、retention
+与实测资源预算；认证 API、Usage/Audit projection 和 Web context panel 已由 Spec 45-R5
+落地，终态 run-event usage bridge 已由 Spec 50-R5 落地。
 
 ## Spec 44：Provider/Usage 管理与上游源码复用门禁（44-R0/44-R1/44-R2/R3/R4 已完成）
 
@@ -590,7 +591,7 @@ conversation-first Web 设置卡均已覆盖 focused tests。未提供默认 pro
 ToolExecutor bridge、注入式 activation、session drain 与本地 live smoke 均已实现，
 默认 MCP 仍关闭。
 
-## Spec 50：Observability lifecycle integration（R1/R2/R3/R4 已完成）
+## Spec 50：Observability lifecycle integration（R1/R2/R3/R4 已完成，R5 进行中）
 
 详见 [Spec 50](specs/50-observability-lifecycle-integration.md)。本阶段在 daemon
 application/RunManager 边界接入唯一 usage ledger、pricing/reconciliation、CPU/RSS/disk
@@ -630,6 +631,13 @@ degraded/unknown，不执行 shell/PowerShell/CLI 或 workspace scan。
 validated audit application service；显式导出是 bounded、canonical、checksum 与
 hash-chain 可验证的本地包，导入只返回事实、不会自动写入或上传。60 个
 observability focused tests 已通过；自动 daemon/API/Web wiring 仍后置。
+
+50-R5 已完成终态 run-event usage bridge：只在 daemon application/RunManager
+边界异步重放已存在的 bounded `run_events`，通过现有
+`ProviderUsageLifecycleAdapter` 写入同一 usage ledger。该切片不启动
+`ResourceCollector`，不记录工具/资源样本，不改变 AgentLoop、默认 run、Scheduler、
+Approval、Sandbox 或 WorkspaceRegistry；writer 失败只产生 degraded，重复 usage
+沿用 ledger 的 no-op/conflict 语义。package/daemon focused fixtures 已通过。
 
 ### Spec 47-R3/R4 implementation update (2026-08-04/2026-08-05)
 

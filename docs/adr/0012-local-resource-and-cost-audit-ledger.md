@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b、44-R4、50-R1、50-R2、50-R3 与 50-R4（contracts、projection、ledger/rollup、显式 collector/audit adapter、lifecycle ports、provider usage/cost adapter、sampling lifecycle adapter 和 audit/export application ports 已实现；自动 wiring/API/Web 仍后置）
+- 状态：Accepted for Phase 43a/43b、44-R4、45-R5、50-R1、50-R2、50-R3、50-R4 与 50-R5（contracts、projection、ledger/rollup、显式 collector/audit adapter、authenticated API/Web projection、lifecycle ports、provider usage/cost adapter、sampling lifecycle adapter、audit/export application ports 和终态 usage bridge 已实现；自动资源采样、pricing settings 与 retention 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -177,3 +177,20 @@ does not write, upload, or alter `run_events`/`goal_events` automatically.
 The implementation is covered by the observability package's 60 focused tests
 and remains an application boundary; automatic daemon/API/Web wiring is still
 deferred to a later release slice.
+
+## 50-R5 terminal run-event usage bridge (implemented)
+
+`RunUsageObserver` is wired as an optional daemon application/`RunManager`
+boundary. After a run settles it replays only that run's existing bounded
+`run_events`, converts the projection to `ProviderUsageObservation` with
+`dataSource=run-event`, and submits it through the existing provider usage
+adapter and ledger. The call is fire-and-forget and fail-soft; it cannot alter
+the authoritative run result or make a second model/tool/shell invocation.
+
+This slice deliberately excludes automatic resource sampling, tool usage
+capture, pricing settings, a second event source, and any change to
+`AgentLoop`, `run_events`, `goal_events`, `Scheduler`, `Approval`, `Sandbox` or
+`WorkspaceRegistry`. Durable ledger idempotency remains the restart boundary;
+same usage content is a no-op and changed content is a conflict. Package and
+daemon focused fixtures cover privacy-safe replay, writer degradation/retry,
+duplicate delivery and run-result isolation.

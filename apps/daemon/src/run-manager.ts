@@ -20,6 +20,7 @@ import {
 } from '@ready4vibe/contracts';
 import type { ContextItem } from '@ready4vibe/context';
 import { AgentLoop, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ToolRuntime } from '@ready4vibe/agent';
+import type { RunUsageObserver } from '@ready4vibe/observability';
 import { Scheduler } from '@ready4vibe/scheduler';
 import type { AgentMemoryRunSnapshot, AgentMemorySettingsManager } from './agent-memory-settings.js';
 import type { AgentMemoryKnowledgeRunSnapshot } from '@ready4vibe/contracts';
@@ -62,6 +63,7 @@ export interface RunManagerOptions {
   workspaceExists?: (workspaceId: string) => boolean;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  observabilityUsageObserver?: RunUsageObserver;
 }
 
 export class RunManagerError extends Error {
@@ -82,6 +84,7 @@ export class RunManager {
   private readonly workspaceExists: (workspaceId: string) => boolean;
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
   private readonly agentMemoryKnowledgeSettings: AgentMemoryKnowledgeSettingsManager | undefined;
+  private readonly observabilityUsageObserver: RunUsageObserver | undefined;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
@@ -93,6 +96,7 @@ export class RunManager {
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
     this.agentMemoryKnowledgeSettings = options.agentMemoryKnowledgeSettings;
+    this.observabilityUsageObserver = options.observabilityUsageObserver;
     this.scheduler = options.scheduler ?? new Scheduler(options.schedulerPolicy ?? {
       maxActiveRuns: 2,
       maxActiveModelCalls: 2,
@@ -140,6 +144,7 @@ export class RunManager {
     void promise.then((result) => {
       this.completions.set(runId, result);
       this.controllers.delete(runId);
+      void this.observeTerminalUsage(runId).catch(() => undefined);
       if (capturedMemory) {
         void this.writeMemory(capturedMemory, config, result)
           .finally(async () => {
@@ -163,6 +168,13 @@ export class RunManager {
     // follow-up GET can observe a real snapshot as soon as 202 is returned.
     await Promise.resolve();
     return { runId, status: 'queued' };
+  }
+
+  private async observeTerminalUsage(runId: string): Promise<void> {
+    const observer = this.observabilityUsageObserver;
+    if (!observer) return;
+    const events = await this.eventStore.read(runId);
+    await observer.recordTerminal(runId, events);
   }
 
   async retryRecovered(runId: string): Promise<{ runId: string; status: 'queued'; retryOf: string } | 'not-found' | 'not-recoverable'> {

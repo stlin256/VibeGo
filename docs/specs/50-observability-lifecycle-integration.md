@@ -1,6 +1,6 @@
 # Spec 50: Observability lifecycle integration
 
-- Status: accepted for 50-R4 (audit action and explicit export boundary)
+- Status: accepted for 50-R5 (terminal run-event usage bridge; automatic resource sampling and pricing settings remain later)
 - Date: 2026-08-04
 - Related: [Spec 43](43-resource-usage-and-cost-audit.md), [Spec 44](44-provider-usage-management-and-upstream-reuse.md), [Spec 45](45-observability-api-and-web.md), [ADR 0012](../adr/0012-local-resource-and-cost-audit-ledger.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -122,6 +122,28 @@ verification; never auto-upload telemetry.
 
 Exit: Web and future clients consume versioned projections, pagination is
 bounded, and audit verification distinguishes valid, degraded and unknown.
+
+### 50-R5: terminal run-event usage bridge (implemented)
+
+`RunUsageObserver` is now wired as an optional daemon application boundary.
+After a run promise settles, `RunManager` reads only that run's existing
+bounded `run_events`, replays them through `replayModelUsage`, converts the
+records to `ProviderUsageObservation` with `dataSource=run-event`, and sends
+them through `ProviderUsageLifecycleAdapter` to the existing usage ledger.
+The observer is fire-and-forget: ledger/projection failure is reported as
+`degraded` and never changes the run result, delays the HTTP 202 response, or
+re-executes a model, tool, shell, approval, or sandbox operation.
+
+Stable usage IDs and durable ledger no-op/conflict semantics are preserved
+across daemon restart. Runs with no usage events produce a bounded no-op. The
+slice does not start `ResourceCollector`, record tool/resource samples,
+introduce pricing settings, or create another event stream. Existing tests
+without the optional observer remain behaviorally unchanged.
+
+Focused package and daemon fixtures prove completed/failed paths, duplicate
+terminal delivery idempotency, writer degradation/retry, run-result isolation,
+and projection privacy: no prompt, transcript, raw provider response, command,
+path, environment value or secret is stored.
 
 ## 50-R1 implementation update (2026-08-05)
 
