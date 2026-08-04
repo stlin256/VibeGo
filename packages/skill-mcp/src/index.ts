@@ -61,7 +61,17 @@ export interface McpHttpManifest extends McpServerManifestBase {
   readonly url: string;
 }
 
-export type McpServerManifest = McpStdioManifest | McpHttpManifest;
+/**
+ * The explicit MCP Streamable HTTP spelling. `http` remains accepted as a
+ * backwards-compatible alias for manifests created by the original one-shot
+ * transport contract.
+ */
+export interface McpStreamableHttpManifest extends McpServerManifestBase {
+  readonly transport: 'streamable-http';
+  readonly url: string;
+}
+
+export type McpServerManifest = McpStdioManifest | McpHttpManifest | McpStreamableHttpManifest;
 
 export interface ManifestLimits {
   readonly maxBytes?: number;
@@ -120,9 +130,9 @@ export function loadMcpServerManifest(input: ManifestInput, limits: ManifestLimi
   assertKeys(record, ['kind', 'id', 'version', 'name', 'description', 'transport', 'command', 'args', 'url', 'tools', 'envAllowlist', 'network']);
   assertKind(record, 'mcp-server');
   const transport = record.transport;
-  if (transport !== 'stdio' && transport !== 'http') throw new ManifestError('MANIFEST_INVALID', 'MCP transport is invalid.');
+  if (transport !== 'stdio' && transport !== 'http' && transport !== 'streamable-http') throw new ManifestError('MANIFEST_INVALID', 'MCP transport is invalid.');
   if (transport === 'stdio' && record.url !== undefined) throw new ManifestError('MANIFEST_INVALID', 'stdio MCP manifest must not include an HTTP URL.');
-  if (transport === 'http' && (record.command !== undefined || record.args !== undefined)) throw new ManifestError('MANIFEST_INVALID', 'HTTP MCP manifest must not include stdio argv.');
+  if ((transport === 'http' || transport === 'streamable-http') && (record.command !== undefined || record.args !== undefined)) throw new ManifestError('MANIFEST_INVALID', 'HTTP MCP manifest must not include stdio argv.');
   const base = {
     kind: 'mcp-server' as const,
     id: identifierField(record, 'id'),
@@ -184,9 +194,16 @@ export type McpTransportErrorCode =
   | 'MCP_MESSAGE_INVALID'
   | 'MCP_RESPONSE_ID_MISMATCH'
   | 'MCP_REMOTE_ERROR'
+  | 'MCP_HTTP_4XX'
+  | 'MCP_HTTP_401'
+  | 'MCP_HTTP_403'
+  | 'MCP_HTTP_429'
+  | 'MCP_HTTP_5XX'
   | 'MCP_TIMEOUT'
   | 'MCP_ABORTED'
-  | 'MCP_CHANNEL_UNAVAILABLE';
+  | 'MCP_CHANNEL_UNAVAILABLE'
+  | 'MCP_PROTOCOL_DISCONNECTED'
+  | 'MCP_SESSION_NOT_INITIALIZED';
 
 export class McpTransportError extends Error {
   constructor(readonly code: McpTransportErrorCode, message = safeTransportMessage(code)) {
@@ -215,8 +232,28 @@ export interface McpJsonRpcResponse {
   readonly error?: McpJsonRpcError;
 }
 
+export interface McpJsonRpcNotification {
+  readonly jsonrpc: '2.0';
+  readonly method: string;
+  readonly params?: unknown;
+}
+
+export type McpProgressNotification = McpJsonRpcNotification & {
+  readonly method: 'notifications/progress';
+  readonly params?: {
+    readonly progressToken?: string | number;
+    readonly progress?: number;
+    readonly total?: number;
+    readonly message?: string;
+  };
+};
+
 export interface McpChannel {
   request(payload: Uint8Array, signal: AbortSignal): Promise<Uint8Array>;
+  /** Optional JSON-RPC notification path used by protocol sessions. */
+  notify?(payload: Uint8Array, signal: AbortSignal): Promise<void>;
+  /** Optional server-notification subscription used for progress events. */
+  onNotification?(listener: (notification: McpJsonRpcNotification) => void): () => void;
   close(): Promise<void>;
 }
 
@@ -580,9 +617,18 @@ function safeTransportMessage(code: McpTransportErrorCode): string {
     MCP_MESSAGE_INVALID: 'The MCP message is invalid.',
     MCP_RESPONSE_ID_MISMATCH: 'The MCP response id did not match the request.',
     MCP_REMOTE_ERROR: 'The MCP server returned an error.',
+    MCP_HTTP_4XX: 'The MCP endpoint rejected the request.',
+    MCP_HTTP_401: 'The MCP endpoint requires valid credentials.',
+    MCP_HTTP_403: 'The MCP endpoint denied access.',
+    MCP_HTTP_429: 'The MCP endpoint rate limited the request.',
+    MCP_HTTP_5XX: 'The MCP endpoint is unavailable.',
     MCP_TIMEOUT: 'The MCP request timed out.',
     MCP_ABORTED: 'The MCP request was cancelled.',
     MCP_CHANNEL_UNAVAILABLE: 'The MCP transport is unavailable.',
+    MCP_PROTOCOL_DISCONNECTED: 'The MCP transport disconnected.',
+    MCP_SESSION_NOT_INITIALIZED: 'The MCP protocol session is not initialized.',
   };
   return messages[code];
 }
+
+export * from './transport.js';

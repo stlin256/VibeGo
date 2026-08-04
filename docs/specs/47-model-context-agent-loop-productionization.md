@@ -187,6 +187,11 @@ Exit: one documented live smoke can complete a minimal text request when
 credentials are supplied out-of-band; failure is classified as provider,
 network, auth, schema or quota without blocking normal Web startup.
 
+This command remains opt-in and outside `pnpm verify` for routine development,
+but it is a mandatory evidence item for the Spec 52 release gate. A release
+candidate cannot claim a complete core Harness without a successful redacted
+live smoke report.
+
 ## Tests first / acceptance matrix
 
 - descriptor rejects secret-shaped fields, absolute paths, unknown protocol and

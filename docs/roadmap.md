@@ -403,7 +403,8 @@ application service。真实 LLM smoke 只允许通过独立命令和进程外 s
 OpenAI-compatible endpoint adapter；该切片已覆盖 provider snapshot、Responses/
 Anthropic-shaped fixture replay、token/byte compaction 与 pre-stream retry，daemon
 R3 daemon/application bridge is now implemented; live smoke remains the later
-opt-in R4 command. The R3 slice gate passed with 402 tests; the R1 gate passed
+opt-in R4 command for ordinary development and is mandatory for the Spec 52
+release gate. The R3 slice gate passed with 402 tests; the R1 gate passed
 with 412 tests; the current repository gate is `pnpm verify` with 420 tests
 after Spec 48-R2.
 
@@ -436,13 +437,20 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（规划）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1 已实现）
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
 manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
 progress、cancellation、health（failed/connectivity-only/verified）、能力快照和 ToolRegistry
 激活。关闭状态不得发起子进程/网络请求，MCP/Skill 失败只能 degraded，不能绕过 Approval、
 Sandbox 或 Scheduler。
+
+49-R1 已交付注入式 transport/session 边界：stdio 使用 argv/env allowlist 与 JSONL
+framing，Streamable HTTP 使用精确 manifest URL、bounded headers/response 和可取消 fetch；
+initialize、progress、request-id、401/403/429/5xx、timeout、malformed/oversized、disconnect
+和 deterministic close 都只返回稳定错误/健康元数据。`@ready4vibe/skill-mcp` focused
+20 tests 已通过；该切片不自动启动、不激活工具，也不进入默认 run，后续 R2 再做
+capability snapshot/registry。
 
 ## Spec 50：Observability lifecycle integration（规划）
 
@@ -460,11 +468,26 @@ two-turn/tool-call path through `RunManager` and the existing `AgentLoop`.
 Provider switching is isolated to later runs and mismatched configured
 providers fail before `run.created`. This slice keeps Goal admission, Approval,
 Sandbox, Scheduler, WorkspaceRegistry and the durable usage ledger unchanged;
-live provider smoke remains the later opt-in R4 command.
+live provider smoke remains the later opt-in R4 command for the offline
+development gate, but Spec 52 requires a successful redacted smoke report
+before release review.
 
 ## Spec 51：Host-first release and client boundary（规划）
 
 详见 [Spec 51](specs/51-host-first-release-and-client-boundary.md) 与现有 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md)。本阶段完成 daemon 静态托管 React Web、跨平台 launcher、单 Host URL、LAN/public TLS/certificate adapter 和未来 TypeScript client SDK。远程用户只需浏览器 URL 与 pairing；Android/iOS/HarmonyOS UI 后置，不读取 SQLite/sidecar，不复制 AgentLoop/Approval/Sandbox。
 
-上述 Spec 47–51 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
+## Spec 52：Capability profiles 与 first-run experience（规划）
+
+详见 [Spec 52](specs/52-capability-profiles-and-first-run-experience.md)。本规格把
+配置引导、能力档位、Approval/Sandbox、conversation-first Web 和 Host-first
+开箱即用路径串成单一验收流，并把核心 Harness 的完整性作为发布门禁。它定义
+`preview`、`workspace-coding`、`advanced-local` 和 `custom` 档位，要求能力按需
+渐进开启、profile/run snapshot 隔离、失败无隐式 host fallback，并保留现有 daemon、
+RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、`run_events` 和
+`goal_events` 的权威地位。Spec 52 还纳入显式 Goal governed admission、真实
+Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM smoke；
+原生客户端是后置消费者，不阻塞 Web/Host 发布。该规格当前只作为规划门禁，不改变
+任何默认权限或 run 创建行为。
+
+上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。

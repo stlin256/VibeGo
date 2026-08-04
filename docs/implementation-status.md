@@ -64,6 +64,8 @@
 
 50. Spec 48-R4 的不可信任务审批续接集成 fixture 已补齐：`untrusted-content` + `external-sandbox` + digest image 先产生 `approval.required`，经认证 approve 后只在同一 run 的显式 continuation 点执行一次注入式 container runner；duplicate/deny/cancel/runtime unavailable 均 fail-closed，Web approval card 只展示 bounded provider/digest/network 元数据，不改变 AgentLoop 核心状态机或现有事件事实源。
 
+51. Spec 49-R1 transport slice 已实现：`packages/skill-mcp` 提供注入式 `McpStdioChannelFactory`、`McpStreamableHttpChannelFactory` 与 bounded `McpProtocolSession`，覆盖 initialize、progress、request id、timeout/cancel、401/403/429/5xx、malformed/oversized/disconnect 和 deterministic close；20 个 skill-mcp focused tests 已通过。transport 不创建 ToolRegistry、Approval、Scheduler、Sandbox 或 daemon startup side effect；R2 capability snapshot/registry 仍未实现。
+
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
@@ -289,10 +291,11 @@ The following work is documented but not fully implemented yet:
   compiler and the R2 injected host-restricted process runner are implemented
   bounded slices. Container smoke and full Web continuation remain later
   phases. Existing daemon shell wiring remains explicit and default-off.
-- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): real
-  stdio/Streamable HTTP transport, health classification, capability snapshot
-  and ToolRegistry activation. Current MCP/Skill transport remains injected
-  one-shot and does not auto-start or access the network.
+- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): R1
+  injected stdio/Streamable HTTP transport and protocol session are now
+  implemented behind fake spawn/fetch ports; capability health classification,
+  snapshot and ToolRegistry activation remain later phases. The daemon still
+  does not auto-start or access MCP transport on startup.
 - **Spec 50** (`specs/50-observability-lifecycle-integration.md`): automatic
   RunManager/application lifecycle wiring for usage, cost, resource samples
   and audit. Current ledgers, collector and API projection are available, but
@@ -301,8 +304,19 @@ The following work is documented but not fully implemented yet:
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate
   Vite server; native Android/iOS/HarmonyOS clients remain post-MVP.
+- **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
+  cross-cutting capability-profile and first-run UX gate is now specified. It
+  defines preview, workspace-coding, advanced-local and custom profiles,
+  progressive capability unlock, contextual blocked-capability guidance,
+  profile/run snapshot isolation and Host-first acceptance. Its release gate
+  additionally covers Goal governed admission, real Tailscale/SSH transport,
+  ACME staging/renewal, a core Harness completeness matrix and a mandatory
+  out-of-band real LLM smoke. This is planning only; no profile resolver, new
+  default capability or run-path behavior has been implemented by this
+  documentation change. Native clients remain post-release and do not block
+  the Web/Host release.
 
-These five specs are design/planning gates only. They do not change the
+These six specs are design/planning gates only. They do not change the
 current statement that untrusted network/model/MCP/Skill/shell side effects
 are disabled unless explicitly configured through the authenticated boundary,
 and they do not modify `run_events`, `goal_events`, AgentLoop, RunManager,
@@ -348,8 +362,10 @@ AgentLoop state machine or introducing a second authority:
   network request or durable observability-ledger write occurs in this slice.
 
 R4 live smoke and Spec 50 automatic usage-ledger lifecycle attachment remain
-deferred. Goal admission, `goal_events`, Approval, Sandbox, Scheduler and
-WorkspaceRegistry behavior remain unchanged.
+deferred for the ordinary offline verification gate. A successful redacted
+live smoke is mandatory before the Spec 52 release gate; Goal admission,
+`goal_events`, Approval, Sandbox, Scheduler and WorkspaceRegistry behavior
+remain unchanged until their separately specified integration phases.
 
 ## Spec 48 R1 implementation note (2026-08-04)
 
