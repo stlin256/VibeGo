@@ -1,10 +1,21 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SettingsTabPanel, SettingsTabs } from './SettingsTabs.js';
+import { resolveSettingsTab, SettingsTabPanel, SettingsTabs } from './SettingsTabs.js';
 
 const tabs = [{ id: 'run', label: 'Run' }, { id: 'tools', label: 'Tools' }, { id: 'access', label: 'Access' }] as const;
 
 describe('SettingsTabs', () => {
+  it('resolves bounded arrow and Home/End keyboard movement with wrapping', () => {
+    expect(resolveSettingsTab(tabs, 'tools', 'ArrowRight')).toBe('access');
+    expect(resolveSettingsTab(tabs, 'tools', 'ArrowDown')).toBe('access');
+    expect(resolveSettingsTab(tabs, 'tools', 'ArrowLeft')).toBe('run');
+    expect(resolveSettingsTab(tabs, 'run', 'ArrowUp')).toBe('access');
+    expect(resolveSettingsTab(tabs, 'tools', 'Home')).toBe('run');
+    expect(resolveSettingsTab(tabs, 'tools', 'End')).toBe('access');
+    expect(resolveSettingsTab(tabs, 'tools', 'PageDown')).toBeNull();
+    expect(resolveSettingsTab([], 'tools', 'ArrowRight')).toBeNull();
+  });
+
   it('renders an accessible tablist and selected panel relationship', () => {
     const html = renderToStaticMarkup(<SettingsTabs ariaLabel="Settings sections" tabs={tabs} activeTab="tools" onTabChange={() => undefined}>
       <SettingsTabPanel tabId="run" activeTab="tools">Run controls</SettingsTabPanel>
@@ -13,9 +24,9 @@ describe('SettingsTabs', () => {
     </SettingsTabs>);
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-label="Settings sections"');
+    expect(html).toContain('aria-controls="settings-panel-tools"');
     expect(html).toContain('id="settings-tab-tools"');
     expect(html).toContain('aria-selected="true"');
-    expect(html).toContain('aria-controls="settings-panel-tools"');
     expect(html).toContain('id="settings-panel-tools"');
     expect(html).toContain('aria-labelledby="settings-tab-tools"');
     expect(html).toContain('Tool controls');

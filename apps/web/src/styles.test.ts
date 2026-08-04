@@ -24,6 +24,17 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.composer-panel { position: sticky;');
   });
 
+  it('keeps the 42c/42d settings tabs, status cards and overflow guards source-owned', () => {
+    expect(styles).toContain('.settings-tabs');
+    expect(styles).toContain('.settings-tab[aria-selected="true"]');
+    expect(styles).toContain('.settings-tab-panel[hidden]');
+    expect(styles).toContain('.settings-section[data-status="degraded"]');
+    expect(styles).toContain('.settings-run-fields');
+    expect(styles).toContain('.settings-section .inline-actions label');
+    expect(styles).toContain('body { overflow-x: hidden; }');
+    expect(styles).toContain('.goal-panel { overflow: hidden; }');
+  });
+
   it('keeps the Phase 56a language control and accessibility hooks bounded', () => {
     expect(styles).toContain('.locale-control');
     expect(styles).toContain('.locale-control select { min-height: 44px;');

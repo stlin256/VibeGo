@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
+**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
 
 ## 当前实施范围
 
@@ -51,7 +51,7 @@
 43. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6b 首个切片：版本化 `agent-memory-operations/v1` 只读 projection、bounded update history、health latency、recall hit/miss、write queue counters、`GET /api/v1/settings/agent-memory/updates` 和 Web 状态摘要；运行时状态独立持久化，不进入 `run_events`、`goal_events` 或 memory payload。settings 支持显式 immutable upstream commit ref lock；候选兼容 fixture 覆盖 health/search/conversation v3 envelope 与 privacy/schema fail-closed。当前/previous/candidate 清理保护和 daemon restart recovery 规则保持不变。
 44. `packages/goal-control` 与 `apps/daemon` 已实现 Spec 40 Phase 2A：`GoalWriteService` 和六个受认证 mutation route 覆盖 Goal 创建、Todo、Gate open/resolve、Evidence 和 validated Todo completion；eventId fingerprint 提供重试 no-op/conflict，controlRevision 提供 stale fail-closed，响应剥离 claim hash，输入拒绝 secret/path/未知字段。该切片不接入默认 run admission，也不改变 `run_events`、AgentLoop、RunManager、Scheduler、Approval、Sandbox 或 WorkspaceRegistry。
 45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；Spec 51-R1 静态托管、R2 launcher 生命周期、R3a certificate readiness projection 和 R4 versioned client SDK 均已实现。R2 launcher 是依赖零、可注入的参数/端口/PID lease/日志脱敏/进程树停止边界，8 个 Node fixture tests 已通过；certificate package 8 个 focused tests、daemon focused gate 152 tests、client SDK 5 个 focused tests 已通过。发行包/签名、R3b ACME/OS-store/renewal、R4 native UI 和 Android/iOS/HarmonyOS 原生客户端仍明确后置。
-46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
+46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a/42b/42c 已按切片落地，42d-1 已补齐 SettingsTabs 的自动化键盘导航 contract；组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
 47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；运行时采样、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
 48. `docs/specs/53-host-install-upgrade-backup-recovery.md` 已实现 Phase 0/1/2/3/4/5/6：`host-manifest/v1`、`host_update_state_v1`、`backup-manifest/v1`/restore/recovery/diagnostic strict contracts、`RestoreApplyConfirmation`、`SqliteBackupSnapshotAdapter`、只读 `SqliteRestorePreflightAdapter`、`SqliteRestoreStagingAdapter` 与 `SqliteRestoreApplyAdapter` 均有 bounded/privacy/path/integrity 校验；未知字段、credential/query token、绝对路径、无效时间、跳过验证、无 previous 回滚、credential/workspace-file import、越权 safe-mode operation、损坏数据库、schema mismatch、超限输出、digest/size/integrity/preflight/staging/apply 失败、未确认/错配 plan、既有 snapshot/candidate/previous 和 swap rollback 均 fail-closed。contracts focused suite 65 tests、storage focused suite 66 tests（含 snapshot fixture 4 tests、restore preflight fixture 10 tests、restore staging fixture 12 tests 与 restore apply fixture 9 tests）、storage typecheck/build 通过。该切片不下载、验证、安装、迁移、restore result 持久化、Web/daemon route 或第二锁/调度器，也不改变 daemon、workspace、run/Goal 事实源。
 49. `docs/specs/54-model-provider-onboarding.md` 已实现 Phase 0/1/2/3/4：`ModelProviderDescriptor`、`ModelEndpointProfile`、`ModelCredentialRef`、`ModelSettingsProfile`、capability/probe/setup-session contracts、显式 OpenAI-compatible `/models` probe、authenticated daemon probe route、Web Settings Probe 控件和 durable non-secret endpoint profile 均有版本、bounded、privacy/path 校验；profile 只保存 provider/endpoint/model metadata，API key 仍仅在进程内或环境注入，重启后返回 `durable-profile`/`credential-required` 并 fail-closed 直到重新输入 key；route 不接受 key/prompt/path/arbitrary headers，probe 不创建 run/event、不改变 provider 或 in-flight snapshot，当前仍不改 Spec 28 的默认 runtime/secret 边界。
@@ -69,8 +69,12 @@ model、memory、knowledge、MCP、tool、sandbox、run-default、TLS 与 deploy
 daemon authority 未改变；组件不访问 API/storage/secret、不创建第二 SSE 或事件事实源。
 新增 focused tests 覆盖 tab semantics、panel hiding、status variants、bounded copy 和
 secret/path-free markup；下一步仍是更深层 Goal/Memory/Tool card 抽取与 42d device/
-accessibility/bundle 验收。Web focused suite 当前 92 tests，typecheck 和 production
-build 通过，JS/CSS gzip 为 82.30/6.02 KiB。
+accessibility/bundle 验收。Web focused suite 当前 94 tests，typecheck 和 production
+build 通过，JS/CSS gzip 为 82.52/6.06 KiB。
+50h. Spec 42 Phase 42d-1 已为 `SettingsTabs` 增加 ArrowLeft/Right、ArrowUp/Down、Home、End
+键盘导航与单一 roving `tabIndex=0`；纯 resolver 和组件 contract tests 通过。该切片不宣称
+屏幕阅读器人工、Playwright、对比度或真实设备证据，也不改变 API、settings、run、SSE 或
+事件事实源。
 50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
 51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
 52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。

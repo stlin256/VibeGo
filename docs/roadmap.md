@@ -327,7 +327,7 @@ runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 sec
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3 已实现，42d 后续）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1 已实现，42d 后续）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -382,8 +382,13 @@ presentational 语义。Tabs/tabpanel 的 active state 仅由 `App` 管理；未
 `hidden` 保持 DOM/SSR 稳定，不新增请求、storage 或安全事实源。该切片保留所有
 已有字段、API callback、焦点 trap/return 和 secret-safe persistence，focused tests
 覆盖 ARIA、面板隐藏、状态变体和敏感信息排除。Goal/Memory/Tool cards 的更深层抽取
-以及 42d viewport/键盘/无障碍/bundle 验收仍后置。当前 Web focused gate 为 92 tests、
-typecheck 和 production build；观测到 JS gzip 82.30 KiB、CSS gzip 6.02 KiB。
+以及 42d viewport/键盘/无障碍/bundle 验收仍后置。当前 Web focused gate 为 94 tests、
+typecheck 和 production build；观测到 JS gzip 82.52 KiB、CSS gzip 6.06 KiB。
+
+42d-1 已为 `SettingsTabs` 增加 Arrow/Home/End 键盘导航、单一 roving
+`tabIndex=0` 和 bounded focus return；行为由纯 resolver 与组件 contract tests
+覆盖，不创建浏览器请求或第二状态源。该切片只证明自动化键盘语义，不替代真实屏幕
+阅读器、Playwright viewport、对比度或物理设备验收。
 
 ## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 

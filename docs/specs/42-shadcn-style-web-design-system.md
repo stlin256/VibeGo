@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1 与 42c-2 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3 与 42d-1 已实现；其余 42d 验收仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -368,9 +368,23 @@ stay deterministic; no settings value is written to browser storage. The
 presentational components do not import `api.ts`, create requests, or change
 the daemon's settings authority. Focused tests cover tab semantics, panel
 selection, status variants, bounded copy, and secret/path-free markup.
-The focused Web gate now passes 92 tests, typecheck and production build; the
-observed output is 82.30 KiB JS gzip and 6.02 KiB CSS gzip, within the phase
+The focused Web gate now passes 94 tests, typecheck and production build; the
+observed output is 82.52 KiB JS gzip and 6.06 KiB CSS gzip, within the phase
 budgets.
+
+### Phase 42d-1 implementation update (2026-08-05)
+
+`SettingsTabs` now implements the bounded keyboard contract for the local
+tablist: `ArrowLeft`/`ArrowUp` and `ArrowRight`/`ArrowDown` move to the
+previous/next tab, while `Home` and `End` select the first/last tab. The
+selected tab remains the only `tabIndex=0` control; focus is moved to the
+newly selected tab without creating a request or changing any settings state
+outside the explicit `onTabChange` callback. A pure resolver is covered by
+unit tests so the behavior is deterministic without a browser test runner.
+
+This slice does not claim screen-reader/manual, Playwright, contrast, or
+physical-device evidence. Existing `hidden` panel, reduced-motion, safe-area,
+ratio and 44px touch-target contracts remain unchanged.
 
 ## 9. 退出条件
 

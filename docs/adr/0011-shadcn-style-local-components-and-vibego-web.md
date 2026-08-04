@@ -158,3 +158,16 @@ callbacks, or daemon contracts. Inactive panels remain bounded and hidden in
 the DOM to keep SSR/test output deterministic. The focused component tests
 cover keyboard/ARIA attributes, inactive panel hiding, status variants and
 secret/path-free rendering.
+
+## Phase 42d-1 implementation update (2026-08-05)
+
+The local tab primitive now owns only the standard keyboard movement contract:
+left/right (and up/down) move within the bounded tab list, while Home/End
+select the first/last tab. It keeps a single roving `tabIndex=0`, calls the
+existing `onTabChange` callback, and focuses the selected tab when a browser
+document is available. The resolver is pure and independently tested; no
+request, storage write, or settings authority moved into the component.
+
+This is an automated keyboard contract only. Manual assistive-technology,
+contrast, Playwright viewport, and physical-device evidence remain explicitly
+out of scope until the later 42d acceptance slices.

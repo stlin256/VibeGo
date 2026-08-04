@@ -27,7 +27,7 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .settings-grid label { display: grid; gap: 5px; }
 .settings-grid input, .settings-grid select { min-height: 40px; padding: 9px 10px; }
 .settings-tabs { display: grid; gap: 12px; margin-top: 14px; }
-.settings-tab-list { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid #263650; padding-bottom: 8px; }
+.settings-tab-list { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; border-bottom: 1px solid #263650; padding-bottom: 8px; }
 .settings-tab { min-height: 40px; padding: 0 13px; color: #cbe4ff; border: 1px solid transparent; background: transparent; }
 .settings-tab:hover { background: #17243c; }
 .settings-tab[aria-selected="true"] { color: var(--vibego-ink); border-color: rgb(92 225 230 / 52%); background: var(--vibego-cyan); }
@@ -39,6 +39,8 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .settings-section-header .ui-card__title { margin: 5px 0 4px; }
 .settings-section-header .ui-card__description { margin: 0; color: var(--vibego-on-dark-muted); font-size: 12px; }
 .settings-section .ui-card__content { display: grid; gap: 10px; }
+.settings-run-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.settings-section .inline-actions label { min-width: min(100%, 160px); flex: 1 1 160px; }
 .settings-section[data-status="degraded"] { border-color: rgb(255 190 92 / 55%); }
 .settings-section[data-status="unavailable"] { border-color: rgb(189 102 90 / 60%); }
 .settings-section .ui-badge { flex: 0 0 auto; }
