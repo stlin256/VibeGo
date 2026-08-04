@@ -1,6 +1,6 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
+- Status: Phase 0 implemented（manifest contract；安装器/升级器/备份恢复仍未接入）
 - Date: 2026-08-04
 - Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -15,7 +15,7 @@
 
 ## 2. 当前差距
 
-- daemon 尚未内置 React 静态资源，开发仍依赖独立 Vite server。
+- daemon 已可在 Host-first release path 内置 React 静态资源；开发仍可使用独立 Vite server。
 - 尚无不要求用户安装 Node/pnpm 的跨平台 Host bundle 和统一 launcher。
 - SQLite 有持久化事件和 settings，但没有面向用户的版本化 backup/restore contract。
 - 已有 restart/recovery guard，但没有 candidate upgrade、migration dry-run、safe mode 和
@@ -55,6 +55,16 @@ createdAt
 ```
 
 Manifest 不得包含绝对路径、secret、API key、private key、完整命令或用户 workspace 内容。
+
+#### Phase 0 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now exposes a strict `host-manifest/v1` contract for
+the fields above. Product/channel/target/revision values are bounded, the
+artifact digest is a lowercase SHA-256 reference, and signature/attestation
+references reject credentials, query tokens, control characters and absolute
+paths. Unknown fields and invalid timestamps are rejected before a future
+installer or updater can act on a manifest. This slice is pure validation: it
+does not download, verify, install, migrate, switch or roll back any artifact.
 
 ### 4.2 安装体验
 
