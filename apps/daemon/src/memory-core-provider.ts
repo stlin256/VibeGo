@@ -1,11 +1,13 @@
 import {
   AgentMemoryIdentitySchema,
   AgentMemoryItemSchema,
+  AgentMemoryOperationsSchema,
   AgentMemoryRecallRequestSchema,
   AgentMemoryStatusSchema,
   AgentMemoryWriteRequestSchema,
   type AgentMemoryErrorCode,
   type AgentMemoryItem,
+  type AgentMemoryOperations,
   type AgentMemoryProvider,
   type AgentMemoryRecallRequest,
   type AgentMemoryRecallResult,
@@ -17,6 +19,7 @@ import {
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_WRITE_BYTES = 32 * 1024;
 const REVISION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+const MAX_PENDING_WRITES = 256;
 
 export type MemoryCoreFetchImplementation = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -56,6 +59,16 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
   private closed = false;
   private revision: string | null = null;
   private lastErrorCode: AgentMemoryErrorCode | null = null;
+  private healthLatencyMs: number | null = null;
+  private recallHits = 0;
+  private recallMisses = 0;
+  private lastRecallAt: string | null = null;
+  private pendingWrites = 0;
+  private writeInFlight = false;
+  private acceptedWrites = 0;
+  private failedWrites = 0;
+  private lastWriteAttemptAt: string | null = null;
+  private lastWriteErrorCode: AgentMemoryErrorCode | null = null;
 
   constructor(options: MemoryCoreProviderOptions) {
     const endpoint = parseEndpoint(options.endpoint, options.allowInsecureHttp === true);
@@ -76,12 +89,14 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
   }
 
   async status(signal?: AbortSignal): Promise<AgentMemoryStatus> {
+    const startedAt = Date.now();
     const checkedAt = new Date().toISOString();
     try {
       const payload = await this.request('/health', 'GET', undefined, signal);
       const revision = readRevision(payload);
       this.revision = revision;
       this.lastErrorCode = null;
+      this.healthLatencyMs = elapsedMs(startedAt);
       return this.statusValue({
         available: true,
         degraded: false,
@@ -93,6 +108,7 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
     } catch (error) {
       const code = errorCode(error);
       this.lastErrorCode = code;
+      this.healthLatencyMs = elapsedMs(startedAt);
       return this.statusValue({
         available: false,
         degraded: true,
@@ -109,6 +125,7 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
     const startedAt = Date.now();
     if (!sameIdentity(parsed.identity, this.identity)) {
       this.lastErrorCode = 'schema';
+      this.recordRecall(false);
       return {
         items: [],
         sourceRevision: this.revision,
@@ -127,6 +144,7 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
       }, parsed.signal);
       const items = mapRecallItems(data, parsed.maxItems, parsed.maxBytes, this.revision);
       this.lastErrorCode = null;
+      this.recordRecall(items.length > 0);
       return {
         items,
         sourceRevision: this.revision,
@@ -135,6 +153,7 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
       };
     } catch (error) {
       this.lastErrorCode = errorCode(error);
+      this.recordRecall(false);
       return {
         items: [],
         sourceRevision: this.revision,
@@ -150,12 +169,53 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
       if (!sameIdentity(parsed.identity, this.identity)) this.lastErrorCode = 'schema';
       return { accepted: false, queued: false };
     }
+    if (this.pendingWrites >= MAX_PENDING_WRITES) {
+      this.lastErrorCode = 'unavailable';
+      this.failedWrites = Math.min(1_000_000_000, this.failedWrites + 1);
+      this.lastWriteErrorCode = 'unavailable';
+      return { accepted: false, queued: false };
+    }
+    this.pendingWrites += 1;
+    this.acceptedWrites = Math.min(1_000_000_000, this.acceptedWrites + 1);
     this.writeQueue = this.writeQueue
-      .then(() => this.write(parsed))
+      .then(async () => {
+        this.writeInFlight = true;
+        this.lastWriteAttemptAt = new Date().toISOString();
+        try {
+          await this.write(parsed);
+          this.lastWriteErrorCode = null;
+        } catch (error) {
+          this.failedWrites = Math.min(1_000_000_000, this.failedWrites + 1);
+          this.lastWriteErrorCode = errorCode(error);
+          throw error;
+        } finally {
+          this.writeInFlight = false;
+          this.pendingWrites = Math.max(0, this.pendingWrites - 1);
+        }
+      })
       .catch((error: unknown) => {
         this.lastErrorCode = errorCode(error);
       });
     return { accepted: true, queued: true };
+  }
+
+  operations(): AgentMemoryOperations {
+    return AgentMemoryOperationsSchema.parse({
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1',
+      currentRevision: this.revision,
+      previousRevision: null,
+      healthLatencyMs: this.healthLatencyMs,
+      recall: { hits: this.recallHits, misses: this.recallMisses, lastAt: this.lastRecallAt },
+      writeQueue: {
+        pending: this.pendingWrites,
+        inFlight: this.writeInFlight,
+        accepted: this.acceptedWrites,
+        failed: this.failedWrites,
+        lastAttemptAt: this.lastWriteAttemptAt,
+        lastErrorCode: this.lastWriteErrorCode,
+      },
+      updates: [],
+    });
   }
 
   async close(): Promise<void> {
@@ -173,6 +233,12 @@ export class TencentMemoryCoreProvider implements AgentMemoryProvider {
       messages: [{ role: 'assistant', content }],
     });
     this.lastErrorCode = null;
+  }
+
+  private recordRecall(hit: boolean): void {
+    if (hit) this.recallHits = Math.min(1_000_000_000, this.recallHits + 1);
+    else this.recallMisses = Math.min(1_000_000_000, this.recallMisses + 1);
+    this.lastRecallAt = new Date().toISOString();
   }
 
   private statusValue(overrides: Pick<AgentMemoryStatus, 'available' | 'degraded' | 'revision' | 'lastHealthAt' | 'updateState' | 'lastErrorCode'>): AgentMemoryStatus {

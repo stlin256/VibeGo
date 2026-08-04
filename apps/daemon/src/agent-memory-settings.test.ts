@@ -130,4 +130,24 @@ describe('AgentMemorySettingsManager', () => {
     expect(JSON.stringify(manager.settingsSnapshot())).not.toMatch(/api[_-]?key|token|secret/iu);
     await snapshot?.dispose();
   });
+
+  it('supports an immutable upstream ref lock and composes runtime/provider diagnostics', () => {
+    const runtime = {
+      probe: vi.fn(async () => readyStatus()),
+      update: vi.fn(async () => readyStatus()),
+      rollback: vi.fn(async () => readyStatus()),
+      operations: vi.fn(() => ({
+        schemaVersion: 'ready4vibe_agent_memory_operations_v1' as const,
+        currentRevision: 'a'.repeat(40), previousRevision: 'b'.repeat(40), healthLatencyMs: 7,
+        recall: { hits: 0, misses: 0, lastAt: null },
+        writeQueue: { pending: 0, inFlight: false, accepted: 0, failed: 0, lastAttemptAt: null, lastErrorCode: null }, updates: [],
+      })),
+    };
+    const memoryProvider = provider();
+    const manager = new AgentMemorySettingsManager({ settings: new InMemorySettingsStore(), provider: memoryProvider, runtime });
+    expect(() => manager.patch({ upstreamRefLocked: true })).toThrowError(AgentMemorySettingsError);
+    manager.patch({ upstreamRef: 'a'.repeat(40), upstreamRefLocked: true });
+    expect(manager.settingsSnapshot()).toMatchObject({ upstreamRefLocked: true, upstreamRef: 'a'.repeat(40) });
+    expect(manager.operations()).toMatchObject({ currentRevision: 'a'.repeat(40), previousRevision: 'b'.repeat(40), healthLatencyMs: 7 });
+  });
 });

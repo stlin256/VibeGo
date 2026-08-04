@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy/MemoryKnowledge adapter 与 Phase 6a Knowledge settings/run context 已落地；Knowledge 工具化仍后置）
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy/MemoryKnowledge adapter 与 Phase 6a Knowledge settings/run context 已落地；Phase 6b 运营可观测性与 upstream 兼容门禁进行中）
 - 日期：2026-08-04
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
@@ -203,6 +203,23 @@ untrusted projection。关闭、sidecar down、timeout、schema/privacy 和 prob
 脱敏 degraded status。Web 仅展示资源 ID、限额、descriptor 摘要和 probe 状态；未增加新的
 逐 run 确认，也未修改 AgentLoop、run_events/goal_events、Scheduler、Approval、Sandbox
 或 WorkspaceRegistry。
+
+### 7.4 Phase 6b operational projection and compatibility gate
+
+运营指标不进入 `run_events`、`goal_events` 或 MemoryCore payload。daemon 通过只读的
+`GET /api/v1/settings/agent-memory/updates` 返回独立版本化投影，包含 bounded update
+history、health latency、recall hit/miss 和 write queue 状态。计数只用于诊断，不能绕过
+Scheduler、Approval、Sandbox、Workspace 或 Goal admission；memory 失败仍然 fail-soft。
+
+Supervisor 在候选成为 `current` 之前读取候选 revision 自带的 manifest、lockfile 和
+README，并运行 adapter contract fixtures（health、recall envelope、write envelope、
+privacy/bounds）。失败候选保留 current。运维可以把 upstream ref 锁定到不可变 commit
+用于回滚/事故恢复；锁定只阻止自动追踪新 ref，不跳过 frozen install、typecheck、health、
+smoke 或 rollback。
+
+`current`、`previous` 和正在验证的 candidate 永远受 revision 清理保护。构建缓存与
+upstream LICENSE/NOTICE 随 sidecar revision 保留在 daemon 本地，不回显到 Web；恢复时只
+重启已验证 current，不重放旧工具调用或未确认写回。
 
 ## 被拒绝的方案
 

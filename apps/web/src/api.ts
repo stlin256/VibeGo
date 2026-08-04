@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -220,6 +220,7 @@ export interface SandboxSettingsStatus {
 export type AgentMemorySettingsStatus = AgentMemorySettingsStatusContract;
 export type AgentMemorySettingsMode = AgentMemoryMode;
 export type AgentMemorySettingsPatchInput = AgentMemorySettingsPatch;
+export type AgentMemoryOperationsStatus = AgentMemoryOperations;
 export type AgentMemoryKnowledgeSettingsStatus = AgentMemoryKnowledgeSettingsStatusContract;
 export type AgentMemoryKnowledgeSettingsPatchInput = AgentMemoryKnowledgeSettingsPatch;
 
@@ -324,6 +325,10 @@ export class ApiClient {
 
   async rollbackAgentMemory(): Promise<AgentMemorySettingsStatus> {
     return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory/rollback', { method: 'POST' });
+  }
+
+  async agentMemoryOperations(): Promise<AgentMemoryOperationsStatus> {
+    return this.request<AgentMemoryOperationsStatus>('/api/v1/settings/agent-memory/updates', { method: 'GET' });
   }
 
   async agentMemoryKnowledgeSettings(): Promise<AgentMemoryKnowledgeSettingsStatus> {

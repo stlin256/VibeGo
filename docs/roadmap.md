@@ -225,7 +225,7 @@ React smoke test、CSS contract test 和可用性为准。
 当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
 新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
 
-## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–5 已实现）
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–6a 已实现，6b 进行中）
 
 详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
@@ -279,4 +279,15 @@ Phase 5 同时增加独立的 MemoryKnowledge 只读 adapter：它通过 `/v3/to
 事实源。Phase 6a 已增加独立 `agent-memory-knowledge/v1` 资源 settings、认证 probe、
 `autoRetrieve=false` 默认值和新 run snapshot 的可选 bounded context 注入；它仍不注册
 任意 ToolRuntime，结果仍受 ContextManager 字节预算和 untrusted trust 标记约束。Proxy
-sidecar 自动构建/切换、Knowledge 工具化和运营 history 仍是后续阶段。
+sidecar 自动构建/切换和 Knowledge 工具化仍是后续阶段；运营 history 已在 Phase 6b
+首个切片中以独立、bounded 的 diagnostics projection 落地。
+
+### Phase 6b：运营可观测性与 upstream 兼容门禁（进行中）
+
+本阶段只增加独立的只读 operations projection：bounded update history、health latency、
+recall hit/miss 和 compact write queue 状态；不把指标写入 `run_events`、`goal_events` 或
+memory payload。候选 revision 在切换前必须通过其自身 manifest/lockfile/README 解析、
+adapter contract fixtures、frozen install、typecheck、health 和 smoke。失败候选保留
+current，`current`/`previous`/candidate 受清理保护。运维可锁定不可变 upstream commit
+进行恢复，但锁定不绕过安全检查。sidecar license/NOTICE、构建缓存、revision 保留与
+daemon 重启恢复规则将同步记录在 Spec 39/ADR 0008，并为 Web/daemon 增加回归测试。

@@ -125,6 +125,8 @@ const AgentMemorySettingsFieldsSchema = z.object({
   userId: safeId,
   upstreamRepo: z.string().min(1).max(2_048).regex(UPSTREAM_REPOSITORY),
   upstreamRef: z.string().min(1).max(128).regex(UPSTREAM_REF),
+  /** When enabled, upstreamRef must be an immutable 40-character commit. */
+  upstreamRefLocked: z.boolean().optional(),
   autoUpdate: z.boolean(),
   updateIntervalMinutes: z.number().int().min(5).max(24 * 60),
   fallbackToDirectProvider: z.boolean(),
@@ -133,6 +135,9 @@ export const AgentMemorySettingsSchema = AgentMemorySettingsFieldsSchema.extend(
   schemaVersion: z.literal(AGENT_MEMORY_SETTINGS_SCHEMA_VERSION),
 }).strict().superRefine((value, context) => {
   if (value.enabled && value.mode === 'off') context.addIssue({ code: z.ZodIssueCode.custom, message: 'enabled memory must select a non-off mode' });
+  if (value.upstreamRefLocked === true && !/^[0-9a-f]{40}$/u.test(value.upstreamRef)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['upstreamRef'], message: 'locked upstreamRef must be an immutable commit SHA' });
+  }
   addPrivacyIssues(value, context);
 });
 export type AgentMemorySettings = z.infer<typeof AgentMemorySettingsSchema>;
@@ -166,6 +171,8 @@ export interface AgentMemoryProvider {
   recall(request: AgentMemoryRecallRequest): Promise<AgentMemoryRecallResult>;
   enqueueWrite(request: AgentMemoryWriteRequest): Promise<AgentMemoryWriteResult>;
   close(): Promise<void>;
+  /** Optional bounded diagnostics; implementations may omit it. */
+  operations?(): import('./agent-memory-operations.js').AgentMemoryOperations;
 }
 
 /** Returns stable, safe privacy violations for memory requests and results. */

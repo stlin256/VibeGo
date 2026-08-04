@@ -82,4 +82,22 @@ describe('TencentMemoryCoreProvider', () => {
     expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({ session_id: 'session_run' });
     expect(JSON.parse(String(calls[1]?.init?.body))).toMatchObject({ session_id: 'session_run' });
   });
+
+  it('exposes bounded recall and write-queue diagnostics without payloads', async () => {
+    let failWrite = false;
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.endsWith('/v3/conversation/add') && failWrite) return response({ code: 500, message: 'private upstream detail' });
+      if (input.endsWith('/v3/conversation/add')) return response({ code: 0, data: { accepted_ids: ['msg_1'] } });
+      return response({ code: 0, data: { items: [] } });
+    });
+    const provider = new TencentMemoryCoreProvider({ endpoint: 'http://127.0.0.1:8420', allowInsecureHttp: true, apiKey: 'memory-key', serviceId: 'vibego', identity, fetchImpl });
+    await provider.recall({ identity, runId: 'run_12345678', query: 'empty', maxItems: 4, maxBytes: 1_024 });
+    failWrite = true;
+    await provider.enqueueWrite({ identity, runId: 'run_12345678', summary: 'bounded summary', outcome: 'completed' });
+    await provider.close();
+    const operations = provider.operations();
+    expect(operations.recall).toMatchObject({ hits: 0, misses: 1 });
+    expect(operations.writeQueue).toMatchObject({ pending: 0, inFlight: false, accepted: 1, failed: 1, lastErrorCode: 'unavailable' });
+    expect(JSON.stringify(operations)).not.toMatch(/private upstream|memory-key|summary/iu);
+  });
 });

@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Phase 1/2 实施基线，Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过）**
+**状态：Accepted（Phase 6b 运营可观测性与 upstream 兼容门禁切片已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过）**
 
 ## 当前实施范围
 
@@ -48,12 +48,13 @@
 40. `apps/daemon` 已实现 Agent Memory Phase 4 bounded run integration：RunManager 为新 run 冻结 provider/identity/revision snapshot，bounded recall 转为 `ContextItem(source='retrieval')` 并交给 ContextManager 裁剪；终态只异步提交 compact summary/outcome/evidence refs，recall/write failure 不改变 run 结果，settings toggle 不影响已启动 run。
 41. `apps/daemon` 与 `packages/model-openai` 已实现 Agent Memory Phase 5 显式 Proxy adapter：MemoryProxy 使用完整 chat path 和 `/health`，identity headers 经过 bounded 校验，Proxy-owned recall/write 为 validated no-op；新 run 冻结 dual memory/model provider，Proxy 首字节前失败可按策略回退直连，部分流不会重放，4xx/secret/privacy/timeout/并发均有测试。`apps/daemon` 同时提供独立 `MemoryKnowledgeProvider`：只读 Wiki/CodeGraph descriptor 与工具白名单经 `/v3/tools/list`/`/v3/tools/call` 适配，bounded/cancellable/privacy-checked 结果转换为 untrusted retrieval `ContextItem`，不注册任意 ToolRuntime，也不接入默认 run 路径。
 42. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6a：独立 `agent-memory-knowledge/v1` settings、SQLite/InMemory persistence、authenticated GET/PATCH/probe、lazy environment/injected provider creation、bounded `search` retrieval 和 new-run snapshot isolation。默认 disabled/off 不创建 provider、不发 HTTP、不改 prompt；knowledge errors fail-soft，Web 不显示 endpoint、secret、原始响应或绝对路径。
-43. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+43. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6b 首个切片：版本化 `agent-memory-operations/v1` 只读 projection、bounded update history、health latency、recall hit/miss、write queue counters、`GET /api/v1/settings/agent-memory/updates` 和 Web 状态摘要；运行时状态独立持久化，不进入 `run_events`、`goal_events` 或 memory payload。settings 支持显式 immutable upstream commit ref lock；候选兼容 fixture 覆盖 health/search/conversation v3 envelope 与 privacy/schema fail-closed。当前/previous/candidate 清理保护和 daemon restart recovery 规则保持不变。
+44. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，298 个测试全部通过（contracts 17、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 103、web 40；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试，以及 Phase 6a Knowledge settings/probe/run snapshot/Web/SQLite recovery 测试；
+- `pnpm test`：通过，308 个测试全部通过（contracts 19、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 108、web 41）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试、Phase 6a Knowledge settings/probe/run snapshot/Web/SQLite recovery，以及 Phase 6b operations/fixture/lock/recovery 测试；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -199,5 +200,6 @@ to untrusted retrieval `ContextItem` candidates. It is not an arbitrary
 Goal/run/Scheduler/Approval/Sandbox authorities. Knowledge application-service
 settings and optional run injection are implemented as Phase 6a. Knowledge
 remains a retrieval-only adapter: automatic Proxy sidecar build/switch, arbitrary
-ToolRuntime registration, approval/resource expansion and operations history
-remain later work.
+ToolRuntime registration, approval/resource expansion and automatic sidecar
+switching remain later work; Phase 6b now supplies bounded operations history
+and compatibility fixtures without promoting Knowledge to a ToolRuntime.

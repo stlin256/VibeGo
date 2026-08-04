@@ -518,6 +518,11 @@ describe('daemon health server', () => {
     const rollback = await fetch(`${base}/rollback`, { method: 'POST' });
     expect(rollback.status).toBe(200);
     expect(await rollback.json()).toMatchObject({ status: { lastErrorCode: 'rollback' } });
+    const operations = await fetch(`${base}/updates`);
+    expect(operations.status).toBe(200);
+    const operationsBody = await operations.text();
+    expect(operationsBody).toContain('ready4vibe_agent_memory_operations_v1');
+    expect(operationsBody).not.toMatch(/api[_-]?key|C:\\Users|secret/iu);
   });
 
   it('serves independent knowledge settings and bounded probe without exposing sidecar details', async () => {

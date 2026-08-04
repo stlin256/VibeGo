@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy 与 MemoryKnowledge adapter、Phase 6a Knowledge settings/run context implemented；Knowledge 工具化与运营增强仍后置
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy 与 MemoryKnowledge adapter、Phase 6a Knowledge settings/run context implemented；Phase 6b 运营可观测性与 upstream 兼容门禁进行中
 - 日期：2026-08-04
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -507,6 +507,7 @@ interface AgentMemorySettingsV1 {
   userId: string;
   upstreamRepo: string;
   upstreamRef: string;
+  upstreamRefLocked?: boolean;
   autoUpdate: boolean;
   updateIntervalMinutes: number;
   fallbackToDirectProvider: boolean;
@@ -710,10 +711,64 @@ HTTP、不改变默认 interactive run。
 
 ### Phase 6b：运营与上游兼容
 
+Phase 6b 将运营信息放在独立的、版本化的只读投影中，不把 telemetry 写入
+`run_events`、`goal_events` 或记忆 payload，也不把 upstream 原始响应暴露给 Web。
+
 - 记录 bounded update history、health latency、recall hit/miss、write queue 状态；
 - 针对 upstream 每次 schema/API 变化增加 adapter contract fixture；
 - 增加升级前兼容性检查和手动锁定 ref 的运维入口；
 - 明确 sidecar license、构建缓存、revision 清理和恢复文档。
+
+#### 6b operational projection contract
+
+`GET /api/v1/settings/agent-memory/updates` 返回
+`ready4vibe_agent_memory_operations_v1`，只包含有限条数的更新记录、revision、
+稳定错误码、耗时和聚合计数：
+
+```ts
+interface AgentMemoryOperationsV1 {
+  schemaVersion: 'ready4vibe_agent_memory_operations_v1';
+  currentRevision: string | null;
+  previousRevision: string | null;
+  healthLatencyMs: number | null;
+  recall: { hits: number; misses: number; lastAt: string | null };
+  writeQueue: {
+    pending: number;
+    inFlight: boolean;
+    accepted: number;
+    failed: number;
+    lastAttemptAt: string | null;
+    lastErrorCode: string | null;
+  };
+  updates: readonly {
+    at: string;
+    operation: 'start' | 'probe' | 'update' | 'rollback';
+    outcome: 'succeeded' | 'failed' | 'skipped';
+    fromRevision: string | null;
+    toRevision: string | null;
+    elapsedMs: number;
+    errorCode: string | null;
+  }[];
+}
+```
+
+All counters and history are bounded, reset only by retention/rotation, and are
+diagnostic rather than admission signals. A recall hit means at least one item
+survived adapter validation and the ContextManager budget; a miss includes an
+empty or degraded result. `pending` write items contain no transcript or tool
+arguments. The `updates` endpoint is read-only and uses the existing daemon auth,
+CSRF and Origin gates.
+
+The upstream compatibility gate reads the candidate's own manifest, lockfile and
+README before frozen install. Adapter fixtures pin the accepted v3 health/search/
+conversation envelopes and reject unknown or privacy-unsafe shapes. A candidate
+that fails this gate never becomes `current`.
+
+Operational settings may pin an immutable commit ref for incident recovery. A
+locked ref disables automatic ref advancement but does not bypass build,
+health, smoke or rollback checks. Revision cleanup protects `current`,
+`previous`, and the configured candidate; caches and license/NOTICE files remain
+outside the Web response and are documented for daemon operators.
 
 ## 13. 测试与验收标准
 
@@ -769,7 +824,7 @@ HTTP、不改变默认 interactive run。
 
 尚未冻结的产品选择包括：上游默认 ref（branch/tag/commit）、定时检查周期、是否允许
 Proxy 失败时直连 fallback、MemoryKnowledge 的首批查询类型，以及 user/agent ID 与
-未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–6a。
+未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–6b 首个切片。
 
 ## 15. 参考链接
 

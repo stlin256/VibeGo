@@ -1,5 +1,6 @@
 import type {
   AgentMemoryIdentity,
+  AgentMemoryOperations,
   AgentMemoryProvider,
   AgentMemorySettings,
   AgentMemorySettingsPatch,
@@ -9,6 +10,7 @@ import type {
 } from '@ready4vibe/contracts';
 import {
   AgentMemoryIdentitySchema,
+  AgentMemoryOperationsSchema,
   AgentMemorySettingsPatchSchema,
   AgentMemorySettingsSchema,
   AgentMemorySettingsStatusSchema,
@@ -29,6 +31,7 @@ export interface AgentMemoryRuntimeOperations {
   update(signal?: AbortSignal): Promise<AgentMemoryStatus>;
   enqueueUpdate?(signal?: AbortSignal): Promise<AgentMemoryStatus>;
   rollback(signal?: AbortSignal): Promise<AgentMemoryStatus>;
+  operations?(): AgentMemoryOperations;
   close?(): Promise<void>;
 }
 
@@ -71,6 +74,7 @@ const DEFAULT_SETTINGS: AgentMemorySettings = {
   userId: 'local-user',
   upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory',
   upstreamRef: 'feat/server_team',
+  upstreamRefLocked: false,
   autoUpdate: true,
   updateIntervalMinutes: 60,
   fallbackToDirectProvider: true,
@@ -132,6 +136,21 @@ export class AgentMemorySettingsManager {
 
   status(): AgentMemorySettingsStatus {
     return this.response();
+  }
+
+  /** Returns bounded diagnostics without exposing provider credentials or paths. */
+  operations(): AgentMemoryOperations {
+    const runtime = this.runtime?.operations?.();
+    const provider = this.provider?.operations?.();
+    return AgentMemoryOperationsSchema.parse({
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1',
+      currentRevision: runtime?.currentRevision ?? provider?.currentRevision ?? this.lastStatus.revision,
+      previousRevision: runtime?.previousRevision ?? provider?.previousRevision ?? this.lastStatus.previousRevision,
+      healthLatencyMs: runtime?.healthLatencyMs ?? provider?.healthLatencyMs ?? null,
+      recall: provider?.recall ?? { hits: 0, misses: 0, lastAt: null },
+      writeQueue: provider?.writeQueue ?? { pending: 0, inFlight: false, accepted: 0, failed: 0, lastAttemptAt: null, lastErrorCode: null },
+      updates: runtime?.updates ?? [],
+    });
   }
 
   patch(input: unknown): AgentMemorySettingsStatus {

@@ -443,6 +443,19 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/agent-memory/updates') {
+    if (!options.agentMemorySettings) {
+      writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    writeJson(response, 200, options.agentMemorySettings.operations());
+    return;
+  }
+
   const agentMemoryAction = /^\/api\/v1\/settings\/agent-memory\/(probe|update|rollback|webhook)$/u.exec(pathname)?.[1];
   if (agentMemoryAction) {
     if (!options.agentMemorySettings) {

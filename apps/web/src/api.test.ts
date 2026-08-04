@@ -152,6 +152,19 @@ describe('ApiClient', () => {
     expect(calls.map((call) => call.input).join('')).not.toContain('apiKey');
   });
 
+  it('loads the bounded agent-memory operations projection without exposing secrets', async () => {
+    const operations = {
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1', currentRevision: 'a'.repeat(40), previousRevision: null,
+      healthLatencyMs: 4, recall: { hits: 2, misses: 1, lastAt: null },
+      writeQueue: { pending: 0, inFlight: false, accepted: 2, failed: 0, lastAttemptAt: null, lastErrorCode: null }, updates: [],
+    };
+    const calls: Array<{ input: string }> = [];
+    const client = new ApiClient('', async (input) => { calls.push({ input: String(input) }); return response(operations); });
+    await expect(client.agentMemoryOperations()).resolves.toEqual(operations);
+    expect(calls).toEqual([{ input: '/api/v1/settings/agent-memory/updates' }]);
+    expect(JSON.stringify(operations)).not.toMatch(/api[_-]?key|secret|C:\\private/iu);
+  });
+
   it('uses the independent bounded knowledge settings and probe endpoints', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const status = { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1', enabled: false, knowledgeId: 'wiki_demo', autoRetrieve: false, maxItems: 8, maxBytes: 8192, timeoutMs: 750 }, available: false, degraded: false, resourceType: null, resourceName: null, sourceRevision: null, tools: [], lastHealthAt: null, lastErrorCode: null };

@@ -60,5 +60,7 @@ describe('agent memory contracts', () => {
     expect(() => AgentMemorySettingsSchema.parse({ ...settings, apiKey: 'secret' })).toThrow();
     expect(() => AgentMemorySettingsSchema.parse({ ...settings, enabled: true, mode: 'off' })).toThrow();
     expect(AgentMemorySettingsStatusSchema.parse({ schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null })).toMatchObject({ settings: { userId: 'user_demo' } });
+    expect(() => AgentMemorySettingsSchema.parse({ ...settings, upstreamRefLocked: true })).toThrow(/immutable commit/iu);
+    expect(AgentMemorySettingsSchema.parse({ ...settings, upstreamRef: 'a'.repeat(40), upstreamRefLocked: true }).upstreamRefLocked).toBe(true);
   });
 });

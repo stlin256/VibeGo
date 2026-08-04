@@ -230,6 +230,25 @@ describe('TencentMemoryRuntimeSupervisor', () => {
     await restarted.close();
   });
 
+  it('persists bounded update history and health latency as a diagnostics-only projection', async () => {
+    const root = join(process.cwd(), `.tmp-memory-supervisor-${randomUUID()}`);
+    roots.push(root);
+    const builder = new FakeBuilder();
+    const launcher = new FakeLauncher();
+    const health = new FakeHealth();
+    const ports = new FakePorts();
+    const supervisor = makeSupervisor(root, builder, launcher, health, ports);
+    await supervisor.update();
+    await supervisor.probe();
+    const operations = supervisor.operations();
+    expect(operations).toMatchObject({ currentRevision: 'a'.repeat(40), healthLatencyMs: 0, recall: { hits: 0, misses: 0 }, writeQueue: { pending: 0 } });
+    expect(operations.updates.map((entry) => entry.operation)).toEqual(['update', 'probe']);
+    await supervisor.close();
+    const persisted = JSON.parse(await readFile(join(root, 'state', 'operations.json'), 'utf8')) as Record<string, unknown>;
+    expect(persisted).toMatchObject({ schemaVersion: 'ready4vibe_agent_memory_runtime_v1', healthLatencyMs: 0 });
+    expect(Array.isArray(persisted.updates)).toBe(true);
+  });
+
   it('reports unsupported modes without starting a process', async () => {
     const root = join(process.cwd(), `.tmp-memory-supervisor-${randomUUID()}`);
     roots.push(root);
