@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 package, opt-in daemon binding and injected activation implemented; live transport smoke and session drain are the remaining R4 gates
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 package, opt-in daemon binding, injected activation, session drain and local live smoke implemented
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -19,9 +19,10 @@ grant.
   retrieval adapters exist.
 - The daemon does not automatically start an MCP subprocess or connect to a
   remote server on startup.
-- Capability health, activation snapshots, cancellation and real stdio/
-  Streamable HTTP smoke tests remain to be completed. Session ownership must
-  also be drained explicitly when a binding is refreshed or deactivated.
+- Capability health, activation snapshots, cancellation and explicit local
+  stdio/Streamable HTTP smoke are covered. Session ownership is drained
+  explicitly when a binding is refreshed or deactivated; no production MCP
+  process or remote endpoint is enabled by default.
 
 ## Research gate (49-R0)
 
@@ -298,9 +299,9 @@ needed. The package slice has 36 skill-mcp tests and 19 tool-adapter tests.
 `apps/daemon` now adds `McpRunBindingManager`; it captures a verified snapshot
 per run and composes an undefined runtime by default. The daemon main path
 remains MCP-off until an application service explicitly activates a call port.
-The daemon binding slice has 3 focused tests; live transport activation is now
-available through the injected service, while real transport smoke remains
-pending.
+The daemon binding/lifecycle slice has 5 focused tests; live transport
+activation is available through the injected service, and the explicit local
+stdio/Streamable HTTP smoke passes.
 
 #### 49-R4 application activation boundary
 
@@ -339,12 +340,27 @@ The daemon activation slice is covered by 10 focused tests and the binding /
 lifecycle slice by 5 focused tests. `@ready4vibe/skill-mcp` now also provides
 `McpSessionActivationProvider`, which uses the public protocol session,
 `tools/list`, capability registry and session-backed call port behind an
-injected channel factory. Its 3 activation tests use fake channels only; no
-default provider or real stdio/Streamable HTTP smoke is installed.
+injected channel factory. Its 3 activation tests use fake channels; the
+explicit `smoke:mcp` command additionally passes real stdio and loopback
+Streamable HTTP fixtures. No default provider or remote smoke is installed.
 
 Exit: an activated MCP tool completes through the same approval/sandbox path
 as a built-in tool, while failure, recovery and retry cannot replay an old
 request.
+
+#### 49-R4 explicit live smoke command
+
+The repository provides `pnpm smoke:mcp -- --transport stdio` and
+`pnpm smoke:mcp -- --transport streamable-http`. These commands first build the
+`skill-mcp` package, then run a fixed local fixture through the real stdio or
+Streamable HTTP channel, `McpProtocolSession`, capability registry and session
+activation provider. The stdio fixture is a bounded `node` child with
+`shell: false`, an explicit environment allowlist and no inherited
+credentials. The HTTP fixture binds only to loopback and uses the exact
+manifest URL. Both commands are opt-in, do not install a server, do not
+contact the Internet and are excluded from `pnpm verify`; failures produce
+stable redacted JSON and a non-zero exit code. This is transport evidence only
+and does not activate the daemon's MCP binding or change ordinary run behavior.
 
 ## Acceptance matrix
 

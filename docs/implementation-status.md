@@ -470,8 +470,8 @@ allowlisted healthy-verified snapshot and injected call port; provider
 failures and ignored-signal timeouts remain degraded and do not start default
 transport. `@ready4vibe/skill-mcp` also provides the injected
 `McpSessionActivationProvider` for public initialize/tools-list/tools-call
-protocol flow; fake-channel tests pass, while real opt-in stdio/Streamable HTTP
-smoke remains pending.
+protocol flow; fake-channel tests and the explicit real opt-in stdio/Streamable
+HTTP fixture smoke both pass. No default provider or remote endpoint is enabled.
 
 The R4 lifecycle slice now freezes session ownership: activation candidates
 need an explicit close port, run-captured MCP runtimes hold an idempotent lease,
@@ -480,3 +480,8 @@ This keeps protocol sessions from leaking or being closed under an in-flight
 run; shutdown remains best-effort and does not alter AgentLoop, RunManager's
 default start behavior, Scheduler, Approval, Sandbox, WorkspaceRegistry or
 event authorities.
+
+The smoke is implemented as an explicit `pnpm smoke:mcp` command over fixed
+local fixtures, outside daemon startup and the offline verification gate; its
+bounded report is secret/path-free. Both stdio and loopback Streamable HTTP
+runs passed on 2026-08-05.

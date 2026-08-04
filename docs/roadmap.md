@@ -475,7 +475,11 @@ no default provider or network/process side effect is enabled.
 The R4 session lifecycle slice is implemented: explicit candidate close
 ownership, per-run idempotent release leases, deferred drain on
 refresh/deactivate, and bounded daemon shutdown are covered by focused tests.
-Real opt-in stdio/Streamable HTTP smoke remains the following gate.
+Real opt-in stdio/Streamable HTTP fixture smoke is implemented and passed. It
+is an explicit `pnpm smoke:mcp` command over fixed local fixtures, outside
+daemon startup and the offline verification gate; its report is bounded and
+secret/path-free. Production remote-server activation remains separately
+opt-in and is not part of the default run path.
 See [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md)
 and the detailed acceptance tests in [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md).
 

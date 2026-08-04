@@ -80,3 +80,11 @@ clear replay boundary because an interrupted run can later be marked
   request from an untrusted transcript.
 - Persisting raw MCP request/response bodies, endpoint credentials or paths.
 - Closing a refreshed session while an already captured run still holds it.
+
+## Live smoke evidence
+
+Real transport evidence is collected only by the explicit `smoke:mcp` command.
+Its stdio and loopback Streamable HTTP fixtures exercise the public protocol
+session and activation provider without changing daemon startup or default run
+composition. The command is not part of the offline verification gate and its
+bounded report excludes command lines, endpoints, paths, headers and secrets.
