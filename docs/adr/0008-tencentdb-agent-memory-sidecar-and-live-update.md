@@ -1,7 +1,7 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor 与 Phase 4 bounded run integration 已落地；Proxy/Knowledge 仍按 Spec 39 后置）
-- 日期：2026-08-03
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration 与 Phase 5 Proxy adapter 已落地；Knowledge 仍按 Spec 39 后置）
+- 日期：2026-08-04
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
 ## 背景
@@ -143,6 +143,25 @@ ready4vibe 现有 `OpenAICompatibleProvider` 会追加 `/chat/completions`。Mem
 需要 `TencentMemoryProxyProvider` 或显式 endpoint contract 来定义路径、headers、
 上游配置和 fallback。默认 Proxy 失效时回退到原始 Provider，除非用户显式选择“Proxy
 失效即停止”的策略。
+
+### 7.1 Phase 5 的 Proxy adapter 落地边界
+
+Phase 5 采用 daemon-local `TencentMemoryProxyProvider`，同时实现 ready4vibe
+的 memory provider port 和 model provider port。它要求显式的 endpoint/path
+contract（默认 `/proxy/{spaceId}/v1/chat/completions`），并单独探测 `/health`；
+不会把 Proxy 根地址传给会隐式追加 `/chat/completions` 的现有 Provider。
+
+Proxy 请求仅携带经过校验的 team/agent/user/session identity headers 和进程内
+credential。`proxy`/`full-stack` 模式下，MemoryProxy 负责注入及对话写回，
+ready4vibe-side recall/write 是 bounded、validated no-op，避免重复写回。模型
+provider 与 identity 一起冻结在 run snapshot；Proxy 在首字节之前不可用时才可按
+`fallbackToDirectProvider` 回退到同一 run 捕获的直连 provider，部分流已经开始后
+不得重放。回退只更新 degraded 状态，不改变 `run_events`、Goal Control、Scheduler、
+Approval、Sandbox 或 Workspace 事实源。
+
+Phase 5 不把 Proxy sidecar 的构建、revision 切换或 secret 写入 settings 纳入
+Supervisor；现阶段支持显式外部 Proxy endpoint，sidecar 自动构建/切换保留到后续
+阶段。这样在 Proxy 未运行、health 超时或响应协议错误时，普通 Web 和直连模型仍可用。
 
 ## 被拒绝的方案
 

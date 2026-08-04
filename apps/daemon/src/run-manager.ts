@@ -109,7 +109,7 @@ export class RunManager {
       runId,
       config,
       signal: controller.signal,
-      modelProvider: this.modelProviderForRun(),
+      modelProvider: capturedMemory?.modelProvider ?? this.modelProviderForRun(),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
       ...(memoryContext.length > 0 ? { contextItems: memoryContext } : {}),
     });

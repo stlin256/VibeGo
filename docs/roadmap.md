@@ -225,18 +225,18 @@ React smoke test、CSS contract test 和可用性为准。
 当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
 新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
 
-## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–4 已实现）
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–5 已实现）
 
 详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
 TencentDB Agent Memory 独立 sidecar + ready4vibe 原生 `AgentMemoryProvider` + Web
 开关 + GitHub 上游自动构建/切换/回滚。`off` 模式保持现有行为，`memory-core` 是首选
-MVP；`proxy` 与 `full-stack` 后置。TencentDB 只负责长期记忆和知识派生层，Goal/
+MVP；`proxy` 已完成显式 endpoint adapter，`full-stack` 与 Knowledge 后置。TencentDB 只负责长期记忆和知识派生层，Goal/
 Todo/Gate/Evidence、run/approval/sandbox/scheduler 仍由 ready4vibe 作为事实源。
 
 实现顺序为：contract/Noop → MemoryCore adapter → Web Settings/status →
 Supervisor current/previous revision 和候选健康检查 → RunManager/ContextManager bounded
-integration → Proxy → Knowledge。upstream
+integration → Proxy adapter → Knowledge。upstream
 更新采用候选 worktree 构建和蓝绿式切换，不做运行中 Node 热替换；构建或 health 失败
 保留当前版本，普通 Web 和 run 不因记忆服务不可用而中断。
 
@@ -263,3 +263,12 @@ provider/identity/revision snapshot，recall 结果经 ContextManager 的 retrie
 trust 标记和字节预算后才进入 AgentLoop；终态 write-back 仅后台提交 compact summary，
 memory 故障不阻塞 run，settings 切换不影响已启动 run。该阶段不修改 AgentLoop 核心状态机、
 run/Goal 事件事实源或 Scheduler/Approval/Sandbox。
+
+Phase 5 已增加 daemon-local `TencentMemoryProxyProvider`：Proxy 使用显式
+`chatCompletionsPath`（默认 `/proxy/{spaceId}/v1/chat/completions`）和独立 `/health`
+探测，发送 bounded identity headers，不复用会隐式追加路径的直连 Provider。Proxy
+模式下 provider 与 identity 随 run snapshot 冻结；Proxy 负责注入/写回，ready4vibe
+侧 recall/write 保持 validated no-op，避免重复记忆写入。Proxy 在流开始前失败时可按
+`fallbackToDirectProvider` 回退到同一 run 的直连 Provider；部分流不会重放，状态只标记
+degraded。Proxy credential 仅来自进程运行时，未加入 settings、Web、事件或文档。
+MemoryKnowledge 只读 adapter、Proxy sidecar 自动构建/切换和运营 history 仍是后续阶段。

@@ -46,12 +46,13 @@
 38. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 2：`agent-memory`/`v1` 非 secret durable settings snapshot、GET/PATCH/probe/update/rollback 认证 API 和 Settings drawer 卡片；MemoryCore 未配置或不可用时返回 bounded degraded 状态，不接入 AgentLoop、RunManager 默认 run、Goal、Scheduler、Approval、Sandbox 或第二套 SSE。
 39. `apps/daemon` 已实现 Agent Memory Phase 3 `TencentMemoryRuntimeSupervisor`：current/previous/candidate 不可变目录、upstream ref/manifest 兼容检查、frozen install、build/typecheck、临时端口 health、MemoryCore smoke、原子切换、串行 update/rollback/timer/webhook queue、切换后回退、bounded `state/update.json` 重启恢复和 Windows 子进程/端口生命周期测试；supervisor 只在 application-service 边界工作，不动态加载 upstream，不修改既有 run/Goal 事实源。
 40. `apps/daemon` 已实现 Agent Memory Phase 4 bounded run integration：RunManager 为新 run 冻结 provider/identity/revision snapshot，bounded recall 转为 `ContextItem(source='retrieval')` 并交给 ContextManager 裁剪；终态只异步提交 compact summary/outcome/evidence refs，recall/write failure 不改变 run 结果，settings toggle 不影响已启动 run。
-41. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+41. `apps/daemon` 与 `packages/model-openai` 已实现 Agent Memory Phase 5 显式 Proxy adapter：MemoryProxy 使用完整 chat path 和 `/health`，identity headers 经过 bounded 校验，Proxy-owned recall/write 为 validated no-op；新 run 冻结 dual memory/model provider，Proxy 首字节前失败可按策略回退直连，部分流不会重放，4xx/secret/privacy/timeout/并发均有测试。
+42. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，267 个测试全部通过（contracts 13、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 76、web 38；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚和 Phase 4 bounded run integration 测试；
+- `pnpm test`：通过，279 个测试全部通过（contracts 13、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 88、web 38；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration 和 Phase 5 Proxy adapter fallback/privacy/concurrency 测试；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -169,8 +170,8 @@ hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
 The verification baseline before the Web projection slice was 20 workspace packages
-and 206 passing tests. The current verification is 20 workspace packages and 267
-passing tests (Web 38, daemon 76, storage 17, contracts 13, workspaces 7).
+and 206 passing tests. The current verification is 20 workspace packages and 279
+passing tests (Web 38, daemon 88, storage 17, contracts 13, workspaces 7).
 Specs 36–39 add
 durable non-secret workspace settings, ratio-first layout contracts, and the
 conversation-first composer/focus contract plus the Agent Memory Phase 0
@@ -181,3 +182,12 @@ client/component and regression tests; screenshot files are not part of the repo
 list/detail/replay API as the authority. Goal write APIs, Web Goal actions, LoopX
 import/export, and governed admission remain later phases. Existing unbound
 interactive runs and the `run_events` contract are unchanged.
+
+Spec 39 Phase 5 adds the daemon-local `TencentMemoryProxyProvider`. It uses an
+explicit MemoryProxy chat path and health endpoint, bounded identity headers,
+run-scoped model/provider snapshots, pre-stream direct-provider fallback, and
+fail-closed partial-stream handling. Proxy-owned injection and write-back are
+validated no-ops on the ready4vibe memory port, so the proxy cannot duplicate
+MemoryCore writes. Proxy credentials remain process-local and are never stored
+in durable settings, Web responses, events, or revision state. MemoryKnowledge
+and automatic Proxy sidecar build/switch remain later work.

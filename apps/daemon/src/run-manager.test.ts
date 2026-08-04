@@ -5,6 +5,7 @@ import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
+import { TencentMemoryProxyProvider } from './memory-proxy-provider.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 
 const config = {
@@ -220,4 +221,45 @@ describe('RunManager restart recovery', () => {
     expect(providerFactory).not.toHaveBeenCalled();
     expect(runManager.completion(started.runId)?.status).toBe('completed');
   });
+
+  it('uses the proxy model provider captured at run creation and keeps the base provider untouched', async () => {
+    const eventStore = new InMemoryEventStore();
+    const baseModel = new FakeModelProvider({ events: [{ type: 'text-delta', text: 'base' }, { type: 'completed', finishReason: 'stop' }] });
+    const proxy = new TencentMemoryProxyProvider({
+      endpoint: 'https://proxy.example.test',
+      identity: { teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo' },
+      fetchImpl: async () => responseFromChunks([
+        'data: {"choices":[{"delta":{"content":"proxy"}}]}\n\n',
+        'data: {"choices":[{"finish_reason":"stop"}]}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    });
+    const memory = new AgentMemorySettingsManager({
+      settings: new InMemorySettingsStore(),
+      providerFactory: () => proxy,
+    });
+    memory.patch({ enabled: true, mode: 'proxy', teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo' });
+    const runManager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: baseModel,
+      agentMemorySettings: memory,
+    });
+
+    const started = await runManager.start(config);
+    await vi.waitFor(() => expect(runManager.completion(started.runId)).toBeDefined());
+    expect(runManager.completion(started.runId)).toMatchObject({ status: 'completed', output: 'proxy' });
+    expect(baseModel.requests).toHaveLength(0);
+  });
 });
+
+function responseFromChunks(chunks: readonly string[], status = 200): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(body, { status });
+}

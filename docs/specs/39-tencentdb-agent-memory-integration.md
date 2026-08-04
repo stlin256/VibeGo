@@ -1,7 +1,7 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration implemented；Proxy/Knowledge 与运营增强为后续阶段
-- 日期：2026-08-03
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy adapter implemented；Knowledge 与运营增强为后续阶段
+- 日期：2026-08-04
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 
@@ -340,6 +340,31 @@ Proxy 健康时模型请求经 Proxy；Proxy 不可用时默认回退到 ready4v
 并将 memory 状态标记为 degraded。若产品后续需要“Proxy 不可用即停止模型请求”，应作为
 独立的显式策略，不得隐含在 `enabled` 开关里。
 
+#### Phase 5 adapter contract (implemented)
+
+The daemon now uses a dedicated `TencentMemoryProxyProvider` rather than
+reusing `OpenAICompatibleProvider` with a different base URL. The provider has
+an explicit, validated `chatCompletionsPath` (the upstream-compatible default is
+`/proxy/{spaceId}/v1/chat/completions`) and an explicit `/health` probe. It sends
+only bounded identity headers (`x-team-id`, `x-agent-id`, `x-user-id`, and the
+optional session header) plus the process-local proxy credential; credentials
+are never part of settings, events, status responses, or logs.
+
+The provider is also the run-scoped memory port for `proxy`/`full-stack` mode:
+the proxy owns injection and conversation write-back, so the ready4vibe-side
+recall/write methods are validated no-ops. Its model stream is frozen into the
+run snapshot. If the proxy fails before any response bytes are observed and
+`fallbackToDirectProvider` is enabled, the captured direct provider is used and
+the memory status becomes degraded. A partially streamed proxy response is
+never replayed through the fallback, preventing duplicate model/tool calls.
+Concurrent runs have independent requests and signals; closing a snapshot does
+not close the shared direct provider.
+
+The runtime supervisor remains the authoritative owner of sidecar revisions.
+Phase 5 does not broaden its MemoryCore-only candidate build contract: an
+externally configured proxy endpoint is supported as a fail-soft adapter, while
+proxy sidecar build/switch orchestration remains a later phase.
+
 ### 8.4 MemoryKnowledge
 
 MemoryKnowledge 作为后置 Adapter，先通过 `/v3/tools/list` 获取受支持工具，再以
@@ -589,12 +614,12 @@ AgentLoop 创建 run。
 
 ### Phase 5：Proxy 与 Knowledge
 
-- 增加专用 `TencentMemoryProxyProvider` 或显式 endpoint contract；
-- 验证 Proxy 注入/写回、直连 fallback 和运行中 snapshot；
+- ✅ 增加专用 `TencentMemoryProxyProvider` 和显式 endpoint contract；
+- ✅ 验证 Proxy 健康、正确路径/headers、直连 fallback、失败降级、并发和运行中 snapshot；
 - 增加 MemoryKnowledge 只读检索 Adapter；
 - 暂不把 `/v3/tools/call` 直接注册为任意 ToolRuntime，先完成 descriptor/approval/limit 测试。
 
-### Phase 5：运营与上游兼容
+### Phase 6：运营与上游兼容
 
 - 记录 bounded update history、health latency、recall hit/miss、write queue 状态；
 - 针对 upstream 每次 schema/API 变化增加 adapter contract fixture；
@@ -611,7 +636,8 @@ AgentLoop 创建 run。
 - recall timeout、HTTP 5xx、malformed JSON、schema mismatch 都返回 degraded，不抛出
   未脱敏 upstream 错误；
 - write-back 只发送 compact summary/evidence refs，不发送原始 transcript 和 secret；
-- Proxy 端点路径不会错误地重复追加 `/chat/completions`；
+- ✅ Proxy 端点路径不会错误地重复追加 `/chat/completions`；
+- ✅ Proxy health、identity headers、pre-stream fallback、partial-stream fail-closed、secret/privacy 和并发隔离有测试；
 - Knowledge 结果只读、bounded、可取消。
 
 ### Daemon/Run 集成

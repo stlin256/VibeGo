@@ -131,7 +131,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 
 ## 开发约束
 
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、267 项测试全部通过**。Agent Memory Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 durable settings/status、Phase 3 sidecar supervisor 与 Phase 4 bounded run integration 已实现；Proxy/Knowledge 仍按阶段推进。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
+每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。当前基线是 **20 个 workspace package、279 项测试全部通过**。Agent Memory Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 durable settings/status、Phase 3 sidecar supervisor、Phase 4 bounded run integration 与 Phase 5 显式 MemoryProxy adapter 已实现；Knowledge 和 Proxy sidecar 自动更新仍按阶段推进。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
 
 品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
 

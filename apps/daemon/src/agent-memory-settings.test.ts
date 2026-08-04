@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentMemoryProvider, AgentMemoryStatus, AgentMemoryIdentity } from '@ready4vibe/contracts';
+import type { AgentMemoryProvider, AgentMemoryStatus, AgentMemoryIdentity, ModelProvider } from '@ready4vibe/contracts';
 import { InMemorySettingsStore, SqliteSettingsStore } from '@ready4vibe/storage';
 import { AgentMemorySettingsError, AgentMemorySettingsManager } from './agent-memory-settings.js';
 
@@ -103,5 +103,31 @@ describe('AgentMemorySettingsManager', () => {
     expect(() => manager.patch({ enabled: true, mode: 'off' })).toThrowError(AgentMemorySettingsError);
     settings.set('agent-memory', 'v1', { schemaVersion: 1, enabled: true });
     expect(() => new AgentMemorySettingsManager({ settings })).toThrowError(expect.objectContaining({ code: 'CORRUPT_SETTINGS' }));
+  });
+
+  it('freezes a proxy model provider into each run snapshot without changing the durable settings shape', async () => {
+    const modelProvider: ModelProvider = {
+      id: 'proxy-model',
+      capabilities: { streaming: true, toolCalls: true, structuredOutput: false },
+      async *stream() { yield { type: 'completed', finishReason: 'stop' }; },
+    };
+    const proxyProvider = {
+      ...provider(readyStatus({ mode: 'proxy', capabilities: ['proxy'] })),
+      mode: 'proxy' as const,
+      capabilities: modelProvider.capabilities,
+      stream: modelProvider.stream,
+    };
+    const manager = new AgentMemorySettingsManager({
+      settings: new InMemorySettingsStore(),
+      modelProviderFactory: vi.fn(() => modelProvider),
+      providerFactory: vi.fn(() => proxyProvider),
+    });
+    manager.patch({ enabled: true, mode: 'proxy', ...identity });
+    const snapshot = manager.createRunSnapshot('session_demo');
+    expect(snapshot?.identity).toEqual({ ...identity, sessionId: 'session_demo' });
+    expect(snapshot?.modelProvider).toBe(proxyProvider);
+    expect(manager.settingsSnapshot()).toMatchObject({ enabled: true, mode: 'proxy' });
+    expect(JSON.stringify(manager.settingsSnapshot())).not.toMatch(/api[_-]?key|token|secret/iu);
+    await snapshot?.dispose();
   });
 });

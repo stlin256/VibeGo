@@ -64,7 +64,13 @@ const agentMemoryRuntime = new TencentMemoryRuntimeSupervisor({
   environment: { ...process.env, READY4VIBE_DATA_DIR: dataDir },
 });
 try {
-  agentMemorySettings = new AgentMemorySettingsManager({ settings: settingsStore, runtime: agentMemoryRuntime });
+  agentMemorySettings = new AgentMemorySettingsManager({
+    settings: settingsStore,
+    runtime: agentMemoryRuntime,
+    // Proxy fallback is captured per run without exposing the model secret to
+    // settings, Web responses, events, or the memory sidecar state directory.
+    modelProviderFactory: () => modelSettings.provider.snapshot(),
+  });
 } catch (error) {
   settingsStore.close();
   goalEventStore.close();

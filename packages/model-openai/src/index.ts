@@ -2,6 +2,17 @@ import type { ModelEvent, ModelProvider, ModelRequest } from '@ready4vibe/contra
 
 export type FetchImplementation = (input: string, init?: RequestInit) => Promise<Response>;
 
+export interface OpenAIChatCompletionsStreamOptions {
+  readonly endpoint: string;
+  readonly request: ModelRequest;
+  readonly signal: AbortSignal;
+  readonly apiKey?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly fetchImpl?: FetchImplementation;
+  readonly errorCodePrefix?: string;
+  readonly providerLabel?: string;
+}
+
 export interface OpenAICompatibleProviderOptions {
   id: string;
   baseUrl: string;
@@ -33,61 +44,84 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   async *stream(request: ModelRequest, signal: AbortSignal): AsyncIterable<ModelEvent> {
-    let response: Response;
-    try {
-      response = await this.fetchImpl(this.endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: 'text/event-stream',
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: request.model,
-          messages: request.messages,
-          ...(request.tools.length > 0 ? { tools: request.tools } : {}),
-          stream: true,
-          stream_options: { include_usage: true },
-          max_tokens: request.budget.maxOutputTokens,
-        }),
-        signal,
-      });
-    } catch {
-      if (!signal.aborted) yield { type: 'error', code: 'MODEL_NETWORK_ERROR', retryable: true, safeMessage: 'The model provider could not be reached.' };
-      return;
-    }
-    if (!response.ok) {
-      if (!signal.aborted) yield { type: 'error', code: `MODEL_HTTP_${response.status}`, retryable: response.status >= 500, safeMessage: `The model provider returned HTTP ${response.status}.` };
-      return;
-    }
-    if (!response.body) {
-      yield { type: 'error', code: 'MODEL_EMPTY_BODY', retryable: true, safeMessage: 'The model provider returned an empty stream.' };
-      return;
-    }
+    yield* streamOpenAIChatCompletions({
+      endpoint: this.endpoint,
+      request,
+      signal,
+      apiKey: this.apiKey,
+      fetchImpl: this.fetchImpl,
+    });
+  }
+}
 
-    let completed = false;
-    try {
-      for await (const data of readSseData(response.body, signal)) {
-        if (data === '[DONE]') {
-          if (!completed) yield { type: 'completed', finishReason: 'stop' };
-          return;
-        }
-        let payload: OpenAIChunk;
-        try {
-          payload = JSON.parse(data) as OpenAIChunk;
-        } catch {
-          if (!signal.aborted) yield { type: 'error', code: 'MODEL_MALFORMED_JSON', retryable: false, safeMessage: 'The model provider returned malformed JSON.' };
-          return;
-        }
-        for (const event of translateChunk(payload)) {
-          if (event.type === 'completed') completed = true;
-          yield event;
-        }
+/**
+ * Shared explicit-endpoint SSE adapter. Callers must provide the complete
+ * endpoint; this function never appends a path segment.
+ */
+export async function* streamOpenAIChatCompletions(options: OpenAIChatCompletionsStreamOptions): AsyncIterable<ModelEvent> {
+  const prefix = options.errorCodePrefix ?? 'MODEL';
+  const label = options.providerLabel ?? 'The model provider';
+  const fetchImpl = options.fetchImpl ?? ((input: string, init?: RequestInit) => globalThis.fetch(input, init));
+  let response: Response;
+  try {
+    response = await fetchImpl(options.endpoint, {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+        ...(options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {}),
+        ...(options.headers ?? {}),
+      },
+      body: JSON.stringify({
+        model: options.request.model,
+        messages: options.request.messages,
+        ...(options.request.tools.length > 0 ? { tools: options.request.tools } : {}),
+        stream: true,
+        stream_options: { include_usage: true },
+        max_tokens: options.request.budget.maxOutputTokens,
+      }),
+      signal: options.signal,
+    });
+  } catch {
+    if (!options.signal.aborted) yield { type: 'error', code: `${prefix}_NETWORK_ERROR`, retryable: true, safeMessage: `${label} could not be reached.` };
+    return;
+  }
+  if (!response.ok) {
+    if (!options.signal.aborted) yield {
+      type: 'error',
+      code: `${prefix}_HTTP_${response.status}`,
+      retryable: response.status >= 500,
+      safeMessage: `${label} returned HTTP ${response.status}.`,
+    };
+    return;
+  }
+  if (!response.body) {
+    yield { type: 'error', code: `${prefix}_EMPTY_BODY`, retryable: true, safeMessage: `${label} returned an empty stream.` };
+    return;
+  }
+
+  let completed = false;
+  try {
+    for await (const data of readSseData(response.body, options.signal)) {
+      if (data === '[DONE]') {
+        if (!completed) yield { type: 'completed', finishReason: 'stop' };
+        return;
       }
-      if (!signal.aborted && !completed) yield { type: 'error', code: 'MODEL_STREAM_ENDED', retryable: true, safeMessage: 'The model provider ended the stream unexpectedly.' };
-    } catch {
-      if (!signal.aborted) yield { type: 'error', code: 'MODEL_STREAM_ERROR', retryable: true, safeMessage: 'The model provider stream failed.' };
+      let payload: OpenAIChunk;
+      try {
+        payload = JSON.parse(data) as OpenAIChunk;
+      } catch {
+        if (!options.signal.aborted) yield { type: 'error', code: `${prefix}_MALFORMED_JSON`, retryable: false, safeMessage: `${label} returned malformed JSON.` };
+        return;
+      }
+      for (const event of translateChunk(payload)) {
+        if (event.type === 'completed') completed = true;
+        yield event;
+      }
     }
+    if (!options.signal.aborted && !completed) yield { type: 'error', code: `${prefix}_STREAM_ENDED`, retryable: true, safeMessage: `${label} ended the stream unexpectedly.` };
+  } catch {
+    if (!options.signal.aborted) yield { type: 'error', code: `${prefix}_STREAM_ERROR`, retryable: true, safeMessage: `${label} stream failed.` };
   }
 }
 
