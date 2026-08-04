@@ -87,12 +87,35 @@ export const ModelTokenCountsSchema = z.object({
 }).strict();
 export type ModelTokenCounts = z.infer<typeof ModelTokenCountsSchema>;
 
-const CostSchema = z.object({
+export const CostItemCodeSchema = z.enum([
+  'input', 'output', 'cache-read', 'cache-write', 'reasoning', 'audio', 'prediction', 'flat-fee', 'other',
+]);
+export type CostItemCode = z.infer<typeof CostItemCodeSchema>;
+
+const TierBreakdownSchema = z.object({
+  upTo: uint.optional(),
+  units: uint,
+  subtotalMicros: decimalUint,
+}).strict();
+
+export const CostItemSchema = z.object({
+  itemCode: CostItemCodeSchema,
+  quantity: uint.optional(),
+  unitMicrosPerMillionTokens: decimalUint.optional(),
+  subtotalMicros: decimalUint,
+  tierBreakdown: z.array(TierBreakdownSchema).max(32).optional(),
+}).strict().superRefine(addPrivacyIssues);
+export type CostItem = z.infer<typeof CostItemSchema>;
+
+export const CostSchema = z.object({
   currency: z.string().regex(/^[A-Z]{3,8}$/u),
   amountMicros: decimalUint,
   accuracy: z.enum(['exact', 'estimated', 'unknown']),
   pricingRevision: revision,
-}).strict();
+  costMultiplier: decimalUint.optional(),
+  items: z.array(CostItemSchema).max(32).optional(),
+}).strict().superRefine(addPrivacyIssues);
+export type ModelUsageCost = z.infer<typeof CostSchema>;
 
 export const ModelUsageRecordSchema = z.object({
   schemaVersion: z.literal(MODEL_USAGE_SCHEMA_VERSION),
@@ -189,19 +212,70 @@ export const AuditEventSchema = z.object({
 }).strict().superRefine(addPrivacyIssues);
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 
+export const PricingModeSchema = z.enum(['per-unit', 'flat-fee', 'tiered']);
+export type PricingMode = z.infer<typeof PricingModeSchema>;
+
+export const PricingTierSchema = z.object({
+  upTo: uint.optional(),
+  unitMicrosPerMillionTokens: decimalUint,
+}).strict();
+export type PricingTier = z.infer<typeof PricingTierSchema>;
+
+const pricingPattern = z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9 ._:@/*-]{0,255}$/u).regex(CONTROL_TEXT);
+
 export const PricingRuleSchema = z.object({
   schemaVersion: z.literal(PRICING_RULE_SCHEMA_VERSION),
   pricingRevision: revision,
   providerId: label,
-  modelPattern: label,
+  modelPattern: pricingPattern,
   effectiveFrom: ISO_TIMESTAMP,
   currency: z.string().regex(/^[A-Z]{3,8}$/u),
+  mode: PricingModeSchema.optional(),
+  flatFeeMicros: decimalUint.optional(),
   inputMicrosPerMillionTokens: decimalUint.optional(),
   outputMicrosPerMillionTokens: decimalUint.optional(),
   cachedInputMicrosPerMillionTokens: decimalUint.optional(),
+  cacheCreationMicrosPerMillionTokens: decimalUint.optional(),
   reasoningMicrosPerMillionTokens: decimalUint.optional(),
+  toolInputMicrosPerMillionTokens: decimalUint.optional(),
+  toolOutputMicrosPerMillionTokens: decimalUint.optional(),
+  audioInputMicrosPerMillionTokens: decimalUint.optional(),
+  audioOutputMicrosPerMillionTokens: decimalUint.optional(),
+  acceptedPredictionMicrosPerMillionTokens: decimalUint.optional(),
+  rejectedPredictionMicrosPerMillionTokens: decimalUint.optional(),
+  tiers: z.array(PricingTierSchema).min(1).max(32).optional(),
   source: z.enum(['builtin', 'user-configured', 'imported']),
-}).strict().superRefine(addPrivacyIssues);
+}).strict().superRefine((value, context) => {
+  addPrivacyIssues(value, context);
+  const mode = value.mode ?? (value.tiers ? 'tiered' : value.flatFeeMicros !== undefined ? 'flat-fee' : 'per-unit');
+  if (mode === 'flat-fee' && value.flatFeeMicros === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['flatFeeMicros'], message: 'flat-fee pricing requires flatFeeMicros' });
+  }
+  if (mode === 'tiered' && value.tiers === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['tiers'], message: 'tiered pricing requires tiers' });
+  }
+  if (mode === 'per-unit' && (value.flatFeeMicros !== undefined || value.tiers !== undefined)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'per-unit pricing cannot include flat fee or tiers' });
+  }
+  if (mode === 'flat-fee' && value.tiers !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['tiers'], message: 'flat-fee pricing cannot include tiers' });
+  }
+  if (mode === 'tiered' && value.flatFeeMicros !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['flatFeeMicros'], message: 'tiered pricing cannot include flat fee' });
+  }
+  if (value.tiers) {
+    let previous = 0;
+    value.tiers.forEach((tier, index) => {
+      if (tier.upTo !== undefined && tier.upTo <= previous) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['tiers', index, 'upTo'], message: 'tiers must have strictly increasing upTo values' });
+      }
+      if (tier.upTo !== undefined) previous = tier.upTo;
+      if (tier.upTo === undefined && index !== value.tiers!.length - 1) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ['tiers', index, 'upTo'], message: 'an unbounded tier must be last' });
+      }
+    });
+  }
+});
 export type PricingRule = z.infer<typeof PricingRuleSchema>;
 
 export const UsageDimensionSummarySchema = z.object({
@@ -265,7 +339,7 @@ export function findObservabilityPrivacyViolations(value: unknown, path: readonl
   }
   if (typeof value !== 'object' || value === null) return violations;
   for (const [key, child] of Object.entries(value)) {
-    const safeCounterKey = /^(?:tokens?|input|output|cachedInput|cacheCreation|reasoning|toolInput|toolOutput|audioInput|audioOutput|acceptedPrediction|rejectedPrediction|tokenAccuracy|inputTokenSemantics|dataSource|reconciledFrom|knownRecords|unknownRecords)$/u.test(key);
+    const safeCounterKey = /^(?:tokens?|input|output|cachedInput|cacheCreation|reasoning|toolInput|toolOutput|audioInput|audioOutput|acceptedPrediction|rejectedPrediction|tokenAccuracy|inputTokenSemantics|dataSource|reconciledFrom|knownRecords|unknownRecords|amountMicros|quantity|unitMicrosPerMillionTokens|subtotalMicros|upTo|units|costMultiplier|items|tierBreakdown|pricingRevision|mode|flatFeeMicros|tiers|inputMicrosPerMillionTokens|outputMicrosPerMillionTokens|cachedInputMicrosPerMillionTokens|cacheCreationMicrosPerMillionTokens|reasoningMicrosPerMillionTokens|toolInputMicrosPerMillionTokens|toolOutputMicrosPerMillionTokens|audioInputMicrosPerMillionTokens|audioOutputMicrosPerMillionTokens|acceptedPredictionMicrosPerMillionTokens|rejectedPredictionMicrosPerMillionTokens)$/u.test(key);
     const nextPath = [...path, key];
     if (!safeCounterKey && SECRET_KEY.test(key)) violations.push(`secret-shaped field is not allowed at ${nextPath.join('.')}`);
     violations.push(...findObservabilityPrivacyViolations(child, nextPath));

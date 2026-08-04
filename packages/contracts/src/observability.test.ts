@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   AUDIT_EVENT_SCHEMA_VERSION,
   MODEL_USAGE_SCHEMA_VERSION,
+  PRICING_RULE_SCHEMA_VERSION,
   RESOURCE_SAMPLE_SCHEMA_VERSION,
   TOOL_USAGE_SCHEMA_VERSION,
   USAGE_ROLLUP_SCHEMA_VERSION,
   USAGE_PROJECTION_SCHEMA_VERSION,
   AuditEventSchema,
+  CostItemSchema,
   ModelUsageRecordSchema,
+  PricingRuleSchema,
   ResourceSampleSchema,
   ToolUsageRecordSchema,
   UsageRollupSchema,
@@ -120,6 +123,35 @@ describe('observability contracts', () => {
       auditEventCount: 1,
       sourceChecksum: 'c'.repeat(64),
     })).toBeTruthy();
+  });
+
+  it('accepts bounded cost items and flat/per-unit/tiered pricing rules', () => {
+    const costItem = { itemCode: 'input', quantity: 10, unitMicrosPerMillionTokens: '1000000', subtotalMicros: '10' };
+    expect(CostItemSchema.parse(costItem)).toEqual(costItem);
+    expect(ModelUsageRecordSchema.parse({
+      ...modelUsage,
+      cost: { currency: 'USD', amountMicros: '10', accuracy: 'exact', pricingRevision: 'price_01', items: [costItem] },
+    }).cost?.items).toEqual([costItem]);
+    const base = {
+      schemaVersion: PRICING_RULE_SCHEMA_VERSION,
+      pricingRevision: 'price_01', providerId: 'deepseek', modelPattern: 'deepseek-*', effectiveFrom: at,
+      currency: 'USD', source: 'user-configured' as const,
+    };
+    expect(PricingRuleSchema.parse({ ...base, inputMicrosPerMillionTokens: '1000000' })).toBeTruthy();
+    expect(PricingRuleSchema.parse({ ...base, mode: 'flat-fee', flatFeeMicros: '250' })).toBeTruthy();
+    expect(PricingRuleSchema.parse({ ...base, mode: 'tiered', tiers: [{ upTo: 1000, unitMicrosPerMillionTokens: '1000000' }, { unitMicrosPerMillionTokens: '500000' }] })).toBeTruthy();
+  });
+
+  it('rejects invalid cost and pricing shapes instead of coercing them', () => {
+    expect(() => CostItemSchema.parse({ itemCode: 'input', quantity: -1, subtotalMicros: '0' })).toThrow();
+    expect(() => PricingRuleSchema.parse({
+      schemaVersion: PRICING_RULE_SCHEMA_VERSION, pricingRevision: 'price_01', providerId: 'deepseek', modelPattern: 'deepseek-*', effectiveFrom: at,
+      currency: 'USD', source: 'user-configured', mode: 'flat-fee',
+    })).toThrow(/flat|fee/iu);
+    expect(() => PricingRuleSchema.parse({
+      schemaVersion: PRICING_RULE_SCHEMA_VERSION, pricingRevision: 'price_01', providerId: 'deepseek', modelPattern: 'deepseek-*', effectiveFrom: at,
+      currency: 'USD', source: 'user-configured', mode: 'tiered', tiers: [{ upTo: 1000, unitMicrosPerMillionTokens: '1' }, { upTo: 900, unitMicrosPerMillionTokens: '1' }],
+    })).toThrow(/tier/iu);
   });
 
   it('rejects unknown fields, secret-shaped values and absolute paths', () => {

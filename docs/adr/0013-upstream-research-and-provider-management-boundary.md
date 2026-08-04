@@ -38,6 +38,11 @@ AgentLoop、RunManager、daemon API 或第二套事实源；R2 才允许进入�
 record 必须显式保留来源 IDs，且不改变 run、Goal、AgentLoop、Scheduler、Approval、Sandbox 或
 WorkspaceRegistry 的权威地位。
 
+44-R3 已实现价格能力并继续复用 `PricingRule`/`ModelUsageRecord.cost`：目录只保存 bounded 非 secret 规则，
+cost engine 用 BigInt 计算 micros 并输出 immutable projection；per-unit、flat-fee、tiered 均通过
+同一 `CostItem`/pricing revision contract 表达。缺价或未知 token 维度只能产生 `unknown` 精度，
+不能伪造零，也不能回写历史 usage record；R3 不接入 run admission 或模型执行。
+
 ## 44-R0 证据结果
 
 以下 pinned source 已完成 README、LICENSE/NOTICE、manifest 和相关实现路径的核对，详细文件清单与

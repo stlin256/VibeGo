@@ -1,6 +1,6 @@
 # Spec 44：Provider、Token、费用管理与上游源码复用
 
-- 状态：Accepted；44-R0、44-R1 provider/usage contract slice 与 44-R2 reconciliation slice 已完成，后续运行时实现仍受下方阶段门禁约束
+- 状态：Accepted；44-R0、44-R1 provider/usage contract slice、44-R2 reconciliation slice 与 44-R3 pricing slice 已完成，后续运行时实现仍受下方阶段门禁约束
 - 日期：2026-08-04
 - 范围：model provider registry、usage/cost normalization、pricing management、audit projections 和开源项目复用
 - 相关：
@@ -213,6 +213,28 @@ different-content conflict、批量原子性、重启 replay 和 UTC rollup；44
 R2 测试覆盖同 ID 幂等/冲突、跨来源合并、token 冲突 fail-closed、retry 隔离、稳定排序和 privacy
 redaction；该 port 仍只作为显式 observability application service 能力，尚未接入默认 run。
 
+### 5.3 44-R3 pricing slice
+
+44-R3 复用现有 `PricingRule` 与 `ModelUsageRecord.cost`，不创建第二套费用事实源。价格目录和
+cost engine 保持纯内存/纯函数：
+
+- `PricingRule` 支持 `per-unit`、`flat-fee`、`tiered` 三种 bounded mode；规则按 provider、
+  `pricingModel` glob、`effectiveFrom` 和 immutable `pricingRevision` 选择，选择结果稳定且可显式
+  指定历史 revision；不调用 provider 账单 API，也不保存 secret；
+- `CostItem` 按 input/output/cache-read/cache-write/reasoning/audio/prediction/flat-fee 等维度保留
+  quantity、单价、subtotal 和 bounded tier breakdown；金额全部使用十进制 micros 字符串与 BigInt
+  计算，避免浮点误差；
+- 缺少规则或某个 token 维度没有价格时不填零：projection 返回 bounded `unknown`/未知维度信息，
+  已知 item 可以展示但总成本精度不能冒充 exact；原始 usage record 不被改写，按当前规则重算得到新
+  projection，并保留 record 当时的 `pricingRevision`；
+- 价格规则注册同 revision/identity/内容是 no-op，不同内容 conflict；规则和 cost projection
+  拒绝 secret、绝对路径、负数、超大 decimal、无序 tier 和未知字段；不接入 AgentLoop、RunManager、
+  Scheduler、Approval、Sandbox、WorkspaceRegistry 或默认 run 创建路径。
+
+R3 测试已覆盖规则选择和历史 revision、per-unit/flat/tiered、cache/reasoning/audio 维度、BigInt
+舍入、未知价格、规则冲突与 restart-independent deterministic projection；下一阶段进入 R4
+resource/audit collector。
+
 ## 6. 测试与验收
 
 - 同一 provider/message/request 的重复上报不重复计费；不同语义返回 conflict；
@@ -226,4 +248,4 @@ redaction；该 port 仍只作为显式 observability application service 能力
 
 ## 7. 当前状态
 
-截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44-R0、R1 provider/usage contract slice 与 R2 reconciliation port 已完成；R2 仍不把研究结论或上游仓库作为 VibeGo 运行时依赖。
+截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、认证 API 和 Web 仍是后续阶段。Spec 44-R0、R1 provider/usage contract slice、R2 reconciliation port 与 R3 pricing slice 已完成；R3 仍不把研究结论或上游仓库作为 VibeGo 运行时依赖。
