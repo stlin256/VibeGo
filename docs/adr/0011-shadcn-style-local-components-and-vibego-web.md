@@ -115,3 +115,17 @@ migration are not part of this slice.
 The focused Web gate covers connected/awaiting-pairing rendering, locale ARIA,
 Button primitive output and secret/path-free markup. The component adds no
 network, storage, SSE or runtime authority.
+
+## Phase 42c-1 implementation update (2026-08-05)
+
+Approval and recovery cards are extracted before the larger Settings Sheet.
+`ApprovalCard` and `RecoveryCard` receive bounded snapshots and explicit
+callbacks from `ConversationShell`; they do not import `ApiClient`, create
+approval/retry requests, or persist operation state. The deny action keeps the
+destructive Button variant, while retry continues to mean “new run” and never
+replays an interrupted tool call. Existing CSS landmarks and callback semantics
+are compatibility contracts for this slice.
+
+Focused tests cover approval details/no-details, destructive deny output,
+recovery retry presentation and secret/path/raw-argument-free markup; the
+slice adds no network, storage, SSE or runtime authority.

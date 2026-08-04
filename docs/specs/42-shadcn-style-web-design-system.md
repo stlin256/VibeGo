@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2 与 42b-3 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3 与 42c-1 已实现；Settings/operation 业务组件迁移仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -264,8 +264,8 @@ while making the next migration reversible.
 
 Focused Web tests cover variant rendering, ARIA/label forwarding, disabled and
 loading behavior, token/helper contracts and primitive isolation. The Web
-focused gate now passes 83 tests, typecheck and production build; the observed
-bundle is 80.54 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
+focused gate now passes 86 tests, typecheck and production build; the observed
+bundle is 80.60 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
 device emulation are claimed as evidence by Phase 42a.
 
 ### Phase 42b-1 implementation update (2026-08-05)
@@ -317,6 +317,24 @@ awaiting-pairing states, verifies Button primitive usage and locale ARIA
 semantics, and rejects credentials, absolute paths, and raw event payloads in
 the rendered markup. The observed output remains below the 110 KiB JS /
 30 KiB CSS gzip budgets.
+
+### Phase 42c-1 implementation update (2026-08-05)
+
+The first operation-surface slice extracts the existing approval and recovery
+cards into typed `vibego` composition components. `ApprovalCard` receives a
+bounded `ApprovalSummary`, the run's sandbox mode, and an explicit allow/deny
+callback; `RecoveryCard` receives only the explicit retry callback. They remain
+presentational: no API, storage, SSE, approval policy, retry creation, tool
+execution, or event persistence may move into the components. The existing
+fail-closed semantics stay in the `App`/daemon callback boundary, including
+single-use approval decisions and recovery as a new run.
+
+The focused gate must cover approval metadata with and without sandbox details,
+recovery retry affordance, destructive deny styling, bounded markup, and the
+absence of credentials, absolute paths, raw tool arguments, or event payloads.
+Settings Sheet, Goal/Memory/Tool cards and operation persistence remain later
+42c slices. The focused Web gate now passes 86 tests with 80.60 KiB JS gzip
+and 5.82 KiB CSS gzip.
 
 ## 9. 退出条件
 

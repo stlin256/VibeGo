@@ -327,7 +327,7 @@ runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 sec
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3 已实现，42c/42d 后续）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1 已实现，42c-2/42d 后续）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -344,8 +344,8 @@ Button/Input/Textarea/Label/Card/Badge/Separator/Skeleton 基础 primitives。
 它们只负责 presentational rendering，不访问 API、storage 或 secret；现有
 conversation shell 尚未迁移，避免在没有组件级回归覆盖时改变交互。Phase 42b
 再按组件逐步迁移 shell，42c 迁移 Settings/operation surfaces，42d 做 viewport、
-键盘、可访问性和 bundle 验收。当前 Web focused gate 为 83 tests、typecheck
-和 production build；观测到 JS gzip 80.54 KiB、CSS gzip 5.82 KiB。
+键盘、可访问性和 bundle 验收。当前 Web focused gate 为 86 tests、typecheck
+和 production build；观测到 JS gzip 80.60 KiB、CSS gzip 5.82 KiB。
 
 Phase 42b-1 已将 conversation stream、composer、RunConsole 和 bounded
 tool-output inspector 抽出到 `components/vibego/ConversationShell.tsx`，并改用
@@ -364,6 +364,12 @@ locale、连接/上下文/设置快照和显式 callback；Settings drawer、ope
 cards、API/SSE 与所有安全事实源仍由 `App`/`ApiClient` 持有。该切片覆盖
 connected/awaiting-pairing、locale ARIA、快捷键提示和窄比例换行，下一步进入
 42c 的 Settings/operation surfaces。
+
+42c-1 已抽取 `ApprovalCard` 与 `RecoveryCard`：它们只接收 bounded run
+projection 和显式 allow/deny/retry callback，保留 destructive deny、recovery
+new-run 与现有 CSS landmark；不会创建请求、写入事件或接管 Approval/RunManager
+事实源。Web focused gate 当前 86 tests、JS/CSS gzip 为 80.60/5.82 KiB。
+Settings Sheet、Goal/Memory/Tool cards 仍按后续 42c 切片推进。
 
 ## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
 
