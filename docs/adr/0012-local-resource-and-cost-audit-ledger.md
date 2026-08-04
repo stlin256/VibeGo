@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b、44-R4 与 50-R1（contracts、projection、ledger/rollup、显式 collector/audit adapter 和 application lifecycle ports 已实现；自动 wiring/API/Web 仍后置）
+- 状态：Accepted for Phase 43a/43b、44-R4、50-R1 与 50-R2（contracts、projection、ledger/rollup、显式 collector/audit adapter、lifecycle ports 和 provider usage/cost application adapter 已实现；自动 wiring/API/Web 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -130,3 +130,16 @@ are reported as degraded and never alter the source run result. The default
 RunManager and AgentLoop wiring remains intentionally unchanged until 50-R2/R3.
 The focused package gate covers the recorder and existing observability
 adapters with 38 passing tests; no live model, tool, shell or network is used.
+
+## 50-R2 provider usage and cost boundary (2026-08-05)
+
+Provider usage enters the ledger only after the public bounded observation is
+normalized and reconciled. The application adapter then applies the selected
+immutable pricing revision and appends model usage through the existing writer;
+unknown pricing is represented as missing/unknown cost, never a fabricated
+zero. Same `usageId` and semantic payload is a no-op, changed content is a
+conflict, and writer failure is degraded/fail-soft. Partial stream or provider
+failure records retain known counters and latency metadata without re-running a
+provider request. No raw response or credential crosses this port, and no
+AgentLoop, RunManager default start, `run_events` or `goal_events` behavior is
+changed.

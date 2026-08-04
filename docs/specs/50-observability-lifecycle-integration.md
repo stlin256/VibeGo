@@ -1,6 +1,6 @@
 # Spec 50: Observability lifecycle integration
 
-- Status: accepted for 50-R1 (application ports and lifecycle fixture)
+- Status: accepted for 50-R2 (provider usage and cost application adapter)
 - Date: 2026-08-04
 - Related: [Spec 43](43-resource-usage-and-cost-audit.md), [Spec 44](44-provider-usage-management-and-upstream-reuse.md), [Spec 45](45-observability-api-and-web.md), [ADR 0012](../adr/0012-local-resource-and-cost-audit-ledger.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -145,6 +145,22 @@ The implementation is `packages/observability/src/lifecycle.ts` with
 `lifecycle.test.ts`; the focused observability gate is 38 passing tests. The
 fixture is network-free and does not require a model credential or a live
 process.
+
+## 50-R2 implementation gate (2026-08-05)
+
+The next adapter will accept only the versioned
+`ProviderUsageObservation` contract, normalize it once, reconcile duplicate or
+complementary sources, apply an immutable `PricingCatalog` revision, and append
+bounded `ModelUsageRecord` values through the existing writer port. Missing
+pricing remains `unknown` instead of zero; reported, estimated and partial
+provider-failure token facts are preserved, including latency and TTFT when
+present. The adapter will be idempotent by `usageId`, fail closed on changed
+payloads, and return `degraded` on writer failure without changing a run result.
+
+No raw provider response, credential, prompt, tool output or network client is
+accepted by this boundary. It remains outside AgentLoop and the default
+RunManager start path; live provider smoke and automatic lifecycle wiring are
+deferred until the explicit release gate.
 
 ## Acceptance matrix
 
