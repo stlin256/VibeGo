@@ -17,6 +17,7 @@ import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervisor.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import { McpSettingsManager } from './mcp-settings.js';
 import { GoalWriteService } from '@ready4vibe/goal-control';
 
 const transport = resolveDaemonTransport();
@@ -93,6 +94,10 @@ try {
 const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
 const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry });
 const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry });
+// MCP remains explicitly disabled and has no default probe/transport. Web can
+// persist non-secret intent and request a later injected probe without causing
+// a child process or network request during daemon startup.
+const mcpSettings = new McpSettingsManager({ settings: settingsStore });
 const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
@@ -131,6 +136,7 @@ const server = createDaemonServer({
   observabilityLedger,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
+  mcpSettings,
   goalEventStore,
   goalWriteService,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),

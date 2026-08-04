@@ -68,6 +68,15 @@
 
 52. Spec 49-R2 capability snapshot/registry 已实现：纯 `@ready4vibe/skill-mcp` 提供 descriptor 校验、manifest/allowlist/health/schema/risk/network/approval 门禁、重复/冲突 revision、read-only resource/prompt projection 和 immutable run snapshot/fingerprint；27 个 focused tests 已通过。不调用 MCP channel、不注册现有 ToolRegistry、不修改 AgentLoop、RunManager、Approval、Scheduler、Sandbox 或 `run_events`/`goal_events`。
 
+53. Spec 49-R3 settings/status slice 已实现：`packages/contracts/src/mcp-settings.ts`
+提供严格版本化、非 secret MCP settings/status/probe contracts；`apps/daemon/src/mcp-settings.ts`
+使用现有 `daemon_settings` 持久化并提供显式注入 probe、revision 匹配、degraded
+fail-soft 和 disabled zero-side-effect 行为；daemon 增加认证
+`GET/PATCH /api/v1/settings/mcp` 与 `POST /api/v1/settings/mcp/probe`，Web 设置抽屉增加
+MCP/SKILL 卡。contracts 37 tests、daemon 130 tests、web 46 tests 的 focused gates 已通过；
+该切片不启动 MCP 子进程、不发网络请求、不注册 ToolRegistry，也不改变 AgentLoop、
+RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry 或 `run_events`/`goal_events`。
+
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
