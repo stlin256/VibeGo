@@ -64,7 +64,9 @@
 
 50. Spec 48-R4 的不可信任务审批续接集成 fixture 已补齐：`untrusted-content` + `external-sandbox` + digest image 先产生 `approval.required`，经认证 approve 后只在同一 run 的显式 continuation 点执行一次注入式 container runner；duplicate/deny/cancel/runtime unavailable 均 fail-closed，Web approval card 只展示 bounded provider/digest/network 元数据，不改变 AgentLoop 核心状态机或现有事件事实源。
 
-51. Spec 49-R1 transport slice 已实现：`packages/skill-mcp` 提供注入式 `McpStdioChannelFactory`、`McpStreamableHttpChannelFactory` 与 bounded `McpProtocolSession`，覆盖 initialize、progress、request id、timeout/cancel、401/403/429/5xx、malformed/oversized/disconnect 和 deterministic close；20 个 skill-mcp focused tests 已通过。transport 不创建 ToolRegistry、Approval、Scheduler、Sandbox 或 daemon startup side effect；R2 capability snapshot/registry 仍未实现。
+51. Spec 49-R1 transport slice 已实现：`packages/skill-mcp` 提供注入式 `McpStdioChannelFactory`、`McpStreamableHttpChannelFactory` 与 bounded `McpProtocolSession`，覆盖 initialize、progress、request id、timeout/cancel、401/403/429/5xx、malformed/oversized/disconnect 和 deterministic close；20 个 skill-mcp focused tests 已通过。transport 不创建 ToolRegistry、Approval、Scheduler、Sandbox 或 daemon startup side effect。
+
+52. Spec 49-R2 capability snapshot/registry 已实现：纯 `@ready4vibe/skill-mcp` 提供 descriptor 校验、manifest/allowlist/health/schema/risk/network/approval 门禁、重复/冲突 revision、read-only resource/prompt projection 和 immutable run snapshot/fingerprint；27 个 focused tests 已通过。不调用 MCP channel、不注册现有 ToolRegistry、不修改 AgentLoop、RunManager、Approval、Scheduler、Sandbox 或 `run_events`/`goal_events`。
 
 ## 验证结果（2026-08-04）
 
