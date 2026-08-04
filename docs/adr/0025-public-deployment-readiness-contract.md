@@ -1,11 +1,11 @@
 # ADR 0025: Explicit public deployment readiness contract
 
-- Status: Accepted for Phase 55a contract slice
+- Status: Accepted; Phase 55a contract slice implemented
 - Date: 2026-08-05
 
 ## Decision
 
-Add a strict, non-secret `deployment/v1` profile and readiness projection to
+Add and implement a strict, non-secret `deployment/v1` profile and readiness projection in
 `@ready4vibe/contracts`. The profile names the transport topology, TLS policy,
 certificate source/challenge, hostname/proxy trust metadata and bounded
 connection/rate limits. The projection maps only safe, stable reason codes and

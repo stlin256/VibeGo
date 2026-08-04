@@ -1,6 +1,6 @@
 # Spec 55：公网部署、证书自动化与运维文档
 
-- Status: Phase 55a contract boundary frozen（不改变当前运行时；ACME/adapter integration remains later）
+- Status: Phase 55a contract implemented（不改变当前运行时；ACME/adapter integration remains later）
 - Date: 2026-08-04
 - Related: [Spec 12](12-auth-transport.md)、[Spec 14](14-certificates-tls.md)、[Spec 24](24-certificate-status.md)、[Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -141,7 +141,7 @@ interactive run。诊断下载为 bounded、redacted bundle，并在生成前展
 
 ## 9. Phase 55a contract boundary（2026-08-05）
 
-Phase 55a first freezes a versioned, non-secret deployment profile and
+Phase 55a implements a versioned, non-secret deployment profile and
 readiness projection in `@ready4vibe/contracts`. The profile describes only
 the selected transport topology and bounded operational limits:
 
