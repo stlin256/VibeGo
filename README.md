@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. MCP/Skill activation, ACME automation, Git write/patch operations, and the full approval/diff UI remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. Host-first same-origin Web distribution is now the accepted deployment direction but is not yet packaged; MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -16,7 +16,8 @@ VibeGo is designed for a single developer who wants to continue a local coding t
 
 ```mermaid
 flowchart LR
-    Browser["VibeGo React PWA"] -->|"Bearer + CSRF"| Daemon["Local daemon"]
+    Browser["VibeGo React PWA"] -->|"same-origin URL"| Host["VibeGo Host"]
+    Host -->|"Bearer + CSRF"| Daemon["Local daemon"]
     Daemon --> Auth["Pairing + transport gate"]
     Daemon --> Loop["Agent loop"]
     Loop --> Context["Context manager"]
@@ -47,7 +48,7 @@ The core loop is deliberately small:
 | Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, daemon-local non-secret persistence, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
-| Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE |
+| Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE; production same-origin Host serving is specified and pending |
 | Goals | Phase 0 native TypeScript Goal Control contracts/projection/claim guards plus Phase 1 isolated SQLite `goal_events` adapter and authenticated read-only daemon projection/replay; Goal writes and default run admission remain disabled |
 
 ## Quick start
@@ -59,7 +60,7 @@ pnpm install
 pnpm typecheck
 pnpm test
 
-# Start the responsive console during development
+# Start the responsive console during development (Vite + daemon are separate in the source checkout)
 pnpm --filter @ready4vibe/web dev
 
 # Build and start the daemon (loopback only)
@@ -67,7 +68,21 @@ pnpm build
 pnpm --filter @ready4vibe/daemon start
 ```
 
-The default daemon address is `http://127.0.0.1:8787`. The web console can use same-origin access or a configured API base URL for a future Tailscale/SSH tunnel.
+The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
+path. The release target is a single Host URL where the daemon serves the compiled Web and
+the API/SSE same-origin; the launcher and static serving are tracked in Spec 41.
+
+## Host-first deployment target
+
+The intended user workflow is to install one VibeGo Host package on the development computer.
+The Host starts the Node daemon, SQLite and compiled React Web together, then opens one URL.
+Remote users on another desktop, phone, tablet or foldable only open that URL; they do not
+install Node, pnpm or a second backend. LAN is opt-in and TLS/pairing remain mandatory gates.
+
+Android, iOS and HarmonyOS native clients are explicitly later work. They will consume the
+same versioned REST/SSE and device-session contracts instead of running a local AgentLoop or
+reading Host storage. See [Spec 41](docs/specs/41-host-first-distribution-and-client-boundary.md)
+and [ADR 0010](docs/adr/0010-host-first-same-origin-web-and-client-boundary.md).
 
 The console includes a Settings panel for workspace, model, trust, sandbox,
 approval, network, and run limits. These choices are sent as a validated run
@@ -159,7 +174,7 @@ packages/
 
 ## Development discipline
 
-Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. The current baseline is **20 workspace packages and 267 passing tests**. Agent Memory Phase 0 contracts/Noop, the Phase 1 MemoryCore HTTP adapter, the Phase 2 durable settings/status boundary, the Phase 3 sidecar supervisor, and the Phase 4 bounded run integration are implemented; Proxy/Knowledge remain staged work. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
+Every substantive module is introduced with a spec, unit tests, typecheck coverage, and a focused Git commit. Agent Memory Phase 0 contracts/Noop, the Phase 1 MemoryCore HTTP adapter, the Phase 2 durable settings/status boundary, the Phase 3 sidecar supervisor, the Phase 4 bounded run integration, the Phase 5 explicit MemoryProxy and read-only MemoryKnowledge adapters, Phase 6a Knowledge settings/probe/new-run context integration, and the Phase 6b operations projection/compatibility fixtures are implemented; Knowledge tool registration and automatic Proxy sidecar updates remain staged work. See [`docs/implementation-status.md`](docs/implementation-status.md), [`docs/roadmap.md`](docs/roadmap.md), and [`docs/specs/`](docs/specs/) for the constraints and staged work.
 
 Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a lime safety signal. The mark used by the Web app is [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg).
 
@@ -169,6 +184,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - [Open-source research](docs/open-source-research.md) and [harness contracts](docs/harness-contracts.md)
 - [Security defaults](docs/adr/0002-security-defaults.md) and [LAN/Codex-like approval decisions](docs/adr/0003-lan-access-and-codex-like-approval.md)
 - [Implementation status](docs/implementation-status.md), [roadmap](docs/roadmap.md), and [spec index](docs/specs/)
+- [Host-first distribution and future client boundary](docs/specs/41-host-first-distribution-and-client-boundary.md) and [ADR 0010](docs/adr/0010-host-first-same-origin-web-and-client-boundary.md)
 
 ## Roadmap highlights
 
@@ -178,6 +194,8 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - paginated/highlighted diff/log/approval views and Playwright desktop/tablet/mobile flows;
 - Goal write APIs, Web Goal projection actions, and governed preflight after the native Phase 0/1 contracts, storage, and authenticated read-only projection slice;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
+- Host-first same-origin static Web serving, cross-platform launcher/release packages, and signed update/rollback;
+- Android/iOS/HarmonyOS native clients after the Host/API/SSE contracts stabilize;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 
 ## Contributing
@@ -188,6 +206,7 @@ Start with a spec or an issue-sized boundary, keep the change modular, add tests
 pnpm typecheck
 pnpm test
 pnpm diff:check
+pnpm verify
 ```
 
 Do not commit API keys, private certificates, workspace secrets, or generated runtime data.

@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentMemoryProvider, AgentMemoryStatus, AgentMemoryIdentity } from '@ready4vibe/contracts';
+import type { AgentMemoryProvider, AgentMemoryStatus, AgentMemoryIdentity, ModelProvider } from '@ready4vibe/contracts';
 import { InMemorySettingsStore, SqliteSettingsStore } from '@ready4vibe/storage';
 import { AgentMemorySettingsError, AgentMemorySettingsManager } from './agent-memory-settings.js';
 
@@ -31,9 +31,9 @@ describe('AgentMemorySettingsManager', () => {
   it('loads defaults and persists only the versioned non-secret snapshot', () => {
     const settings = new InMemorySettingsStore();
     const manager = new AgentMemorySettingsManager({ settings });
-    expect(manager.status()).toMatchObject({ settings: { enabled: false, mode: 'memory-core', teamId: 'vibego' }, status: { mode: 'off', updateState: 'disabled' } });
+    expect(manager.status()).toMatchObject({ settings: { enabled: false, mode: 'off', teamId: 'vibego' }, status: { mode: 'off', updateState: 'disabled' } });
     const patched = manager.patch({ enabled: true, ...identity, updateIntervalMinutes: 15 });
-    expect(patched).toMatchObject({ settings: { enabled: true, userId: 'user_demo', updateIntervalMinutes: 15 }, status: { degraded: true, lastErrorCode: 'unavailable' } });
+    expect(patched).toMatchObject({ settings: { enabled: true, mode: 'memory-core', userId: 'user_demo', updateIntervalMinutes: 15 }, status: { degraded: true, lastErrorCode: 'unavailable' } });
     const persisted = settings.get<Record<string, unknown>>('agent-memory', 'v1');
     expect(persisted).toMatchObject({ schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: true, userId: 'user_demo' });
     expect(JSON.stringify(persisted)).not.toMatch(/api[_-]?key|token|secret|C:\\private/iu);
@@ -103,5 +103,51 @@ describe('AgentMemorySettingsManager', () => {
     expect(() => manager.patch({ enabled: true, mode: 'off' })).toThrowError(AgentMemorySettingsError);
     settings.set('agent-memory', 'v1', { schemaVersion: 1, enabled: true });
     expect(() => new AgentMemorySettingsManager({ settings })).toThrowError(expect.objectContaining({ code: 'CORRUPT_SETTINGS' }));
+  });
+
+  it('freezes a proxy model provider into each run snapshot without changing the durable settings shape', async () => {
+    const modelProvider: ModelProvider = {
+      id: 'proxy-model',
+      capabilities: { streaming: true, toolCalls: true, structuredOutput: false },
+      async *stream() { yield { type: 'completed', finishReason: 'stop' }; },
+    };
+    const proxyProvider = {
+      ...provider(readyStatus({ mode: 'proxy', capabilities: ['proxy'] })),
+      mode: 'proxy' as const,
+      capabilities: modelProvider.capabilities,
+      stream: modelProvider.stream,
+    };
+    const manager = new AgentMemorySettingsManager({
+      settings: new InMemorySettingsStore(),
+      modelProviderFactory: vi.fn(() => modelProvider),
+      providerFactory: vi.fn(() => proxyProvider),
+    });
+    manager.patch({ enabled: true, mode: 'proxy', ...identity });
+    const snapshot = manager.createRunSnapshot('session_demo');
+    expect(snapshot?.identity).toEqual({ ...identity, sessionId: 'session_demo' });
+    expect(snapshot?.modelProvider).toBe(proxyProvider);
+    expect(manager.settingsSnapshot()).toMatchObject({ enabled: true, mode: 'proxy' });
+    expect(JSON.stringify(manager.settingsSnapshot())).not.toMatch(/api[_-]?key|token|secret/iu);
+    await snapshot?.dispose();
+  });
+
+  it('supports an immutable upstream ref lock and composes runtime/provider diagnostics', () => {
+    const runtime = {
+      probe: vi.fn(async () => readyStatus()),
+      update: vi.fn(async () => readyStatus()),
+      rollback: vi.fn(async () => readyStatus()),
+      operations: vi.fn(() => ({
+        schemaVersion: 'ready4vibe_agent_memory_operations_v1' as const,
+        currentRevision: 'a'.repeat(40), previousRevision: 'b'.repeat(40), healthLatencyMs: 7,
+        recall: { hits: 0, misses: 0, lastAt: null },
+        writeQueue: { pending: 0, inFlight: false, accepted: 0, failed: 0, lastAttemptAt: null, lastErrorCode: null }, updates: [],
+      })),
+    };
+    const memoryProvider = provider();
+    const manager = new AgentMemorySettingsManager({ settings: new InMemorySettingsStore(), provider: memoryProvider, runtime });
+    expect(() => manager.patch({ upstreamRefLocked: true })).toThrowError(AgentMemorySettingsError);
+    manager.patch({ upstreamRef: 'a'.repeat(40), upstreamRefLocked: true });
+    expect(manager.settingsSnapshot()).toMatchObject({ upstreamRefLocked: true, upstreamRef: 'a'.repeat(40) });
+    expect(manager.operations()).toMatchObject({ currentRevision: 'a'.repeat(40), previousRevision: 'b'.repeat(40), healthLatencyMs: 7 });
   });
 });

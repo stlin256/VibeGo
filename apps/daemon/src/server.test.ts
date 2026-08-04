@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SCHEDULER_POLICY, type ModelEvent, type ModelProvider, type ModelRequest, type NewGoalEvent } from '@ready4vibe/contracts';
+import { DEFAULT_SCHEDULER_POLICY, type AgentMemoryKnowledgeProvider, type AgentMemoryKnowledgeToolList, type AgentMemoryKnowledgeResult, type AgentMemoryStatus, type ModelEvent, type ModelProvider, type ModelRequest, type NewGoalEvent } from '@ready4vibe/contracts';
 import { InMemoryApprovalBroker } from '@ready4vibe/agent';
 import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
@@ -19,6 +19,7 @@ import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { InMemoryGitSettingsManager } from './git-settings.js';
 import { InMemoryGoalEventStore, createGoalEvent } from '@ready4vibe/goal-control';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
+import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -496,7 +497,7 @@ describe('daemon health server', () => {
     const base = `http://127.0.0.1:${port}/api/v1/settings/agent-memory`;
     const initial = await fetch(base);
     expect(initial.status).toBe(200);
-    expect(await initial.json()).toMatchObject({ settings: { enabled: false, mode: 'memory-core' }, status: { updateState: 'disabled' } });
+    expect(await initial.json()).toMatchObject({ settings: { enabled: false, mode: 'off' }, status: { updateState: 'disabled' } });
     const patched = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo', upstreamRef: 'feat/server_team' }) });
     const patchedBody = await patched.text();
     expect(patched.status).toBe(200);
@@ -517,6 +518,46 @@ describe('daemon health server', () => {
     const rollback = await fetch(`${base}/rollback`, { method: 'POST' });
     expect(rollback.status).toBe(200);
     expect(await rollback.json()).toMatchObject({ status: { lastErrorCode: 'rollback' } });
+    const operations = await fetch(`${base}/updates`);
+    expect(operations.status).toBe(200);
+    const operationsBody = await operations.text();
+    expect(operationsBody).toContain('ready4vibe_agent_memory_operations_v1');
+    expect(operationsBody).not.toMatch(/api[_-]?key|C:\\Users|secret/iu);
+  });
+
+  it('serves independent knowledge settings and bounded probe without exposing sidecar details', async () => {
+    const list: AgentMemoryKnowledgeToolList = {
+      schemaVersion: 'ready4vibe_agent_memory_knowledge_tools_v1', knowledgeId: 'wiki_demo', resourceType: 'wiki', name: 'Demo docs', summary: null, status: 'ready',
+      tools: [{ name: 'search', description: 'Search docs.', params: { query: { type: 'string', required: true } } }], sourceRevision: 'knowledge_rev_1', elapsedMs: 1, degraded: false, errorCode: null,
+    };
+    const result: AgentMemoryKnowledgeResult = {
+      schemaVersion: 'ready4vibe_agent_memory_knowledge_result_v1', knowledgeId: 'wiki_demo', toolName: 'search', items: [], sourceRevision: 'knowledge_rev_1', elapsedMs: 1, degraded: false, errorCode: null,
+    };
+    const provider: AgentMemoryKnowledgeProvider = {
+      id: 'tencentdb-memory-knowledge',
+      status: vi.fn(async (): Promise<AgentMemoryStatus> => ({ schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: true, mode: 'full-stack', available: true, degraded: false, revision: 'knowledge_rev_1', previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'ready', lastErrorCode: null, capabilities: ['knowledge'] })),
+      listTools: vi.fn(async () => list),
+      call: vi.fn(async () => result),
+      retrieve: vi.fn(async () => result),
+      close: vi.fn(async () => undefined),
+    };
+    const manager = new AgentMemoryKnowledgeSettingsManager({ settings: new InMemorySettingsStore(), provider });
+    const server = createDaemonServer({ agentMemoryKnowledgeSettings: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/agent-memory/knowledge`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({ settings: { enabled: false, knowledgeId: 'wiki_demo', autoRetrieve: false } });
+    const patched = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, autoRetrieve: true, knowledgeId: 'wiki_demo' }) });
+    expect(patched.status).toBe(200);
+    const patchedBody = await patched.text();
+    expect(patchedBody).not.toMatch(/endpoint|api[_-]?key|C:\\Users/iu);
+    const probe = await fetch(`${base}/probe`, { method: 'POST' });
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toMatchObject({ available: true, resourceType: 'wiki', resourceName: 'Demo docs', tools: [{ name: 'search' }] });
+    const malformed = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'http://private' }) });
+    expect(malformed.status).toBe(400);
   });
 
   it('serves explicit filesystem tool settings without exposing the workspace path', async () => {

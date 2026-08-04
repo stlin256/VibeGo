@@ -17,6 +17,8 @@
 | 7 | Web/PWA | React 多端布局、SSE resume、pairing/run console/cancel MVP | Web typecheck/build、API/SSE 单测和 React smoke test 通过；Playwright desktop/tablet/mobile、diff/log/approval 深化后置 |
 | 8 | 低资源与硬化 | 运行时指标、事件保留、速率限制、备份/导出 | 达到 `product-brief.md` 的目标，报告实测数据 |
 | 9 | 扩展生态 | plugin/adapter SDK、文档站、示例技能 | 第三方可在不改核心包的情况下增加 provider/tool |
+| 10 | Host-first 发行 | daemon 同源托管 React Web、跨平台 launcher、内置 Node runtime、LAN 引导、签名更新/回滚 | 一个 Host URL 可完成本机和远程浏览器使用；不要求用户安装 Node/pnpm 或单独部署 Web |
+| 11 | Native clients（后置） | 版本化 TypeScript client SDK、Android/iOS/HarmonyOS 客户端、设备会话和移动端恢复 | 只消费 Host REST/SSE；不读取 SQLite、不复制 AgentLoop/Approval/Sandbox |
 
 ## 推荐第一条实现链
 
@@ -225,18 +227,19 @@ React smoke test、CSS contract test 和可用性为准。
 当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
 新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
 
-## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–4 已实现）
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–6a 已实现，6b 进行中）
 
 详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
 TencentDB Agent Memory 独立 sidecar + ready4vibe 原生 `AgentMemoryProvider` + Web
 开关 + GitHub 上游自动构建/切换/回滚。`off` 模式保持现有行为，`memory-core` 是首选
-MVP；`proxy` 与 `full-stack` 后置。TencentDB 只负责长期记忆和知识派生层，Goal/
+MVP；`proxy` 已完成显式 endpoint adapter，Knowledge 已完成可选 settings/run context，完整
+`full-stack` 与 Knowledge 工具化后置。TencentDB 只负责长期记忆和知识派生层，Goal/
 Todo/Gate/Evidence、run/approval/sandbox/scheduler 仍由 ready4vibe 作为事实源。
 
 实现顺序为：contract/Noop → MemoryCore adapter → Web Settings/status →
 Supervisor current/previous revision 和候选健康检查 → RunManager/ContextManager bounded
-integration → Proxy → Knowledge。upstream
+integration → Proxy adapter → Knowledge。upstream
 更新采用候选 worktree 构建和蓝绿式切换，不做运行中 Node 热替换；构建或 health 失败
 保留当前版本，普通 Web 和 run 不因记忆服务不可用而中断。
 
@@ -263,3 +266,128 @@ provider/identity/revision snapshot，recall 结果经 ContextManager 的 retrie
 trust 标记和字节预算后才进入 AgentLoop；终态 write-back 仅后台提交 compact summary，
 memory 故障不阻塞 run，settings 切换不影响已启动 run。该阶段不修改 AgentLoop 核心状态机、
 run/Goal 事件事实源或 Scheduler/Approval/Sandbox。
+
+Phase 5 已增加 daemon-local `TencentMemoryProxyProvider`：Proxy 使用显式
+`chatCompletionsPath`（默认 `/proxy/{spaceId}/v1/chat/completions`）和独立 `/health`
+探测，发送 bounded identity headers，不复用会隐式追加路径的直连 Provider。Proxy
+模式下 provider 与 identity 随 run snapshot 冻结；Proxy 负责注入/写回，ready4vibe
+侧 recall/write 保持 validated no-op，避免重复记忆写入。Proxy 在流开始前失败时可按
+`fallbackToDirectProvider` 回退到同一 run 的直连 Provider；部分流不会重放，状态只标记
+degraded。Proxy credential 仅来自进程运行时，未加入 settings、Web、事件或文档。
+Phase 5 同时增加独立的 MemoryKnowledge 只读 adapter：它通过 `/v3/tools/list` 与
+`/v3/tools/call` 提供 Wiki/CodeGraph descriptor 和静态只读白名单，执行 bounded、
+可取消、privacy-checked 的调用，并转换为 untrusted retrieval `ContextItem`。它不注册
+任意 ToolRuntime，不进入默认 run 创建路径，也不改变 Goal/run/Scheduler/Approval/Sandbox
+事实源。Phase 6a 已增加独立 `agent-memory-knowledge/v1` 资源 settings、认证 probe、
+`autoRetrieve=false` 默认值和新 run snapshot 的可选 bounded context 注入；它仍不注册
+任意 ToolRuntime，结果仍受 ContextManager 字节预算和 untrusted trust 标记约束。Proxy
+sidecar 自动构建/切换和 Knowledge 工具化仍是后续阶段；运营 history 已在 Phase 6b
+首个切片中以独立、bounded 的 diagnostics projection 落地。
+
+### Phase 6b：运营可观测性与 upstream 兼容门禁（进行中）
+
+本阶段只增加独立的只读 operations projection：bounded update history、health latency、
+recall hit/miss 和 compact write queue 状态；不把指标写入 `run_events`、`goal_events` 或
+memory payload。候选 revision 在切换前必须通过其自身 manifest/lockfile/README 解析、
+adapter contract fixtures、frozen install、typecheck、health 和 smoke。失败候选保留
+current，`current`/`previous`/candidate 受清理保护。运维可锁定不可变 upstream commit
+进行恢复，但锁定不绕过安全检查。sidecar license/NOTICE、构建缓存、revision 保留与
+daemon 重启恢复规则将同步记录在 Spec 39/ADR 0008，并为 Web/daemon 增加回归测试。
+
+## Spec 40：Goal write API 与 bounded mutation service（Phase 2A 已实现）
+
+详见 [Spec 40](specs/40-goal-write-api-and-bounded-mutations.md) 与
+[ADR 0009](adr/0009-goal-write-api-and-mutation-boundary.md)。`GoalWriteService` 已在
+daemon application-service 增加有限、受认证的 Goal/Todo/Gate/Evidence mutation API。
+每个请求使用 eventId 幂等键和 controlRevision optimistic concurrency，validated Evidence
+是 Todo completion 的硬门禁；服务在 event stream 上完成重启后幂等和 fingerprint conflict。
+
+Phase 2A 不提供 raw event ingest、quota spend、claim UI 或 governed scheduler，也不接入
+默认 run admission；AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
+`run_events` 和 `goal_events` 的事实源边界保持不变。Web editor 与 governed preflight 留到
+后续 Phase 2B。Goal write API 已完成，Web editor、claim/release UI 和 governed preflight
+仍后置。
+
+## Spec 41：Host-first 发行、同源 Web 与后续客户端边界（设计已接受，代码待实现）
+
+详见 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md) 与
+[ADR 0010](adr/0010-host-first-same-origin-web-and-client-boundary.md)。最终发行形态是一个
+VibeGo Host：daemon 同时提供 React Web 静态资源、REST API、SSE、SQLite 和执行平面；远程
+用户只需在桌面、手机、平板或折叠屏浏览器中打开 Host URL。生产环境不要求用户启动 Vite、
+配置 CORS 或单独部署 Web server。
+
+实现顺序为：daemon 同源托管 `apps/web/dist` → 统一 dev/preview/start 入口 → 内置 Node
+runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 secret store/签名
+更新 → 原生客户端 SDK。Android、iOS、HarmonyOS 客户端明确后置；它们只消费版本化 REST/SSE、
+pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
+Scheduler、Approval 或 Sandbox。
+
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（设计已接受，Phase 42a 待开始）
+
+详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
+[ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
+Vite 和 TypeScript，迁移为 VibeGo token 驱动的 shadcn 风格 conversation shell。组件选型
+遵循组件库优先：shadcn registry/Radix 或经过评估的 headless 库优先，原生 HTML 仅用于
+简单语义元素，自定义 primitive 必须记录不采用现有库的原因并有完整无障碍测试。
+
+阶段顺序为：42a token/组件库接入与基础 primitives → 42b 对话 shell → 42c Settings、
+Approval、Goal、Memory 和 operation cards → 42d viewport/键盘/无障碍/bundle 验收。该阶段
+不改 daemon、REST/SSE、AgentLoop 或原生客户端边界。
+
+## Spec 43：资源、Token、费用与审计可观测性（Phase 43a/43b 已实现）
+
+详见 [Spec 43](specs/43-resource-usage-and-cost-audit.md) 与
+[ADR 0012](adr/0012-local-resource-and-cost-audit-ledger.md)。Phase 43a 只建立
+`resource-usage/v1`、`audit/v1` contracts，以及不连接运行时的 model usage replay
+projection；它按已有 `run_events` 的 `seq` 生成稳定 checksum，明确
+reported/estimated/unknown 精度并保持隐私脱敏。Phase 43b 已增加独立 in-memory/SQLite
+ledger 与 UTC hour rollup，使用 BEGIN IMMEDIATE、ID 幂等、批量回滚和 hash-chain，但仍不接入采样器、
+daemon/API/Web，也不改变 interactive run、Goal、AgentLoop、Scheduler、Approval、Sandbox
+或 Workspace 行为。
+
+后续顺序为：43c 低资源 host/tool/sandbox collectors →
+43d token/cost normalization 与认证 API → 43e Web Usage/Audit surfaces 和实测资源预算。
+
+## Spec 44：Provider/Usage 管理与上游源码复用门禁（44-R0/44-R1/44-R2/R3/R4 已完成）
+
+详见 [Spec 44](specs/44-provider-usage-management-and-upstream-reuse.md)、
+[ADR 0013](adr/0013-upstream-research-and-provider-management-boundary.md) 和
+[实施提示词](prompts/44-provider-usage-management-implementation.md)。本阶段把
+CC Switch、AxonHub、LiteLLM、Langfuse 和 OpenTelemetry 的可借鉴语义映射到
+VibeGo 原生 Provider registry、usage normalizer、pricing catalog、dedup/reconcile、
+resource sample、audit 和 projection；不引入完整 proxy、Tauri、Python runtime、CLI
+session 扫描或第二套事实源。
+
+44-R0 已在 [上游调研记录](research/upstream-provider-usage.md) 中固定五个 canonical repository 的
+commit、许可证、文件路径、语义摘要和 clean-room 决策；本阶段没有复制上游代码或新增运行时依赖。
+44-R1 已完成纯 schema/registry/normalizer 与单元测试；这些实现不接入 AgentLoop 或默认 run。
+Spec 43b 已提供唯一独立 ledger/rollup，44-R2 已补齐 provider usage 的 bounded reconciliation、
+去重和 conflict port，不创建第二套账本；44-R3 已完成基于同一 `PricingRule`/`cost` contract 的
+纯内存 pricing catalog 与 BigInt cost projection；44-R4 已完成 Node/adapter resource collector、
+bounded queue、degraded 状态和 audit application adapter。退出顺序为：44-R5 认证 API、Web
+Usage/Audit 和显式导入。当前下一步为 Spec 45 的只读 Usage/Audit projection；任何上游
+commit、许可证、路径或语义变化都重新触发 R0；当前 Spec 43 的 contracts/ledger 实现状态以其
+Spec 和 `implementation-status.md` 为准，现有 interactive run 行为保持不变。
+
+## Spec 45：Observability API 与 Web Usage/Audit projection（45-R5 基础切片已完成）
+
+### Spec 45 R5 implementation update (2026-08-04)
+
+The first API/Web projection slice is complete: authenticated bounded summary,
+timeseries, run usage, audit, pricing, rebuild, and verify endpoints now reuse
+the existing ledger, while the Web context rail renders a non-blocking Usage/Audit
+panel. Automatic sampling settings, export/import, and pricing catalog wiring
+remain later work; interactive runs and Goal behavior are unchanged.
+
+详见 [Spec 45](specs/45-observability-api-and-web.md) 与
+[ADR 0014](adr/0014-observability-api-and-web-projection.md)。R5 只通过现有 AuthGate 和
+Host-first daemon 注入 observability ledger，提供 bounded summary、timeseries、run usage、
+audit verify/replay 和只读 pricing projection；Web 以 context panel 消费，不读取 SQLite、不
+返回 raw payload，也不改变 interactive run 或 Goal 行为。
+
+## Spec 46：Automated verification workflow（已接受）
+
+详见 [Spec 46](specs/46-automated-verification-workflow.md) 与
+[ADR 0015](adr/0015-automated-verification-workflow.md)。`pnpm verify` 固定执行
+typecheck → test → diff:check → git diff --check，失败即停，不安装依赖、不改工作区、
+不触碰模型凭据；它复用现有 package scripts，作为每次实质性提交前的统一门禁。

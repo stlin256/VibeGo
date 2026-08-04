@@ -1,7 +1,7 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration implemented；Proxy/Knowledge 与运营增强为后续阶段
-- 日期：2026-08-03
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy 与 MemoryKnowledge adapter、Phase 6a Knowledge settings/run context implemented；Phase 6b 运营可观测性与 upstream 兼容门禁进行中
+- 日期：2026-08-04
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 
@@ -109,7 +109,7 @@ scheduler, SSE stream, or run admission gate.
 | --- | --- | --- | --- |
 | MemoryCore | L0/L1/L2/L3 记忆、记忆元数据、召回和写回 | Node.js/TypeScript；Node >=22.16；HTTP Gateway 默认 `8420`；SQLite/本地文件 | 首选方式：独立进程 + `@tencentdb-agent-memory/memory-sdk-ts-v2` |
 | MemoryProxy | 透明转发 OpenAI/Anthropic，请求前注入记忆、请求后写回 | 默认端口 `8096`；对上游模型提供代理入口 | 可选兼容方式：专用 Proxy Provider，不直接拼接现有 Provider URL |
-| MemoryKnowledge | Wiki、CodeGraph、异步索引及知识工具 | 默认端口 `8421`；`/v3/tools/list`、`/v3/tools/call` | 后置 Adapter；先作为受限检索能力，不改变 Goal 事实源 |
+| MemoryKnowledge | Wiki、CodeGraph、异步索引及知识工具 | 默认端口 `8421`；`/v3/tools/list`、`/v3/tools/call` | daemon-local 只读 Adapter；Phase 6a 可选注入 bounded context，不改变 Goal 事实源 |
 
 MemoryCore v3 请求需要 `teamId`、`agentId`、`userId`，`sessionId` 可选。ready4vibe
 必须显式维护这组身份映射，不从原始 prompt 或任意浏览器字段推导。MemoryCore 负责
@@ -179,7 +179,9 @@ flowchart LR
 | `proxy` | MemoryProxy（MemoryCore 由 Proxy 管理或按 upstream 要求启动） | 模型请求经 Proxy 注入/写回；必要时回退直连 Provider | 兼容性验证后 |
 | `full-stack` | MemoryCore + MemoryProxy + MemoryKnowledge | recall、Proxy 注入、知识工具和异步 record | 后置实验 |
 
-建议默认配置：`enabled=false`、`mode=memory-core`、`autoUpdate=true`。用户打开开关后
+默认配置固定为：`enabled=false`、`mode=off`、`autoUpdate=true`。关闭时不创建
+provider、不调用 SDK/HTTP、不启动 sidecar，也不修改 prompt。用户打开开关时，Web
+若仍选择 `off`，会自动选择首选的 `memory-core`；用户也可以显式选择其他后置模式。
 新 run 读取新的运行时快照；已经开始的 run 保留自己的 provider/memory snapshot，避免
 中途切换造成一次 turn 前后语义不一致。
 
@@ -340,13 +342,62 @@ Proxy 健康时模型请求经 Proxy；Proxy 不可用时默认回退到 ready4v
 并将 memory 状态标记为 degraded。若产品后续需要“Proxy 不可用即停止模型请求”，应作为
 独立的显式策略，不得隐含在 `enabled` 开关里。
 
+#### Phase 5 adapter contract (implemented)
+
+The daemon now uses a dedicated `TencentMemoryProxyProvider` rather than
+reusing `OpenAICompatibleProvider` with a different base URL. The provider has
+an explicit, validated `chatCompletionsPath` (the upstream-compatible default is
+`/proxy/{spaceId}/v1/chat/completions`) and an explicit `/health` probe. It sends
+only bounded identity headers (`x-team-id`, `x-agent-id`, `x-user-id`, and the
+optional session header) plus the process-local proxy credential; credentials
+are never part of settings, events, status responses, or logs.
+
+The provider is also the run-scoped memory port for `proxy`/`full-stack` mode:
+the proxy owns injection and conversation write-back, so the ready4vibe-side
+recall/write methods are validated no-ops. Its model stream is frozen into the
+run snapshot. If the proxy fails before any response bytes are observed and
+`fallbackToDirectProvider` is enabled, the captured direct provider is used and
+the memory status becomes degraded. A partially streamed proxy response is
+never replayed through the fallback, preventing duplicate model/tool calls.
+Concurrent runs have independent requests and signals; closing a snapshot does
+not close the shared direct provider.
+
+The runtime supervisor remains the authoritative owner of sidecar revisions.
+Phase 5 does not broaden its MemoryCore-only candidate build contract: an
+externally configured proxy endpoint is supported as a fail-soft adapter, while
+proxy sidecar build/switch orchestration remains a later phase.
+
 ### 8.4 MemoryKnowledge
 
-MemoryKnowledge 作为后置 Adapter，先通过 `/v3/tools/list` 获取受支持工具，再以
+MemoryKnowledge 通过 daemon-local Adapter 先以 `/v3/tools/list` 获取受支持工具，再以
 `/v3/tools/call` 调用明确的 Wiki/CodeGraph 查询。首版只允许只读、bounded、可取消的
 检索；结果仍转换成 `ContextItem(source='retrieval')`，不能直接注册为任意
 `ToolRuntime`。待工具 descriptor、审批和运行时资源预算有完整测试后，才评估加入
 AgentLoop tool-call 列表。
+
+#### Phase 5 MemoryKnowledge adapter contract (implemented)
+
+The daemon now has a `MemoryKnowledgeProvider` boundary for the public
+MemoryKnowledge HTTP surface. It is separate from the `AgentMemoryProvider`
+data-plane recall/write port and does not import upstream modules. The adapter:
+
+- sends only `POST /v3/tools/list` and `POST /v3/tools/call` with an explicit,
+  validated `knowledgeId`, `toolName`, bounded params and `x-tdai-service-id`;
+- projects only the static read-only Wiki/CodeGraph allowlist (`get_info`,
+  `search`, `list_pages`, `read_page`, `get_graph`, `list_raw`, `read_raw`, and
+  the documented CodeGraph queries) and rejects management/unknown tools before
+  an upstream call;
+- applies independent timeout, `AbortSignal`, response-byte, result-count and
+  content-byte limits. HTTP errors, malformed envelopes, schema mismatch,
+  oversized output, secret-shaped values and absolute paths become a bounded
+  degraded result without exposing upstream bodies;
+- converts accepted output into untrusted `ContextItem(source='retrieval')`
+  candidates. The caller must still pass them through `ContextManager`; raw
+  output is not written to run/Goal events and the adapter does not register a
+  `ToolRuntime` or grant approval/sandbox authority;
+- remains daemon-local in this phase. Resource settings and optional new-run
+  injection are supplied by the Phase 6a application service; automatic sidecar
+  supervision and arbitrary ToolRuntime registration remain deferred.
 
 ## 9. Runtime Supervisor 与 revision 切换
 
@@ -458,6 +509,7 @@ interface AgentMemorySettingsV1 {
   userId: string;
   upstreamRepo: string;
   upstreamRef: string;
+  upstreamRefLocked?: boolean;
   autoUpdate: boolean;
   updateIntervalMinutes: number;
   fallbackToDirectProvider: boolean;
@@ -589,17 +641,136 @@ AgentLoop 创建 run。
 
 ### Phase 5：Proxy 与 Knowledge
 
-- 增加专用 `TencentMemoryProxyProvider` 或显式 endpoint contract；
-- 验证 Proxy 注入/写回、直连 fallback 和运行中 snapshot；
-- 增加 MemoryKnowledge 只读检索 Adapter；
-- 暂不把 `/v3/tools/call` 直接注册为任意 ToolRuntime，先完成 descriptor/approval/limit 测试。
+- ✅ 增加专用 `TencentMemoryProxyProvider` 和显式 endpoint contract；
+- ✅ 验证 Proxy 健康、正确路径/headers、直连 fallback、失败降级、并发和运行中 snapshot；
+- ✅ 增加 MemoryKnowledge 只读检索 Adapter、工具 descriptor、Wiki/CodeGraph 白名单、
+  bounded/cancellable call 和 `ContextItem` 转换；
+- ✅ 覆盖 unknown/management tool、timeout、5xx、malformed/schema、超大响应、AbortSignal
+  和 secret/绝对路径 privacy fixture；不把它接入默认 run 创建路径。
 
-### Phase 5：运营与上游兼容
+### Phase 6a：Knowledge resource settings 与可选 run context
+
+Phase 6a 为 MemoryKnowledge 增加独立的 `agent-memory-knowledge/v1` daemon
+settings 和可选的 bounded run context 注入。它不扩展 `agent-memory/v1`，避免把
+知识资源生命周期与 MemoryCore/Proxy revision 混成一个 settings snapshot。持久化字段为：
+
+```ts
+interface AgentMemoryKnowledgeSettingsV1 {
+  schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1';
+  enabled: boolean;
+  knowledgeId: string;
+  autoRetrieve: boolean;
+  maxItems: number;
+  maxBytes: number;
+  timeoutMs: number;
+}
+```
+
+默认值是 `enabled=false`、`autoRetrieve=false`；resource ID 由用户显式填写，不能从
+prompt、workspace 路径或浏览器身份推导。endpoint、service id 和任何 credential 仍由
+daemon 运行时环境/adapter 提供，不写入 Web response、事件或浏览器存储。settings
+使用独立 namespace/key 和现有 `daemon_settings` 事务边界，未知字段、secret-shaped
+字段、绝对路径、过大限额和非法 ID fail-closed。
+
+增加受现有认证/CSRF/Origin 门禁保护的：
+
+- `GET/PATCH /api/v1/settings/agent-memory/knowledge`；
+- `POST /api/v1/settings/agent-memory/knowledge/probe`，只执行 bounded `tools/list`；
+
+响应只返回 enabled、resource ID、autoRetrieve、limits、resource type/name、只读 tool
+descriptor 摘要、健康时间和稳定 error code，不返回 endpoint、原始响应、绝对路径或
+secret。`autoRetrieve` 只影响新 run；已经创建的 run 冻结 knowledge provider、resource
+ID、revision/descriptor 和 limits。
+
+启用 `autoRetrieve` 后，RunManager 在 AgentLoop 首次模型请求前，以 user message 形成
+bounded query，调用 adapter 的只读 `tools/list` + `tools/call`，将结果转换为
+`ContextItem(source='retrieval', trust='untrusted')`，再交给现有 ContextManager 字节预算
+和裁剪逻辑。knowledge timeout、sidecar down、5xx、schema/privacy/limit failure 都返回
+空 context/degraded telemetry，不阻塞 run；不把结果注册为 ToolRuntime，也不授予
+Approval、Sandbox、Scheduler、Workspace 或 Goal 权限。关闭开关后不创建 provider、不发
+HTTP、不改变默认 interactive run。
+
+#### Phase 6a implementation status (implemented)
+
+- `packages/contracts` exports strict versioned settings, patch, status and run
+  snapshot contracts. IDs, limits, secret-shaped fields and absolute paths are
+  rejected before persistence or transport.
+- `apps/daemon` persists the independent namespace with SQLite/InMemory stores,
+  lazily creates the provider from injected dependencies or daemon environment,
+  and exposes authenticated GET/PATCH/probe routes. The default resource is the
+  explicit bounded fixture `wiki_demo`; endpoint/service ID/credentials remain
+  process-local.
+- `RunManager` freezes the provider/resource/limits for new runs only. It calls
+  the read-only `search` descriptor before `tools/call`, converts successful
+  results to untrusted retrieval context, and fail-softs on timeout, degraded
+  protocol, privacy or sidecar errors. No AgentLoop state-machine, event store,
+  scheduler, approval, sandbox or workspace authority changed.
+- Web Settings exposes the resource ID, auto-retrieve toggle, limits, health and
+  probe action without rendering endpoint, credential, raw response or path.
+- Contract, manager, API, run isolation and Web render tests cover off mode,
+  persistence, probe degradation, bounded context injection and settings
+  snapshot isolation.
+
+### Phase 6b：运营与上游兼容
+
+Phase 6b 将运营信息放在独立的、版本化的只读投影中，不把 telemetry 写入
+`run_events`、`goal_events` 或记忆 payload，也不把 upstream 原始响应暴露给 Web。
 
 - 记录 bounded update history、health latency、recall hit/miss、write queue 状态；
 - 针对 upstream 每次 schema/API 变化增加 adapter contract fixture；
 - 增加升级前兼容性检查和手动锁定 ref 的运维入口；
 - 明确 sidecar license、构建缓存、revision 清理和恢复文档。
+
+#### 6b operational projection contract
+
+`GET /api/v1/settings/agent-memory/updates` 返回
+`ready4vibe_agent_memory_operations_v1`，只包含有限条数的更新记录、revision、
+稳定错误码、耗时和聚合计数：
+
+```ts
+interface AgentMemoryOperationsV1 {
+  schemaVersion: 'ready4vibe_agent_memory_operations_v1';
+  currentRevision: string | null;
+  previousRevision: string | null;
+  healthLatencyMs: number | null;
+  recall: { hits: number; misses: number; lastAt: string | null };
+  writeQueue: {
+    pending: number;
+    inFlight: boolean;
+    accepted: number;
+    failed: number;
+    lastAttemptAt: string | null;
+    lastErrorCode: string | null;
+  };
+  updates: readonly {
+    at: string;
+    operation: 'start' | 'probe' | 'update' | 'rollback';
+    outcome: 'succeeded' | 'failed' | 'skipped';
+    fromRevision: string | null;
+    toRevision: string | null;
+    elapsedMs: number;
+    errorCode: string | null;
+  }[];
+}
+```
+
+All counters and history are bounded, reset only by retention/rotation, and are
+diagnostic rather than admission signals. A recall hit means at least one item
+survived adapter validation and the ContextManager budget; a miss includes an
+empty or degraded result. `pending` write items contain no transcript or tool
+arguments. The `updates` endpoint is read-only and uses the existing daemon auth,
+CSRF and Origin gates.
+
+The upstream compatibility gate reads the candidate's own manifest, lockfile and
+README before frozen install. Adapter fixtures pin the accepted v3 health/search/
+conversation envelopes and reject unknown or privacy-unsafe shapes. A candidate
+that fails this gate never becomes `current`.
+
+Operational settings may pin an immutable commit ref for incident recovery. A
+locked ref disables automatic ref advancement but does not bypass build,
+health, smoke or rollback checks. Revision cleanup protects `current`,
+`previous`, and the configured candidate; caches and license/NOTICE files remain
+outside the Web response and are documented for daemon operators.
 
 ## 13. 测试与验收标准
 
@@ -611,8 +782,9 @@ AgentLoop 创建 run。
 - recall timeout、HTTP 5xx、malformed JSON、schema mismatch 都返回 degraded，不抛出
   未脱敏 upstream 错误；
 - write-back 只发送 compact summary/evidence refs，不发送原始 transcript 和 secret；
-- Proxy 端点路径不会错误地重复追加 `/chat/completions`；
-- Knowledge 结果只读、bounded、可取消。
+- ✅ Proxy 端点路径不会错误地重复追加 `/chat/completions`；
+- ✅ Proxy health、identity headers、pre-stream fallback、partial-stream fail-closed、secret/privacy 和并发隔离有测试；
+- ✅ Knowledge 结果只读、bounded、可取消，并在进入 ContextManager 前标记为 untrusted retrieval。
 
 ### Daemon/Run 集成
 
@@ -654,7 +826,7 @@ AgentLoop 创建 run。
 
 尚未冻结的产品选择包括：上游默认 ref（branch/tag/commit）、定时检查周期、是否允许
 Proxy 失败时直连 fallback、MemoryKnowledge 的首批查询类型，以及 user/agent ID 与
-未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–4。
+未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–6b 首个切片。
 
 ## 15. 参考链接
 

@@ -37,8 +37,19 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 | `GET` | `/certificates` | 返回证书来源、SAN、指纹、有效期和 TLS 状态（不返回私钥） |
 | `POST` | `/certificates/import` | 仅 loopback 管理端导入用户提供的证书文件路径 |
 | `POST` | `/certificates/rotate` | 轮换 managed/self-signed 或未来 ACME 证书 |
+| `GET` | `/usage/summary?range=24h|7d|30d` | bounded Usage summary projection |
+| `GET` | `/usage/timeseries?metric=cpu|memory|disk|tokens|cost&range=...` | UTC bucket projection |
+| `GET` | `/runs/:runId/usage` | 该 run 的 model/tool usage projection |
+| `GET` | `/audit/events?after=&action=&outcome=` | bounded audit projection |
+| `GET` | `/usage/pricing` | 非 secret pricing rule projection |
+| `POST` | `/usage/rebuild` | 显式重建 usage rollup |
+| `POST` | `/audit/verify` | 显式校验 audit hash-chain |
 
 服务端 health/capability 响应必须包含 `transport.kind`、`transport.tlsRequired`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
+
+Usage/Audit 响应统一带 `schemaVersion=ready4vibe_observability_api_v1`、`generatedAt` 和
+`status=ready|degraded|unknown`；历史列表、时间序列和 audit page 均有服务端上限，不返回
+prompt、transcript、raw provider response、tool output、命令、环境变量、绝对路径或 secret。
 
 ## Workspace registry
 

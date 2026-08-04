@@ -100,6 +100,26 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .goal-state .empty-icon { width: 38px; height: 38px; margin: 0; font-size: 18px; }
 .goal-skeleton { width: min(460px, 80%); height: 12px; border-radius: 999px; background: linear-gradient(90deg, #17243c 25%, #263650 50%, #17243c 75%); background-size: 200% 100%; animation: goal-loading 1.4s ease-in-out infinite; }
 @keyframes goal-loading { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.observability-panel { display: grid; gap: 14px; }
+.observability-header { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.observability-header h2 { margin-bottom: 4px; }
+.observability-header p { margin: 0; font-size: 12px; }
+.observability-refresh { flex: 0 0 auto; min-height: 36px; padding: 0 12px; color: #cbe4ff; border: 1px solid #30415c; background: #122039; font-size: 12px; }
+.observability-refresh:hover { background: #172b4b; }
+.observability-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.observability-metrics div { display: grid; gap: 3px; border: 1px solid #263650; border-radius: 9px; padding: 8px; }
+.observability-metrics span { color: #6f86a7; font-size: 10px; }
+.observability-metrics strong { color: #d7e1ef; font-size: 13px; }
+.observability-meta { display: flex; flex-wrap: wrap; gap: 8px; color: #6f86a7; font-size: 10px; }
+.observability-meta span[data-status="degraded"] { color: #ffbe5c; }
+.observability-meta span[data-status="ready"] { color: var(--vibego-cyan); }
+.observability-audit { display: grid; gap: 6px; border-top: 1px solid #263650; padding-top: 10px; }
+.observability-audit p { margin: 0; font-size: 11px; }
+.observability-audit-row { display: flex; justify-content: space-between; gap: 8px; border-radius: 8px; padding: 7px 8px; background: rgb(17 31 54 / 60%); color: #c4d2e5; font-size: 11px; }
+.observability-audit-row span:last-child { color: #95a9c3; }
+.observability-state { display: grid; justify-items: center; gap: 7px; min-height: 110px; align-content: center; text-align: center; }
+.observability-state strong { color: #d7e1ef; font-size: 13px; }
+.observability-state p { margin: 0; font-size: 11px; }
 .approval-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(184 243 108 / 52%); border-radius: 12px; padding: 14px; background: rgb(184 243 108 / 8%); }
 .recovery-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid rgb(255 190 92 / 58%); border-radius: 12px; padding: 14px; background: rgb(255 190 92 / 9%); }
 .recovery-card p { margin: 5px 0 0; font-size: 12px; }

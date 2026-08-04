@@ -12,8 +12,12 @@ import type {
 import {
   AgentMemoryErrorCodeSchema,
   AgentMemoryIdentitySchema,
+  AgentMemoryOperationsSchema,
   AgentMemoryStatusSchema,
+  AgentMemoryUpdateRecordSchema,
   AgentMemoryUpdateStateSchema,
+  type AgentMemoryOperations,
+  type AgentMemoryUpdateRecord,
 } from '@ready4vibe/contracts';
 
 const RUNTIME_SCHEMA_VERSION = 'ready4vibe_agent_memory_runtime_v1' as const;
@@ -126,8 +130,10 @@ interface RuntimeState {
   previous: PreviousPointer | null;
   lastHealthAt: string | null;
   lastUpdateAt: string | null;
+  healthLatencyMs: number | null;
   updateState: AgentMemoryStatus['updateState'];
   lastErrorCode: AgentMemoryErrorCode | null;
+  updates: AgentMemoryUpdateRecord[];
 }
 
 interface PointerDocument {
@@ -140,8 +146,15 @@ interface UpdateStateDocument {
   schemaVersion: typeof RUNTIME_SCHEMA_VERSION;
   lastHealthAt: string | null;
   lastUpdateAt: string | null;
+  healthLatencyMs: number | null;
   updateState: AgentMemoryStatus['updateState'];
   lastErrorCode: AgentMemoryErrorCode | null;
+}
+
+interface OperationsDocument {
+  schemaVersion: typeof RUNTIME_SCHEMA_VERSION;
+  healthLatencyMs: number | null;
+  updates: AgentMemoryUpdateRecord[];
 }
 
 interface CommandInput {
@@ -223,6 +236,10 @@ export class TencentMemoryRuntimeSupervisor {
       return this.statusValue();
     }
     await this.ensureLoaded();
+    const operationStartedAt = Date.now();
+    const fromRevision = this.state.current?.revision ?? null;
+    let operationOutcome: 'succeeded' | 'failed' | 'skipped' = 'failed';
+    let operationError: AgentMemoryErrorCode | null = null;
     if (!isSupportedMode(settings.mode)) {
       await this.stopSidecar();
       this.state = { ...this.state, updateState: 'degraded', lastErrorCode: 'unavailable' };
@@ -243,13 +260,17 @@ export class TencentMemoryRuntimeSupervisor {
           lastErrorCode: null,
           lastHealthAt: this.now(),
         };
+        operationOutcome = 'succeeded';
       } catch {
         await this.stopSidecar();
         this.state = { ...this.state, updateState: 'degraded', lastErrorCode: 'unavailable' };
+        operationError = 'unavailable';
       }
     } else {
       this.state = { ...this.state, updateState: 'degraded', lastErrorCode: 'unavailable' };
+      operationError = 'unavailable';
     }
+    this.recordUpdate('start', operationOutcome, fromRevision, this.state.current?.revision ?? null, operationError, operationStartedAt);
     this.schedule(settings);
     await this.persistState();
     return this.statusValue();
@@ -259,14 +280,32 @@ export class TencentMemoryRuntimeSupervisor {
     return this.sidecar?.endpoint;
   }
 
+  operations(): AgentMemoryOperations {
+    return AgentMemoryOperationsSchema.parse({
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1',
+      currentRevision: this.state.current?.revision ?? null,
+      previousRevision: this.state.previous?.revision ?? null,
+      healthLatencyMs: this.state.healthLatencyMs,
+      recall: { hits: 0, misses: 0, lastAt: null },
+      writeQueue: { pending: 0, inFlight: false, accepted: 0, failed: 0, lastAttemptAt: null, lastErrorCode: null },
+      updates: this.state.updates,
+    });
+  }
+
   async probe(signal?: AbortSignal): Promise<AgentMemoryStatus> {
     return this.enqueue(async () => {
       await this.ensureLoaded();
+      const operationStartedAt = Date.now();
+      const fromRevision = this.state.current?.revision ?? null;
       if (this.closed) return this.failureStatus('unavailable');
       const settings = this.settings();
       if (!settings.enabled || settings.mode === 'off') return this.disabledStatus();
       if (!isSupportedMode(settings.mode)) return this.failureStatus('unavailable');
-      if (!this.sidecar || !this.state.current) return this.failureStatus('unavailable');
+      if (!this.sidecar || !this.state.current) {
+        this.recordUpdate('probe', 'failed', this.state.current?.revision ?? null, this.state.current?.revision ?? null, 'unavailable', operationStartedAt);
+        await this.persistState();
+        return this.failureStatus('unavailable');
+      }
       try {
         const candidate = await this.candidateBuilder.loadRevision({ revision: this.state.current.revision, revisionDir: this.revisionDir(this.state.current.revision), signal });
         await this.checkHealthy(this.sidecar, candidate, signal);
@@ -274,6 +313,7 @@ export class TencentMemoryRuntimeSupervisor {
       } catch {
         this.state = { ...this.state, updateState: 'degraded', lastErrorCode: 'health' };
       }
+      this.recordUpdate('probe', this.state.lastErrorCode ? 'failed' : 'succeeded', fromRevision, this.state.current?.revision ?? null, this.state.lastErrorCode, operationStartedAt);
       await this.persistState();
       return this.statusValue();
     });
@@ -313,12 +353,19 @@ export class TencentMemoryRuntimeSupervisor {
     if (!isSupportedMode(settings.mode)) return this.failureStatus('unavailable');
     let candidateDir: string | undefined;
     let candidateSidecar: MemorySidecar | undefined;
+    const operationStartedAt = Date.now();
+    const fromRevision = this.state.current?.revision ?? null;
     try {
       this.state = { ...this.state, updateState: 'updating', lastErrorCode: null };
       await this.persistState();
+      if (settings.upstreamRefLocked === true && !REVISION.test(settings.upstreamRef)) {
+        throw new SupervisorError('INVALID_SETTINGS', 'locked upstream ref must be an immutable commit');
+      }
       const revision = validateRevision(await this.candidateBuilder.resolveRevision({ repository: settings.upstreamRepo, ref: settings.upstreamRef, signal }));
       if (this.state.current?.revision === revision && this.sidecar) {
         await this.probeCurrent(signal);
+        this.recordUpdate('update', 'skipped', fromRevision, this.state.current?.revision ?? null, null, operationStartedAt);
+        await this.persistState();
         return this.statusValue();
       }
       candidateDir = this.candidateDir(revision);
@@ -339,6 +386,7 @@ export class TencentMemoryRuntimeSupervisor {
       await this.switchTo(candidate, candidateSidecar, signal);
       candidateSidecar = undefined;
       this.state = { ...this.state, updateState: 'ready', lastErrorCode: null, lastHealthAt: this.now(), lastUpdateAt: this.now() };
+      this.recordUpdate('update', 'succeeded', fromRevision, this.state.current?.revision ?? null, null, operationStartedAt);
       await this.persistState();
       await this.pruneRevisions();
       this.schedule(settings);
@@ -348,6 +396,7 @@ export class TencentMemoryRuntimeSupervisor {
       if (candidateDir) await this.candidateBuilder.discard(candidateDir).catch(() => undefined);
       const code = mapSupervisorError(error, 'build');
       this.state = { ...this.state, updateState: 'degraded', lastErrorCode: code };
+      this.recordUpdate('update', 'failed', fromRevision, this.state.current?.revision ?? null, code, operationStartedAt);
       await this.persistState();
       return this.statusValue();
     }
@@ -359,6 +408,8 @@ export class TencentMemoryRuntimeSupervisor {
     if (!settings.enabled || settings.mode === 'off') return this.disabledStatus();
     if (!isSupportedMode(settings.mode) || !this.state.previous) return this.failureStatus('rollback');
     let rollbackSidecar: MemorySidecar | undefined;
+    const operationStartedAt = Date.now();
+    const fromRevision = this.state.current?.revision ?? null;
     try {
       this.state = { ...this.state, updateState: 'rollback', lastErrorCode: null };
       await this.persistState();
@@ -371,11 +422,13 @@ export class TencentMemoryRuntimeSupervisor {
       await this.switchTo(candidate, rollbackSidecar, signal);
       rollbackSidecar = undefined;
       this.state = { ...this.state, updateState: 'ready', lastErrorCode: null, lastHealthAt: this.now(), lastUpdateAt: this.now() };
+      this.recordUpdate('rollback', 'succeeded', fromRevision, this.state.current?.revision ?? null, null, operationStartedAt);
       await this.persistState();
       return this.statusValue();
     } catch {
       await rollbackSidecar?.stop(this.drainTimeoutMs).catch(() => undefined);
       this.state = { ...this.state, updateState: 'degraded', lastErrorCode: 'rollback' };
+      this.recordUpdate('rollback', 'failed', fromRevision, this.state.current?.revision ?? null, 'rollback', operationStartedAt);
       await this.persistState();
       return this.statusValue();
     }
@@ -431,9 +484,17 @@ export class TencentMemoryRuntimeSupervisor {
     }
   }
 
-  private async checkHealthy(sidecar: MemorySidecar, candidate: MemoryCandidate, signal?: AbortSignal): Promise<void> {
-    try { await this.healthClient.health({ sidecar, candidate, signal }); }
-    catch (error) { throw error instanceof SupervisorError ? error : new SupervisorError('HEALTH_FAILED', 'sidecar health check failed', { cause: error }); }
+  private async checkHealthy(sidecar: MemorySidecar, candidate: MemoryCandidate, signal?: AbortSignal): Promise<number> {
+    const startedAt = Date.now();
+    try {
+      await this.healthClient.health({ sidecar, candidate, signal });
+      const latency = boundedLatency(Date.now() - startedAt);
+      this.state = { ...this.state, healthLatencyMs: latency };
+      return latency;
+    } catch (error) {
+      this.state = { ...this.state, healthLatencyMs: boundedLatency(Date.now() - startedAt) };
+      throw error instanceof SupervisorError ? error : new SupervisorError('HEALTH_FAILED', 'sidecar health check failed', { cause: error });
+    }
   }
 
   private async checkSmoke(sidecar: MemorySidecar, settings: AgentMemorySettings, signal?: AbortSignal): Promise<void> {
@@ -448,6 +509,26 @@ export class TencentMemoryRuntimeSupervisor {
     const next = this.queue.then(operation, operation);
     this.queue = next.catch(() => this.statusValue());
     return next;
+  }
+
+  private recordUpdate(
+    operation: AgentMemoryUpdateRecord['operation'],
+    outcome: AgentMemoryUpdateRecord['outcome'],
+    fromRevision: string | null,
+    toRevision: string | null,
+    errorCode: AgentMemoryErrorCode | null,
+    startedAt: number,
+  ): void {
+    const record = AgentMemoryUpdateRecordSchema.parse({
+      at: this.now(),
+      operation,
+      outcome,
+      fromRevision,
+      toRevision,
+      elapsedMs: boundedLatency(Date.now() - startedAt),
+      errorCode,
+    });
+    this.state = { ...this.state, updates: [...this.state.updates, record].slice(-32) };
   }
 
   private schedule(settings: AgentMemorySettings): void {
@@ -468,11 +549,14 @@ export class TencentMemoryRuntimeSupervisor {
     await mkdir(this.revisionsRoot, { recursive: true });
     const aggregate = await readPointerDocument(join(this.stateRoot, 'pointers.json'));
     const update = await readUpdateState(join(this.stateRoot, 'update.json'));
+    const operations = await readOperationsDocument(join(this.stateRoot, 'operations.json'));
     this.state = {
       ...emptyState(),
       current: aggregate?.current ?? await readPointer<CurrentPointer>(join(this.stateRoot, 'current.json'), 'current'),
       previous: aggregate?.previous ?? await readPointer<PreviousPointer>(join(this.stateRoot, 'previous.json'), 'previous'),
       ...(update ?? {}),
+      healthLatencyMs: operations?.healthLatencyMs ?? update?.healthLatencyMs ?? null,
+      updates: operations?.updates ?? [],
     };
     this.stateLoaded = true;
   }
@@ -488,9 +572,15 @@ export class TencentMemoryRuntimeSupervisor {
       schemaVersion: RUNTIME_SCHEMA_VERSION,
       lastHealthAt: this.state.lastHealthAt,
       lastUpdateAt: this.state.lastUpdateAt,
+      healthLatencyMs: this.state.healthLatencyMs,
       updateState: this.state.updateState,
       lastErrorCode: this.state.lastErrorCode,
     } satisfies UpdateStateDocument);
+    await writeAtomicJson(join(this.stateRoot, 'operations.json'), {
+      schemaVersion: RUNTIME_SCHEMA_VERSION,
+      healthLatencyMs: this.state.healthLatencyMs,
+      updates: this.state.updates,
+    } satisfies OperationsDocument);
   }
 
   private async persistPointers(current: CurrentPointer | null, previous: PreviousPointer | null): Promise<void> {
@@ -961,15 +1051,27 @@ async function readUpdateState(path: string): Promise<UpdateStateDocument | null
     const record = asRecord(JSON.parse(raw) as unknown);
     if (!record || record.schemaVersion !== RUNTIME_SCHEMA_VERSION) return null;
     if (!isNullableIsoTimestamp(record.lastHealthAt) || !isNullableIsoTimestamp(record.lastUpdateAt)) return null;
+    if (!isNullableLatency(record.healthLatencyMs)) return null;
     if (!AgentMemoryUpdateStateSchema.safeParse(record.updateState).success) return null;
     if (record.lastErrorCode !== null && !AgentMemoryErrorCodeSchema.safeParse(record.lastErrorCode).success) return null;
     return {
       schemaVersion: RUNTIME_SCHEMA_VERSION,
       lastHealthAt: record.lastHealthAt,
       lastUpdateAt: record.lastUpdateAt,
+      healthLatencyMs: record.healthLatencyMs,
       updateState: record.updateState,
       lastErrorCode: record.lastErrorCode,
     } as UpdateStateDocument;
+  } catch { return null; }
+}
+
+async function readOperationsDocument(path: string): Promise<OperationsDocument | null> {
+  try {
+    const raw = await readFile(path, 'utf8');
+    const record = asRecord(JSON.parse(raw) as unknown);
+    if (!record || record.schemaVersion !== RUNTIME_SCHEMA_VERSION || !isNullableLatency(record.healthLatencyMs) || !Array.isArray(record.updates) || record.updates.length > 32) return null;
+    const updates = record.updates.map((value) => AgentMemoryUpdateRecordSchema.parse(value));
+    return { schemaVersion: RUNTIME_SCHEMA_VERSION, healthLatencyMs: record.healthLatencyMs, updates };
   } catch { return null; }
 }
 
@@ -1000,7 +1102,7 @@ async function writeAtomicJson(path: string, value: unknown): Promise<void> {
 }
 
 function emptyState(): RuntimeState {
-  return { current: null, previous: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'degraded', lastErrorCode: null };
+  return { current: null, previous: null, lastHealthAt: null, lastUpdateAt: null, healthLatencyMs: null, updateState: 'degraded', lastErrorCode: null, updates: [] };
 }
 
 function validateRevision(value: string): string {
@@ -1056,4 +1158,12 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function isNullableIsoTimestamp(value: unknown): value is string | null {
   return value === null || (typeof value === 'string' && !Number.isNaN(Date.parse(value)));
+}
+
+function isNullableLatency(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 60_000);
+}
+
+function boundedLatency(value: number): number {
+  return Math.min(60_000, Math.max(0, Math.trunc(value)));
 }

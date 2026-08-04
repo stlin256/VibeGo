@@ -2,6 +2,8 @@ import {
   AgentMemoryRecallRequestSchema,
   AgentMemoryStatusSchema,
   AgentMemoryWriteRequestSchema,
+  AgentMemoryOperationsSchema,
+  type AgentMemoryOperations,
   type AgentMemoryProvider,
   type AgentMemoryRecallRequest,
   type AgentMemoryRecallResult,
@@ -51,6 +53,18 @@ export class NoopAgentMemoryProvider implements AgentMemoryProvider {
   async enqueueWrite(request: AgentMemoryWriteRequest): Promise<AgentMemoryWriteResult> {
     AgentMemoryWriteRequestSchema.parse(request);
     return { accepted: false, queued: false };
+  }
+
+  operations(): AgentMemoryOperations {
+    return AgentMemoryOperationsSchema.parse({
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1',
+      currentRevision: null,
+      previousRevision: null,
+      healthLatencyMs: null,
+      recall: { hits: 0, misses: 0, lastAt: null },
+      writeQueue: { pending: 0, inFlight: false, accepted: 0, failed: 0, lastAttemptAt: null, lastErrorCode: null },
+      updates: [],
+    });
   }
 
   async close(): Promise<void> {

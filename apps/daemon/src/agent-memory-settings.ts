@@ -1,13 +1,16 @@
 import type {
   AgentMemoryIdentity,
+  AgentMemoryOperations,
   AgentMemoryProvider,
   AgentMemorySettings,
   AgentMemorySettingsPatch,
   AgentMemorySettingsStatus,
   AgentMemoryStatus,
+  ModelProvider,
 } from '@ready4vibe/contracts';
 import {
   AgentMemoryIdentitySchema,
+  AgentMemoryOperationsSchema,
   AgentMemorySettingsPatchSchema,
   AgentMemorySettingsSchema,
   AgentMemorySettingsStatusSchema,
@@ -16,6 +19,7 @@ import {
 } from '@ready4vibe/contracts';
 import type { SettingsStore } from '@ready4vibe/storage';
 import { TencentMemoryCoreProvider, type MemoryCoreProviderOptions } from './memory-core-provider.js';
+import { TencentMemoryProxyProvider } from './memory-proxy-provider.js';
 
 export const AGENT_MEMORY_SETTINGS_NAMESPACE = 'agent-memory' as const;
 export const AGENT_MEMORY_SETTINGS_KEY = 'v1' as const;
@@ -27,6 +31,7 @@ export interface AgentMemoryRuntimeOperations {
   update(signal?: AbortSignal): Promise<AgentMemoryStatus>;
   enqueueUpdate?(signal?: AbortSignal): Promise<AgentMemoryStatus>;
   rollback(signal?: AbortSignal): Promise<AgentMemoryStatus>;
+  operations?(): AgentMemoryOperations;
   close?(): Promise<void>;
 }
 
@@ -37,6 +42,7 @@ export interface AgentMemoryRuntimeOperations {
  */
 export interface AgentMemoryRunSnapshot {
   readonly provider: AgentMemoryProvider;
+  readonly modelProvider?: ModelProvider;
   readonly identity: AgentMemoryIdentity;
   readonly revision: string | null;
   readonly dispose: () => Promise<void>;
@@ -46,6 +52,8 @@ export interface AgentMemorySettingsManagerOptions {
   readonly settings: SettingsStore;
   readonly provider?: AgentMemoryProvider;
   readonly providerFactory?: (identity: AgentMemoryIdentity) => AgentMemoryProvider | undefined;
+  /** Returns the current direct model provider for proxy fallback snapshots. */
+  readonly modelProviderFactory?: () => ModelProvider | undefined;
   readonly runtime?: AgentMemoryRuntimeOperations;
   readonly environment?: NodeJS.ProcessEnv;
 }
@@ -60,12 +68,13 @@ export class AgentMemorySettingsError extends Error {
 const DEFAULT_SETTINGS: AgentMemorySettings = {
   schemaVersion: AGENT_MEMORY_SETTINGS_SCHEMA_VERSION,
   enabled: false,
-  mode: 'memory-core',
+  mode: 'off',
   teamId: 'vibego',
   agentId: 'vibego-local-agent',
   userId: 'local-user',
   upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory',
   upstreamRef: 'feat/server_team',
+  upstreamRefLocked: false,
   autoUpdate: true,
   updateIntervalMinutes: 60,
   fallbackToDirectProvider: true,
@@ -76,6 +85,7 @@ export class AgentMemorySettingsManager {
   private provider: AgentMemoryProvider | undefined;
   private readonly providerFactory: ((identity: AgentMemoryIdentity) => AgentMemoryProvider | undefined) | undefined;
   private readonly providerWasInjected: boolean;
+  private readonly modelProviderFactory: (() => ModelProvider | undefined) | undefined;
   private readonly runtime: AgentMemoryRuntimeOperations | undefined;
   private readonly settings: SettingsStore;
   private readonly environment: NodeJS.ProcessEnv;
@@ -84,6 +94,7 @@ export class AgentMemorySettingsManager {
   constructor(options: AgentMemorySettingsManagerOptions) {
     this.settings = options.settings;
     this.providerFactory = options.providerFactory;
+    this.modelProviderFactory = options.modelProviderFactory;
     this.providerWasInjected = options.provider !== undefined;
     this.runtime = options.runtime;
     this.environment = options.environment ?? process.env;
@@ -98,7 +109,7 @@ export class AgentMemorySettingsManager {
 
   createRunSnapshot(sessionId?: string): AgentMemoryRunSnapshot | undefined {
     const settings = this.settingsValue;
-    if (!settings.enabled || settings.mode !== 'memory-core') return undefined;
+    if (!settings.enabled || settings.mode === 'off') return undefined;
     const identity = identityFromSettings(settings, sessionId);
     let provider: AgentMemoryProvider | undefined;
     let ownsProvider = false;
@@ -111,8 +122,12 @@ export class AgentMemorySettingsManager {
       ownsProvider = provider !== undefined;
     }
     if (!provider) return undefined;
+    const modelProvider = settings.mode === 'proxy' || settings.mode === 'full-stack'
+      ? (isModelProvider(provider) ? provider : undefined)
+      : undefined;
     return {
       provider,
+      ...(modelProvider ? { modelProvider } : {}),
       identity,
       revision: this.lastStatus.revision,
       dispose: ownsProvider ? () => provider!.close() : async () => undefined,
@@ -121,6 +136,21 @@ export class AgentMemorySettingsManager {
 
   status(): AgentMemorySettingsStatus {
     return this.response();
+  }
+
+  /** Returns bounded diagnostics without exposing provider credentials or paths. */
+  operations(): AgentMemoryOperations {
+    const runtime = this.runtime?.operations?.();
+    const provider = this.provider?.operations?.();
+    return AgentMemoryOperationsSchema.parse({
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1',
+      currentRevision: runtime?.currentRevision ?? provider?.currentRevision ?? this.lastStatus.revision,
+      previousRevision: runtime?.previousRevision ?? provider?.previousRevision ?? this.lastStatus.previousRevision,
+      healthLatencyMs: runtime?.healthLatencyMs ?? provider?.healthLatencyMs ?? null,
+      recall: provider?.recall ?? { hits: 0, misses: 0, lastAt: null },
+      writeQueue: provider?.writeQueue ?? { pending: 0, inFlight: false, accepted: 0, failed: 0, lastAttemptAt: null, lastErrorCode: null },
+      updates: runtime?.updates ?? [],
+    });
   }
 
   patch(input: unknown): AgentMemorySettingsStatus {
@@ -132,7 +162,12 @@ export class AgentMemorySettingsManager {
     }
     let next: AgentMemorySettings;
     try {
-      next = AgentMemorySettingsSchema.parse({ ...this.settingsValue, ...patch, schemaVersion: AGENT_MEMORY_SETTINGS_SCHEMA_VERSION });
+      // Keep the durable default fully off while making the first enable action
+      // ergonomic: an omitted mode selects the preferred MemoryCore adapter.
+      const normalizedPatch = patch.enabled === true && patch.mode === undefined && this.settingsValue.mode === 'off'
+        ? { ...patch, mode: 'memory-core' as const }
+        : patch;
+      next = AgentMemorySettingsSchema.parse({ ...this.settingsValue, ...normalizedPatch, schemaVersion: AGENT_MEMORY_SETTINGS_SCHEMA_VERSION });
     } catch (error) {
       throw new AgentMemorySettingsError('INVALID_SETTINGS', 'Agent memory settings are invalid.', { cause: error });
     }
@@ -146,13 +181,19 @@ export class AgentMemorySettingsManager {
     if (!this.providerWasInjected || this.providerFactory) this.provider = this.createProvider(next);
     if (previousProvider && previousProvider !== this.provider) void previousProvider.close();
     this.lastStatus = this.initialStatus(next);
-    if (this.runtime?.start) {
+    if (this.runtime?.start && next.mode === 'memory-core') {
       void this.runtime.start().then((status) => {
         if (this.settingsValue !== next) return;
         this.refreshProviderForRuntime();
         this.lastStatus = next.enabled ? this.normalizeRuntimeStatus(status) : this.disabledStatus();
       }).catch(() => {
         if (this.settingsValue === next) this.lastStatus = next.enabled ? unavailableStatus(next.mode, 'unavailable') : this.disabledStatus();
+      });
+    } else if (next.enabled && this.provider && (next.mode === 'proxy' || next.mode === 'full-stack')) {
+      void this.provider.status().then((status) => {
+        if (this.settingsValue === next) this.lastStatus = this.normalizeRuntimeStatus(status);
+      }).catch(() => {
+        if (this.settingsValue === next) this.lastStatus = unavailableStatus(next.mode, 'unavailable');
       });
     }
     return this.response();
@@ -164,9 +205,9 @@ export class AgentMemorySettingsManager {
       return this.response();
     }
     try {
-      const status = this.runtime
+      const status = this.runtime && this.settingsValue.mode === 'memory-core'
         ? await this.runtime.probe(signal)
-        : this.settingsValue.mode === 'memory-core' && this.provider ? await this.provider.status(signal) : unavailableStatus(this.settingsValue.mode, 'unavailable');
+        : this.provider ? await this.provider.status(signal) : unavailableStatus(this.settingsValue.mode, 'unavailable');
       this.lastStatus = this.normalizeRuntimeStatus(status);
     } catch {
       this.lastStatus = unavailableStatus(this.settingsValue.mode, 'unavailable');
@@ -180,10 +221,10 @@ export class AgentMemorySettingsManager {
       return this.response();
     }
     try {
-      this.lastStatus = this.normalizeRuntimeStatus(this.runtime?.start
+      this.lastStatus = this.normalizeRuntimeStatus(this.runtime && this.settingsValue.mode === 'memory-core' && this.runtime.start
         ? await this.runtime.start(signal)
-        : this.runtime ? await this.runtime.probe(signal) : unavailableStatus(this.settingsValue.mode, 'unavailable'));
-      this.refreshProviderForRuntime();
+        : this.provider ? await this.provider.status(signal) : unavailableStatus(this.settingsValue.mode, 'unavailable'));
+      if (this.settingsValue.mode === 'memory-core') this.refreshProviderForRuntime();
     } catch {
       this.lastStatus = unavailableStatus(this.settingsValue.mode, 'unavailable');
     }
@@ -195,7 +236,7 @@ export class AgentMemorySettingsManager {
       this.lastStatus = this.disabledStatus();
       return this.response();
     }
-    if (!this.runtime) {
+    if (!this.runtime || this.settingsValue.mode !== 'memory-core') {
       this.lastStatus = actionUnavailableStatus(this.lastStatus, this.settingsValue.mode, 'update');
       return this.response();
     }
@@ -213,7 +254,7 @@ export class AgentMemorySettingsManager {
       this.lastStatus = this.disabledStatus();
       return this.response();
     }
-    if (!this.runtime) return this.update(signal);
+    if (!this.runtime || this.settingsValue.mode !== 'memory-core') return this.update(signal);
     try {
       this.lastStatus = this.normalizeRuntimeStatus(await (this.runtime.enqueueUpdate ? this.runtime.enqueueUpdate(signal) : this.runtime.update(signal)));
       this.refreshProviderForRuntime();
@@ -228,7 +269,7 @@ export class AgentMemorySettingsManager {
       this.lastStatus = this.disabledStatus();
       return this.response();
     }
-    if (!this.runtime) {
+    if (!this.runtime || this.settingsValue.mode !== 'memory-core') {
       this.lastStatus = actionUnavailableStatus(this.lastStatus, this.settingsValue.mode, 'rollback');
       return this.response();
     }
@@ -263,11 +304,12 @@ export class AgentMemorySettingsManager {
   }
 
   private createProvider(settings: AgentMemorySettings, identity = identityFromSettings(settings)): AgentMemoryProvider | undefined {
-    if (!settings.enabled || settings.mode !== 'memory-core') return undefined;
+    if (!settings.enabled || settings.mode === 'off') return undefined;
     if (this.providerFactory) {
       try { return this.providerFactory(identity); } catch { return undefined; }
     }
-    return createProviderFromEnvironment(identity, this.environment, this.runtime?.endpoint?.());
+    const fallback = (settings.mode === 'proxy' || settings.mode === 'full-stack') ? this.modelProviderFactory?.() : undefined;
+    return createProviderFromEnvironment(settings, identity, this.environment, this.runtime?.endpoint?.(), fallback);
   }
 
   private refreshProviderForRuntime(): void {
@@ -336,19 +378,50 @@ function actionUnavailableStatus(previous: AgentMemoryStatus, mode: AgentMemoryS
   });
 }
 
-function createProviderFromEnvironment(identity: AgentMemoryIdentity, environment: NodeJS.ProcessEnv, endpointOverride?: string): AgentMemoryProvider | undefined {
-  const apiKey = environment.READY4VIBE_MEMORY_CORE_API_KEY;
-  if (!apiKey) return undefined;
-  const endpoint = endpointOverride ?? environment.READY4VIBE_MEMORY_CORE_ENDPOINT ?? 'http://127.0.0.1:8420';
-  const allowInsecureHttp = environment.READY4VIBE_MEMORY_CORE_ALLOW_INSECURE_HTTP === '1' || isLoopbackMemoryEndpoint(endpoint);
-  const options: MemoryCoreProviderOptions = {
-    endpoint,
-    apiKey,
-    serviceId: environment.READY4VIBE_MEMORY_CORE_SERVICE_ID ?? 'vibego',
-    identity,
-    ...(allowInsecureHttp ? { allowInsecureHttp: true } : {}),
-  };
-  try { return new TencentMemoryCoreProvider(options); } catch { return undefined; }
+function createProviderFromEnvironment(
+  settings: AgentMemorySettings,
+  identity: AgentMemoryIdentity,
+  environment: NodeJS.ProcessEnv,
+  endpointOverride?: string,
+  fallback?: ModelProvider,
+): AgentMemoryProvider | undefined {
+  if (settings.mode === 'memory-core') {
+    const apiKey = environment.READY4VIBE_MEMORY_CORE_API_KEY;
+    if (!apiKey) return undefined;
+    const endpoint = endpointOverride ?? environment.READY4VIBE_MEMORY_CORE_ENDPOINT ?? 'http://127.0.0.1:8420';
+    const allowInsecureHttp = environment.READY4VIBE_MEMORY_CORE_ALLOW_INSECURE_HTTP === '1' || isLoopbackMemoryEndpoint(endpoint);
+    const options: MemoryCoreProviderOptions = {
+      endpoint,
+      apiKey,
+      serviceId: environment.READY4VIBE_MEMORY_CORE_SERVICE_ID ?? 'vibego',
+      identity,
+      ...(allowInsecureHttp ? { allowInsecureHttp: true } : {}),
+    };
+    try { return new TencentMemoryCoreProvider(options); } catch { return undefined; }
+  }
+  if (settings.mode === 'proxy' || settings.mode === 'full-stack') {
+    const endpoint = environment.READY4VIBE_MEMORY_PROXY_ENDPOINT ?? 'http://127.0.0.1:8096';
+    const allowInsecureHttp = environment.READY4VIBE_MEMORY_PROXY_ALLOW_INSECURE_HTTP === '1' || isLoopbackMemoryEndpoint(endpoint);
+    try {
+      return new TencentMemoryProxyProvider({
+        endpoint,
+        identity,
+        ...(environment.READY4VIBE_MEMORY_PROXY_API_KEY ? { proxyApiKey: environment.READY4VIBE_MEMORY_PROXY_API_KEY } : {}),
+        ...(environment.READY4VIBE_MEMORY_PROXY_UPSTREAM_API_KEY ? { upstreamApiKey: environment.READY4VIBE_MEMORY_PROXY_UPSTREAM_API_KEY } : {}),
+        ...(fallback ? { fallback } : {}),
+        fallbackToDirectProvider: settings.fallbackToDirectProvider,
+        mode: settings.mode,
+        ...(allowInsecureHttp ? { allowInsecureHttp: true } : {}),
+      });
+    } catch { return undefined; }
+  }
+  return undefined;
+}
+
+function isModelProvider(value: AgentMemoryProvider): value is AgentMemoryProvider & ModelProvider {
+  return typeof (value as Partial<ModelProvider>).stream === 'function'
+    && typeof (value as Partial<ModelProvider>).capabilities === 'object'
+    && (value as Partial<ModelProvider>).capabilities !== null;
 }
 
 function isLoopbackMemoryEndpoint(value: string): boolean {

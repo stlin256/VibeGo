@@ -1,4 +1,4 @@
-import type { AgentMemoryMode, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -220,6 +220,16 @@ export interface SandboxSettingsStatus {
 export type AgentMemorySettingsStatus = AgentMemorySettingsStatusContract;
 export type AgentMemorySettingsMode = AgentMemoryMode;
 export type AgentMemorySettingsPatchInput = AgentMemorySettingsPatch;
+export type AgentMemoryOperationsStatus = AgentMemoryOperations;
+export type AgentMemoryKnowledgeSettingsStatus = AgentMemoryKnowledgeSettingsStatusContract;
+export type AgentMemoryKnowledgeSettingsPatchInput = AgentMemoryKnowledgeSettingsPatch;
+
+export type UsageSummary = ObservabilityUsageSummary;
+export type UsageTimeseries = ObservabilityTimeseries;
+export type RunUsage = ObservabilityRunUsage;
+export type AuditEventsResponse = ObservabilityAuditResponse;
+export type PricingResponse = ObservabilityPricingResponse;
+export type ObservabilityOperation = ObservabilityOperationResponse;
 
 export interface StoredEvent {
   version: 1;
@@ -288,6 +298,37 @@ export class ApiClient {
     return this.request<GoalProjectionListResponse>('/api/v1/goals', { method: 'GET' });
   }
 
+  async usageSummary(range: '24h' | '7d' | '30d' = '24h'): Promise<UsageSummary> {
+    return this.request<UsageSummary>(`/api/v1/usage/summary?range=${encodeURIComponent(range)}`, { method: 'GET' });
+  }
+
+  async usageTimeseries(metric: 'cpu' | 'memory' | 'disk' | 'tokens' | 'cost', range: '24h' | '7d' | '30d' = '24h'): Promise<UsageTimeseries> {
+    return this.request<UsageTimeseries>(`/api/v1/usage/timeseries?metric=${encodeURIComponent(metric)}&range=${encodeURIComponent(range)}`, { method: 'GET' });
+  }
+
+  async runUsage(runId: string): Promise<RunUsage> {
+    return this.request<RunUsage>(`/api/v1/runs/${encodeURIComponent(runId)}/usage`, { method: 'GET' });
+  }
+
+  async auditEvents(after = 0, filters: { action?: string; outcome?: string } = {}): Promise<AuditEventsResponse> {
+    const query = new URLSearchParams({ after: String(after) });
+    if (filters.action) query.set('action', filters.action);
+    if (filters.outcome) query.set('outcome', filters.outcome);
+    return this.request<AuditEventsResponse>(`/api/v1/audit/events?${query.toString()}`, { method: 'GET' });
+  }
+
+  async pricing(): Promise<PricingResponse> {
+    return this.request<PricingResponse>('/api/v1/usage/pricing', { method: 'GET' });
+  }
+
+  async rebuildUsage(): Promise<ObservabilityOperation> {
+    return this.request<ObservabilityOperation>('/api/v1/usage/rebuild', { method: 'POST' });
+  }
+
+  async verifyAudit(): Promise<ObservabilityOperation> {
+    return this.request<ObservabilityOperation>('/api/v1/audit/verify', { method: 'POST' });
+  }
+
   async certificateStatus(): Promise<CertificateStatus> {
     return this.request<CertificateStatus>('/api/v1/certificates/status', { method: 'GET' });
   }
@@ -322,6 +363,22 @@ export class ApiClient {
 
   async rollbackAgentMemory(): Promise<AgentMemorySettingsStatus> {
     return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory/rollback', { method: 'POST' });
+  }
+
+  async agentMemoryOperations(): Promise<AgentMemoryOperationsStatus> {
+    return this.request<AgentMemoryOperationsStatus>('/api/v1/settings/agent-memory/updates', { method: 'GET' });
+  }
+
+  async agentMemoryKnowledgeSettings(): Promise<AgentMemoryKnowledgeSettingsStatus> {
+    return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge', { method: 'GET' });
+  }
+
+  async patchAgentMemoryKnowledgeSettings(input: AgentMemoryKnowledgeSettingsPatchInput): Promise<AgentMemoryKnowledgeSettingsStatus> {
+    return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async probeAgentMemoryKnowledge(): Promise<AgentMemoryKnowledgeSettingsStatus> {
+    return this.request<AgentMemoryKnowledgeSettingsStatus>('/api/v1/settings/agent-memory/knowledge/probe', { method: 'POST' });
   }
 
   async toolSettings(): Promise<ToolSettingsStatus> {

@@ -59,13 +59,27 @@ describe('web console shell', () => {
   });
 
   it('renders the functional agent-memory settings card without secrets or paths', () => {
-    const html = renderToStaticMarkup(<App agentMemorySettings={{ schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'memory-core', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null }} onPatchAgentMemorySettings={() => undefined} onProbeAgentMemory={() => undefined} onUpdateAgentMemory={() => undefined} onRollbackAgentMemory={() => undefined} />);
+    const html = renderToStaticMarkup(<App agentMemorySettings={{ schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'off', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null }} agentMemoryOperations={{ schemaVersion: 'ready4vibe_agent_memory_operations_v1', currentRevision: null, previousRevision: null, healthLatencyMs: 3, recall: { hits: 2, misses: 1, lastAt: null }, writeQueue: { pending: 0, inFlight: false, accepted: 2, failed: 0, lastAttemptAt: null, lastErrorCode: null }, updates: [] }} onPatchAgentMemorySettings={() => undefined} onProbeAgentMemory={() => undefined} onUpdateAgentMemory={() => undefined} onRollbackAgentMemory={() => undefined} />);
     expect(html).toContain('AGENT MEMORY');
     expect(html).toContain('Enable optional long-term memory');
     expect(html).toContain('Save memory settings');
     expect(html).toContain('Probe');
     expect(html).toContain('Roll back');
+    expect(html).toContain('recall hits 2 / misses 1');
+    expect(html).toContain('Lock ref to an immutable commit SHA');
     expect(html).not.toContain('apiKey');
+    expect(html).not.toContain('C:\\Users');
+  });
+
+  it('renders the optional knowledge settings card with bounded controls', () => {
+    const html = renderToStaticMarkup(<App agentMemoryKnowledgeSettings={{ schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1', enabled: false, knowledgeId: 'wiki_demo', autoRetrieve: false, maxItems: 8, maxBytes: 8192, timeoutMs: 750 }, available: false, degraded: false, resourceType: null, resourceName: null, sourceRevision: null, tools: [], lastHealthAt: null, lastErrorCode: null }} onPatchAgentMemoryKnowledgeSettings={() => undefined} onProbeAgentMemoryKnowledge={() => undefined} />);
+    expect(html).toContain('KNOWLEDGE RETRIEVAL');
+    expect(html).toContain('Enable optional knowledge resource');
+    expect(html).toContain('Resource ID');
+    expect(html).toContain('Retrieve once for each new run');
+    expect(html).toContain('Save knowledge settings');
+    expect(html).toContain('Probe knowledge');
+    expect(html).not.toContain('endpoint');
     expect(html).not.toContain('C:\\Users');
   });
 

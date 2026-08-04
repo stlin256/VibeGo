@@ -56,7 +56,7 @@ export async function readGoalProjection(
   if (!store.listGoalIds().includes(goalId)) return undefined;
   const events = await store.read(goalId);
   if (events.length === 0) return undefined;
-  return redactProjection(builder.build(events));
+  return redactGoalProjection(builder.build(events));
 }
 
 export async function readGoalEventPage(
@@ -81,7 +81,7 @@ export async function readGoalEventPage(
   };
 }
 
-function redactProjection(projection: GoalProjection): SafeGoalProjection {
+export function redactGoalProjection(projection: GoalProjection): SafeGoalProjection {
   return {
     ...projection,
     todos: projection.todos.map(({ claimTokenHash: _claimTokenHash, ...todo }) => todo),

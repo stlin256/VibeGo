@@ -82,6 +82,32 @@ describe('ApiClient', () => {
     expect(calls[1]?.input).not.toContain('token');
   });
 
+  it('uses bounded usage and audit projections without placing credentials in URLs', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ schemaVersion: 'ready4vibe_observability_api_v1', status: 'ready', generatedAt: '2026-08-04T00:00:00.000Z', range: '24h', from: '2026-08-03T00:00:00.000Z', to: '2026-08-04T00:00:00.000Z', modelAttempts: 0, modelRequests: 0, toolCalls: 0, tokens: { input: { total: null, knownRecords: 0, unknownRecords: 0 }, output: { total: null, knownRecords: 0, unknownRecords: 0 }, cachedInput: { total: null, knownRecords: 0, unknownRecords: 0 }, reasoning: { total: null, knownRecords: 0, unknownRecords: 0 } }, resources: { sampleCount: 0, droppedSampleCount: 0 }, cost: { currency: null, amountMicros: null, accuracy: 'not-applicable' }, events: [], after: 0, nextAfter: null, rules: [] });
+    });
+    await client.usageSummary('7d');
+    await client.usageTimeseries('tokens', '24h');
+    await client.runUsage('run_usage_01');
+    await client.auditEvents(42, { action: 'run.completed', outcome: 'succeeded' });
+    await client.pricing();
+    await client.rebuildUsage();
+    await client.verifyAudit();
+    expect(calls.map((call) => call.input)).toEqual([
+      '/api/v1/usage/summary?range=7d',
+      '/api/v1/usage/timeseries?metric=tokens&range=24h',
+      '/api/v1/runs/run_usage_01/usage',
+      '/api/v1/audit/events?after=42&action=run.completed&outcome=succeeded',
+      '/api/v1/usage/pricing',
+      '/api/v1/usage/rebuild',
+      '/api/v1/audit/verify',
+    ]);
+    expect(calls[5]?.init?.method).toBe('POST');
+    expect(calls.map((call) => call.input).join('')).not.toMatch(/access|secret|api[_-]?key/iu);
+  });
+
   it('posts approval decisions in the body without putting credentials in the URL', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const fetcher: FetchLike = async (input, init) => {
@@ -139,7 +165,7 @@ describe('ApiClient', () => {
 
   it('uses the authenticated agent-memory settings/probe/update/rollback endpoints without secrets', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
-    const status = { schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'memory-core', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null };
+    const status = { schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'off', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null };
     const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
     await client.agentMemorySettings();
     await client.patchAgentMemorySettings({ enabled: true });
@@ -150,6 +176,32 @@ describe('ApiClient', () => {
     expect(calls[1]?.init?.method).toBe('PATCH');
     expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true }));
     expect(calls.map((call) => call.input).join('')).not.toContain('apiKey');
+  });
+
+  it('loads the bounded agent-memory operations projection without exposing secrets', async () => {
+    const operations = {
+      schemaVersion: 'ready4vibe_agent_memory_operations_v1', currentRevision: 'a'.repeat(40), previousRevision: null,
+      healthLatencyMs: 4, recall: { hits: 2, misses: 1, lastAt: null },
+      writeQueue: { pending: 0, inFlight: false, accepted: 2, failed: 0, lastAttemptAt: null, lastErrorCode: null }, updates: [],
+    };
+    const calls: Array<{ input: string }> = [];
+    const client = new ApiClient('', async (input) => { calls.push({ input: String(input) }); return response(operations); });
+    await expect(client.agentMemoryOperations()).resolves.toEqual(operations);
+    expect(calls).toEqual([{ input: '/api/v1/settings/agent-memory/updates' }]);
+    expect(JSON.stringify(operations)).not.toMatch(/api[_-]?key|secret|C:\\private/iu);
+  });
+
+  it('uses the independent bounded knowledge settings and probe endpoints', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_knowledge_settings_v1', enabled: false, knowledgeId: 'wiki_demo', autoRetrieve: false, maxItems: 8, maxBytes: 8192, timeoutMs: 750 }, available: false, degraded: false, resourceType: null, resourceName: null, sourceRevision: null, tools: [], lastHealthAt: null, lastErrorCode: null };
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.agentMemoryKnowledgeSettings();
+    await client.patchAgentMemoryKnowledgeSettings({ enabled: true, autoRetrieve: true, knowledgeId: 'wiki_demo' });
+    await client.probeAgentMemoryKnowledge();
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/agent-memory/knowledge', '/api/v1/settings/agent-memory/knowledge', '/api/v1/settings/agent-memory/knowledge/probe']);
+    expect(calls[1]?.init?.method).toBe('PATCH');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true, autoRetrieve: true, knowledgeId: 'wiki_demo' }));
+    expect(calls.map((call) => call.input).join('')).not.toMatch(/endpoint|api[_-]?key/iu);
   });
 
   it('toggles filesystem tools through the authenticated settings endpoint', async () => {

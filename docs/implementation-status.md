@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Phase 1/2 实施基线，Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过）**
+**状态：Accepted（Agent Memory Phase 6b 与 Goal Control Phase 2A 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过）**
 
 ## 当前实施范围
 
@@ -42,16 +42,28 @@
 34. `apps/web` 的 Goal 只读投影切片按 `docs/specs/35-goal-web-readonly-projection.md` 接入现有 `ApiClient` 和 React 控制台：只消费一次 `GET /api/v1/goals`，支持 loading/unavailable/empty/ready、显式 refresh 和终态刷新；不写 Goal、不增加第二条 SSE/轮询、不把响应写入浏览器存储，也不改变 interactive run composer；
 35. `packages/storage`、`packages/workspaces` 与 `apps/daemon` 按 `docs/specs/36-durable-workspace-settings.md` 增加独立、版本化的 `daemon_settings` adapter：workspace id/label/root 可安全恢复，写失败回滚，公共状态不暴露路径；不持久化 API key，不修改 `run_events`/`goal_events` 或默认 run admission；
 36. `apps/web` 已按 `docs/specs/37-ratio-responsive-ui.md` 与 `docs/specs/38-conversation-first-web-shell.md` 实现 ratio-first、Codex-like conversation-first 壳层：对话/运行时间线优先，composer 在底部；New task 一键清空草稿并聚焦输入；设置为认证抽屉，Goal/连接/guardrail 为可收起上下文；CSS 不使用 UA/device sniffing，视觉截图不纳入仓库。
-37. `packages/contracts` 与 `apps/daemon` 已按 `docs/specs/39-tencentdb-agent-memory-integration.md` 实现 Agent Memory Phase 0 与 Phase 1 adapter：版本化 mode/identity/recall/write/status DTO、bounded strict/privacy 校验、`NoopAgentMemoryProvider` 和原生 `fetch` 的 `TencentMemoryCoreProvider`；后者覆盖 health、MemoryCore v3 recall、显式 team/agent/user/session 隔离、revision、untrusted/bounded mapping、timeout/5xx/malformed/schema degradation、身份不匹配 fail-closed 和串行 compact write-back。默认 `off` 不调用 SDK/网络/子进程、不改 prompt、不改 AgentLoop 或 run/Goal 事实源；Web Settings、sidecar supervisor 与 bounded run integration 已在后续 Phase 2–4 落地。
+37. `packages/contracts` 与 `apps/daemon` 已按 `docs/specs/39-tencentdb-agent-memory-integration.md` 实现 Agent Memory Phase 0 与 Phase 1 adapter：版本化 mode/identity/recall/write/status DTO、bounded strict/privacy 校验、`NoopAgentMemoryProvider` 和原生 `fetch` 的 `TencentMemoryCoreProvider`；后者覆盖 health、MemoryCore v3 recall、显式 team/agent/user/session 隔离、revision、untrusted/bounded mapping、timeout/5xx/malformed/schema degradation、身份不匹配 fail-closed 和串行 compact write-back。持久化默认 `enabled=false/mode=off`，不调用 SDK/网络/子进程、不改 prompt、不改 AgentLoop 或 run/Goal 事实源；Web Settings、sidecar supervisor 与 bounded run integration 已在后续 Phase 2–4 落地。
 38. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 2：`agent-memory`/`v1` 非 secret durable settings snapshot、GET/PATCH/probe/update/rollback 认证 API 和 Settings drawer 卡片；MemoryCore 未配置或不可用时返回 bounded degraded 状态，不接入 AgentLoop、RunManager 默认 run、Goal、Scheduler、Approval、Sandbox 或第二套 SSE。
 39. `apps/daemon` 已实现 Agent Memory Phase 3 `TencentMemoryRuntimeSupervisor`：current/previous/candidate 不可变目录、upstream ref/manifest 兼容检查、frozen install、build/typecheck、临时端口 health、MemoryCore smoke、原子切换、串行 update/rollback/timer/webhook queue、切换后回退、bounded `state/update.json` 重启恢复和 Windows 子进程/端口生命周期测试；supervisor 只在 application-service 边界工作，不动态加载 upstream，不修改既有 run/Goal 事实源。
 40. `apps/daemon` 已实现 Agent Memory Phase 4 bounded run integration：RunManager 为新 run 冻结 provider/identity/revision snapshot，bounded recall 转为 `ContextItem(source='retrieval')` 并交给 ContextManager 裁剪；终态只异步提交 compact summary/outcome/evidence refs，recall/write failure 不改变 run 结果，settings toggle 不影响已启动 run。
-41. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+41. `apps/daemon` 与 `packages/model-openai` 已实现 Agent Memory Phase 5 显式 Proxy adapter：MemoryProxy 使用完整 chat path 和 `/health`，identity headers 经过 bounded 校验，Proxy-owned recall/write 为 validated no-op；新 run 冻结 dual memory/model provider，Proxy 首字节前失败可按策略回退直连，部分流不会重放，4xx/secret/privacy/timeout/并发均有测试。`apps/daemon` 同时提供独立 `MemoryKnowledgeProvider`：只读 Wiki/CodeGraph descriptor 与工具白名单经 `/v3/tools/list`/`/v3/tools/call` 适配，bounded/cancellable/privacy-checked 结果转换为 untrusted retrieval `ContextItem`，不注册任意 ToolRuntime，也不接入默认 run 路径。
+42. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6a：独立 `agent-memory-knowledge/v1` settings、SQLite/InMemory persistence、authenticated GET/PATCH/probe、lazy environment/injected provider creation、bounded `search` retrieval 和 new-run snapshot isolation。默认 disabled/off 不创建 provider、不发 HTTP、不改 prompt；knowledge errors fail-soft，Web 不显示 endpoint、secret、原始响应或绝对路径。
+43. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6b 首个切片：版本化 `agent-memory-operations/v1` 只读 projection、bounded update history、health latency、recall hit/miss、write queue counters、`GET /api/v1/settings/agent-memory/updates` 和 Web 状态摘要；运行时状态独立持久化，不进入 `run_events`、`goal_events` 或 memory payload。settings 支持显式 immutable upstream commit ref lock；候选兼容 fixture 覆盖 health/search/conversation v3 envelope 与 privacy/schema fail-closed。当前/previous/candidate 清理保护和 daemon restart recovery 规则保持不变。
+44. `packages/goal-control` 与 `apps/daemon` 已实现 Spec 40 Phase 2A：`GoalWriteService` 和六个受认证 mutation route 覆盖 Goal 创建、Todo、Gate open/resolve、Evidence 和 validated Todo completion；eventId fingerprint 提供重试 no-op/conflict，controlRevision 提供 stale fail-closed，响应剥离 claim hash，输入拒绝 secret/path/未知字段。该切片不接入默认 run admission，也不改变 `run_events`、AgentLoop、RunManager、Scheduler、Approval、Sandbox 或 WorkspaceRegistry。
+45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；daemon 同源托管 React Web、发行包和统一 launcher 尚未实现，Android/iOS/HarmonyOS 原生客户端明确后置。
+46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
+47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；运行时采样、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
+
+47a. `docs/specs/44-provider-usage-management-and-upstream-reuse.md`、`docs/adr/0013-upstream-research-and-provider-management-boundary.md`、`docs/prompts/44-provider-usage-management-implementation.md` 和 `docs/research/upstream-provider-usage.md` 已完成 Spec 44-R0：CC Switch、AxonHub、LiteLLM、Langfuse、OpenTelemetry 的 canonical URL、默认分支、pinned commit、LICENSE/NOTICE 边界、相关文件路径和语义摘要均已记录，所有复用决定均为 clean-room。没有复制上游源码、schema、UI、session 或 runtime，也未新增依赖；R1/R2/R3 的实现状态见下列条目。
+47b. Spec 44-R1 provider/usage contract slice 已完成：`packages/contracts/src/provider-usage.ts` 提供严格版本化 `ProviderDescriptor`、`ProviderCapabilitySnapshot`、`ProviderUsageObservation`、secret/path fail-closed 校验和 token 维度向后兼容扩展；`packages/observability/src/provider-usage.ts` 提供 immutable in-memory `ProviderRegistry`、capability snapshot 与纯 `normalizeProviderUsageObservation`，现有 run-event replay projection 显式保留 `dataSource`/input token semantics。测试覆盖 strictness、privacy、快照隔离、cache-inclusive/fresh、unknown counters 和幂等输入；仍不接入 AgentLoop、RunManager、daemon API 或默认 run。
+47c. Spec 44-R2 reconciliation slice 已完成：复用 Spec 43b 唯一 `usage_ledger`/UTC rollup，`packages/observability/src/provider-usage.ts` 新增纯内存按 usage ID 与 bounded semantic key 的去重、跨来源合并和 fail-closed conflict port；每个 retry attempt 独立保留，reconciled record 限定来源 IDs 和 token/status/identity 冲突，仍不接入默认 run。
+47d. Spec 44-R3 pricing slice 已完成：复用 `PricingRule`/`ModelUsageRecord.cost`，`packages/contracts/src/observability.ts` 增加 bounded `CostItem`/tier/price mode contract，`packages/observability/src/pricing.ts` 以纯内存 `PricingCatalog` 和 BigInt cost projection 支持 per-unit、flat-fee、tiered、历史 revision 与 unknown cost；不接入默认 run。
+48. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → observability → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，267 个测试全部通过（contracts 13、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 76、web 38；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚和 Phase 4 bounded run integration 测试；
+- `pnpm test`：通过，357 个测试全部通过（contracts 28、goal-control 17、storage 30、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、observability 17、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 112、web 41）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试、Phase 6a Knowledge settings/probe/run snapshot/Web/SQLite recovery，以及 Phase 6b operations/fixture/lock/recovery 测试；Spec 40 覆盖 mutation replay、重试 no-op/conflict、stale revision、validated completion、safe error、LAN auth、方法门禁和 SQLite 重启幂等；Spec 44-R1/R2/R3 覆盖 provider descriptor strictness、privacy、capability snapshot isolation、usage normalizer、token semantics、usage ID dedup、cross-source reconciliation、retry isolation、conflict fail-closed、pricing mode/revision、BigInt cost items 和 unknown cost；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -61,6 +73,7 @@
 
 - 不在默认路径调用真实模型、网络、MCP、Skill 或 shell；真实模型只在显式 Web/环境配置后使用；
 - 不在 daemon 启动时修改用户 workspace、Git、系统设置或证书；filesystem/shell 只有用户从已认证 Web 设置显式开启、并经过路径/审批/sandbox 守卫后才可能产生副作用；
+- 当前尚未把 React Web 静态资源内置到 daemon，也没有发行包 launcher；源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 是下一阶段实现目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
 - 不实现 ACME 自动签发、Windows 证书存储、VM runtime、MCP/Skill 外部连接或完整审批/diff UI；external sandbox CLI runner 已由 daemon 的显式设置 wiring，但默认关闭且不会自动拉取镜像或启动容器；Web/PWA 仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
@@ -169,8 +182,8 @@ hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
 The verification baseline before the Web projection slice was 20 workspace packages
-and 206 passing tests. The current verification is 20 workspace packages and 267
-passing tests (Web 38, daemon 76, storage 17, contracts 13, workspaces 7).
+and 206 passing tests. The current verification is 20 workspace packages and 298
+passing tests (Web 40, daemon 103, storage 17, contracts 17, workspaces 7).
 Specs 36–39 add
 durable non-secret workspace settings, ratio-first layout contracts, and the
 conversation-first composer/focus contract plus the Agent Memory Phase 0
@@ -181,3 +194,73 @@ client/component and regression tests; screenshot files are not part of the repo
 list/detail/replay API as the authority. Goal write APIs, Web Goal actions, LoopX
 import/export, and governed admission remain later phases. Existing unbound
 interactive runs and the `run_events` contract are unchanged.
+
+Spec 39 Phase 5 adds the daemon-local `TencentMemoryProxyProvider`. It uses an
+explicit MemoryProxy chat path and health endpoint, bounded identity headers,
+run-scoped model/provider snapshots, pre-stream direct-provider fallback, and
+fail-closed partial-stream handling. Proxy-owned injection and write-back are
+validated no-ops on the ready4vibe memory port, so the proxy cannot duplicate
+MemoryCore writes. Proxy credentials remain process-local and are never stored
+in durable settings, Web responses, events, or revision state. The same Phase 5
+slice adds a daemon-local `MemoryKnowledgeProvider`: it only calls the public
+`/v3/tools/list` and `/v3/tools/call` read-only Wiki/CodeGraph allowlist, applies
+bounded/cancellable/privacy-checked HTTP decoding, and converts accepted output
+to untrusted retrieval `ContextItem` candidates. It is not an arbitrary
+`ToolRuntime`, is not on the default run creation path, and does not change
+Goal/run/Scheduler/Approval/Sandbox authorities. Knowledge application-service
+settings and optional run injection are implemented as Phase 6a. Knowledge
+remains a retrieval-only adapter: automatic Proxy sidecar build/switch, arbitrary
+ToolRuntime registration, approval/resource expansion and automatic sidecar
+switching remain later work; Phase 6b now supplies bounded operations history
+and compatibility fixtures without promoting Knowledge to a ToolRuntime.
+
+## Spec 44-R4 implementation note (2026-08-04)
+
+The observability package now has an explicit low-resource `ResourceCollector` and
+`AuditApplicationAdapter`. The collector uses Node CPU/memory APIs plus injected
+OS/sandbox probes, supports idle/active/detailed profiles, bounded queue capacity,
+dropped-sample accounting, and fail-soft degraded status. It never executes shell,
+PowerShell, CLI probes, or filesystem scans. The audit adapter validates bounded
+`AuditEventDraft` values, delegates append/hash-chain work to the existing ledger,
+and reports writer failures without changing the originating action result.
+
+R4 tests cover queue overflow, unsupported probes, stop/restart, privacy rejection,
+writer failure, and audit-chain integrity. No default daemon/run path, AgentLoop,
+RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events`, or
+`goal_events` behavior changed; authenticated API, Web Usage/Audit, export/import,
+and automatic sampling settings remain R5 work.
+
+## Spec 45 R0 implementation note (2026-08-04)
+
+R5 API/Web projection work is now scoped in `docs/specs/45-observability-api-and-web.md` and
+`docs/adr/0014-observability-api-and-web-projection.md`. The planned boundary injects the existing
+observability ledger into the daemon, exposes authenticated bounded Usage/Audit reads and explicit
+rebuild/verify operations, and keeps browser output free of raw payloads, secrets, commands and
+absolute paths. The R5 implementation and tests are recorded in the section below.
+
+## Spec 45 R5 implementation note (2026-08-04)
+
+The documentation gate is now followed by a bounded implementation slice:
+
+- `apps/daemon/src/main.ts` injects the existing observability ledger into the
+  daemon server and closes it on initialization, recovery, and shutdown paths;
+  `RunManager`, AgentLoop, Scheduler, Approval, Sandbox, WorkspaceRegistry,
+  `run_events`, and `goal_events` remain unchanged.
+- `apps/daemon/src/server.ts` exposes authenticated summary, timeseries, run
+  usage, audit page, pricing, rebuild, and verify endpoints with bounded parsing
+  and stable degraded error codes.
+- `packages/contracts/src/observability-api.ts` and
+  `packages/observability/src/api.ts` provide versioned DTOs and pure projections;
+  `apps/web/src/ObservabilityPanel.tsx` consumes them in the existing responsive
+  conversation context rail.
+- Tests cover daemon/API, contract, projection, browser client, and degraded UI
+  behavior. Automatic sampling settings, export/import, and pricing catalog
+wiring remain out of this slice.
+
+## Spec 46 implementation note (2026-08-04)
+
+The fixed verification gate is documented in Spec 46/ADR 0015. The repository
+script exposed as `pnpm verify` runs the existing typecheck, test,
+diff-check, and Git diff-check commands in a deterministic fail-fast order; it
+does not install dependencies, mutate the worktree, or expose environment
+secrets.

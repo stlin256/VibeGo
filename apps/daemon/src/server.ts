@@ -1,17 +1,22 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
+import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
-import { GoalProjectionError } from '@ready4vibe/goal-control';
+import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutationResult } from '@ready4vibe/goal-control';
+import { buildAuditResponse, buildPricingResponse, buildRunUsage, buildUsageSummary, buildUsageTimeseries, verifyAuditChain } from '@ready4vibe/observability';
+import type { ObservabilityLedger } from '@ready4vibe/storage';
+import type { PricingCatalog } from '@ready4vibe/observability';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
 import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
 import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './agent-memory-settings.js';
-import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, type GoalProjectionStore } from './goal-api.js';
+import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -40,7 +45,11 @@ export interface DaemonServerOptions {
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
+  goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
+  agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  observabilityLedger?: ObservabilityLedger;
+  pricingCatalog?: PricingCatalog;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -60,7 +69,11 @@ interface ResolvedDaemonServerOptions {
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
+  goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
+  agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  observabilityLedger?: ObservabilityLedger;
+  pricingCatalog?: PricingCatalog;
 }
 
 export interface HealthResponse {
@@ -112,7 +125,11 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
     ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
+    ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
+    ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
+    ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
+    ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -128,6 +145,15 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       }
       if (error instanceof GoalProjectionError) {
         writeJson(response, 503, { error: { code: 'GOAL_PROJECTION_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
+        return;
+      }
+      if (error instanceof GoalWriteError) {
+        writeJson(response, error.statusCode, { error: { code: error.code, message: error.safeMessage } });
+        return;
+      }
+      const goalError = goalMutationError(error);
+      if (goalError) {
+        writeJson(response, goalError.statusCode, { error: { code: goalError.code, message: goalError.message } });
         return;
       }
       writeJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } });
@@ -232,7 +258,140 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/usage/summary') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const range = parseObservabilityRange(url.searchParams.get('range'));
+    try {
+      const [models, tools, samples] = await Promise.all([
+        options.observabilityLedger.listModelUsage(),
+        options.observabilityLedger.listToolUsage(),
+        options.observabilityLedger.listResourceSamples(),
+      ]);
+      writeJson(response, 200, buildUsageSummary(models, tools, samples, range));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Observability projection is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/timeseries') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const range = parseObservabilityRange(url.searchParams.get('range'));
+    const metric = parseObservabilityMetric(url.searchParams.get('metric'));
+    try {
+      const [models, samples] = await Promise.all([
+        options.observabilityLedger.listModelUsage(),
+        options.observabilityLedger.listResourceSamples(),
+      ]);
+      writeJson(response, 200, buildUsageTimeseries(models, samples, metric, range));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Observability projection is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/pricing') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.pricingCatalog) {
+      writeJson(response, 200, {
+        schemaVersion: 'ready4vibe_observability_api_v1', status: 'degraded', generatedAt: new Date().toISOString(), rules: [],
+      });
+      return;
+    }
+    try {
+      writeJson(response, 200, buildPricingResponse(options.pricingCatalog.list()));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_PRICING_UNAVAILABLE', message: 'Pricing projection is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/rebuild') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    try {
+      const rollups = await options.observabilityLedger.rebuildRollups();
+      writeJson(response, 200, { schemaVersion: 'ready4vibe_observability_api_v1', status: 'ready', generatedAt: new Date().toISOString(), rollupsRebuilt: rollups.length });
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_REBUILD_FAILED', message: 'Usage rollup rebuild failed.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/audit/verify') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    try {
+      const events = await options.observabilityLedger.listAuditEvents();
+      const verified = verifyAuditEvents(events);
+      writeJson(response, 200, { schemaVersion: 'ready4vibe_observability_api_v1', status: verified ? 'ready' : 'degraded', generatedAt: new Date().toISOString(), verified });
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_VERIFY_FAILED', message: 'Audit verification is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/audit/events') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const after = parseObservabilityAuditCursor(url.searchParams.get('after'));
+    const action = parseObservabilityFilter(url.searchParams.get('action'));
+    const outcome = parseObservabilityFilter(url.searchParams.get('outcome'));
+    try {
+      writeJson(response, 200, buildAuditResponse(await options.observabilityLedger.listAuditEvents(), after, {
+        ...(action === undefined ? {} : { action }), ...(outcome === undefined ? {} : { outcome }),
+      }));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Audit projection is unavailable.' } });
+    }
+    return;
+  }
+
   if (pathname === '/api/v1/goals') {
+    if (request.method === 'POST') {
+      if (!options.goalWriteService) {
+        writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+        return;
+      }
+      const result = await options.goalWriteService.createGoal(await readJson(request, options.bodyLimitBytes));
+      writeJson(response, 201, safeGoalMutation(result));
+      return;
+    }
     if (!options.goalEventStore) {
       writeJson(response, 503, { error: { code: 'GOALS_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
       return;
@@ -242,6 +401,81 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, await listGoalProjections(options.goalEventStore));
+    return;
+  }
+
+  const completeTodoMatch = /^\/api\/v1\/goals\/([^/]+)\/todos\/([^/]+)\/complete$/u.exec(pathname);
+  if (completeTodoMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.completeTodo(decodeGoalId(completeTodoMatch[1]), decodeTodoId(completeTodoMatch[2]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const resolveGateMatch = /^\/api\/v1\/goals\/([^/]+)\/gates\/([^/]+)\/resolve$/u.exec(pathname);
+  if (resolveGateMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.resolveGate(decodeGoalId(resolveGateMatch[1]), decodeGateId(resolveGateMatch[2]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const addTodoMatch = /^\/api\/v1\/goals\/([^/]+)\/todos$/u.exec(pathname);
+  if (addTodoMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.addTodo(decodeGoalId(addTodoMatch[1]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const openGateMatch = /^\/api\/v1\/goals\/([^/]+)\/gates$/u.exec(pathname);
+  if (openGateMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.openGate(decodeGoalId(openGateMatch[1]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const evidenceMatch = /^\/api\/v1\/goals\/([^/]+)\/evidence$/u.exec(pathname);
+  if (evidenceMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.attachEvidence(decodeGoalId(evidenceMatch[1]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
     return;
   }
 
@@ -396,6 +630,59 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/agent-memory/knowledge') {
+    if (!options.agentMemoryKnowledgeSettings) {
+      writeJson(response, 503, { error: { code: 'AGENT_MEMORY_KNOWLEDGE_SETTINGS_UNAVAILABLE', message: 'Agent memory knowledge settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.agentMemoryKnowledgeSettings.status());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or PATCH required' } }, { Allow: 'GET, PATCH' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    try {
+      writeJson(response, 200, options.agentMemoryKnowledgeSettings.patch(input));
+    } catch (error) {
+      if (error instanceof AgentMemoryKnowledgeSettingsError) {
+        const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/agent-memory/knowledge/probe') {
+    if (!options.agentMemoryKnowledgeSettings) {
+      writeJson(response, 503, { error: { code: 'AGENT_MEMORY_KNOWLEDGE_SETTINGS_UNAVAILABLE', message: 'Agent memory knowledge settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    writeJson(response, 200, await options.agentMemoryKnowledgeSettings.probe());
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/agent-memory/updates') {
+    if (!options.agentMemorySettings) {
+      writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    writeJson(response, 200, options.agentMemorySettings.operations());
     return;
   }
 
@@ -557,6 +844,29 @@ async function handleRequest(
         return;
       }
       throw error;
+    }
+    return;
+  }
+
+  const runUsageMatch = /^\/api\/v1\/runs\/([^/]+)\/usage$/u.exec(pathname);
+  if (runUsageMatch) {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const runId = decodeRunId(runUsageMatch[1]);
+    try {
+      const [models, tools] = await Promise.all([
+        options.observabilityLedger.listModelUsage(),
+        options.observabilityLedger.listToolUsage(),
+      ]);
+      writeJson(response, 200, buildRunUsage(runId, models, tools));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Run usage projection is unavailable.' } });
     }
     return;
   }
@@ -798,6 +1108,36 @@ function parseCursor(value: string | string[] | null): number {
   return parsed;
 }
 
+function parseObservabilityRange(value: string | null): ObservabilityRange {
+  const candidate = value === null || value.trim() === '' ? '24h' : value;
+  const parsed = ObservabilityRangeSchema.safeParse(candidate);
+  if (!parsed.success) throw new RequestError(400, 'INVALID_OBSERVABILITY_RANGE', 'Range must be 24h, 7d, or 30d.');
+  return parsed.data;
+}
+
+function parseObservabilityMetric(value: string | null): ObservabilityMetric {
+  const parsed = ObservabilityMetricSchema.safeParse(value ?? 'cpu');
+  if (!parsed.success) throw new RequestError(400, 'INVALID_OBSERVABILITY_METRIC', 'Metric must be cpu, memory, disk, tokens, or cost.');
+  return parsed.data;
+}
+
+function parseObservabilityAuditCursor(value: string | null): number {
+  if (value === null || value.trim() === '') return 0;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 1_000_000_000_000) throw new RequestError(400, 'INVALID_AUDIT_CURSOR', 'Invalid audit cursor.');
+  return parsed;
+}
+
+function parseObservabilityFilter(value: string | null): string | undefined {
+  if (value === null || value.trim() === '') return undefined;
+  if (value.length > 64 || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/u.test(value)) throw new RequestError(400, 'INVALID_AUDIT_FILTER', 'Invalid audit filter.');
+  return value;
+}
+
+function verifyAuditEvents(events: readonly AuditEvent[]): boolean {
+  return verifyAuditChain(events);
+}
+
 function decodeRunId(value: string | undefined): string {
   if (!value) throw new RequestError(400, 'INVALID_RUN_ID', 'Invalid run id.');
   try {
@@ -817,6 +1157,28 @@ function decodeGoalId(value: string | undefined): string {
     return goalId;
   } catch {
     throw new RequestError(400, 'INVALID_GOAL_ID', 'Invalid goal id.');
+  }
+}
+
+function decodeTodoId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_TODO_ID', 'Invalid todo id.');
+  try {
+    const todoId = decodeURIComponent(value);
+    if (!/^todo_[A-Za-z0-9_-]{8,128}$/u.test(todoId)) throw new Error('invalid');
+    return todoId;
+  } catch {
+    throw new RequestError(400, 'INVALID_TODO_ID', 'Invalid todo id.');
+  }
+}
+
+function decodeGateId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_GATE_ID', 'Invalid gate id.');
+  try {
+    const gateId = decodeURIComponent(value);
+    if (!/^gate_[A-Za-z0-9_-]{8,128}$/u.test(gateId)) throw new Error('invalid');
+    return gateId;
+  } catch {
+    throw new RequestError(400, 'INVALID_GATE_ID', 'Invalid gate id.');
   }
 }
 
@@ -860,6 +1222,32 @@ function readJson(request: IncomingMessage, limitBytes: number): Promise<unknown
 
 function isValidationError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'issues' in error;
+}
+
+function safeGoalMutation(result: GoalMutationResult): Record<string, unknown> {
+  return {
+    schemaVersion: result.schemaVersion,
+    eventId: result.eventId,
+    controlRevision: result.controlRevision,
+    projection: redactGoalProjection(result.projection),
+  };
+}
+
+function goalMutationError(error: unknown): { code: string; message: string; statusCode: number } | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error) || typeof error.code !== 'string') return undefined;
+  switch (error.code) {
+    case 'GOAL_EVENT_CONFLICT':
+      return { code: error.code, message: 'Goal event id is already used with different content.', statusCode: 409 };
+    case 'GOAL_CONTROL_REVISION_STALE':
+      return { code: error.code, message: 'Goal control revision is stale.', statusCode: 409 };
+    case 'GOAL_TODO_VALIDATION_REQUIRED':
+      return { code: error.code, message: 'Validated Evidence is required before Todo completion.', statusCode: 422 };
+    case 'GOAL_EVENT_INVALID':
+    case 'GOAL_EVENT_STORAGE_ERROR':
+      return { code: 'GOAL_STORAGE_UNAVAILABLE', message: 'Goal storage is unavailable.', statusCode: 503 };
+    default:
+      return undefined;
+  }
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown, extraHeaders: Record<string, string> = {}): void {

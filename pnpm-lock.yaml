@@ -44,6 +44,9 @@ importers:
       '@ready4vibe/model-openai':
         specifier: workspace:*
         version: link:../../packages/model-openai
+      '@ready4vibe/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@ready4vibe/policy':
         specifier: workspace:*
         version: link:../../packages/policy
@@ -152,6 +155,15 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/observability:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+
   packages/policy:
     dependencies:
       '@ready4vibe/contracts':
@@ -186,6 +198,9 @@ importers:
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@ready4vibe/observability':
+        specifier: workspace:*
+        version: link:../observability
       uuid:
         specifier: 11.1.0
         version: 11.1.0

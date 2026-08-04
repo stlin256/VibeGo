@@ -1,7 +1,7 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor 与 Phase 4 bounded run integration 已落地；Proxy/Knowledge 仍按 Spec 39 后置）
-- 日期：2026-08-03
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy/MemoryKnowledge adapter 与 Phase 6a Knowledge settings/run context 已落地；Phase 6b 运营可观测性与 upstream 兼容门禁进行中）
+- 日期：2026-08-04
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
 ## 背景
@@ -144,6 +144,83 @@ ready4vibe 现有 `OpenAICompatibleProvider` 会追加 `/chat/completions`。Mem
 上游配置和 fallback。默认 Proxy 失效时回退到原始 Provider，除非用户显式选择“Proxy
 失效即停止”的策略。
 
+### 7.1 Phase 5 的 Proxy adapter 落地边界
+
+Phase 5 采用 daemon-local `TencentMemoryProxyProvider`，同时实现 ready4vibe
+的 memory provider port 和 model provider port。它要求显式的 endpoint/path
+contract（默认 `/proxy/{spaceId}/v1/chat/completions`），并单独探测 `/health`；
+不会把 Proxy 根地址传给会隐式追加 `/chat/completions` 的现有 Provider。
+
+Proxy 请求仅携带经过校验的 team/agent/user/session identity headers 和进程内
+credential。`proxy`/`full-stack` 模式下，MemoryProxy 负责注入及对话写回，
+ready4vibe-side recall/write 是 bounded、validated no-op，避免重复写回。模型
+provider 与 identity 一起冻结在 run snapshot；Proxy 在首字节之前不可用时才可按
+`fallbackToDirectProvider` 回退到同一 run 捕获的直连 provider，部分流已经开始后
+不得重放。回退只更新 degraded 状态，不改变 `run_events`、Goal Control、Scheduler、
+Approval、Sandbox 或 Workspace 事实源。
+
+Phase 5 不把 Proxy sidecar 的构建、revision 切换或 secret 写入 settings 纳入
+Supervisor；现阶段支持显式外部 Proxy endpoint，sidecar 自动构建/切换保留到后续
+阶段。这样在 Proxy 未运行、health 超时或响应协议错误时，普通 Web 和直连模型仍可用。
+
+### 7.2 Phase 5 的 MemoryKnowledge adapter 落地边界
+
+MemoryKnowledge 使用独立的 `MemoryKnowledgeProvider`，只调用公开的
+`POST /v3/tools/list` 与 `POST /v3/tools/call`。adapter 固定校验
+`x-tdai-service-id`、`knowledge_id`、工具名和 bounded params，并只允许文档化的
+Wiki/CodeGraph 只读白名单；管理、写入、索引和未知工具在 HTTP 请求前 fail-closed。
+descriptor、HTTP envelope、结果条数/字节数、超时和取消均在 adapter 侧校验。响应只生成
+带 `source='retrieval'`、`trust='untrusted'` 的 `ContextItem` 候选，仍需经过现有
+`ContextManager`；adapter 不注册 `ToolRuntime`、不执行 Approval/Sandbox，也不修改
+`AgentLoop`、`RunManager`、`run_events`、`goal_events` 或 Goal admission。任何上游错误、
+malformed/schema、secret-shaped 内容或绝对路径都只产生 bounded degraded 结果。
+
+本阶段不把知识资源 ID、sidecar endpoint 或 credential 加入 durable settings，也不在
+默认 run 创建路径自动触发知识检索；后续应用服务必须先补充显式资源配置、审批/资源预算
+和回归测试，才可将它作为可选的 run context source。
+
+### 7.3 Phase 6a 的 Knowledge settings 与 application-service 边界
+
+Phase 6a 使用独立的 `agent-memory-knowledge/v1` settings，不修改既有
+`agent-memory/v1` schema。仅保存 `enabled`、`knowledgeId`、`autoRetrieve` 和 bounded
+`maxItems/maxBytes/timeoutMs`；endpoint、service id、credential、原始 tool response、
+绝对路径和完整 transcript 留在 daemon/adapter 边界之外。默认关闭且不自动发网络请求。
+
+通过现有认证 API 提供 GET/PATCH 与 probe。probe 只执行 `tools/list` 并返回脱敏的 resource
+type/name、只读 descriptor 摘要、健康时间和稳定错误码。RunManager 可选接收
+knowledge settings manager，在新 run 创建时冻结 provider/resource/limits；只有
+`autoRetrieve=true` 才执行一次 bounded retrieval，结果标记为 untrusted retrieval
+context 后交给 ContextManager。settings 切换不影响在途 run。
+
+这个 application-service port 不修改 AgentLoop 核心状态机，也不让 MemoryKnowledge 成为
+任意 ToolRuntime；所有错误均 fail-soft，不能覆盖模型/tool/approval 原始结果。Goal、
+`goal_events`、`run_events`、Scheduler、Approval、Sandbox、WorkspaceRegistry 仍是事实源。
+
+Phase 6a 已按上述边界实现：settings manager 使用现有 `daemon_settings` 事务，provider
+只从注入依赖或 daemon 环境惰性创建；新 run 在 RunManager application-service 层冻结
+provider、resource ID 和 limits，`search` 召回结果经过现有 ContextManager 前的 bounded
+untrusted projection。关闭、sidecar down、timeout、schema/privacy 和 probe 失败均只返回
+脱敏 degraded status。Web 仅展示资源 ID、限额、descriptor 摘要和 probe 状态；未增加新的
+逐 run 确认，也未修改 AgentLoop、run_events/goal_events、Scheduler、Approval、Sandbox
+或 WorkspaceRegistry。
+
+### 7.4 Phase 6b operational projection and compatibility gate
+
+运营指标不进入 `run_events`、`goal_events` 或 MemoryCore payload。daemon 通过只读的
+`GET /api/v1/settings/agent-memory/updates` 返回独立版本化投影，包含 bounded update
+history、health latency、recall hit/miss 和 write queue 状态。计数只用于诊断，不能绕过
+Scheduler、Approval、Sandbox、Workspace 或 Goal admission；memory 失败仍然 fail-soft。
+
+Supervisor 在候选成为 `current` 之前读取候选 revision 自带的 manifest、lockfile 和
+README，并运行 adapter contract fixtures（health、recall envelope、write envelope、
+privacy/bounds）。失败候选保留 current。运维可以把 upstream ref 锁定到不可变 commit
+用于回滚/事故恢复；锁定只阻止自动追踪新 ref，不跳过 frozen install、typecheck、health、
+smoke 或 rollback。
+
+`current`、`previous` 和正在验证的 candidate 永远受 revision 清理保护。构建缓存与
+upstream LICENSE/NOTICE 随 sidecar revision 保留在 daemon 本地，不回显到 Web；恢复时只
+重启已验证 current，不重放旧工具调用或未确认写回。
+
 ## 被拒绝的方案
 
 ### 完整复制 TencentDB 源码到 ready4vibe
@@ -198,7 +275,7 @@ revision、evidence 和 recovery 语义。
 3. daemon settings API、Web 开关、状态卡片和新 run snapshot；
 4. Supervisor 的 current/previous、候选 build/health/smoke、切换/回滚；
 5. MemoryProxy 专用 Provider；
-6. MemoryKnowledge 只读 Adapter 和后续工具评估。
+6. MemoryKnowledge 只读 Adapter（已落地）和后续工具评估。
 
 任何阶段都不得把 TencentDB 接到 Goal admission、Scheduler、Approval 或 Sandbox 的
 绕过路径；任何候选 revision 未通过 contract/health/smoke test，都不得成为 current。

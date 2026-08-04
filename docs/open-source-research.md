@@ -53,3 +53,18 @@
 ## 许可证与发布注意
 
 在真正引入任何第三方代码、schema 或依赖前，必须单独做许可证审查并把 NOTICE/许可证文件加入发布物。本次仅阅读代码结构，没有将这些仓库的代码复制到产品源码，也没有把它们作为运行时依赖。
+
+## Provider/Token/费用调研入口（Spec 44）
+
+Spec 43/44 需要对 CC Switch、AxonHub、LiteLLM、Langfuse 和 OpenTelemetry 做一次
+固定 commit 的二次核对。可借鉴内容包括 token/cache 语义、稳定 ID 去重、pricing revision、
+cost item、TTFT/latency、rollup/prune 和 projection 筛选体验；不引入完整 proxy、Tauri、
+Python runtime、CLI session 扫描或外部常驻服务。
+
+本次新增的研究记录模板见
+[`research/upstream-provider-usage.md`](research/upstream-provider-usage.md)，实现 Agent
+的逐步提示词见
+[`prompts/44-provider-usage-management-implementation.md`](prompts/44-provider-usage-management-implementation.md)。
+模板要求记录 URL、pinned commit、读取路径、许可证/NOTICE、设计借鉴与复用决定。没有这些
+证据时只能 clean-room 重实现，不能复制代码；用户提到的 `axonhub/ccswitch` 也必须先确认
+canonical repository。

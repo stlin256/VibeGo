@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type CertificateStatus, type GitSettingsStatus, type GoalProjectionListResponse, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type GoalProjectionListResponse, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
@@ -17,6 +17,9 @@ function RuntimeApp(): JSX.Element {
   const [modelSettingsUnavailable, setModelSettingsUnavailable] = useState(false);
   const [agentMemorySettings, setAgentMemorySettings] = useState<AgentMemorySettingsStatus>();
   const [agentMemorySettingsUnavailable, setAgentMemorySettingsUnavailable] = useState(false);
+  const [agentMemoryOperations, setAgentMemoryOperations] = useState<AgentMemoryOperationsStatus>();
+  const [agentMemoryKnowledgeSettings, setAgentMemoryKnowledgeSettings] = useState<AgentMemoryKnowledgeSettingsStatus>();
+  const [agentMemoryKnowledgeSettingsUnavailable, setAgentMemoryKnowledgeSettingsUnavailable] = useState(false);
   const [toolSettings, setToolSettings] = useState<ToolSettingsStatus>();
   const [toolSettingsUnavailable, setToolSettingsUnavailable] = useState(false);
   const [gitSettings, setGitSettings] = useState<GitSettingsStatus>();
@@ -30,6 +33,12 @@ function RuntimeApp(): JSX.Element {
   const [goalProjectionUnavailable, setGoalProjectionUnavailable] = useState(false);
   const [goalProjectionRefreshing, setGoalProjectionRefreshing] = useState(false);
   const goalRefreshInFlight = useRef(false);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary>();
+  const [auditEvents, setAuditEvents] = useState<AuditEventsResponse>();
+  const [observabilityLoading, setObservabilityLoading] = useState(true);
+  const [observabilityUnavailable, setObservabilityUnavailable] = useState(false);
+  const [observabilityRefreshing, setObservabilityRefreshing] = useState(false);
+  const observabilityRefreshInFlight = useRef(false);
 
   useEffect(() => {
     saveRunProfile(profile);
@@ -62,6 +71,21 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) {
       setAgentMemorySettings(undefined);
       setAgentMemorySettingsUnavailable(isAgentMemorySettingsUnavailable(reason));
+    }
+  };
+
+  const refreshAgentMemoryOperations = async (): Promise<void> => {
+    try { setAgentMemoryOperations(await client.agentMemoryOperations()); }
+    catch { setAgentMemoryOperations(undefined); }
+  };
+
+  const refreshAgentMemoryKnowledgeSettings = async (): Promise<void> => {
+    try {
+      setAgentMemoryKnowledgeSettings(await client.agentMemoryKnowledgeSettings());
+      setAgentMemoryKnowledgeSettingsUnavailable(false);
+    } catch (reason) {
+      setAgentMemoryKnowledgeSettings(undefined);
+      setAgentMemoryKnowledgeSettingsUnavailable(isAgentMemoryKnowledgeSettingsUnavailable(reason));
     }
   };
 
@@ -124,6 +148,23 @@ function RuntimeApp(): JSX.Element {
     }
   };
 
+  const refreshObservability = async (): Promise<void> => {
+    if (observabilityRefreshInFlight.current) return;
+    observabilityRefreshInFlight.current = true;
+    const hasExisting = usageSummary !== undefined || auditEvents !== undefined;
+    if (hasExisting) setObservabilityRefreshing(true);
+    else setObservabilityLoading(true);
+    const [summaryResult, auditResult] = await Promise.allSettled([client.usageSummary('24h'), client.auditEvents()]);
+    if (summaryResult.status === 'fulfilled') setUsageSummary(summaryResult.value);
+    else setUsageSummary(undefined);
+    if (auditResult.status === 'fulfilled') setAuditEvents(auditResult.value);
+    else setAuditEvents(undefined);
+    setObservabilityUnavailable(summaryResult.status === 'rejected' && auditResult.status === 'rejected');
+    setObservabilityLoading(false);
+    setObservabilityRefreshing(false);
+    observabilityRefreshInFlight.current = false;
+  };
+
   useEffect(() => {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
@@ -131,11 +172,14 @@ function RuntimeApp(): JSX.Element {
         void refreshCertificateStatus();
         void refreshModelSettings();
         void refreshAgentMemorySettings();
+        void refreshAgentMemoryOperations();
+        void refreshAgentMemoryKnowledgeSettings();
         void refreshToolSettings();
         void refreshGitSettings();
         void refreshSandboxSettings();
         void refreshWorkspaces();
         void refreshGoalProjection();
+        void refreshObservability();
       }
     }).catch((reason: unknown) => setError(safeError(reason)));
   }, []);
@@ -148,11 +192,14 @@ function RuntimeApp(): JSX.Element {
       await refreshCertificateStatus();
       await refreshModelSettings();
       await refreshAgentMemorySettings();
+      await refreshAgentMemoryOperations();
+      await refreshAgentMemoryKnowledgeSettings();
       await refreshToolSettings();
       await refreshGitSettings();
       await refreshSandboxSettings();
       await refreshWorkspaces();
       await refreshGoalProjection();
+      await refreshObservability();
     } catch (reason) { setError(safeError(reason)); }
   };
 
@@ -166,6 +213,8 @@ function RuntimeApp(): JSX.Element {
       if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') setRun(await client.getRun(runId));
     }
     await refreshGoalProjection();
+    await refreshAgentMemoryOperations();
+    await refreshObservability();
   };
 
   const createRun = async (message: string): Promise<void> => {
@@ -219,6 +268,7 @@ function RuntimeApp(): JSX.Element {
     try {
       setAgentMemorySettings(await client.patchAgentMemorySettings(input));
       setAgentMemorySettingsUnavailable(false);
+      await refreshAgentMemoryOperations();
       setError(undefined);
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
@@ -227,6 +277,7 @@ function RuntimeApp(): JSX.Element {
     try {
       setAgentMemorySettings(await client.probeAgentMemory());
       setAgentMemorySettingsUnavailable(false);
+      await refreshAgentMemoryOperations();
       setError(undefined);
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
@@ -235,6 +286,7 @@ function RuntimeApp(): JSX.Element {
     try {
       setAgentMemorySettings(await client.updateAgentMemory());
       setAgentMemorySettingsUnavailable(false);
+      await refreshAgentMemoryOperations();
       setError(undefined);
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
@@ -243,6 +295,23 @@ function RuntimeApp(): JSX.Element {
     try {
       setAgentMemorySettings(await client.rollbackAgentMemory());
       setAgentMemorySettingsUnavailable(false);
+      await refreshAgentMemoryOperations();
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const patchAgentMemoryKnowledgeSettings = async (input: AgentMemoryKnowledgeSettingsPatchInput): Promise<void> => {
+    try {
+      setAgentMemoryKnowledgeSettings(await client.patchAgentMemoryKnowledgeSettings(input));
+      setAgentMemoryKnowledgeSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const probeAgentMemoryKnowledge = async (): Promise<void> => {
+    try {
+      setAgentMemoryKnowledgeSettings(await client.probeAgentMemoryKnowledge());
+      setAgentMemoryKnowledgeSettingsUnavailable(false);
       setError(undefined);
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
@@ -305,7 +374,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -327,6 +396,10 @@ function isModelSettingsUnavailable(reason: unknown): boolean {
 
 function isAgentMemorySettingsUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'AGENT_MEMORY_SETTINGS_UNAVAILABLE';
+}
+
+function isAgentMemoryKnowledgeSettingsUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'AGENT_MEMORY_KNOWLEDGE_SETTINGS_UNAVAILABLE';
 }
 
 function isToolSettingsUnavailable(reason: unknown): boolean {
