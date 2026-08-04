@@ -6,7 +6,9 @@
 
 ```mermaid
 flowchart LR
-  U[桌面/平板/手机浏览器] -->|HTTPS 或受保护 HTTP| T[Transport API + SSE]
+  U[桌面/平板/手机浏览器] -->|Host 同源 URL| W[Host 托管的 React Web]
+  W -->|HTTPS 或受保护 HTTP| T[Transport API + SSE]
+  N[未来 Android/iOS/HarmonyOS] -->|版本化 API + SSE| T
   T --> A[Application Service]
   A --> G[Goal Control（可选 governed）]
   G --> GE[独立 goal_events / projection]
@@ -27,12 +29,35 @@ flowchart LR
 ## 进程模型
 
 - `apps/daemon`：Node.js 单进程；负责 API、任务调度、harness、存储、workspace registry 和显式启用的工具 runtime。
-- `apps/web`：React/Vite 静态构建；开发时独立运行，生产时由 daemon 静态托管或由反代托管。
+- `apps/web`：React/Vite 静态构建；开发时可以独立运行，Host release 时由 daemon 静态托管。
+- Host release 是默认用户部署形态：daemon 同时提供 Web、REST API 和 SSE；用户在远程设备
+  上只打开 URL，不安装 Node.js、pnpm 或另一套后端。反向代理仍可作为专业部署 adapter，
+  但不是普通用户的前置条件。
 - `packages/goal-control`：原生 TypeScript Goal/Todo/Gate/Evidence 控制平面；Phase 0
   只提供纯 reducer、projection、claim/revision 和 `shouldRun`，不启动第二个进程。
 - 可选 `sandbox-worker`：仅在启用 Docker/VM/平台隔离时出现；MVP 不强制常驻。
 - 模型服务、MCP server、Docker/VM 均是外部进程，不进入 daemon 的核心内存模型。
 - Scheduler 默认允许 2 个 active run；provider、tool、sandbox 和 workspace write lease 共同决定实际并发。
+
+### Host-first 连接边界
+
+Spec 41 和 ADR 0010 将 Host 定义为唯一执行事实源。生产路由由 daemon 统一提供：
+
+```text
+GET /                  -> apps/web/dist/index.html
+GET /assets/*          -> hashed React assets
+GET /health            -> transport/storage/auth summary
+/api/v1/*              -> authenticated application APIs
+run SSE                -> existing seq/Last-Event-ID replay
+```
+
+生产 Web 使用同源相对 API 路径，不需要用户配置 CORS、Vite 端口或第二个 Web server。
+开发环境仍可运行独立 Vite，但必须通过显式 dev proxy/allowed-origin fixture 访问 daemon，
+不能把开发端口当作发行版部署合约。
+
+桌面、手机、平板和折叠屏浏览器都是 Web Client；未来 Android、iOS、HarmonyOS 原生
+客户端只消费同一套版本化 REST/SSE、pairing 和 device session。它们不得读取 SQLite、
+workspace root 或 memory sidecar，也不得复制 AgentLoop、Scheduler、Approval 或 Sandbox。
 
 ## 推荐 monorepo
 

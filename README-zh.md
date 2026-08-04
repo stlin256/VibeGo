@@ -8,7 +8,7 @@
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring 和响应式 Web/PWA 控制台已经实现并通过测试。MCP/Skill 激活、ACME 自动化、Git 写入/patch 和完整审批/diff UI 仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring 和响应式 Web/PWA 控制台已经实现并通过测试。Host-first 同源 Web 发行方向已确定但尚未打包；MCP/Skill 激活、ACME 自动化、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -16,7 +16,8 @@
 
 ```mermaid
 flowchart LR
-    Browser["VibeGo React PWA"] -->|"Bearer + CSRF"| Daemon["本地 daemon"]
+    Browser["VibeGo React PWA"] -->|"同源 URL"| Host["VibeGo Host"]
+    Host -->|"Bearer + CSRF"| Daemon["本地 daemon"]
     Daemon --> Auth["Pairing + 传输门禁"]
     Daemon --> Loop["Agent loop"]
     Loop --> Context["上下文管理"]
@@ -47,7 +48,7 @@ flowchart LR
 | Workspace | 单用户 workspace registry、下拉选择、明确添加/删除确认和 per-run 根目录快照 |
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
-| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式设置、模型配置、审批卡片、恢复重试、取消、指标、tool-output inspector 和 SSE |
+| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式设置、模型配置、审批卡片、恢复重试、取消、指标、tool-output inspector 和 SSE；生产 Host 同源托管方向已确定，代码待实现 |
 | Goal Control | Phase 0 原生 TypeScript contracts/projection/claim 守卫，加上 Phase 1 独立 SQLite `goal_events` adapter 与受认证的 daemon 只读 projection/replay；Goal 写操作和默认 run admission 仍关闭 |
 
 ## 快速开始
@@ -59,7 +60,7 @@ pnpm install
 pnpm typecheck
 pnpm test
 
-# 开发 Web 控制台
+# 开发 Web 控制台（源码 checkout 中 Vite 与 daemon 暂时分开）
 pnpm --filter @ready4vibe/web dev
 
 # 构建并启动 daemon（仅 loopback）
@@ -67,7 +68,20 @@ pnpm build
 pnpm --filter @ready4vibe/daemon start
 ```
 
-默认地址是 `http://127.0.0.1:8787`。Web 控制台默认可以 same-origin 访问，也为后续 Tailscale/SSH tunnel 预留 API base URL。
+默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。最终发行目标是一个
+Host URL：daemon 同时托管编译后的 Web、API 和 SSE；launcher 与静态托管实现记录在
+Spec 41 中。
+
+## Host-first 部署目标
+
+用户最终只需在主要开发电脑安装一个 VibeGo Host。Host 会一起启动 Node daemon、SQLite
+和编译后的 React Web，并自动打开一个 URL。远程桌面、手机、平板或折叠屏只需打开该
+URL，不安装 Node、pnpm 或第二套后端；局域网访问仍必须显式开启 TLS 和 pairing。
+
+Android、iOS、HarmonyOS 原生客户端明确后置。未来客户端只消费同一套版本化 REST/SSE
+和 device session，不运行本地 AgentLoop，也不读取 Host 的存储。详见
+[Spec 41](docs/specs/41-host-first-distribution-and-client-boundary.md) 与
+[ADR 0010](docs/adr/0010-host-first-same-origin-web-and-client-boundary.md)。
 
 控制台内置 Settings 面板，可配置 workspace、模型、任务信任级别、sandbox、审批、网络和运行限制；常规使用不需要手动编辑 `.env` 或 YAML。API key、私钥等 secret 不会进入这个面板，后续由 daemon 侧安全 secret provider 负责。
 当传输要求 TLS 时，同一面板还会展示证书有效期和安全的下一步提示，不会要求用户粘贴或上传私钥。
@@ -141,6 +155,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 - [开源项目调研](docs/open-source-research.md) 与 [harness 合约](docs/harness-contracts.md)
 - [安全默认值](docs/adr/0002-security-defaults.md) 与 [LAN/Codex-like 审批决策](docs/adr/0003-lan-access-and-codex-like-approval.md)
 - [实施状态](docs/implementation-status.md)、[路线图](docs/roadmap.md) 与 [Spec 索引](docs/specs/)
+- [Host-first 发行与后续客户端边界](docs/specs/41-host-first-distribution-and-client-boundary.md) 与 [ADR 0010](docs/adr/0010-host-first-same-origin-web-and-client-boundary.md)
 
 ## 后续路线
 
@@ -149,6 +164,8 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 - 分页/高亮 diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
 - Goal 写 API、Web Goal 投影操作和 governed preflight（Phase 0/1 合同、存储与受认证只读 projection 已完成）；
 - ACME/certificate manager、Tailscale/SSH transport adapter；
+- Host-first 同源静态 Web 托管、跨平台 launcher/发行包和签名更新/回滚；
+- 在 Host/API/SSE 合约稳定后再开发 Android/iOS/HarmonyOS 原生客户端；
 - 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
 
 ## 贡献
