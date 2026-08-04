@@ -68,7 +68,7 @@ export class AgentMemorySettingsError extends Error {
 const DEFAULT_SETTINGS: AgentMemorySettings = {
   schemaVersion: AGENT_MEMORY_SETTINGS_SCHEMA_VERSION,
   enabled: false,
-  mode: 'memory-core',
+  mode: 'off',
   teamId: 'vibego',
   agentId: 'vibego-local-agent',
   userId: 'local-user',
@@ -162,7 +162,12 @@ export class AgentMemorySettingsManager {
     }
     let next: AgentMemorySettings;
     try {
-      next = AgentMemorySettingsSchema.parse({ ...this.settingsValue, ...patch, schemaVersion: AGENT_MEMORY_SETTINGS_SCHEMA_VERSION });
+      // Keep the durable default fully off while making the first enable action
+      // ergonomic: an omitted mode selects the preferred MemoryCore adapter.
+      const normalizedPatch = patch.enabled === true && patch.mode === undefined && this.settingsValue.mode === 'off'
+        ? { ...patch, mode: 'memory-core' as const }
+        : patch;
+      next = AgentMemorySettingsSchema.parse({ ...this.settingsValue, ...normalizedPatch, schemaVersion: AGENT_MEMORY_SETTINGS_SCHEMA_VERSION });
     } catch (error) {
       throw new AgentMemorySettingsError('INVALID_SETTINGS', 'Agent memory settings are invalid.', { cause: error });
     }

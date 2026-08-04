@@ -179,7 +179,9 @@ flowchart LR
 | `proxy` | MemoryProxy（MemoryCore 由 Proxy 管理或按 upstream 要求启动） | 模型请求经 Proxy 注入/写回；必要时回退直连 Provider | 兼容性验证后 |
 | `full-stack` | MemoryCore + MemoryProxy + MemoryKnowledge | recall、Proxy 注入、知识工具和异步 record | 后置实验 |
 
-建议默认配置：`enabled=false`、`mode=memory-core`、`autoUpdate=true`。用户打开开关后
+默认配置固定为：`enabled=false`、`mode=off`、`autoUpdate=true`。关闭时不创建
+provider、不调用 SDK/HTTP、不启动 sidecar，也不修改 prompt。用户打开开关时，Web
+若仍选择 `off`，会自动选择首选的 `memory-core`；用户也可以显式选择其他后置模式。
 新 run 读取新的运行时快照；已经开始的 run 保留自己的 provider/memory snapshot，避免
 中途切换造成一次 turn 前后语义不一致。
 

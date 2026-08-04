@@ -31,9 +31,9 @@ describe('AgentMemorySettingsManager', () => {
   it('loads defaults and persists only the versioned non-secret snapshot', () => {
     const settings = new InMemorySettingsStore();
     const manager = new AgentMemorySettingsManager({ settings });
-    expect(manager.status()).toMatchObject({ settings: { enabled: false, mode: 'memory-core', teamId: 'vibego' }, status: { mode: 'off', updateState: 'disabled' } });
+    expect(manager.status()).toMatchObject({ settings: { enabled: false, mode: 'off', teamId: 'vibego' }, status: { mode: 'off', updateState: 'disabled' } });
     const patched = manager.patch({ enabled: true, ...identity, updateIntervalMinutes: 15 });
-    expect(patched).toMatchObject({ settings: { enabled: true, userId: 'user_demo', updateIntervalMinutes: 15 }, status: { degraded: true, lastErrorCode: 'unavailable' } });
+    expect(patched).toMatchObject({ settings: { enabled: true, mode: 'memory-core', userId: 'user_demo', updateIntervalMinutes: 15 }, status: { degraded: true, lastErrorCode: 'unavailable' } });
     const persisted = settings.get<Record<string, unknown>>('agent-memory', 'v1');
     expect(persisted).toMatchObject({ schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: true, userId: 'user_demo' });
     expect(JSON.stringify(persisted)).not.toMatch(/api[_-]?key|token|secret|C:\\private/iu);

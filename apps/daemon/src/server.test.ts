@@ -497,7 +497,7 @@ describe('daemon health server', () => {
     const base = `http://127.0.0.1:${port}/api/v1/settings/agent-memory`;
     const initial = await fetch(base);
     expect(initial.status).toBe(200);
-    expect(await initial.json()).toMatchObject({ settings: { enabled: false, mode: 'memory-core' }, status: { updateState: 'disabled' } });
+    expect(await initial.json()).toMatchObject({ settings: { enabled: false, mode: 'off' }, status: { updateState: 'disabled' } });
     const patched = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo', upstreamRef: 'feat/server_team' }) });
     const patchedBody = await patched.text();
     expect(patched.status).toBe(200);

@@ -62,7 +62,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
   const [modelApiKey, setModelApiKey] = useState('');
   const [memoryEnabled, setMemoryEnabled] = useState(false);
-  const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('memory-core');
+  const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('off');
   const [memoryTeamId, setMemoryTeamId] = useState('vibego');
   const [memoryAgentId, setMemoryAgentId] = useState('vibego-local-agent');
   const [memoryUserId, setMemoryUserId] = useState('local-user');
@@ -153,7 +153,9 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     if (!onPatchAgentMemorySettings) return;
     setMemoryBusy(true);
     try {
-      await onPatchAgentMemorySettings({ enabled: memoryEnabled, mode: memoryMode, teamId: memoryTeamId, agentId: memoryAgentId, userId: memoryUserId, upstreamRepo: memoryUpstreamRepo, upstreamRef: memoryUpstreamRef, upstreamRefLocked: memoryUpstreamRefLocked, autoUpdate: memoryAutoUpdate, updateIntervalMinutes: memoryIntervalMinutes, fallbackToDirectProvider: memoryFallback });
+      const selectedMode: AgentMemorySettingsMode = memoryEnabled && memoryMode === 'off' ? 'memory-core' : memoryMode;
+      if (selectedMode !== memoryMode) setMemoryMode(selectedMode);
+      await onPatchAgentMemorySettings({ enabled: memoryEnabled, mode: selectedMode, teamId: memoryTeamId, agentId: memoryAgentId, userId: memoryUserId, upstreamRepo: memoryUpstreamRepo, upstreamRef: memoryUpstreamRef, upstreamRefLocked: memoryUpstreamRefLocked, autoUpdate: memoryAutoUpdate, updateIntervalMinutes: memoryIntervalMinutes, fallbackToDirectProvider: memoryFallback });
     } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setMemoryBusy(false); }
   };
   const runAgentMemoryAction = async (action?: () => Promise<void> | void): Promise<void> => {
