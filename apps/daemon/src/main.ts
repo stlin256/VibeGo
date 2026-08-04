@@ -80,6 +80,7 @@ const runManager = new RunManager({
   modelProviderForRun: () => modelSettings.provider.snapshot(),
   toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
+  agentMemorySettings,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {

@@ -65,4 +65,21 @@ describe('TencentMemoryCoreProvider', () => {
     expect(mismatchedIdentity).toEqual({ accepted: false, queued: false });
     expect(calls).toHaveLength(beforeMismatch);
   });
+
+  it('allows a run-scoped session when the provider was created from durable base identity', async () => {
+    const calls: Array<{ input: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (input: string, init?: RequestInit) => {
+      calls.push(init === undefined ? { input } : { input, init });
+      if (input.endsWith('/health')) return response({ status: 'ok', version: 'rev_123' });
+      return response({ code: 0, data: { items: [{ id: 'memory_1', type: 'fact', content: 'session scoped' }] } });
+    });
+    const baseIdentity = { teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo' };
+    const provider = new TencentMemoryCoreProvider({ endpoint: 'http://127.0.0.1:8420', allowInsecureHttp: true, apiKey: 'memory-key', serviceId: 'vibego', identity: baseIdentity, fetchImpl });
+    const runIdentity = { ...baseIdentity, sessionId: 'session_run' };
+    await expect(provider.recall({ identity: runIdentity, runId: 'run_12345678', query: 'session', maxItems: 4, maxBytes: 1_024 })).resolves.toMatchObject({ degraded: false });
+    await expect(provider.enqueueWrite({ identity: runIdentity, runId: 'run_12345678', summary: 'session scoped write', outcome: 'completed' })).resolves.toEqual({ accepted: true, queued: true });
+    await provider.close();
+    expect(JSON.parse(String(calls[0]?.init?.body))).toMatchObject({ session_id: 'session_run' });
+    expect(JSON.parse(String(calls[1]?.init?.body))).toMatchObject({ session_id: 'session_run' });
+  });
 });

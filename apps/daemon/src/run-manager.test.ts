@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentMemoryIdentity, AgentMemoryProvider, AgentMemoryStatus, AgentMemoryWriteRequest } from '@ready4vibe/contracts';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { InMemoryEventStore } from '@ready4vibe/storage';
+import { InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
+import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 
 const config = {
@@ -35,6 +37,57 @@ function manager(eventStore: InMemoryEventStore): RunManager {
     scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
     modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }),
   });
+}
+
+function memoryStatus(): AgentMemoryStatus {
+  return {
+    schemaVersion: 'ready4vibe_agent_memory_status_v0',
+    enabled: true,
+    mode: 'memory-core',
+    available: true,
+    degraded: false,
+    revision: 'rev_123',
+    previousRevision: null,
+    lastHealthAt: '2026-08-04T00:00:00.000Z',
+    lastUpdateAt: null,
+    updateState: 'ready',
+    lastErrorCode: null,
+    capabilities: ['recall', 'write-back'],
+  };
+}
+
+function memoryProvider(identity: AgentMemoryIdentity, options: {
+  recall?: AgentMemoryProvider['recall'];
+  enqueueWrite?: (request: AgentMemoryWriteRequest) => Promise<{ accepted: boolean; queued: boolean }>;
+} = {}): AgentMemoryProvider {
+  const defaultRecall: AgentMemoryProvider['recall'] = vi.fn(async () => ({
+    items: [{ id: 'memory_1', content: 'Use the bounded test workflow.', kind: 'preference' as const, source: 'tencentdb-memory-core' as const, trust: 'untrusted' as const }],
+    sourceRevision: 'rev_123',
+    elapsedMs: 1,
+    degraded: false,
+  }));
+  const defaultWrite: AgentMemoryProvider['enqueueWrite'] = vi.fn(async () => ({ accepted: true, queued: true }));
+  return {
+    id: 'tencentdb-agent-memory',
+    mode: 'memory-core',
+    status: vi.fn(async () => memoryStatus()),
+    recall: options.recall ?? defaultRecall,
+    enqueueWrite: options.enqueueWrite ?? defaultWrite,
+    close: vi.fn(async () => undefined),
+  };
+}
+
+function memoryManager(providers: AgentMemoryProvider[]): AgentMemorySettingsManager {
+  const manager = new AgentMemorySettingsManager({
+    settings: new InMemorySettingsStore(),
+    providerFactory: (identity) => {
+      const provider = memoryProvider(identity);
+      providers.push(provider);
+      return provider;
+    },
+  });
+  manager.patch({ enabled: true, teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo' });
+  return manager;
 }
 
 describe('RunManager restart recovery', () => {
@@ -82,5 +135,89 @@ describe('RunManager restart recovery', () => {
     });
     await expect(runManager.start(config)).rejects.toBeInstanceOf(RunManagerError);
     expect(eventStore.listRunIds()).toEqual([]);
+  });
+
+  it('recalls bounded untrusted context and queues compact write-back after terminal state', async () => {
+    const eventStore = new InMemoryEventStore();
+    const providers: AgentMemoryProvider[] = [];
+    const memory = memoryManager(providers);
+    const model = new FakeModelProvider({ events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] });
+    const runManager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: model,
+      agentMemorySettings: memory,
+    });
+
+    const started = await runManager.start(config);
+    await vi.waitFor(() => expect(runManager.completion(started.runId)).toBeDefined());
+    const runProvider = providers.at(-1);
+    expect(runProvider).toBeDefined();
+    expect(vi.mocked(runProvider!.recall)).toHaveBeenCalledWith(expect.objectContaining({
+      runId: started.runId,
+      identity: expect.objectContaining({ sessionId: 'session-recovery' }),
+    }));
+    expect(model.requests[0]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ content: expect.stringContaining('Use the bounded test workflow.') }),
+    ]));
+    await vi.waitFor(() => expect(vi.mocked(runProvider!.enqueueWrite)).toHaveBeenCalledWith(expect.objectContaining({
+      runId: started.runId,
+      outcome: 'completed',
+      evidenceRefs: [`run:${started.runId}`],
+    })));
+    const events = await eventStore.read(started.runId);
+    expect(JSON.stringify(events)).not.toMatch(/api[_-]?key|private key|C:\\|\/Users\//iu);
+  });
+
+  it('keeps runs available when recall/write fail and drops retrieval within context budget', async () => {
+    const eventStore = new InMemoryEventStore();
+    const providers: AgentMemoryProvider[] = [];
+    const memory = new AgentMemorySettingsManager({
+      settings: new InMemorySettingsStore(),
+      providerFactory: (identity) => {
+        const provider = memoryProvider(identity, {
+          recall: vi.fn(async () => { throw new Error('recall unavailable'); }),
+          enqueueWrite: vi.fn(async () => { throw new Error('write unavailable'); }),
+        });
+        providers.push(provider);
+        return provider;
+      },
+    });
+    memory.patch({ enabled: true, teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo' });
+    const model = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: model, agentMemorySettings: memory });
+
+    const started = await runManager.start({ ...config, limits: { ...config.limits, maxContextBytes: 32 } });
+    await vi.waitFor(() => expect(runManager.completion(started.runId)).toBeDefined());
+    expect(runManager.completion(started.runId)?.status).toBe('completed');
+    expect(model.requests[0]?.messages).toEqual([{ role: 'user', content: config.userMessage }]);
+    expect(vi.mocked(providers.at(-1)!.enqueueWrite)).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a captured run provider after settings are switched off', async () => {
+    const eventStore = new InMemoryEventStore();
+    const providers: AgentMemoryProvider[] = [];
+    const memory = memoryManager(providers);
+    const model = new FakeModelProvider({ delayMs: 10, events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] });
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: model, agentMemorySettings: memory });
+
+    const started = await runManager.start(config);
+    memory.patch({ enabled: false });
+    await vi.waitFor(() => expect(runManager.completion(started.runId)).toBeDefined());
+    const runProvider = providers.at(-1)!;
+    expect(vi.mocked(runProvider.enqueueWrite)).toHaveBeenCalledWith(expect.objectContaining({ runId: started.runId, outcome: 'completed' }));
+  });
+
+  it('does not create or call a memory provider while memory is off', async () => {
+    const eventStore = new InMemoryEventStore();
+    const providerFactory = vi.fn(() => memoryProvider({ teamId: 'team_demo', agentId: 'agent_demo', userId: 'user_demo' }));
+    const memory = new AgentMemorySettingsManager({ settings: new InMemorySettingsStore(), providerFactory });
+    const model = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: model, agentMemorySettings: memory });
+
+    const started = await runManager.start(config);
+    await vi.waitFor(() => expect(runManager.completion(started.runId)).toBeDefined());
+    expect(providerFactory).not.toHaveBeenCalled();
+    expect(runManager.completion(started.runId)?.status).toBe('completed');
   });
 });

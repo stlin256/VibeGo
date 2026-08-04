@@ -19,6 +19,7 @@
     "@ready4vibe/agent": "workspace:*",
     "@ready4vibe/auth": "workspace:*",
     "@ready4vibe/certificates": "workspace:*",
+    "@ready4vibe/context": "workspace:*",
     "@ready4vibe/contracts": "workspace:*",
     "@ready4vibe/execution": "workspace:*",
     "@ready4vibe/goal-control": "workspace:*",

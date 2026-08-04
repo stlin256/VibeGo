@@ -1,7 +1,22 @@
 import { v7 as uuidv7 } from 'uuid';
-import { parseRunConfig, type EventStore, type ModelProvider, type RunConfig, type RunStatus, type SchedulerPolicy, type StoredEvent } from '@ready4vibe/contracts';
+import {
+  AgentMemoryRecallRequestSchema,
+  AgentMemoryRecallResultSchema,
+  AgentMemoryWriteRequestSchema,
+  parseRunConfig,
+  type AgentMemoryRecallResult,
+  type AgentMemoryWriteRequest,
+  type EventStore,
+  type ModelProvider,
+  type RunConfig,
+  type RunStatus,
+  type SchedulerPolicy,
+  type StoredEvent,
+} from '@ready4vibe/contracts';
+import type { ContextItem } from '@ready4vibe/context';
 import { AgentLoop, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ToolRuntime } from '@ready4vibe/agent';
 import { Scheduler } from '@ready4vibe/scheduler';
+import type { AgentMemoryRunSnapshot, AgentMemorySettingsManager } from './agent-memory-settings.js';
 
 export type RunEventListener = (event: StoredEvent) => void;
 
@@ -34,6 +49,7 @@ export interface RunManagerOptions {
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
   workspaceExists?: (workspaceId: string) => boolean;
+  agentMemorySettings?: AgentMemorySettingsManager;
 }
 
 export class RunManagerError extends Error {
@@ -51,6 +67,7 @@ export class RunManager {
   private readonly modelProviderForRun: () => ModelProvider;
   private readonly toolRuntimeForRun: (config: RunConfig) => ToolRuntime | undefined;
   private readonly workspaceExists: (workspaceId: string) => boolean;
+  private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
@@ -59,6 +76,7 @@ export class RunManager {
     this.modelProviderForRun = options.modelProviderForRun ?? (() => options.modelProvider);
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
+    this.agentMemorySettings = options.agentMemorySettings;
     this.scheduler = options.scheduler ?? new Scheduler(options.schedulerPolicy ?? {
       maxActiveRuns: 2,
       maxActiveModelCalls: 2,
@@ -83,18 +101,29 @@ export class RunManager {
     const controller = new AbortController();
     this.controllers.set(runId, controller);
     const capturedToolRuntime = this.toolRuntimeForRun(config);
+    const capturedMemory = this.agentMemorySettings?.createRunSnapshot(config.createdBySessionId);
+    const memoryContext = capturedMemory
+      ? await this.recallMemory(capturedMemory, config, runId, controller.signal)
+      : [];
     const promise = this.agentLoop.run({
       runId,
       config,
       signal: controller.signal,
       modelProvider: this.modelProviderForRun(),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
+      ...(memoryContext.length > 0 ? { contextItems: memoryContext } : {}),
     });
     void promise.then((result) => {
       this.completions.set(runId, result);
       this.controllers.delete(runId);
+      if (capturedMemory) {
+        void this.writeMemory(capturedMemory, config, result)
+          .finally(() => capturedMemory.dispose())
+          .catch(() => undefined);
+      }
     }).catch(() => {
       this.controllers.delete(runId);
+      if (capturedMemory) void capturedMemory.dispose().catch(() => undefined);
     });
     // AgentLoop writes run.created synchronously before its first await, so a
     // follow-up GET can observe a real snapshot as soon as 202 is returned.
@@ -222,6 +251,63 @@ export class RunManager {
   completion(runId: string): AgentRunResult | undefined {
     return this.completions.get(runId);
   }
+
+  private async recallMemory(
+    snapshot: AgentMemoryRunSnapshot,
+    config: RunConfig,
+    runId: string,
+    parentSignal: AbortSignal,
+  ): Promise<readonly ContextItem[]> {
+    const controller = new AbortController();
+    const onAbort = (): void => controller.abort();
+    parentSignal.addEventListener('abort', onAbort, { once: true });
+    let resolveTimeout!: (value: AgentMemoryRecallResult) => void;
+    const timeoutResult = new Promise<AgentMemoryRecallResult>((resolve) => { resolveTimeout = resolve; });
+    const timer = setTimeout(() => {
+      controller.abort();
+      resolveTimeout({ items: [], sourceRevision: snapshot.revision, elapsedMs: MEMORY_RECALL_TIMEOUT_MS, degraded: true });
+    }, MEMORY_RECALL_TIMEOUT_MS);
+    try {
+      const request = {
+        identity: snapshot.identity,
+        runId,
+        ...(safeWorkspaceId(config.workspaceId) ? { workspaceId: safeWorkspaceId(config.workspaceId) } : {}),
+        query: truncateUtf8(config.userMessage, MEMORY_QUERY_MAX_BYTES),
+        maxItems: MEMORY_RECALL_MAX_ITEMS,
+        maxBytes: Math.min(MEMORY_RECALL_MAX_BYTES, Math.max(1, Math.floor(config.limits.maxContextBytes / 4))),
+        signal: controller.signal,
+      };
+      const parsedRequest = AgentMemoryRecallRequestSchema.parse(request);
+      const result = AgentMemoryRecallResultSchema.parse(await Promise.race([snapshot.provider.recall(parsedRequest), timeoutResult]));
+      if (result.degraded) return [];
+      return toMemoryContextItems(result, runId);
+    } catch {
+      // Memory is an enhancement. A malformed query, timeout, or unavailable
+      // provider must never turn an otherwise valid run into a Web error.
+      return [];
+    } finally {
+      clearTimeout(timer);
+      parentSignal.removeEventListener('abort', onAbort);
+    }
+  }
+
+  private async writeMemory(snapshot: AgentMemoryRunSnapshot, config: RunConfig, result: AgentRunResult): Promise<void> {
+    const request: AgentMemoryWriteRequest = {
+      identity: snapshot.identity,
+      runId: result.runId,
+      ...(safeWorkspaceId(config.workspaceId) ? { workspaceId: safeWorkspaceId(config.workspaceId) } : {}),
+      summary: truncateUtf8(result.output || `Run finished with status: ${result.status}.`, MEMORY_WRITE_SUMMARY_MAX_BYTES),
+      evidenceRefs: [`run:${result.runId}`],
+      outcome: result.status,
+      ...(snapshot.revision ? { sourceRevision: snapshot.revision } : {}),
+    };
+    try {
+      await snapshot.provider.enqueueWrite(AgentMemoryWriteRequestSchema.parse(request));
+    } catch {
+      // Provider validation and transport failures remain bounded degraded
+      // state; run_events already contains the authoritative terminal result.
+    }
+  }
 }
 
 export class ObservableEventStore implements EventStore {
@@ -307,4 +393,43 @@ function latestRunStatus(events: readonly StoredEvent[]): RunStatus {
     if (event.type === 'run.needs_recovery') status = 'needs-recovery';
   }
   return status;
+}
+
+const MEMORY_RECALL_MAX_ITEMS = 8;
+const MEMORY_RECALL_MAX_BYTES = 8 * 1024;
+const MEMORY_QUERY_MAX_BYTES = 8 * 1024;
+const MEMORY_WRITE_SUMMARY_MAX_BYTES = 8 * 1024;
+const MEMORY_RECALL_TIMEOUT_MS = 750;
+const SAFE_WORKSPACE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
+
+function toMemoryContextItems(result: AgentMemoryRecallResult, runId: string): ContextItem[] {
+  const ids = new Set<string>();
+  const items: ContextItem[] = [];
+  for (const item of result.items) {
+    const baseId = `memory:${item.id}`;
+    let id = baseId;
+    let suffix = 1;
+    while (ids.has(id)) id = `${baseId}:${suffix++}`;
+    ids.add(id);
+    items.push({
+      id: `${runId}:${id}`,
+      source: 'retrieval',
+      trust: item.trust,
+      // Retrieval is intentionally droppable context; system/developer/user
+      // protection remains owned by ContextManager.
+      role: 'assistant',
+      content: `[MEMORY kind=${item.kind} source=${item.source}]\n${item.content}`,
+    });
+  }
+  return items;
+}
+
+function safeWorkspaceId(value: string): string | undefined {
+  return SAFE_WORKSPACE_ID.test(value) ? value : undefined;
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.byteLength <= maxBytes) return value;
+  return new TextDecoder().decode(encoded.slice(0, maxBytes));
 }

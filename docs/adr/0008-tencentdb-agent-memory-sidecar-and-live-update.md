@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API 与 Phase 3 runtime supervisor 已落地；其余集成仍按 Spec 39 分阶段）
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor 与 Phase 4 bounded run integration 已落地；Proxy/Knowledge 仍按 Spec 39 后置）
 - 日期：2026-08-03
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
@@ -38,7 +38,7 @@ TencentDB 的内部 module path。
 Web Settings 提供普通开关和模式选择，不增加额外的逐任务安全确认。sidecar 不可用时，
 Web、RunManager 和直接模型 Provider 继续工作，并显示降级状态。
 
-### 2.1 当前 Phase 1 的适配器边界
+### 2.1 Phase 1 的适配器边界（历史基线）
 
 Phase 1 先落地一个 daemon-local `TencentMemoryCoreProvider`，使用原生 `fetch`
 调用公开 MemoryCore v3 HTTP API。它只负责健康检查、bounded recall 和串行 compact
@@ -46,9 +46,9 @@ write-back，并显式校验 provider 实例的 team/agent/user/session identity
 按 `untrusted` 处理。适配器超时、5xx、malformed 或 schema mismatch 时返回稳定的
 degraded 结果，不阻断 run。
 
-该实现不启动 sidecar、不依赖 upstream SDK、不注入 `ContextManager`、不修改
-`AgentLoop`/`RunManager`、不接入 Web Settings，也不改变默认 run 创建路径。后续阶段在
-完成 runtime snapshot 和 Supervisor 后，才能把它作为可选 provider 接入应用服务。
+该实现本身不启动 sidecar、不依赖 upstream SDK；ContextManager/RunManager 的注入和
+runtime snapshot 属于后续应用服务阶段，现已由 Phase 4 contract（见 6.2）完成。它不
+改变默认 run admission，也不让 MemoryCore 取代既有 run/Goal 事实源。
 
 ### 3. ready4vibe 保留所有执行事实源
 
@@ -114,6 +114,19 @@ MemoryCore smoke 都成功，才替换 current 指针，随后 drain 旧进程�
 时刻最多有一个 fetch/build/switch。daemon 重启只读取指针和设置，不重放旧工具调用，
 并按 current revision 启动一个新的 sidecar 实例。Supervisor 不做 Node 模块热替换，也
 不修改 `run_events`、`goal_events`、Scheduler、Approval、Sandbox 或 Workspace。
+
+### 6.2 Phase 4 run integration contract
+
+RunManager 在 daemon application-service 层创建新 run snapshot：它冻结当前 provider、
+identity、sidecar revision 和 bounded memory policy，再把 recall 结果作为普通
+`ContextItem` 交给 AgentLoop；AgentLoop 的状态机、scheduler、approval、sandbox 和
+`run_events` 合约不改变。recall 只产生可丢弃的 retrieval context，任何 timeout、schema
+或 provider failure 都回退到无记忆上下文。
+
+run 终态由 RunManager 在后台向 snapshot provider 提交 compact write-back。该任务不阻塞
+终态响应，且只允许 summary、outcome、source revision 和 bounded evidence refs；settings
+切换或 sidecar revision 更新不会改变已开始 run 的 snapshot。旧 provider 的 dispose
+在后台等待队列完成，失败只保留 degraded 状态，不改写 run/Goal 事实源。
 
 截至 2026-08-04 的上游证据：`feat/server_team` 为
 `0aff21a2d9f2b8a0354aaa80a2e586aab4054562`；该 revision 的 README 声明 Node `>=22.16`，

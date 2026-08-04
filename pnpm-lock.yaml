@@ -29,6 +29,9 @@ importers:
       '@ready4vibe/certificates':
         specifier: workspace:*
         version: link:../../packages/certificates
+      '@ready4vibe/context':
+        specifier: workspace:*
+        version: link:../../packages/context
       '@ready4vibe/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

@@ -30,6 +30,18 @@ export interface AgentMemoryRuntimeOperations {
   close?(): Promise<void>;
 }
 
+/**
+ * Immutable application-service input for one run. The provider is never
+ * serialized or exposed to Web; it is disposed asynchronously after the run's
+ * compact write-back has been queued.
+ */
+export interface AgentMemoryRunSnapshot {
+  readonly provider: AgentMemoryProvider;
+  readonly identity: AgentMemoryIdentity;
+  readonly revision: string | null;
+  readonly dispose: () => Promise<void>;
+}
+
 export interface AgentMemorySettingsManagerOptions {
   readonly settings: SettingsStore;
   readonly provider?: AgentMemoryProvider;
@@ -82,6 +94,29 @@ export class AgentMemorySettingsManager {
 
   settingsSnapshot(): AgentMemorySettings {
     return { ...this.settingsValue };
+  }
+
+  createRunSnapshot(sessionId?: string): AgentMemoryRunSnapshot | undefined {
+    const settings = this.settingsValue;
+    if (!settings.enabled || settings.mode !== 'memory-core') return undefined;
+    const identity = identityFromSettings(settings, sessionId);
+    let provider: AgentMemoryProvider | undefined;
+    let ownsProvider = false;
+    if (this.providerFactory) {
+      try { provider = this.providerFactory(identity); ownsProvider = provider !== undefined; } catch { provider = undefined; }
+    } else if (this.providerWasInjected) {
+      provider = this.provider;
+    } else {
+      provider = this.createProvider(settings, identity);
+      ownsProvider = provider !== undefined;
+    }
+    if (!provider) return undefined;
+    return {
+      provider,
+      identity,
+      revision: this.lastStatus.revision,
+      dispose: ownsProvider ? () => provider!.close() : async () => undefined,
+    };
   }
 
   status(): AgentMemorySettingsStatus {
@@ -227,12 +262,12 @@ export class AgentMemorySettingsManager {
     }
   }
 
-  private createProvider(settings: AgentMemorySettings): AgentMemoryProvider | undefined {
+  private createProvider(settings: AgentMemorySettings, identity = identityFromSettings(settings)): AgentMemoryProvider | undefined {
     if (!settings.enabled || settings.mode !== 'memory-core') return undefined;
     if (this.providerFactory) {
-      try { return this.providerFactory(identityFromSettings(settings)); } catch { return undefined; }
+      try { return this.providerFactory(identity); } catch { return undefined; }
     }
-    return createProviderFromEnvironment(identityFromSettings(settings), this.environment, this.runtime?.endpoint?.());
+    return createProviderFromEnvironment(identity, this.environment, this.runtime?.endpoint?.());
   }
 
   private refreshProviderForRuntime(): void {
@@ -270,8 +305,16 @@ export class AgentMemorySettingsManager {
   }
 }
 
-function identityFromSettings(settings: AgentMemorySettings): AgentMemoryIdentity {
-  return AgentMemoryIdentitySchema.parse({ teamId: settings.teamId, agentId: settings.agentId, userId: settings.userId });
+function identityFromSettings(settings: AgentMemorySettings, sessionId?: string): AgentMemoryIdentity {
+  const safeSessionId = typeof sessionId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/u.test(sessionId)
+    ? sessionId
+    : undefined;
+  return AgentMemoryIdentitySchema.parse({
+    teamId: settings.teamId,
+    agentId: settings.agentId,
+    userId: settings.userId,
+    ...(safeSessionId ? { sessionId: safeSessionId } : {}),
+  });
 }
 
 function unavailableStatus(mode: AgentMemorySettings['mode'], code: AgentMemoryStatus['lastErrorCode']): AgentMemoryStatus {

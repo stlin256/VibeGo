@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor implemented（未接入 AgentLoop/默认 run 路径）；Phase 4+ Draft
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration implemented；Proxy/Knowledge 与运营增强为后续阶段
 - 日期：2026-08-03
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -53,9 +53,10 @@ adapter boundary currently provides:
 - provider-identity matching so a caller cannot use an adapter instance for a
   different team, agent, user, or session.
 
-This is an adapter contract slice only. It is not yet wired into `ContextManager`,
-`AgentLoop`, `RunManager` snapshots, Web Settings, sidecar supervision, or the
-default run creation path. `off` and all existing unbound interactive runs keep
+This section records the Phase 1 adapter boundary: at that stage it was not wired
+into `ContextManager`, `AgentLoop`, `RunManager` snapshots, Web Settings, sidecar
+supervision, or the default run creation path. Phase 2–4 add those application
+service boundaries while `off` and all existing unbound interactive runs keep
 their previous behavior.
 
 ## 1.3 Phase 2 implementation gate
@@ -65,12 +66,12 @@ authenticated daemon API. It stores only the enabled/mode/identity/upstream
 policy fields described by this spec; MemoryCore credentials, environment
 variables, absolute paths, and sidecar logs are never accepted or returned.
 
-The API can report status and probe the configured provider. Update and rollback
-are explicit capability calls: until the Phase 3 supervisor exists they return a
-stable degraded/update code and do not mutate the current revision. The Web
-surface is a small Settings card that edits the same snapshot and displays
-bounded health/revision state; it does not create a second scheduler, SSE stream,
-or run admission gate.
+The API can report status and probe the configured provider. In the Phase 2-only
+slice, update and rollback were explicit capability calls returning a stable
+degraded/update code; Phase 3 now supplies the supervisor while preserving that
+fail-soft API shape. The Web surface is a small Settings card that edits the same
+snapshot and displays bounded health/revision state; it does not create a second
+scheduler, SSE stream, or run admission gate.
 
 ## 2. 用户需求与非目标
 
@@ -573,7 +574,20 @@ AgentLoop 创建 run。
 - ✅ 候选没有可识别 lockfile 时以 `NO_LOCKFILE` fail-closed，不执行非 frozen install；
   2026-08-04 核对的 `feat/server_team` 当前正处于该兼容性门禁，保持现有 current 不变。
 
-### Phase 4：Proxy 与 Knowledge
+### Phase 4：RunManager/ContextManager bounded integration
+
+- ✅ 由 daemon application service 在创建新 run 时冻结 memory/provider snapshot；settings
+  切换只影响后续 run，运行中的 provider 不随开关变化而重建。
+- ✅ recall 使用显式 team/agent/user/session identity 和 bounded query，结果只转换为
+  `ContextItem(source='retrieval')`，标记原始 trust，并交给现有 ContextManager 的字节预算
+  与裁剪逻辑；recall timeout、schema 或 provider failure 均 fail-soft，不阻塞普通 run。
+- ✅ run 终态后仅异步提交 compact summary、outcome、source revision 和 bounded evidence
+  refs；write failure 不覆盖原始 run result，也不写入完整 transcript、tool output、secret
+  或绝对路径。snapshot/provider 的 dispose 在后台完成，不延迟 Web 的终态响应。
+- ✅ 增加 off、recall degraded、context budget、settings toggle snapshot、successful
+  write-back、write failure 和 concurrent run isolation 测试。
+
+### Phase 5：Proxy 与 Knowledge
 
 - 增加专用 `TencentMemoryProxyProvider` 或显式 endpoint contract；
 - 验证 Proxy 注入/写回、直连 fallback 和运行中 snapshot；
@@ -640,7 +654,7 @@ AgentLoop 创建 run。
 
 尚未冻结的产品选择包括：上游默认 ref（branch/tag/commit）、定时检查周期、是否允许
 Proxy 失败时直连 fallback、MemoryKnowledge 的首批查询类型，以及 user/agent ID 与
-未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–3。
+未来多用户账户体系的映射。这些选择不应阻塞 Phase 0–4。
 
 ## 15. 参考链接
 

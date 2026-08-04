@@ -364,7 +364,10 @@ function sameIdentity(
   return left.teamId === right.teamId
     && left.agentId === right.agentId
     && left.userId === right.userId
-    && left.sessionId === right.sessionId;
+    // A provider created from durable settings has no session scope. A run
+    // may add its explicit session id at call time; a provider created for a
+    // fixed session still rejects every other session (fail-closed).
+    && (right.sessionId === undefined || left.sessionId === right.sessionId);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

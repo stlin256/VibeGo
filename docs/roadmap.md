@@ -225,7 +225,7 @@ React smoke test、CSS contract test 和可用性为准。
 当前交互约束：中心区域必须先呈现对话/运行时间线，再呈现底部 composer；
 新建任务是一键清空草稿并聚焦输入，不要求用户先进入设置页。
 
-## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–3 已实现）
+## Spec 39：TencentDB Agent Memory 可切换融合与自动更新（Phase 0–4 已实现）
 
 详见 [Spec 39](specs/39-tencentdb-agent-memory-integration.md) 和
 [ADR 0008](adr/0008-tencentdb-agent-memory-sidecar-and-live-update.md)。采用
@@ -234,8 +234,9 @@ TencentDB Agent Memory 独立 sidecar + ready4vibe 原生 `AgentMemoryProvider` 
 MVP；`proxy` 与 `full-stack` 后置。TencentDB 只负责长期记忆和知识派生层，Goal/
 Todo/Gate/Evidence、run/approval/sandbox/scheduler 仍由 ready4vibe 作为事实源。
 
-实现顺序为：contract/Noop → MemoryCore recall/write-back → Web Settings/status →
-Supervisor current/previous revision 和候选健康检查 → Proxy → Knowledge。upstream
+实现顺序为：contract/Noop → MemoryCore adapter → Web Settings/status →
+Supervisor current/previous revision 和候选健康检查 → RunManager/ContextManager bounded
+integration → Proxy → Knowledge。upstream
 更新采用候选 worktree 构建和蓝绿式切换，不做运行中 Node 热替换；构建或 health 失败
 保留当前版本，普通 Web 和 run 不因记忆服务不可用而中断。
 
@@ -256,3 +257,9 @@ worktree、frozen install、build/typecheck、临时端口 health、MemoryCore s
 原子切换；构建/health/smoke 失败保留 current，切换后失败可回退 previous。Web 更新、
 定时触发和 webhook 通知共用串行队列，Windows 子进程终止与端口释放均有测试。该阶段
 仍不把 TencentDB 模块加载进 daemon，也不接入 AgentLoop 默认 run admission。
+
+Phase 4 已在 daemon application service 接入 bounded run integration：新 run 冻结
+provider/identity/revision snapshot，recall 结果经 ContextManager 的 retrieval item、
+trust 标记和字节预算后才进入 AgentLoop；终态 write-back 仅后台提交 compact summary，
+memory 故障不阻塞 run，settings 切换不影响已启动 run。该阶段不修改 AgentLoop 核心状态机、
+run/Goal 事件事实源或 Scheduler/Approval/Sandbox。
