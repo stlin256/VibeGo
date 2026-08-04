@@ -106,7 +106,9 @@ Windows/Unix 适配不需要把 shell 或 filesystem 逻辑泄漏到 AgentLoop�
 previous，`state/current.json` 与 `state/previous.json` 是便于诊断的镜像，只保存
 revision、port、mode 和时间戳。任何候选步骤失败都保留 current；只有候选 health 与
 MemoryCore smoke 都成功，才替换 current 指针，随后 drain 旧进程并更新 previous。
-切换后的健康失败必须停止新实例、恢复 previous 指针并重新通过 health/smoke。
+`state/update.json` 独立保存 bounded 的健康/更新时间、状态和稳定错误码，daemon 重启
+后可恢复可见的更新摘要；其中不包含 secret、绝对路径或 sidecar 日志。切换后的健康
+失败必须停止新实例、恢复 previous 指针并重新通过 health/smoke。
 
 `update()`、`rollback()`、定时器和 webhook notification 共用一个 promise queue；同一
 时刻最多有一个 fetch/build/switch。daemon 重启只读取指针和设置，不重放旧工具调用，

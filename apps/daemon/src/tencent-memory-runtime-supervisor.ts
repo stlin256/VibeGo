@@ -9,7 +9,12 @@ import type {
   AgentMemorySettings,
   AgentMemoryStatus,
 } from '@ready4vibe/contracts';
-import { AgentMemoryIdentitySchema, AgentMemoryStatusSchema } from '@ready4vibe/contracts';
+import {
+  AgentMemoryErrorCodeSchema,
+  AgentMemoryIdentitySchema,
+  AgentMemoryStatusSchema,
+  AgentMemoryUpdateStateSchema,
+} from '@ready4vibe/contracts';
 
 const RUNTIME_SCHEMA_VERSION = 'ready4vibe_agent_memory_runtime_v1' as const;
 const REVISION = /^[0-9a-f]{40}$/u;
@@ -129,6 +134,14 @@ interface PointerDocument {
   schemaVersion: typeof RUNTIME_SCHEMA_VERSION;
   current: CurrentPointer | null;
   previous: PreviousPointer | null;
+}
+
+interface UpdateStateDocument {
+  schemaVersion: typeof RUNTIME_SCHEMA_VERSION;
+  lastHealthAt: string | null;
+  lastUpdateAt: string | null;
+  updateState: AgentMemoryStatus['updateState'];
+  lastErrorCode: AgentMemoryErrorCode | null;
 }
 
 interface CommandInput {
@@ -454,10 +467,12 @@ export class TencentMemoryRuntimeSupervisor {
     await mkdir(this.candidatesRoot, { recursive: true });
     await mkdir(this.revisionsRoot, { recursive: true });
     const aggregate = await readPointerDocument(join(this.stateRoot, 'pointers.json'));
+    const update = await readUpdateState(join(this.stateRoot, 'update.json'));
     this.state = {
       ...emptyState(),
       current: aggregate?.current ?? await readPointer<CurrentPointer>(join(this.stateRoot, 'current.json'), 'current'),
       previous: aggregate?.previous ?? await readPointer<PreviousPointer>(join(this.stateRoot, 'previous.json'), 'previous'),
+      ...(update ?? {}),
     };
     this.stateLoaded = true;
   }
@@ -469,6 +484,13 @@ export class TencentMemoryRuntimeSupervisor {
   private async persistState(): Promise<void> {
     await mkdir(this.stateRoot, { recursive: true });
     await this.persistPointers(this.state.current, this.state.previous);
+    await writeAtomicJson(join(this.stateRoot, 'update.json'), {
+      schemaVersion: RUNTIME_SCHEMA_VERSION,
+      lastHealthAt: this.state.lastHealthAt,
+      lastUpdateAt: this.state.lastUpdateAt,
+      updateState: this.state.updateState,
+      lastErrorCode: this.state.lastErrorCode,
+    } satisfies UpdateStateDocument);
   }
 
   private async persistPointers(current: CurrentPointer | null, previous: PreviousPointer | null): Promise<void> {
@@ -933,6 +955,24 @@ async function readPointerDocument(path: string): Promise<PointerDocument | null
   } catch { return null; }
 }
 
+async function readUpdateState(path: string): Promise<UpdateStateDocument | null> {
+  try {
+    const raw = await readFile(path, 'utf8');
+    const record = asRecord(JSON.parse(raw) as unknown);
+    if (!record || record.schemaVersion !== RUNTIME_SCHEMA_VERSION) return null;
+    if (!isNullableIsoTimestamp(record.lastHealthAt) || !isNullableIsoTimestamp(record.lastUpdateAt)) return null;
+    if (!AgentMemoryUpdateStateSchema.safeParse(record.updateState).success) return null;
+    if (record.lastErrorCode !== null && !AgentMemoryErrorCodeSchema.safeParse(record.lastErrorCode).success) return null;
+    return {
+      schemaVersion: RUNTIME_SCHEMA_VERSION,
+      lastHealthAt: record.lastHealthAt,
+      lastUpdateAt: record.lastUpdateAt,
+      updateState: record.updateState,
+      lastErrorCode: record.lastErrorCode,
+    } as UpdateStateDocument;
+  } catch { return null; }
+}
+
 function validatePointerRecord(value: unknown, kind: 'current'): CurrentPointer | null;
 function validatePointerRecord(value: unknown, kind: 'previous'): PreviousPointer | null;
 function validatePointerRecord(value: unknown, kind: 'current' | 'previous'): CurrentPointer | PreviousPointer | null;
@@ -1012,4 +1052,8 @@ function supportsCurrentNode(range: string): boolean {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function isNullableIsoTimestamp(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && !Number.isNaN(Date.parse(value)));
 }

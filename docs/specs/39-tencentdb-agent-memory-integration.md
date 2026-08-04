@@ -396,11 +396,13 @@ stateDiagram-v2
   data/memory-core/<revision>/          # sidecar-owned data, if upstream requires it
 ```
 
-`current.json` 和 `previous.json` 只保存 revision、mode、port、health timestamp 和
-schema version；`pointers.json` 通过临时文件 + rename 原子保存二者，是重启时的权威
-恢复源，前两个文件只是便于诊断的镜像。所有这些文件都不保存密钥。若 upstream 需要
-API key 或模型凭据，继续使用 daemon 的 secret boundary，并通过进程环境或启动参数
-注入，不进入 Web status、事件或 Git worktree。
+`current.json` 和 `previous.json` 只保存 revision、mode、port、endpoint/start
+metadata 和 schema version；`pointers.json` 通过临时文件 + rename 原子保存二者，是
+重启时的指针恢复源，前两个文件只是便于诊断的镜像。`update.json` 独立保存 bounded
+的 `lastHealthAt`、`lastUpdateAt`、`updateState` 和 `lastErrorCode`，因此 daemon 重启
+后仍能显示最近一次健康/更新结果。所有这些文件都不保存密钥。若 upstream 需要 API key
+或模型凭据，继续使用 daemon 的 secret boundary，并通过进程环境或启动参数注入，不进入
+Web status、事件或 Git worktree。
 
 Phase 3 的候选构建子进程只接收最小系统环境（PATH、Windows 临时目录和用户目录等），
 不会继承 ready4vibe 的模型密钥、MemoryCore key 或完整环境变量。sidecar 启动时可由

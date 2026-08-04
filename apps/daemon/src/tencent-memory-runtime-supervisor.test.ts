@@ -208,9 +208,23 @@ describe('TencentMemoryRuntimeSupervisor', () => {
     const rolledBack = await supervisor.rollback();
     expect(rolledBack).toMatchObject({ revision: 'a'.repeat(40), previousRevision: 'b'.repeat(40), degraded: false });
     await supervisor.close();
+    const persistedUpdate = JSON.parse(await readFile(join(root, 'state', 'update.json'), 'utf8')) as Record<string, unknown>;
+    expect(persistedUpdate).toMatchObject({
+      schemaVersion: 'ready4vibe_agent_memory_runtime_v1',
+      updateState: 'ready',
+      lastErrorCode: null,
+      lastHealthAt: '2026-08-04T00:00:00.000Z',
+      lastUpdateAt: '2026-08-04T00:00:00.000Z',
+    });
     const restartedLauncher = new FakeLauncher();
     const restarted = makeSupervisor(root, builder, restartedLauncher, health, ports);
-    expect(await restarted.start()).toMatchObject({ revision: 'a'.repeat(40), previousRevision: 'b'.repeat(40), available: true });
+    expect(await restarted.start()).toMatchObject({
+      revision: 'a'.repeat(40),
+      previousRevision: 'b'.repeat(40),
+      available: true,
+      lastHealthAt: '2026-08-04T00:00:00.000Z',
+      lastUpdateAt: '2026-08-04T00:00:00.000Z',
+    });
     expect(builder.loadCalls).toContain('a'.repeat(40));
     expect(restartedLauncher.launched[0]?.port).toBe(18_703);
     await restarted.close();
