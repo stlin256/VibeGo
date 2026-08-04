@@ -96,6 +96,18 @@ runtime + Host launcher，未来如需要桌面原生体验再评估 Tauri 或�
 4. 再加入 LAN TLS、QR pairing、平台 secret store 和签名更新；
 5. 最后提供版本化 TypeScript client SDK，并开始 Android/iOS/HarmonyOS 客户端。
 
+### Spec 51-R1 static serving gate (2026-08-05)
+
+The first implementation slice adds an optional absolute Web dist directory
+to the daemon. Only `GET`/`HEAD` static requests are resolved; API, health and
+SSE routes stay outside the resolver and keep the existing AuthGate. The
+resolver performs percent-decoded traversal/control-character checks,
+rejects symlink/directory escapes, serves SPA fallback only for extensionless
+paths, and applies `no-store` to `index.html` plus immutable caching to hashed
+assets. A missing build returns a bounded unavailable response and never
+exposes a host path or source checkout file. This slice does not add a
+launcher, CORS, native client or second Web server.
+
 ## 不变的事实源
 
 此 ADR 不修改或替换：

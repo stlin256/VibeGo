@@ -1,6 +1,6 @@
 # Spec 51: Host-first release and future client boundary
 
-- Status: planned (51-R0 packaging gate)
+- Status: in progress (51-R1 static serving gate)
 - Date: 2026-08-04
 - Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -115,6 +115,22 @@ that serves a built Web directory without changing the development server.
 
 Exit: a clean build can be opened through one host URL; API and SSE remain
 authenticated and relative.
+
+#### 51-R1 implementation gate (2026-08-05)
+
+The daemon accepts an optional absolute `webDistDir` and serves only built
+static files from that directory. `GET` and `HEAD` are supported; `/` and
+extensionless client routes fall back to `index.html`, while missing files with
+an extension return a bounded 404. `index.html` is `no-store`; hashed
+`/assets/*` files receive immutable cache headers. Percent-decoded traversal,
+NUL/control characters, symlink escapes and directories fail closed without
+revealing host paths. `/api/*`, `/health` and run SSE never enter the static
+resolver and retain their existing authentication, CSRF and origin behavior.
+
+The default source checkout keeps the Vite development server unchanged. The
+production `main` composition points to `apps/web/dist` (or an explicit
+`READY4VIBE_WEB_DIST_DIR`), and a missing build reports a safe
+`WEB_ASSETS_UNAVAILABLE` response rather than serving source files.
 
 ### 51-R2: cross-platform launcher
 
