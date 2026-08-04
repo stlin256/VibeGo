@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; R4 pending
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 contract frozen and implementation in progress
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -228,13 +228,66 @@ composer.
 
 ### 49-R4: run-scoped execution bridge
 
-Connect only activated, approved MCP tools to the existing ToolExecutor and
-Sandbox. Apply cancellation and resource limits through the run's AbortSignal
-and Scheduler lease. Record safe request/result metadata in `run_events` and
-audit; bounded tool output remains source-labelled context.
+R4 is a run-scoped adapter, not a new execution subsystem. Only a tool in an
+immutable `McpCapabilitySnapshot` may be exposed to the model. The application
+captures the snapshot when a run is created; capability refresh, settings
+changes and transport replacement affect later runs only.
 
-Exit: an MCP tool can complete through the same approval/sandbox path as a
-built-in tool, and failure/recovery cannot replay an old request.
+The bridge has three explicit ports:
+
+1. `McpRunToolBinding` maps one executable MCP descriptor to the existing
+   `ToolRegistry`/`ToolExecutor` descriptor. It copies only the stable id,
+   revision, risk, summary, input schema, sandbox mode, network mode and
+   approval mode. Resources and prompts are never executable tools.
+2. `McpToolCallPort` performs one bounded `tools/call` through the already
+   verified `McpProtocolSession`/transport. It receives the run `AbortSignal`,
+   has a byte and timeout budget, and returns a redacted result or a stable
+   `MCP_*` error code. It never receives the daemon's ambient environment.
+3. `McpExecutionLedger` provides per-run idempotency. A key is
+   `runId/turnId/callId/descriptorRevision/fingerprint(input)`. A matching
+   completed request is a no-op replay that returns the bounded cached result;
+   a matching in-flight request is shared; a different payload or descriptor
+   revision fails closed. Recovery always creates a new run and cannot resume
+   an unknown in-flight request.
+
+The adapter is registered as a handler in the existing `ToolHandlerRegistry`
+and is invoked only by `ToolExecutorRuntime`. Therefore approval evaluation,
+approval continuation, sandbox resolution, workspace validation, Scheduler
+leases and cancellation remain owned by the current boundaries. The bridge
+does not call `ToolExecutor` recursively, create a second Approval/Scheduler/
+Sandbox, or modify the AgentLoop state machine.
+
+Bounded `tool.requested`, `tool.started`, `tool.output` and `tool.completed`
+events retain only ids, revisions, risk, attempt, byte counts, stable error
+codes and a redacted/truncated output. No MCP URL, command, argv, auth header,
+environment value, absolute path, raw JSON-RPC body or complete transcript is
+written to `run_events`, audit, logs or Web DTOs.
+
+The default daemon composition remains unchanged while R4 is opt-in. A
+missing, degraded or disabled MCP binding is omitted from the run snapshot;
+ordinary runs continue with the built-in runtimes. A failed or cancelled MCP
+call propagates a bounded tool failure and never silently retries. The only
+retry after approval is the existing explicit continuation path, and the
+idempotency ledger prevents duplicate remote execution.
+
+#### 49-R4 acceptance tests
+
+- only `healthy-verified`, allowlisted executable descriptors are bound;
+- resource/prompt descriptors and stale snapshot revisions are rejected;
+- ToolExecutor approval, Sandbox, WorkspaceRegistry and Scheduler are used;
+- run cancellation aborts the MCP request and closes the session;
+- response bytes and output context are bounded and source-labelled;
+- same call key is a no-op/shared in-flight request; changed input/revision is
+  a conflict;
+- daemon restart marks the old run `needs-recovery`, and retry creates a new
+  run without replaying the old MCP call;
+- disabled/degraded/default MCP settings perform no transport side effect;
+- no AgentLoop core-loop, RunManager default-start, `run_events` schema,
+  `goal_events`, Approval or Sandbox authority changes are required.
+
+Exit: an activated MCP tool completes through the same approval/sandbox path
+as a built-in tool, while failure, recovery and retry cannot replay an old
+request.
 
 ## Acceptance matrix
 

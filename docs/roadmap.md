@@ -442,7 +442,29 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2/R3 已实现，R4 规划中）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2/R3 已实现，R4 contract 已冻结）
+
+### Spec 49-R4 implementation contract (2026-08-04)
+
+R4 is deliberately a run-scoped bridge. An immutable, healthy-verified MCP
+capability snapshot is captured at run creation; only executable tool
+descriptors may be bound. The bridge uses the existing ToolRegistry,
+ToolExecutorRuntime, ApprovalPolicy/approval broker, Scheduler lease,
+SandboxResolver and WorkspaceRegistry. It does not add a second execution or
+event authority, and it does not modify the AgentLoop core state machine.
+
+The bridge exposes a bounded MCP call port with the run AbortSignal and a
+per-run idempotency ledger keyed by run/turn/call, descriptor revision and a
+canonical input fingerprint. Matching completed or in-flight requests are
+shared/no-op; a changed payload or revision is rejected. Recovery creates a
+new run and never resumes an unknown in-flight remote call. MCP metadata in
+`run_events` is limited to stable ids, revision/risk, attempts, byte counts,
+safe error codes and truncated output; URLs, commands, argv, headers,
+environment values, absolute paths and raw protocol bodies remain excluded.
+
+The default daemon remains MCP-off. Disabled/degraded status omits the bridge
+and never blocks ordinary runs. See [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md)
+and the detailed acceptance tests in [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md).
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
 manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
