@@ -11,6 +11,8 @@
     "typecheck": "pnpm build && pnpm --filter \"@ready4vibe/*\" typecheck",
     "test": "pnpm build && pnpm --filter \"@ready4vibe/*\" test",
     "test:coverage": "pnpm build && pnpm --filter \"@ready4vibe/*\" test -- --coverage",
+    "check:module": "node scripts/check-module.mjs",
+    "test:workflow": "node --test scripts/check-module.test.mjs",
     "diff:check": "git diff --check",
     "verify": "node scripts/verify-workspace.mjs"
   },

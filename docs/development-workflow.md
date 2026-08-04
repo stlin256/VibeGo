@@ -10,7 +10,7 @@
 2. **写文档**：更新对应 ADR/模块合约/API/测试策略，标注状态和未决项。
 3. **写失败测试**：先加入最小 failing unit/contract test 或 fixture。
 4. **实现**：只在该模块和必要的 adapter 内修改；不要顺手重构其他包。
-5. **验证**：运行包级 tests、typecheck、lint；需要时跑集成/E2E/benchmark。
+5. **验证**：内循环使用 `pnpm check:module -- <package>` 运行选中包的依赖闭包构建、typecheck 和 tests；跨包接口变更补充受影响包；提交前再运行完整 `pnpm verify`，需要时跑集成/E2E/benchmark。
 6. **更新文档**：把实际行为、限制、测量值和命令写回文档；若设计变化，新增/更新 ADR。
 7. **审查 diff**：检查 secret、越权、依赖膨胀、事件兼容性和文档链接。
 8. **提交**：一个逻辑变更一个小提交，提交信息说明模块和行为。
@@ -47,4 +47,3 @@ feat(api): expose run creation and event stream
 - 每个 release 生成变更日志、依赖清单、测试矩阵、sandbox 限制和性能报告；
 - 发布前重新核对开源依赖许可证与上游安全公告；
 - 不因“模型能跑”跳过安全测试、文档同步或远程认证验收。
-

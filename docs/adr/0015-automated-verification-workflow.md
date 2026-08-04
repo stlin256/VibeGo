@@ -23,3 +23,8 @@ Contributors get a single command and stable failure boundaries. The workflow
 adds a small amount of process startup overhead because `typecheck` and `test`
 retain their existing build steps; that duplication is preferred to silently
 changing package-level semantics.
+
+The repository also exposes `pnpm check:module -- <package>...` for the inner
+loop. It builds the selected package dependency closure, then typechecks and
+tests only the requested package(s). This focused command is complementary to,
+not a replacement for, the fixed full-repository gate.

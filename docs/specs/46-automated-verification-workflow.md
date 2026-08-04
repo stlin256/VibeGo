@@ -24,6 +24,23 @@ The script sets `CI=true` only when the caller has not already set it. It does
 not install dependencies, alter the working tree, commit, push, or contact a
 model provider. Dependency installation remains an explicit contributor step.
 
+## Focused package validation
+
+The full gate is intentionally not the inner development loop. When a change
+is scoped to one or more workspace packages, contributors should run:
+
+```text
+pnpm check:module -- @ready4vibe/contracts
+pnpm check:module -- @ready4vibe/model-openai @ready4vibe/context
+```
+
+`check:module` builds the selected packages and their workspace dependencies,
+then runs `typecheck` and `test` only for the selected packages. It fails fast
+and never starts a model provider. Add a directly changed dependency to the
+selector list when its public contract or generated `dist` output is part of
+the change. This keeps feedback fast without weakening the pre-commit
+`pnpm verify` gate.
+
 ## Portability and failure behavior
 
 - Resolve `pnpm` as `pnpm.cmd` on Windows and `pnpm` elsewhere.
