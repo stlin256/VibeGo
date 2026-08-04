@@ -1,6 +1,6 @@
 # Spec 48: Approval, sandbox and shell runtime closure
 
-- Status: 48-R1 implementation in progress (policy compiler slice)
+- Status: 48-R2 implementation complete (host-restricted runner slice); R3 pending
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 01](01-sandbox-approval.md), [Spec 10](10-sandbox-execution.md), [Spec 18](18-tool-wiring.md), [Spec 30](30-external-shell-sandbox-wiring.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -124,6 +124,22 @@ the test process. Keep host-restricted clearly labeled in contracts and UI.
 
 Exit: platform tests cover path traversal, symlinks, command injection,
 environment leakage, timeout, cancellation, output truncation and restart.
+
+#### R2 contract slice (2026-08-04)
+
+The host-restricted runner is an opt-in adapter in
+`@ready4vibe/sandbox-runtime`. It accepts only an argv array, an absolute
+server-resolved workspace root/cwd, an explicit environment allowlist and
+bounded timeout/output limits. It resolves both workspace and cwd through an
+injected `realpath` port, rejects root/escape/symlink cases, always spawns with
+`shell:false`, and exposes only capped stdout/stderr and exit metadata. `.cmd`
+and PowerShell invocations remain argv fixtures; no shell string is accepted.
+
+Process-tree termination is an injected platform port. The Windows adapter may
+use `taskkill /T /F` behind that port; tests use a fake terminator and never
+execute arbitrary user data. The runner is not registered by the daemon or
+`AgentLoop` in R2, so the existing explicit tool/sandbox gates and default-off
+behavior remain unchanged.
 
 ### 48-R3: container/Podman smoke runner
 
