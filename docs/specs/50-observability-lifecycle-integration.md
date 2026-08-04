@@ -1,6 +1,6 @@
 # Spec 50: Observability lifecycle integration
 
-- Status: accepted for 50-R3 (resource sampling lifecycle adapter)
+- Status: accepted for 50-R4 (audit action and explicit export boundary)
 - Date: 2026-08-04
 - Related: [Spec 43](43-resource-usage-and-cost-audit.md), [Spec 44](44-provider-usage-management-and-upstream-reuse.md), [Spec 45](45-observability-api-and-web.md), [ADR 0012](../adr/0012-local-resource-and-cost-audit-ledger.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -201,6 +201,20 @@ flush the collector. Recovery starts a new snapshot. Collector degradation is
 reported without throwing into the originating action. The observability gate
 is 54 passing tests; no shell, CLI, network or automatic daemon wiring was
 introduced.
+
+## 50-R4 implementation gate (2026-08-05)
+
+Audit actions for settings, approval, sandbox, model/provider changes and
+explicit export/verification will pass through the existing validated
+`AuditApplicationAdapter`. The port accepts bounded actor/transport/target
+metadata only; it never accepts prompts, commands, paths, environment values,
+raw provider responses or credentials. Export is an explicit local operation:
+the bundle is contract-validated, deterministically checksummed, bounded and
+redaction-safe; import only verifies and returns facts for an existing ledger
+writer and never uploads or mutates state by itself.
+
+The existing authenticated Usage/Audit projections remain the Web authority;
+this slice does not add a second API, event stream, scheduler or audit ledger.
 
 ## Acceptance matrix
 

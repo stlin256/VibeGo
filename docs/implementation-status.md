@@ -320,6 +320,8 @@ The following work is documented but not fully implemented yet:
   focused tests; no default run wiring or network behavior is enabled.
   Spec 50-R3 sampling lifecycle adapter is implemented with 54 focused tests;
   automatic collector start/stop remains opt-in without default daemon wiring.
+  Spec 50-R4 audit action and explicit export/import is now at its documentation
+  gate; no upload or second event source is planned.
 - **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate

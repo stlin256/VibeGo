@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b、44-R4、50-R1、50-R2 与 50-R3（contracts、projection、ledger/rollup、显式 collector/audit adapter、lifecycle ports、provider usage/cost adapter 和 sampling lifecycle adapter 已实现；自动 wiring/API/Web 仍后置）
+- 状态：Accepted for Phase 43a/43b、44-R4、50-R1、50-R2、50-R3 与 50-R4（contracts、projection、ledger/rollup、显式 collector/audit adapter、lifecycle ports、provider usage/cost adapter、sampling lifecycle adapter 和 audit/export application ports 已实现；自动 wiring/API/Web 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -165,3 +165,12 @@ The adapter is implemented in
 focused package gate covers lease gating, snapshot isolation, pause/recovery,
 terminal cleanup, degraded stop and platform probe fixtures. It remains opt-in
 and does not start from daemon boot.
+
+## 50-R4 audit and export boundary (2026-08-05)
+
+Settings, approval, sandbox and provider/model changes use one validated audit
+application service and the existing hash-chain writer. Explicit export/import
+is a local, bounded projection: records are revalidated, sorted canonically,
+redaction/privacy checks run before serialization, and a checksum plus audit
+chain verification detects tampering. Import returns validated facts only; it
+does not write, upload, or alter `run_events`/`goal_events` automatically.
