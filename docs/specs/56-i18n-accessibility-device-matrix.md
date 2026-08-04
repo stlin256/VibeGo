@@ -1,6 +1,6 @@
 # Spec 56：多语言、无障碍与真实设备兼容矩阵
 
-- Status: Phase 56a implemented（locale/accessibility shell slice；full catalog and real-device evidence remain later）
+- Status: Phase 56a/56b implemented（locale/accessibility shell + focus/catalog slice；full catalog and real-device evidence remain later）
 - Date: 2026-08-04
 - Related: [Spec 37](37-ratio-responsive-ui.md)、[Spec 38](38-conversation-first-web-shell.md)、[Spec 42](42-shadcn-style-web-design-system.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -196,3 +196,11 @@ bounded settings catalog:
 - Focus helpers are pure and bounded in unit tests; DOM rendering tests assert
   the semantic landmarks. This phase still does not claim screen-reader/manual
   pass, visual regression pass, or real-device compatibility.
+
+`apps/web` now wires the focus scope to the Settings dialog: the close action
+receives focus on open, Tab navigation wraps within enabled dialog controls,
+Escape closes, and the remembered trigger receives focus on close. Core run
+profile, model, guardrail and limit labels are catalog-backed in both locales.
+Focused Web tests cover the pure index/filter helpers and dialog landmarks;
+58 Web tests, typecheck and production build pass. No run/provider/Goal/SSE
+state is changed by locale or focus interactions.

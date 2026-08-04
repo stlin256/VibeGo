@@ -41,6 +41,8 @@ describe('Web locale adapter', () => {
     const translate = createTranslator('zh-CN');
     expect(translate('nav.newTask')).toBe('＋ 新任务');
     expect(translate('conversation.startRun')).toBe('开始运行');
+    expect(translate('settings.modelProvider')).toBe('模型提供方');
+    expect(translate('guardrails.untrusted')).toBe('不可信任务强制使用外部沙箱');
     expect(translate('locale.english')).toBe('English');
     expect(translate('nav.newTask')).not.toContain('nav.newTask');
     expect((translate as (key: string) => string)('missing.message')).toBe('Unavailable');

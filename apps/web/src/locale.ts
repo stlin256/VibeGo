@@ -22,8 +22,33 @@ export type MessageKey =
   | 'connection.connected'
   | 'connection.awaitingPairing'
   | 'settings.title'
+  | 'settings.eyebrow'
   | 'settings.close'
   | 'settings.description'
+  | 'settings.workspaces'
+  | 'settings.workspaceSetup'
+  | 'settings.workspace'
+  | 'settings.modelProvider'
+  | 'settings.modelName'
+  | 'settings.modelAccess'
+  | 'settings.providerUrl'
+  | 'settings.apiKey'
+  | 'settings.saveProvider'
+  | 'settings.clearDaemonKey'
+  | 'settings.modelListEndpoint'
+  | 'settings.probeModels'
+  | 'settings.taskTrust'
+  | 'settings.sandbox'
+  | 'settings.network'
+  | 'settings.approval'
+  | 'settings.maxTurns'
+  | 'settings.wallTime'
+  | 'settings.modelInputTokens'
+  | 'settings.modelOutputTokens'
+  | 'settings.maxToolCalls'
+  | 'settings.maxOutputBytes'
+  | 'settings.maxContextBytes'
+  | 'settings.resetDefaults'
   | 'connection.workspaceTitle'
   | 'connection.pairingTitle'
   | 'connection.pairingDescription'
@@ -36,6 +61,10 @@ export type MessageKey =
   | 'conversation.startRun'
   | 'conversation.readyTitle'
   | 'conversation.readyDescription'
+  | 'guardrails.title'
+  | 'guardrails.untrusted'
+  | 'guardrails.approval'
+  | 'guardrails.sse'
   | 'locale.label'
   | 'locale.english'
   | 'locale.chinese'
@@ -55,8 +84,33 @@ const EN_US: Catalog = {
   'connection.connected': 'Connected',
   'connection.awaitingPairing': 'Awaiting pairing',
   'settings.title': 'Run profile',
+  'settings.eyebrow': 'SETTINGS',
   'settings.close': 'Close settings',
   'settings.description': 'Configure this run from the console; no config file editing is required.',
+  'settings.workspaces': 'WORKSPACES',
+  'settings.workspaceSetup': 'Workspace setup',
+  'settings.workspace': 'Workspace',
+  'settings.modelProvider': 'Model provider',
+  'settings.modelName': 'Model name',
+  'settings.modelAccess': 'MODEL ACCESS',
+  'settings.providerUrl': 'Provider URL',
+  'settings.apiKey': 'API key',
+  'settings.saveProvider': 'Save provider',
+  'settings.clearDaemonKey': 'Clear daemon key',
+  'settings.modelListEndpoint': 'Model list endpoint',
+  'settings.probeModels': 'Probe models',
+  'settings.taskTrust': 'Task trust',
+  'settings.sandbox': 'Sandbox',
+  'settings.network': 'Network',
+  'settings.approval': 'Approval',
+  'settings.maxTurns': 'Max turns',
+  'settings.wallTime': 'Wall time (ms)',
+  'settings.modelInputTokens': 'Model input tokens',
+  'settings.modelOutputTokens': 'Model output tokens',
+  'settings.maxToolCalls': 'Max tool calls',
+  'settings.maxOutputBytes': 'Max output bytes',
+  'settings.maxContextBytes': 'Max context bytes',
+  'settings.resetDefaults': 'Reset conservative defaults',
   'connection.workspaceTitle': 'Connect your local workspace',
   'connection.pairingTitle': 'Enter one-time pairing code',
   'connection.pairingDescription': 'After pairing, the token stays only in this page.',
@@ -69,6 +123,10 @@ const EN_US: Catalog = {
   'conversation.startRun': 'Start run',
   'conversation.readyTitle': 'Ready for your next task',
   'conversation.readyDescription': 'Describe a change, test, or explanation below. The agent’s plan, output, approvals, and recovery stay in this conversation.',
+  'guardrails.title': 'GUARDRAILS',
+  'guardrails.untrusted': 'Untrusted tasks require an external sandbox',
+  'guardrails.approval': 'Writes and commands request approval by policy',
+  'guardrails.sse': 'Event streams resume from their sequence number',
   'locale.label': 'Language',
   'locale.english': 'English',
   'locale.chinese': '简体中文',
@@ -87,8 +145,33 @@ const ZH_CN: Catalog = {
   'connection.connected': '已连接',
   'connection.awaitingPairing': '等待配对',
   'settings.title': '运行配置',
+  'settings.eyebrow': '设置',
   'settings.close': '关闭设置',
   'settings.description': '直接在控制台配置本次运行，无需编辑配置文件。',
+  'settings.workspaces': '工作区',
+  'settings.workspaceSetup': '工作区设置',
+  'settings.workspace': '工作区',
+  'settings.modelProvider': '模型提供方',
+  'settings.modelName': '模型名称',
+  'settings.modelAccess': '模型访问',
+  'settings.providerUrl': '提供方 URL',
+  'settings.apiKey': 'API key',
+  'settings.saveProvider': '保存提供方',
+  'settings.clearDaemonKey': '清除 daemon key',
+  'settings.modelListEndpoint': '模型列表 endpoint',
+  'settings.probeModels': '探测模型',
+  'settings.taskTrust': '任务信任级别',
+  'settings.sandbox': '沙箱',
+  'settings.network': '网络',
+  'settings.approval': '审批',
+  'settings.maxTurns': '最大轮数',
+  'settings.wallTime': '最长时间（毫秒）',
+  'settings.modelInputTokens': '模型输入 token',
+  'settings.modelOutputTokens': '模型输出 token',
+  'settings.maxToolCalls': '最大工具调用数',
+  'settings.maxOutputBytes': '最大输出字节数',
+  'settings.maxContextBytes': '最大上下文字节数',
+  'settings.resetDefaults': '恢复保守默认值',
   'connection.workspaceTitle': '连接你的本地工作区',
   'connection.pairingTitle': '输入一次性配对码',
   'connection.pairingDescription': '配对完成后 token 只保存在当前页面内。',
@@ -101,6 +184,10 @@ const ZH_CN: Catalog = {
   'conversation.startRun': '开始运行',
   'conversation.readyTitle': '准备好处理下一个任务',
   'conversation.readyDescription': '在下方描述修改、测试或解释需求。agent 的计划、输出、审批和恢复信息都会留在当前对话中。',
+  'guardrails.title': '安全边界',
+  'guardrails.untrusted': '不可信任务强制使用外部沙箱',
+  'guardrails.approval': '写入与命令按策略请求审批',
+  'guardrails.sse': '事件流可按序号断线续传',
   'locale.label': '语言',
   'accessibility.statusLabel': '实时状态',
 };

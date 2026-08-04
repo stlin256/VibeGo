@@ -43,7 +43,7 @@ added behind the same contract later.
 This ADR does not add a second transport, server-side translation service,
 screen-reader automation, RTL layout, native mobile app or full catalog rewrite.
 
-## Phase 56b extension
+## Phase 56b extension (implemented)
 
 The next Web-only extension adds a deterministic focus scope to the existing
 Settings drawer and moves the core settings/guardrail labels into the same

@@ -10,7 +10,7 @@ describe('web console shell', () => {
     expect(html).toContain('pairing-code');
     expect(html).toContain('连接你的本地工作区');
     expect(html).toContain('VibeGo');
-    expect(html).toContain('不可信任务强制 external sandbox');
+    expect(html).toContain('不可信任务强制使用外部沙箱');
   });
 
   it('renders the non-secret run settings onboarding surface', () => {
@@ -199,6 +199,19 @@ describe('web console shell', () => {
     expect(html).toContain('等待配对');
     expect(html).not.toContain('vibego.locale.v1');
     expect(html).not.toMatch(/api[_-]?key|Authorization|C:\\Users/iu);
+  });
+
+  it('exposes a modal settings relationship and keyboard shortcut without secrets', () => {
+    const html = renderToStaticMarkup(<App locale="en-US" />);
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-controls="settings-drawer"');
+    expect(html).toContain('aria-keyshortcuts="Control+N Meta+N"');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-labelledby="settings-drawer-title"');
+    expect(html).toContain('Max context bytes');
+    expect(html).toContain('Untrusted tasks require an external sandbox');
+    expect(html).not.toMatch(/api[_-]?key=[^"& ]+|Authorization:|C:\\Users\\[A-Za-z0-9._-]+/iu);
   });
 
   it('renders an explicit approval card with allow and deny controls', () => {

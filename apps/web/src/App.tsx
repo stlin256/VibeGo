@@ -2,6 +2,7 @@ import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
+import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 import { ObservabilityPanel } from './ObservabilityPanel.js';
 import { createTranslator, type Locale } from './locale.js';
@@ -121,6 +122,9 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const settingsPanelRef = useRef<HTMLElement | null>(null);
+  const settingsTriggerRef = useRef<HTMLElement | null>(null);
+  const settingsWasOpen = useRef(false);
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelBaseUrl(modelSettings.baseUrl);
   }, [modelSettings?.baseUrl]);
@@ -269,10 +273,34 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     if (fallback) updateProfile({ workspaceId: fallback.id });
   }, [profile.workspaceId, workspaces]);
   useEffect(() => {
-    if (!settingsOpen) return;
-    const closeOnEscape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setSettingsOpen(false); };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    if (!settingsOpen) {
+      if (settingsWasOpen.current) {
+        settingsWasOpen.current = false;
+        settingsTriggerRef.current?.focus();
+      }
+      return;
+    }
+    settingsWasOpen.current = true;
+    const panel = settingsPanelRef.current;
+    focusFirst(panel);
+    const onDialogKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSettingsOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !panel) return;
+      const focusable = focusableElements(panel);
+      if (focusable.length === 0) return;
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+      const nextIndex = nextFocusIndex(currentIndex, focusable.length, event.shiftKey);
+      if (currentIndex < 0 || (event.shiftKey && currentIndex === 0) || (!event.shiftKey && currentIndex === focusable.length - 1)) {
+        event.preventDefault();
+        focusable[nextIndex]?.focus();
+      }
+    };
+    document.addEventListener('keydown', onDialogKeyDown);
+    return () => document.removeEventListener('keydown', onDialogKeyDown);
   }, [settingsOpen]);
   useEffect(() => {
     const startFromShortcut = (event: KeyboardEvent): void => {
@@ -310,15 +338,19 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     else if (mode === 'workspace-write') updateProfile({ sandbox: { mode, network, writableRoots: 'writableRoots' in profile.sandbox && profile.sandbox.writableRoots.length > 0 ? profile.sandbox.writableRoots : ['.'] } });
     else updateProfile({ sandbox: { mode, network, provider: 'provider' in profile.sandbox ? profile.sandbox.provider : 'docker', ...('writableRoots' in profile.sandbox && profile.sandbox.writableRoots ? { writableRoots: profile.sandbox.writableRoots } : {}) } });
   };
+  const openSettings = (target: HTMLElement): void => {
+    settingsTriggerRef.current = target;
+    setSettingsOpen(true);
+  };
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><img className="brand-mark" src="/vibego-mark.svg" alt={t('brand.name')} /><span>Vibe<span className="brand-go">Go</span></span></div>
         <div className="topbar-actions">
-          <button className="topbar-button primary-task-button" type="button" onClick={startNewTask}>{t('nav.newTask')}</button>
+          <button className="topbar-button primary-task-button" type="button" aria-keyshortcuts="Control+N Meta+N" onClick={startNewTask}>{t('nav.newTask')}</button>
           <button className="topbar-button context-toggle" type="button" aria-expanded={contextOpen} aria-label={contextOpen ? t('nav.hideDetails') : t('nav.showDetails')} onClick={() => setContextOpen((current) => !current)}>{contextOpen ? t('nav.hideDetails') : t('nav.showDetails')}</button>
-          <button className="topbar-button settings-toggle" type="button" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={() => setSettingsOpen(true)}>{t('nav.settings')}</button>
+          <button className="topbar-button settings-toggle" type="button" aria-haspopup="dialog" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={(event) => openSettings(event.currentTarget)}>{t('nav.settings')}</button>
           <label className="locale-control"><span>{t('locale.label')}</span><select aria-label={t('locale.label')} value={locale} onChange={(event) => onLocaleChange?.(event.target.value as Locale)}><option value="en-US">{t('locale.english')}</option><option value="zh-CN">{t('locale.chinese')}</option></select></label>
           <div className="connection-pill" data-connected={connected}>{connected ? t('connection.connected') : t('connection.awaitingPairing')}</div>
         </div>
@@ -333,17 +365,17 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
           <div className="rail-section-label">RECENT</div>
           <div className="rail-session active"><span className="session-dot" />{t('nav.currentTask')}</div>
           <div className="rail-session"><span className="session-dot muted-dot" />{t('nav.noOtherRuns')}</div>
-          <button className="rail-settings-button" type="button" onClick={() => setSettingsOpen(true)}>{t('nav.settings')}</button>
+          <button className="rail-settings-button" type="button" aria-haspopup="dialog" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={(event) => openSettings(event.currentTarget)}>{t('nav.settings')}</button>
         </nav>
         <aside className="sidebar" aria-label="连接与运行摘要">
-          <section id="settings-drawer" className="panel settings-panel" data-open={settingsOpen} aria-label={t('settings.title')}>
-            <div className="settings-drawer-header"><div><div className="eyebrow">SETTINGS</div><h2>{t('settings.title')}</h2></div><button className="drawer-close" type="button" aria-label={t('settings.close')} onClick={() => setSettingsOpen(false)}>{t('settings.close')}</button></div>
+          <section id="settings-drawer" ref={settingsPanelRef} className="panel settings-panel" data-open={settingsOpen} role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title" aria-hidden={!settingsOpen}>
+            <div className="settings-drawer-header"><div><div className="eyebrow">{t('settings.eyebrow')}</div><h2 id="settings-drawer-title">{t('settings.title')}</h2></div><button className="drawer-close" type="button" aria-label={t('settings.close')} onClick={() => setSettingsOpen(false)}>{t('settings.close')}</button></div>
             <p className="muted">{t('settings.description')}</p>
             <div className="settings-grid">
-              <div className="workspace-setup" aria-label="Workspace setup">
-                <div className="eyebrow">WORKSPACES</div>
+              <div className="workspace-setup" aria-label={t('settings.workspaceSetup')}>
+                <div className="eyebrow">{t('settings.workspaces')}</div>
                 {workspacesUnavailable ? <p className="muted">Workspace setup is unavailable until the daemon exposes the authenticated registry.</p> : workspaces ? <>
-                  <label>Workspace<select value={profile.workspaceId} disabled={workspaceBusy} onChange={(event) => updateProfile({ workspaceId: event.target.value })}>{workspaces.workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.label} · {workspace.id}{workspace.isDefault ? ' · default' : ''}</option>)}</select></label>
+                  <label>{t('settings.workspace')}<select value={profile.workspaceId} disabled={workspaceBusy} onChange={(event) => updateProfile({ workspaceId: event.target.value })}>{workspaces.workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.label} · {workspace.id}{workspace.isDefault ? ' · default' : ''}</option>)}</select></label>
                   <p className="muted">Added paths are on the daemon machine. The path is used only by the daemon and is never shown in status, events, or browser storage.</p>
                   {onAddWorkspace && <form onSubmit={(event) => { void addWorkspace(event); }}>
                     <label>Workspace id<input value={workspaceIdInput} disabled={workspaceBusy} onChange={(event) => setWorkspaceIdInput(event.target.value)} placeholder="project-a" autoComplete="off" /></label>
@@ -355,21 +387,21 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                   {workspaces.workspaces.filter((workspace) => workspace.canRemove).map((workspace) => <div className="workspace-row" key={workspace.id}><span>{workspace.label} · {workspace.id}</span><button className="cancel-button" type="button" disabled={workspaceBusy} onClick={() => { void removeWorkspace(workspace.id); }}>Remove</button></div>)}
                 </> : <p className="muted">Pair with the daemon to configure workspaces.</p>}
               </div>
-              <label>Model provider<input value={profile.model.provider} onChange={(event) => updateProfile({ model: { ...profile.model, provider: event.target.value } })} /></label>
-              <label>Model name<input value={profile.model.name} onChange={(event) => updateProfile({ model: { ...profile.model, name: event.target.value } })} /></label>
+              <label>{t('settings.modelProvider')}<input value={profile.model.provider} onChange={(event) => updateProfile({ model: { ...profile.model, provider: event.target.value } })} /></label>
+              <label>{t('settings.modelName')}<input value={profile.model.name} onChange={(event) => updateProfile({ model: { ...profile.model, name: event.target.value } })} /></label>
               <div className="model-setup" aria-label="Model provider setup">
-                <div className="eyebrow">MODEL ACCESS</div>
+                <div className="eyebrow">{t('settings.modelAccess')}</div>
                 {modelSettingsUnavailable ? <p className="muted">Model setup is unavailable until the daemon exposes the authenticated settings adapter.</p> : <>
                   <p className="muted">{modelSettings?.configured ? `Configured via ${modelSettings.source}. The key is held by the daemon and is never shown here.` : 'Set up a provider here; no .env or YAML editing is required.'}</p>
                   {modelSettings?.configured && <p className="muted">{modelSettings.providerId} · {modelSettings.baseUrl ?? 'URL hidden'}{modelSettings.modelName ? ` · ${modelSettings.modelName}` : ''}</p>}
                   <form onSubmit={(event) => { void submitModelSettings(event); }}>
-                    <label>Provider URL<input type="url" value={modelBaseUrl} onChange={(event) => setModelBaseUrl(event.target.value)} placeholder="https://api.deepseek.com" autoComplete="url" /></label>
-                    <label>API key<input type="password" value={modelApiKey} onChange={(event) => setModelApiKey(event.target.value)} placeholder={modelSettings?.configured ? 'Enter a replacement key' : 'Paste once; never stored in browser'} autoComplete="new-password" /></label>
-                    <div className="inline-actions"><button type="submit" disabled={!modelApiKey}>Save provider</button>{modelSettings?.configured && <button className="cancel-button" type="button" onClick={() => { void (async () => { await onClearModelSettings?.(); setModelApiKey(''); })(); }}>Clear daemon key</button>}</div>
+                    <label>{t('settings.providerUrl')}<input type="url" value={modelBaseUrl} onChange={(event) => setModelBaseUrl(event.target.value)} placeholder="https://api.deepseek.com" autoComplete="url" /></label>
+                    <label>{t('settings.apiKey')}<input type="password" value={modelApiKey} onChange={(event) => setModelApiKey(event.target.value)} placeholder={modelSettings?.configured ? 'Enter a replacement key' : 'Paste once; never stored in browser'} autoComplete="new-password" /></label>
+                    <div className="inline-actions"><button type="submit" disabled={!modelApiKey}>{t('settings.saveProvider')}</button>{modelSettings?.configured && <button className="cancel-button" type="button" onClick={() => { void (async () => { await onClearModelSettings?.(); setModelApiKey(''); })(); }}>{t('settings.clearDaemonKey')}</button>}</div>
                   </form>
                   <form onSubmit={(event) => { void submitModelProbe(event); }}>
-                    <label>Model list endpoint<input type="url" value={modelProbeEndpoint} onChange={(event) => setModelProbeEndpoint(event.target.value)} placeholder="https://api.deepseek.com/models" autoComplete="url" /></label>
-                    <div className="inline-actions"><button type="submit" disabled={!onProbeModel || modelProbeBusy || !modelProbeEndpoint.trim()}>Probe models</button>{modelProbe && <span className="muted">{modelProbe.status}{modelProbe.errorCode ? ` · ${modelProbe.errorCode}` : modelProbe.capabilities ? ` · ${modelProbe.capabilities.modelId}` : ''}</span>}</div>
+                    <label>{t('settings.modelListEndpoint')}<input type="url" value={modelProbeEndpoint} onChange={(event) => setModelProbeEndpoint(event.target.value)} placeholder="https://api.deepseek.com/models" autoComplete="url" /></label>
+                    <div className="inline-actions"><button type="submit" disabled={!onProbeModel || modelProbeBusy || !modelProbeEndpoint.trim()}>{t('settings.probeModels')}</button>{modelProbe && <span className="muted">{modelProbe.status}{modelProbe.errorCode ? ` · ${modelProbe.errorCode}` : modelProbe.capabilities ? ` · ${modelProbe.capabilities.modelId}` : ''}</span>}</div>
                   </form>
                 </>}
               </div>
@@ -443,21 +475,21 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                   <button type="button" disabled={sandboxBusy || !sandboxSettings.healthy || !sandboxImageDigest} onClick={() => { void toggleSandbox(!sandboxSettings.enabled); }}>{sandboxSettings.enabled ? 'Disable external shell' : 'Enable external shell'}</button>
                 </> : <p className="muted">Pair with the daemon to configure external sandbox execution.</p>}
               </div>
-              <label>Task trust<select value={profile.taskTrust} onChange={(event) => updateProfile({ taskTrust: event.target.value as RunProfile['taskTrust'] })}><option value="trusted-workspace">Trusted workspace</option><option value="untrusted-content">Untrusted content</option></select></label>
-              <label>Sandbox<select value={profile.sandbox.mode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">Read-only</option><option value="workspace-write">Workspace write</option><option value="external-sandbox">External sandbox</option></select></label>
-              <label>Network<select value={'network' in profile.sandbox ? profile.sandbox.network : 'restricted'} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, network: event.target.value as 'restricted' | 'enabled' } as RunProfile['sandbox'] })}><option value="restricted">Restricted</option><option value="enabled">Enabled</option></select></label>
+              <label>{t('settings.taskTrust')}<select value={profile.taskTrust} onChange={(event) => updateProfile({ taskTrust: event.target.value as RunProfile['taskTrust'] })}><option value="trusted-workspace">Trusted workspace</option><option value="untrusted-content">Untrusted content</option></select></label>
+              <label>{t('settings.sandbox')}<select value={profile.sandbox.mode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">Read-only</option><option value="workspace-write">Workspace write</option><option value="external-sandbox">External sandbox</option></select></label>
+              <label>{t('settings.network')}<select value={'network' in profile.sandbox ? profile.sandbox.network : 'restricted'} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, network: event.target.value as 'restricted' | 'enabled' } as RunProfile['sandbox'] })}><option value="restricted">Restricted</option><option value="enabled">Enabled</option></select></label>
               {profile.sandbox.mode === 'workspace-write' && <label>Writable roots<input value={profile.sandbox.writableRoots?.join(', ') ?? ''} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, writableRoots: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) } })} /></label>}
               {profile.sandbox.mode === 'external-sandbox' && <><label>Runtime<select value={profile.sandbox.provider} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, provider: event.target.value as 'docker' | 'podman' | 'vm' } })}><option value="docker">Docker</option><option value="podman">Podman</option><option value="vm">VM</option></select></label><label>Sandbox writable roots<input value={profile.sandbox.writableRoots?.join(', ') ?? ''} onChange={(event) => updateProfile({ sandbox: { ...profile.sandbox, writableRoots: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) } })} placeholder="src, tests" /></label></>}
-              <label>Approval<select value={typeof profile.approval === 'string' ? profile.approval : 'on-request'} onChange={(event) => updateProfile({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">On request</option><option value="untrusted">Untrusted tasks</option><option value="never">Never (read-only only)</option></select></label>
-              <label>Max turns<input type="number" min={1} max={50} value={profile.limits.maxTurns} onChange={(event) => updateLimit('maxTurns', event.target.value)} /></label>
-              <label>Wall time (ms)<input type="number" min={1} max={1800000} value={profile.limits.maxWallTimeMs} onChange={(event) => updateLimit('maxWallTimeMs', event.target.value)} /></label>
-              <label>Model input tokens<input type="number" min={1} value={profile.limits.maxModelInputTokens} onChange={(event) => updateLimit('maxModelInputTokens', event.target.value)} /></label>
-              <label>Model output tokens<input type="number" min={1} value={profile.limits.maxModelOutputTokens} onChange={(event) => updateLimit('maxModelOutputTokens', event.target.value)} /></label>
-              <label>Max tool calls<input type="number" min={1} max={200} value={profile.limits.maxToolCalls} onChange={(event) => updateLimit('maxToolCalls', event.target.value)} /></label>
-              <label>Max output bytes<input type="number" min={1} value={profile.limits.maxOutputBytes} onChange={(event) => updateLimit('maxOutputBytes', event.target.value)} /></label>
-              <label>Max context bytes<input type="number" min={1} value={profile.limits.maxContextBytes} onChange={(event) => updateLimit('maxContextBytes', event.target.value)} /></label>
+              <label>{t('settings.approval')}<select value={typeof profile.approval === 'string' ? profile.approval : 'on-request'} onChange={(event) => updateProfile({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">On request</option><option value="untrusted">Untrusted tasks</option><option value="never">Never (read-only only)</option></select></label>
+              <label>{t('settings.maxTurns')}<input type="number" min={1} max={50} value={profile.limits.maxTurns} onChange={(event) => updateLimit('maxTurns', event.target.value)} /></label>
+              <label>{t('settings.wallTime')}<input type="number" min={1} max={1800000} value={profile.limits.maxWallTimeMs} onChange={(event) => updateLimit('maxWallTimeMs', event.target.value)} /></label>
+              <label>{t('settings.modelInputTokens')}<input type="number" min={1} value={profile.limits.maxModelInputTokens} onChange={(event) => updateLimit('maxModelInputTokens', event.target.value)} /></label>
+              <label>{t('settings.modelOutputTokens')}<input type="number" min={1} value={profile.limits.maxModelOutputTokens} onChange={(event) => updateLimit('maxModelOutputTokens', event.target.value)} /></label>
+              <label>{t('settings.maxToolCalls')}<input type="number" min={1} max={200} value={profile.limits.maxToolCalls} onChange={(event) => updateLimit('maxToolCalls', event.target.value)} /></label>
+              <label>{t('settings.maxOutputBytes')}<input type="number" min={1} value={profile.limits.maxOutputBytes} onChange={(event) => updateLimit('maxOutputBytes', event.target.value)} /></label>
+              <label>{t('settings.maxContextBytes')}<input type="number" min={1} value={profile.limits.maxContextBytes} onChange={(event) => updateLimit('maxContextBytes', event.target.value)} /></label>
             </div>
-            <button className="reset-button" type="button" onClick={onResetProfile}>Reset conservative defaults</button>
+            <button className="reset-button" type="button" onClick={onResetProfile}>{t('settings.resetDefaults')}</button>
             <div className="certificate-guidance">
               <div className="eyebrow">TLS STATUS</div>
               {certificateStatus ? <><strong>{certificateStatus.subject}</strong><p className="muted">Valid to {new Date(certificateStatus.validTo).toLocaleDateString()} · {certificateStatus.daysRemaining} days remaining</p><p className="muted">SAN: {certificateStatus.subjectAltNames.join(', ') || 'not reported'}</p></> : health?.transport.tlsRequired || certificateStatusUnavailable ? <p className="muted">Certificate setup is required for this TLS transport. Use the daemon certificate adapter; private keys are never entered or shown in this browser.</p> : <p className="muted">Loopback HTTP is active for local development. Pairing and future TLS setup remain available.</p>}
@@ -471,7 +503,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
               {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
             </section>
             <section className="panel pairing-panel"><div className="eyebrow">PAIRING</div><h2>{t('connection.pairingTitle')}</h2><p className="muted">{t('connection.pairingDescription')}</p><form onSubmit={submitPairing}><label htmlFor="pairing-code">Pairing code</label><input id="pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.target.value)} autoComplete="off" inputMode="text" /><button type="submit">{t('connection.pairingAction')}</button></form></section>
-            <section className="panel safety-panel"><div className="eyebrow">GUARDRAILS</div><ul><li>不可信任务强制 external sandbox</li><li>写入与命令按策略请求审批</li><li>事件流可按 seq 断线续传</li></ul></section>
+            <section className="panel safety-panel"><div className="eyebrow">{t('guardrails.title')}</div><ul><li>{t('guardrails.untrusted')}</li><li>{t('guardrails.approval')}</li><li>{t('guardrails.sse')}</li></ul></section>
           </>}
         </aside>
         <section className="main-column">
@@ -495,7 +527,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
             <p className="muted">Vibe Coding，随时随地；执行有边界，进度可继续。</p>
             {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
           </section>
-          <section className="panel safety-panel"><div className="eyebrow">GUARDRAILS</div><ul><li>不可信任务强制 external sandbox</li><li>写入与命令按策略请求审批</li><li>事件流可按 seq 断线续传</li></ul></section>
+          <section className="panel safety-panel"><div className="eyebrow">{t('guardrails.title')}</div><ul><li>{t('guardrails.untrusted')}</li><li>{t('guardrails.approval')}</li><li>{t('guardrails.sse')}</li></ul></section>
         </aside>}
       </section>
     </main>
