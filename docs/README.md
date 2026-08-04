@@ -51,4 +51,11 @@
 - [Spec 49：MCP/Skill transport and capability lifecycle](specs/49-mcp-skill-transport-and-capability-lifecycle.md)：R1 注入式 stdio/Streamable HTTP session 边界已进入实施；健康分级、能力快照与 ToolRegistry 激活按后续阶段推进。
 - [Spec 50：Observability lifecycle integration](specs/50-observability-lifecycle-integration.md)：将 usage/cost/resource/audit ledger 在 application/RunManager 边界接入，保持 fail-soft 与隐私约束。
 - [Spec 51：Host-first release and client boundary](specs/51-host-first-release-and-client-boundary.md)：daemon 静态托管 Web、跨平台 launcher、LAN/public TLS 适配与后置 Android/iOS/HarmonyOS client SDK 边界。
+- [Spec 52：Capability profiles 与 first-run experience](specs/52-capability-profiles-and-first-run-experience.md)：把配置引导、能力档位、Goal governed admission、Tailscale/SSH、ACME 和真实 LLM smoke 串为 Web/Host 发布门禁。
+- [Spec 53：Host 安装、升级、备份与故障恢复](specs/53-host-install-upgrade-backup-recovery.md)：一键 Host bundle、平台签名、current/previous/candidate 回滚、SQLite 一致性备份、迁移和 safe mode。
+- [Spec 54：本地与云模型配置向导](specs/54-model-provider-onboarding.md)：Ollama、LM Studio、llama.cpp、OpenAI-compatible、Anthropic/DeepSeek 显式 endpoint、secret reference 和 provider/run snapshot isolation。
+- [Spec 55：公网部署、证书自动化与运维文档](specs/55-public-deployment-certificates-operations.md)：ACME staging/renewal/rollback、reverse proxy、Tailscale/SSH、public HTTPS 和版本化 operations runbook。
+- [Spec 56：多语言、无障碍与真实设备兼容矩阵](specs/56-i18n-accessibility-device-matrix.md)：`en-US`/`zh-CN`、WCAG 2.2 AA、辅助技术、Playwright ratio fixtures 和真实 desktop/mobile/foldable/tablet evidence。
+- [Spec 57：Release 发布流水线](specs/57-release-publishing-pipeline.md)：protected tag/channel、可重复多平台构建、checksum、平台签名、SBOM、provenance、attestation 和 stable promotion。
+- [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)：Node SEA、GitHub Releases/Attestations、Sigstore、Let's Encrypt、SQLite、WCAG、Playwright、Ollama 和 LM Studio 的公开资料与 clean-room 设计判断。
 - [TencentDB 融合实施提示词](prompts/39-tencentdb-agent-memory-implementation.md)：可直接交给另一位开发者或 Agent，按 Contract → MemoryCore → Web Settings → Supervisor → Proxy/Knowledge 顺序实施，并保留 dirty worktree。

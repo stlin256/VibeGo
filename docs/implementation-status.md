@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Agent Memory Phase 6b 与 Goal Control Phase 2A 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过）**
+**状态：Accepted（Agent Memory Phase 6b 与 Goal Control Phase 2A 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53–57 为 Proposed release-hardening planning gates）**
 
 ## 当前实施范围
 
@@ -294,10 +294,11 @@ The following work is documented but not fully implemented yet:
   bounded slices. Container smoke and full Web continuation remain later
   phases. Existing daemon shell wiring remains explicit and default-off.
 - **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): R1
-  injected stdio/Streamable HTTP transport and protocol session are now
-  implemented behind fake spawn/fetch ports; capability health classification,
-  snapshot and ToolRegistry activation remain later phases. The daemon still
-  does not auto-start or access MCP transport on startup.
+  injected stdio/Streamable HTTP transport and R2 immutable capability
+  snapshots are implemented behind fake ports. R3 now adds the optional,
+  authenticated non-secret MCP settings/status contract and Web card; its
+  injected probe remains off by default, so the daemon still does not
+  auto-start a process or access MCP transport on startup.
 - **Spec 50** (`specs/50-observability-lifecycle-integration.md`): automatic
   RunManager/application lifecycle wiring for usage, cost, resource samples
   and audit. Current ledgers, collector and API projection are available, but
@@ -395,3 +396,41 @@ Approval, SandboxResolver, WorkspaceRegistry and event authorities are
 unchanged in this slice.
 The focused host-runner suite has 17 tests and the current repository gate
 passes with 420 tests; no arbitrary host command is started by the test suite.
+
+## Spec 53–57 planning status (2026-08-04)
+
+The following release-hardening specifications were added as documentation-only
+planning gates. They are intentionally not described as implemented, and this
+change does not modify the existing AgentLoop, RunManager, Scheduler, Approval,
+Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
+
+- **Spec 53** (`specs/53-host-install-upgrade-backup-recovery.md`) is Proposed.
+  It defines one-click Host bundles, platform signatures, immutable
+  `current/previous/candidate` updates, SQLite-consistent backup/restore,
+  migration preflight, safe mode and bounded recovery diagnostics. No installer,
+  updater, backup UI or migration runtime is implemented by the new document.
+- **Spec 54** (`specs/54-model-provider-onboarding.md`) is Proposed. It defines
+  local/cloud provider presets, explicit endpoint paths, OS-backed credential
+  references, bounded health/model probes, model capability snapshots and
+  provider/run isolation. It does not add a provider SDK, model download path or
+  new network behavior.
+- **Spec 55** (`specs/55-public-deployment-certificates-operations.md`) is
+  Proposed. It defines explicit public deployment modes, ACME staging/renewal/
+  rollback, reverse-proxy trust boundaries, Tailscale/SSH operational evidence
+  and versioned `docs/operations` runbooks. It does not expose a public listener,
+  install a proxy, change firewall rules or perform ACME calls.
+- **Spec 56** (`specs/56-i18n-accessibility-device-matrix.md`) is Proposed. It
+  defines `en-US`/`zh-CN` catalogs, WCAG 2.2 AA acceptance, keyboard/screen-reader
+  evidence, Playwright ratio fixtures and a real desktop/mobile/foldable/tablet
+  compatibility matrix. It does not claim that emulation is real-device proof.
+- **Spec 57** (`specs/57-release-publishing-pipeline.md`) is Proposed. It defines
+  protected tag/channel promotion, reproducible multi-platform builds, checksum,
+  platform signing, SBOM, provenance/attestation, draft-to-stable approval and
+  withdrawn/rollback procedures. It does not create GitHub Actions, publish a
+  release or upload artifacts.
+
+The research basis is recorded in
+`docs/research/53-57-release-install-model-operations-research.md`. Before any
+implementation commit, the relevant prerequisite matrix must be re-verified on
+the current checkout. New runtime behavior remains opt-in and disabled until its
+focused contracts, failure fixtures and release evidence are accepted.

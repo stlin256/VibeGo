@@ -1,6 +1,6 @@
 # 分阶段路线图
 
-**状态：Accepted（文档阶段已完成；阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地）**
+**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 53–57 已新增为 Proposed release-hardening planning gates）**
 
 每个阶段都是一个可回滚的 Git 提交或小提交组。完成条件包含：代码、单元测试、文档更新、验证命令和已知限制。
 
@@ -19,6 +19,11 @@
 | 9 | 扩展生态 | plugin/adapter SDK、文档站、示例技能 | 第三方可在不改核心包的情况下增加 provider/tool |
 | 10 | Host-first 发行 | daemon 同源托管 React Web、跨平台 launcher、内置 Node runtime、LAN 引导、签名更新/回滚 | 一个 Host URL 可完成本机和远程浏览器使用；不要求用户安装 Node/pnpm 或单独部署 Web |
 | 11 | Native clients（后置） | 版本化 TypeScript client SDK、Android/iOS/HarmonyOS 客户端、设备会话和移动端恢复 | 只消费 Host REST/SSE；不读取 SQLite、不复制 AgentLoop/Approval/Sandbox |
+| 12 | Host 安装与恢复 | 一键 Host bundle、平台签名、candidate/current/previous 升级、SQLite backup/restore、migration 和 safe mode | clean machine 可安装/升级/回滚；备份恢复不泄露 secret，失败不覆盖 current |
+| 13 | 模型配置向导 | local/cloud provider preset、secret reference、health/model probe、能力快照和新 run 隔离 | 不编辑配置文件即可完成 provider setup；探测、真实调用和模型下载明确区分 |
+| 14 | 公网部署与运维 | ACME staging/renewal/rollback、direct/reverse-proxy/Tailscale/SSH 指引、健康与事故 runbook | 公网显式 opt-in、TLS/pairing/CSRF/Origin/限流门禁通过；无隐式端口暴露 |
+| 15 | 多语言与设备质量 | `en-US`/`zh-CN` catalog、WCAG 2.2 AA、Playwright ratio fixtures、真实设备/辅助技术矩阵 | desktop、portrait、phone、foldable、wide/tri-fold、tablet 的 primary action 可达 |
+| 16 | Release 发布流水线 | Git tag、可重复构建、多平台 artifact、checksum、签名、SBOM、provenance、draft→stable promotion | stable 只发布不可变且可验证 artifact；安装/升级/模型/ACME/设备证据齐全 |
 
 ## 推荐第一条实现链
 
@@ -437,7 +442,7 @@ sandbox-runtime 计划/runner 执行；engine probe 与报告只返回 bounded�
 显式工具 continuation；deny、cancel、重复决定、runtime 不可用和 recovery 不会执行
 旧调用或隐式 host fallback。下一步进入 Spec 49 的 MCP/Skill transport lifecycle。
 
-## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2 已实现）
+## Spec 49：MCP/Skill transport and capability lifecycle（R1/R2 已实现，R3 进行中）
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有
 manifest/one-shot boundary 扩展为可选 stdio/Streamable HTTP 连接，补齐 auth、session、
@@ -464,6 +469,17 @@ allowlist、协议/schema/privacy、manifest-owned risk 与 network/approval/san
 门禁、单调 health checkId、重复/冲突 revision、read-only resource/prompt 和
 immutable run snapshot/fingerprint。该纯 projection 不调用 MCP transport，也不改变
 任何现有执行或事件权威；后续进入 R3 daemon/Web status。
+
+### Spec 49-R3 implementation contract (2026-08-04)
+
+R3 先落地非 secret `daemon_settings` 快照、认证 GET/PATCH settings、显式
+probe/status 和 Web 设置卡。快照只包含 server identity、transport、label、
+manifest revision 与 capability reference allowlist；URL、command、argv、path、
+environment、credential 和原始 protocol response 均被拒绝。关闭时 probe 是零副作用
+no-op；启用但没有注入 verifier 时返回 bounded `degraded`，不阻塞普通会话/run。
+该切片不启动 MCP 子进程、不发网络请求、不注册 ToolRegistry，也不修改
+AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
+`run_events` 或 `goal_events`。详见 [ADR 0022](adr/0022-mcp-r3-settings-and-status-boundary.md)。
 
 ## Spec 50：Observability lifecycle integration（规划）
 
@@ -504,3 +520,31 @@ Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM
 
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。
+
+## Spec 53–57：面向可发布与更广泛用户的 Release hardening（规划）
+
+新增规格均为 Proposed planning gate，暂不改变当前运行时，也不替换既有
+AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
+`run_events` 或 `goal_events` 的权威地位：
+
+- [Spec 53](specs/53-host-install-upgrade-backup-recovery.md)：定义一键安装、平台签名、
+  current/previous/candidate 升级、SQLite 一致性备份、restore/migration、safe mode 和
+  故障恢复。安装/升级不修改 workspace，备份默认排除 API key、private key、完整环境变量
+  和 workspace 内容。
+- [Spec 54](specs/54-model-provider-onboarding.md)：定义 local/cloud 模型向导、Ollama、
+  LM Studio、llama.cpp、OpenAI-compatible、Anthropic 和 DeepSeek 显式 endpoint，采用
+  secret reference、bounded probe、能力快照和 run snapshot isolation；不自动下载模型。
+- [Spec 55](specs/55-public-deployment-certificates-operations.md)：定义 loopback/LAN/
+  Tailscale/SSH/public HTTPS/reverse proxy 的部署边界，ACME HTTP-01/DNS-01 staging、续期、
+  回滚、trusted proxy 和版本化运维 runbook；不做 UPnP、自动防火墙或隐式公网暴露。
+- [Spec 56](specs/56-i18n-accessibility-device-matrix.md)：定义 `en-US`/`zh-CN` message
+  catalog、WCAG 2.2 AA、键盘/屏幕阅读器/reduced motion、Playwright emulation 与真实
+  desktop/phone/foldable/wide-fold/tri-fold/tablet 兼容矩阵；模拟设备不得冒充真实通过。
+- [Spec 57](specs/57-release-publishing-pipeline.md)：定义 tag/channel、可重复多平台构建、
+  checksum、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
+  release evidence 和 withdrawn/rollback 流程。
+
+推荐实施顺序为 `53 → 54 → 56 → 55 → 57`；Spec 57 的 stable gate 必须汇总前四项的
+安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读
+[Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
+并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
