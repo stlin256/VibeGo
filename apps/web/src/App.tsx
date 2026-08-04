@@ -3,9 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
-import { GoalProjectionPanel } from './GoalProjectionPanel.js';
-import { ObservabilityPanel } from './ObservabilityPanel.js';
-import { ConversationShell } from './components/vibego/ConversationShell.js';
+import { ContextRail, ConversationShell, WorkspaceRail } from './components/vibego/index.js';
 import { createTranslator, type Locale } from './locale.js';
 import './styles.css';
 
@@ -360,16 +358,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
       </header>
       <div className="sr-only" aria-live="polite" aria-label={t('accessibility.statusLabel')}>{error ?? (connected ? t('connection.connected') : t('connection.awaitingPairing'))}</div>
       <section className="content-grid">
-        <nav className="workspace-rail" aria-label="Workspace navigation">
-          <div className="eyebrow">WORKSPACE</div>
-          <strong className="workspace-rail-name">{workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId}</strong>
-          <p className="muted">{t('nav.localSession')}</p>
-          <button className="rail-new-button" type="button" onClick={startNewTask}>{t('nav.newTask')}</button>
-          <div className="rail-section-label">RECENT</div>
-          <div className="rail-session active"><span className="session-dot" />{t('nav.currentTask')}</div>
-          <div className="rail-session"><span className="session-dot muted-dot" />{t('nav.noOtherRuns')}</div>
-          <button className="rail-settings-button" type="button" aria-haspopup="dialog" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={(event) => openSettings(event.currentTarget)}>{t('nav.settings')}</button>
-        </nav>
+        <WorkspaceRail workspaceLabel={workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId} settingsOpen={settingsOpen} copy={{ navigationLabel: 'Workspace navigation', eyebrow: 'WORKSPACE', localSession: t('nav.localSession'), newTask: t('nav.newTask'), recent: 'RECENT', currentTask: t('nav.currentTask'), noOtherRuns: t('nav.noOtherRuns'), settings: t('nav.settings') }} onNewTask={startNewTask} onOpenSettings={openSettings} />
         <aside className="sidebar" aria-label="连接与运行摘要">
           <section id="settings-drawer" ref={settingsPanelRef} className="panel settings-panel" data-open={settingsOpen} role="dialog" aria-modal="true" aria-labelledby="settings-drawer-title" aria-hidden={!settingsOpen}>
             <div className="settings-drawer-header"><div><div className="eyebrow">{t('settings.eyebrow')}</div><h2 id="settings-drawer-title">{t('settings.title')}</h2></div><button className="drawer-close" type="button" aria-label={t('settings.close')} onClick={() => setSettingsOpen(false)}>{t('settings.close')}</button></div>
@@ -517,17 +506,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
           {error && <div className="error-banner" role="alert">{error}</div>}
           {connected ? <ConversationShell run={run} events={events} message={message} profile={profile} composerRef={composerRef} copy={{ title: t('conversation.title'), hint: t('conversation.hint'), newMessage: t('conversation.newMessage'), inputLabel: t('conversation.inputLabel'), inputPlaceholder: t('conversation.inputPlaceholder'), startRun: t('conversation.startRun'), readyTitle: t('conversation.readyTitle'), readyDescription: t('conversation.readyDescription'), untrustedPolicy: 'untrusted content · external sandbox', trustedPolicy: 'trusted workspace · read-only' }} onMessageChange={setMessage} onSubmit={submitRun} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <section className="panel empty-state"><span className="empty-icon">◎</span><h2>先完成安全配对</h2><p className="muted">daemon 默认不会把 token 放进 URL、cookie 或本地存储。</p></section>}
         </section>
-        {connected && <aside className="context-rail" data-open={contextOpen} aria-label="Run context">
-          <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} />
-          <ObservabilityPanel {...(usageSummary ? { summary: usageSummary } : {})} {...(auditEvents ? { audit: auditEvents } : {})} loading={observabilityLoading} unavailable={observabilityUnavailable} refreshing={observabilityRefreshing} {...(onRefreshObservability ? { onRefresh: onRefreshObservability } : {})} />
-          <section className="panel connection-panel">
-            <div className="eyebrow">CONNECTION</div>
-            <h2>Connected workspace</h2>
-            <p className="muted">Vibe Coding，随时随地；执行有边界，进度可继续。</p>
-            {health ? <dl className="summary-list"><div><dt>transport</dt><dd>{health.transport.kind}</dd></div><div><dt>TLS</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>sandbox</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
-          </section>
-          <section className="panel safety-panel"><div className="eyebrow">{t('guardrails.title')}</div><ul><li>{t('guardrails.untrusted')}</li><li>{t('guardrails.approval')}</li><li>{t('guardrails.sse')}</li></ul></section>
-        </aside>}
+        {connected && <ContextRail open={contextOpen} goalProjection={goalProjection} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={onRefreshGoalProjection} usageSummary={usageSummary} auditEvents={auditEvents} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={onRefreshObservability} health={health} copy={{ ariaLabel: 'Run context', connectionEyebrow: 'CONNECTION', connectionTitle: 'Connected workspace', description: 'Vibe Coding，随时随地；执行有边界，进度可继续。', transport: 'transport', tls: 'TLS', sandbox: 'sandbox', safetyTitle: t('guardrails.title'), guardrails: [t('guardrails.untrusted'), t('guardrails.approval'), t('guardrails.sse')] }} />}
       </section>
     </main>
   );

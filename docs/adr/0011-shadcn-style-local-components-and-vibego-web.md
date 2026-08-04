@@ -91,3 +91,12 @@ It uses the local Button/Textarea primitives and receives all run snapshots and
 actions from `App`; it does not own API calls, SSE, storage, approval policy or
 event persistence. This keeps the extraction reversible and leaves the
 workspace rail, context rail and Settings drawer for separately tested slices.
+
+## Phase 42b-2 implementation update (2026-08-05)
+
+`WorkspaceRail` and `ContextRail` are now separate presentational components.
+They accept typed metadata/projections and callbacks, use Button/Card
+primitives, and preserve the existing CSS landmarks and responsive grid. The
+context component composes the existing read-only Goal and observability
+panels; it does not fetch data or become a second API/event authority. Settings
+and topbar remain in the application shell until their own migration gate.
