@@ -20,6 +20,7 @@ import { InMemoryGitSettingsManager } from './git-settings.js';
 import { InMemoryGoalEventStore, createGoalEvent } from '@ready4vibe/goal-control';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import { McpSettingsManager } from './mcp-settings.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 
@@ -721,6 +722,60 @@ describe('daemon health server', () => {
     expect(enabled.status).toBe(200);
     expect(enabledBody).not.toContain('C:\\Users');
     expect(JSON.parse(enabledBody)).toMatchObject({ enabled: true, provider: 'docker', imageDigest: expect.stringContaining('@sha256:') });
+  });
+
+  it('serves optional MCP settings/status without starting transport when disabled', async () => {
+    const probe = { probe: vi.fn(async () => ({
+      schemaVersion: 'ready4vibe_mcp_probe_result_v0' as const,
+      serverId: 'demo-mcp',
+      manifestRevision: 'manifest-20260804',
+      health: 'healthy-verified' as const,
+      currentRevision: 'cap-20260804',
+      previousRevision: null,
+      capabilityCount: 1,
+    })) };
+    const mcpSettings = new McpSettingsManager({ settings: new InMemorySettingsStore(), probe });
+    const server = createDaemonServer({ mcpSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/mcp`;
+
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({ status: 'disabled', settings: { enabled: false, transport: 'stdio' }, nextAction: 'enable' });
+    const noOpProbe = await fetch(`${base}/probe`, { method: 'POST' });
+    expect(noOpProbe.status).toBe(200);
+    expect(await noOpProbe.json()).toMatchObject({ status: 'disabled' });
+    expect(probe.probe).not.toHaveBeenCalled();
+
+    const enabled = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      enabled: true, serverId: 'demo-mcp', serverVersion: '1.2.3', transport: 'streamable-http', endpointLabel: 'Demo integration',
+      manifestRevision: 'manifest-20260804', capabilityAllowlist: ['demo-mcp/tool/read_file@1.0.0'],
+    }) });
+    expect(enabled.status).toBe(200);
+    expect(await enabled.json()).toMatchObject({ status: 'degraded', degraded: true, nextAction: 'probe' });
+    expect(probe.probe).not.toHaveBeenCalled();
+
+    const unsafe = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpointLabel: 'https://example.test' }) });
+    expect(unsafe.status).toBe(400);
+    expect(await unsafe.json()).toMatchObject({ error: { code: 'INVALID_SETTINGS' } });
+
+    const probed = await fetch(`${base}/probe`, { method: 'POST' });
+    expect(probed.status).toBe(200);
+    expect(await probed.json()).toMatchObject({ status: 'ready', health: 'healthy-verified', currentRevision: 'cap-20260804', capabilityCount: 1, nextAction: 'none' });
+    expect(probe.probe).toHaveBeenCalledTimes(1);
+    expect((await (await fetch(base)).text())).not.toMatch(/rawResponse|token|secret|C:\\\\|\/(?:Users|home)\//iu);
+  });
+
+  it('keeps MCP settings behind the existing LAN authentication gate', async () => {
+    const authGate = new AuthGate({ mode: 'lan', tlsRequired: false, randomBytes: (() => new Uint8Array(64)) });
+    const mcpSettings = new McpSettingsManager({ settings: new InMemorySettingsStore() });
+    const server = createDaemonServer({ host: '0.0.0.0', transportMode: 'lan', authGate, mcpSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/settings/mcp`);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
   });
 
   it('guides workspace registration without returning daemon paths and rejects unknown runs', async () => {

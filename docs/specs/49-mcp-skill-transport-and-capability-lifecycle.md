@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1 and 49-R2 implemented; R3+ pending
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; R4 pending
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -186,6 +186,41 @@ Expose authenticated, non-secret settings and health/probe actions through the
 existing Settings drawer. The UI shows endpoint label, transport, revision,
 health and next action; it never displays an API key, local executable path or
 raw protocol error. Activation remains explicit and off by default.
+
+#### 49-R3 application contract (2026-08-04)
+
+R3 owns a small `ready4vibe_mcp_settings_v1` durable snapshot in the existing
+`daemon_settings` table. It stores only bounded, non-secret intent:
+
+- `enabled`;
+- `serverId`, `serverVersion`, `transport` (`stdio` or `streamable-http`);
+- a human-readable `endpointLabel` (label only, never a URL, command, argv or
+  local path);
+- the immutable `manifestRevision`; and
+- an explicit, bounded capability reference allowlist.
+
+The corresponding `ready4vibe_mcp_settings_status_v0` projection contains the
+sanitized settings, `disabled | starting | ready | degraded` status,
+`failed | healthy-connectivity-only | healthy-verified` health (or `null`),
+current/previous revision, capability count, last health time, a stable error
+code, and one of `enable | probe | review-capabilities | none` as `nextAction`.
+Unknown fields, secret-shaped values, environment names/values, absolute paths,
+URLs, commands and raw protocol responses are rejected before persistence or
+Web serialization.
+
+The daemon exposes authenticated `GET/PATCH /api/v1/settings/mcp` and
+`POST /api/v1/settings/mcp/probe`. PATCH persists the snapshot and returns the
+current status; probe is injected through an application port so tests can use
+a fake capability verifier. When disabled, neither PATCH nor status creation
+starts a child process or performs a network request, and `probe` is a no-op.
+When enabled without a configured verifier, the status is bounded `degraded`;
+ordinary conversation/run creation continues unchanged. A probe result is
+accepted only for the same server/manifest revision and cannot activate a
+ToolRegistry, alter `run_events`/`goal_events`, or change AgentLoop,
+RunManager, Scheduler, Approval, Sandbox or WorkspaceRegistry behavior.
+
+The Web settings drawer uses the same API and renders a compact MCP status
+card. A degraded MCP status is informational and never blocks the composer.
 
 Exit: restart restores non-secret manifest state, disabled integrations make no
 process/network calls, and degraded health never blocks the conversation

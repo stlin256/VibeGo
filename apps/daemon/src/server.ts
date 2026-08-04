@@ -16,6 +16,7 @@ import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js'
 import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
 import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
@@ -48,6 +49,7 @@ export interface DaemonServerOptions {
   goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  mcpSettings?: McpSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
 }
@@ -72,6 +74,7 @@ interface ResolvedDaemonServerOptions {
   goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  mcpSettings?: McpSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
 }
@@ -128,6 +131,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
+    ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
   };
@@ -149,6 +153,11 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       }
       if (error instanceof GoalWriteError) {
         writeJson(response, error.statusCode, { error: { code: error.code, message: error.safeMessage } });
+        return;
+      }
+      if (error instanceof McpSettingsError) {
+        const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }
       const goalError = goalMutationError(error);
@@ -657,6 +666,46 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/mcp') {
+    if (!options.mcpSettings) {
+      writeJson(response, 503, { error: { code: 'MCP_SETTINGS_UNAVAILABLE', message: 'MCP settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.mcpSettings.status());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or PATCH required' } }, { Allow: 'GET, PATCH' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    try {
+      writeJson(response, 200, options.mcpSettings.patch(input));
+    } catch (error) {
+      if (error instanceof McpSettingsError) {
+        const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/mcp/probe') {
+    if (!options.mcpSettings) {
+      writeJson(response, 503, { error: { code: 'MCP_SETTINGS_UNAVAILABLE', message: 'MCP settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    writeJson(response, 200, await options.mcpSettings.probe());
     return;
   }
 
