@@ -4,7 +4,7 @@ import type { StoredEvent } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
-import { GoalProjectionError } from '@ready4vibe/goal-control';
+import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutationResult } from '@ready4vibe/goal-control';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
@@ -12,7 +12,7 @@ import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js'
 import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
 import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
-import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, type GoalProjectionStore } from './goal-api.js';
+import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -41,6 +41,7 @@ export interface DaemonServerOptions {
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
+  goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
 }
@@ -62,6 +63,7 @@ interface ResolvedDaemonServerOptions {
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
+  goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
 }
@@ -115,6 +117,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
     ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
+    ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
   };
@@ -132,6 +135,15 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       }
       if (error instanceof GoalProjectionError) {
         writeJson(response, 503, { error: { code: 'GOAL_PROJECTION_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
+        return;
+      }
+      if (error instanceof GoalWriteError) {
+        writeJson(response, error.statusCode, { error: { code: error.code, message: error.safeMessage } });
+        return;
+      }
+      const goalError = goalMutationError(error);
+      if (goalError) {
+        writeJson(response, goalError.statusCode, { error: { code: goalError.code, message: goalError.message } });
         return;
       }
       writeJson(response, 500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error.' } });
@@ -237,6 +249,15 @@ async function handleRequest(
   }
 
   if (pathname === '/api/v1/goals') {
+    if (request.method === 'POST') {
+      if (!options.goalWriteService) {
+        writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+        return;
+      }
+      const result = await options.goalWriteService.createGoal(await readJson(request, options.bodyLimitBytes));
+      writeJson(response, 201, safeGoalMutation(result));
+      return;
+    }
     if (!options.goalEventStore) {
       writeJson(response, 503, { error: { code: 'GOALS_UNAVAILABLE', message: 'Goal projection is unavailable.' } });
       return;
@@ -246,6 +267,81 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, await listGoalProjections(options.goalEventStore));
+    return;
+  }
+
+  const completeTodoMatch = /^\/api\/v1\/goals\/([^/]+)\/todos\/([^/]+)\/complete$/u.exec(pathname);
+  if (completeTodoMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.completeTodo(decodeGoalId(completeTodoMatch[1]), decodeTodoId(completeTodoMatch[2]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const resolveGateMatch = /^\/api\/v1\/goals\/([^/]+)\/gates\/([^/]+)\/resolve$/u.exec(pathname);
+  if (resolveGateMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.resolveGate(decodeGoalId(resolveGateMatch[1]), decodeGateId(resolveGateMatch[2]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const addTodoMatch = /^\/api\/v1\/goals\/([^/]+)\/todos$/u.exec(pathname);
+  if (addTodoMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.addTodo(decodeGoalId(addTodoMatch[1]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const openGateMatch = /^\/api\/v1\/goals\/([^/]+)\/gates$/u.exec(pathname);
+  if (openGateMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.openGate(decodeGoalId(openGateMatch[1]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
+    return;
+  }
+
+  const evidenceMatch = /^\/api\/v1\/goals\/([^/]+)\/evidence$/u.exec(pathname);
+  if (evidenceMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalWriteService) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITES_UNAVAILABLE', message: 'Goal writes are unavailable.' } });
+      return;
+    }
+    const result = await options.goalWriteService.attachEvidence(decodeGoalId(evidenceMatch[1]), await readJson(request, options.bodyLimitBytes));
+    writeJson(response, 200, safeGoalMutation(result));
     return;
   }
 
@@ -877,6 +973,28 @@ function decodeGoalId(value: string | undefined): string {
   }
 }
 
+function decodeTodoId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_TODO_ID', 'Invalid todo id.');
+  try {
+    const todoId = decodeURIComponent(value);
+    if (!/^todo_[A-Za-z0-9_-]{8,128}$/u.test(todoId)) throw new Error('invalid');
+    return todoId;
+  } catch {
+    throw new RequestError(400, 'INVALID_TODO_ID', 'Invalid todo id.');
+  }
+}
+
+function decodeGateId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_GATE_ID', 'Invalid gate id.');
+  try {
+    const gateId = decodeURIComponent(value);
+    if (!/^gate_[A-Za-z0-9_-]{8,128}$/u.test(gateId)) throw new Error('invalid');
+    return gateId;
+  } catch {
+    throw new RequestError(400, 'INVALID_GATE_ID', 'Invalid gate id.');
+  }
+}
+
 function parseGoalEventLimit(value: string | null): number {
   if (value === null || value.trim() === '') return DEFAULT_GOAL_EVENT_PAGE_SIZE;
   const parsed = Number(value);
@@ -917,6 +1035,32 @@ function readJson(request: IncomingMessage, limitBytes: number): Promise<unknown
 
 function isValidationError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'issues' in error;
+}
+
+function safeGoalMutation(result: GoalMutationResult): Record<string, unknown> {
+  return {
+    schemaVersion: result.schemaVersion,
+    eventId: result.eventId,
+    controlRevision: result.controlRevision,
+    projection: redactGoalProjection(result.projection),
+  };
+}
+
+function goalMutationError(error: unknown): { code: string; message: string; statusCode: number } | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error) || typeof error.code !== 'string') return undefined;
+  switch (error.code) {
+    case 'GOAL_EVENT_CONFLICT':
+      return { code: error.code, message: 'Goal event id is already used with different content.', statusCode: 409 };
+    case 'GOAL_CONTROL_REVISION_STALE':
+      return { code: error.code, message: 'Goal control revision is stale.', statusCode: 409 };
+    case 'GOAL_TODO_VALIDATION_REQUIRED':
+      return { code: error.code, message: 'Validated Evidence is required before Todo completion.', statusCode: 422 };
+    case 'GOAL_EVENT_INVALID':
+    case 'GOAL_EVENT_STORAGE_ERROR':
+      return { code: 'GOAL_STORAGE_UNAVAILABLE', message: 'Goal storage is unavailable.', statusCode: 503 };
+    default:
+      return undefined;
+  }
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown, extraHeaders: Record<string, string> = {}): void {

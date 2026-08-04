@@ -181,7 +181,11 @@ const claimPayload = todoIdPayload.extend({
 const releasePayload = todoIdPayload.extend({ claimTokenHash: z.string().regex(/^[a-f0-9]{64}$/u) }).strict();
 const deferredPayload = todoIdPayload.extend({ nextDueAt: z.string().datetime({ offset: true }).optional() }).strict();
 const blockedPayload = todoIdPayload.extend({ gateId: z.string().regex(/^gate_[A-Za-z0-9_-]{8,128}$/u).optional() }).strict();
-const completedPayload = todoIdPayload.extend({ completedAt: z.string().datetime({ offset: true }).optional() }).strict();
+const completedPayload = todoIdPayload.extend({
+  /** New write API events cite the validated evidence that unlocked completion. */
+  evidenceId: z.string().regex(/^evidence_[A-Za-z0-9_-]{8,128}$/u).optional(),
+  completedAt: z.string().datetime({ offset: true }).optional(),
+}).strict();
 const quotaPayload = z.object({ turnKey: z.string().regex(/^turn_[A-Za-z0-9_.:-]{1,160}$/u) }).strict();
 
 export class GoalProjectionBuilder {
@@ -299,6 +303,10 @@ export class GoalProjectionBuilder {
         this.assertGoalExists(state);
         const current = state.todos.get(value.todoId);
         if (!current) throw new GoalProjectionError('todo.completed references an unknown todo');
+        if (value.evidenceId) {
+          const evidence = state.evidence.get(value.evidenceId);
+          if (!evidence || evidence.status !== 'validated') throw new GoalProjectionError('todo.completed requires validated evidence');
+        }
         state.todos.set(value.todoId, { ...current, status: 'done', ...(value.completedAt ? { completedAt: value.completedAt } : {}) });
         return;
       }
@@ -582,3 +590,5 @@ export function createGoalEvent<TPayload extends Record<string, unknown>>(input:
 }
 
 export { GoalEventTypeSchema };
+
+export * from './write.js';

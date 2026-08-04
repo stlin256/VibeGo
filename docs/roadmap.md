@@ -17,6 +17,8 @@
 | 7 | Web/PWA | React 多端布局、SSE resume、pairing/run console/cancel MVP | Web typecheck/build、API/SSE 单测和 React smoke test 通过；Playwright desktop/tablet/mobile、diff/log/approval 深化后置 |
 | 8 | 低资源与硬化 | 运行时指标、事件保留、速率限制、备份/导出 | 达到 `product-brief.md` 的目标，报告实测数据 |
 | 9 | 扩展生态 | plugin/adapter SDK、文档站、示例技能 | 第三方可在不改核心包的情况下增加 provider/tool |
+| 10 | Host-first 发行 | daemon 同源托管 React Web、跨平台 launcher、内置 Node runtime、LAN 引导、签名更新/回滚 | 一个 Host URL 可完成本机和远程浏览器使用；不要求用户安装 Node/pnpm 或单独部署 Web |
+| 11 | Native clients（后置） | 版本化 TypeScript client SDK、Android/iOS/HarmonyOS 客户端、设备会话和移动端恢复 | 只消费 Host REST/SSE；不读取 SQLite、不复制 AgentLoop/Approval/Sandbox |
 
 ## 推荐第一条实现链
 
@@ -291,3 +293,43 @@ adapter contract fixtures、frozen install、typecheck、health 和 smoke。失�
 current，`current`/`previous`/candidate 受清理保护。运维可锁定不可变 upstream commit
 进行恢复，但锁定不绕过安全检查。sidecar license/NOTICE、构建缓存、revision 保留与
 daemon 重启恢复规则将同步记录在 Spec 39/ADR 0008，并为 Web/daemon 增加回归测试。
+
+## Spec 40：Goal write API 与 bounded mutation service（Phase 2A 已实现）
+
+详见 [Spec 40](specs/40-goal-write-api-and-bounded-mutations.md) 与
+[ADR 0009](adr/0009-goal-write-api-and-mutation-boundary.md)。`GoalWriteService` 已在
+daemon application-service 增加有限、受认证的 Goal/Todo/Gate/Evidence mutation API。
+每个请求使用 eventId 幂等键和 controlRevision optimistic concurrency，validated Evidence
+是 Todo completion 的硬门禁；服务在 event stream 上完成重启后幂等和 fingerprint conflict。
+
+Phase 2A 不提供 raw event ingest、quota spend、claim UI 或 governed scheduler，也不接入
+默认 run admission；AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
+`run_events` 和 `goal_events` 的事实源边界保持不变。Web editor 与 governed preflight 留到
+后续 Phase 2B。Goal write API 已完成，Web editor、claim/release UI 和 governed preflight
+仍后置。
+
+## Spec 41：Host-first 发行、同源 Web 与后续客户端边界（设计已接受，代码待实现）
+
+详见 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md) 与
+[ADR 0010](adr/0010-host-first-same-origin-web-and-client-boundary.md)。最终发行形态是一个
+VibeGo Host：daemon 同时提供 React Web 静态资源、REST API、SSE、SQLite 和执行平面；远程
+用户只需在桌面、手机、平板或折叠屏浏览器中打开 Host URL。生产环境不要求用户启动 Vite、
+配置 CORS 或单独部署 Web server。
+
+实现顺序为：daemon 同源托管 `apps/web/dist` → 统一 dev/preview/start 入口 → 内置 Node
+runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 secret store/签名
+更新 → 原生客户端 SDK。Android、iOS、HarmonyOS 客户端明确后置；它们只消费版本化 REST/SSE、
+pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
+Scheduler、Approval 或 Sandbox。
+
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（设计已接受，Phase 42a 待开始）
+
+详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
+[ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
+Vite 和 TypeScript，迁移为 VibeGo token 驱动的 shadcn 风格 conversation shell。组件选型
+遵循组件库优先：shadcn registry/Radix 或经过评估的 headless 库优先，原生 HTML 仅用于
+简单语义元素，自定义 primitive 必须记录不采用现有库的原因并有完整无障碍测试。
+
+阶段顺序为：42a token/组件库接入与基础 primitives → 42b 对话 shell → 42c Settings、
+Approval、Goal、Memory 和 operation cards → 42d viewport/键盘/无障碍/bundle 验收。该阶段
+不改 daemon、REST/SSE、AgentLoop 或原生客户端边界。

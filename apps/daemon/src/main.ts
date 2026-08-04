@@ -17,6 +17,7 @@ import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervisor.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
+import { GoalWriteService } from '@ready4vibe/goal-control';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -37,6 +38,7 @@ const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
+const goalWriteService = new GoalWriteService(goalEventStore, { producer: 'daemon-goal-api' });
 let settingsStore: SqliteSettingsStore;
 try {
   settingsStore = new SqliteSettingsStore(join(dataDir, 'events.sqlite'));
@@ -123,6 +125,7 @@ const server = createDaemonServer({
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   goalEventStore,
+  goalWriteService,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 
