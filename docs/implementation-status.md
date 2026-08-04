@@ -60,6 +60,8 @@
 47d. Spec 44-R3 pricing slice 已完成：复用 `PricingRule`/`ModelUsageRecord.cost`，`packages/contracts/src/observability.ts` 增加 bounded `CostItem`/tier/price mode contract，`packages/observability/src/pricing.ts` 以纯内存 `PricingCatalog` 和 BigInt cost projection 支持 per-unit、flat-fee、tiered、历史 revision 与 unknown cost；不接入默认 run。
 48. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → observability → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
+49. `packages/sandbox-runtime` 与根脚本已实现 Spec 48-R3：`ContainerSmokeRunner`/`ContainerCliRuntimeProbe` 和显式 `pnpm smoke:container` 只接受 Docker/Podman、immutable digest 与解析后的 workspace，固定 restricted-network `sh -c "printf ready4vibe-smoke"` fixture，强制 `--pull=never`、`--rm`、`--init`、资源/超时/输出上限和取消；report 仅返回 versioned、redacted 状态，默认不进入 `pnpm verify`、daemon 启动或 run 创建路径。sandbox-runtime focused 30 tests 与 CLI workflow 7 tests 已通过；真实 engine smoke 仍需用户显式执行。
+
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；

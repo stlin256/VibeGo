@@ -44,7 +44,7 @@ flowchart LR
 | 模型 | OpenAI-compatible provider 边界和可确定测试的 fake provider |
 | 上下文 | 带来源标签的上下文管理、预算/压缩边界 |
 | 安全 | 不可信任务必须 external sandbox、路径/argv 守卫、审批策略元数据 |
-| 工具 | filesystem/shell 适配器和统一 executor；默认不启用主机执行 |
+| 工具 | filesystem/shell 适配器和统一 executor；默认不启用主机执行；digest 固定的 container smoke 只能显式运行 |
 | Workspace | 单用户 workspace registry、下拉选择、明确添加/删除确认和 per-run 根目录快照 |
 | 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
 | 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
@@ -66,6 +66,9 @@ pnpm --filter @ready4vibe/web dev
 # 构建并启动 daemon（仅 loopback）
 pnpm build
 pnpm --filter @ready4vibe/daemon start
+
+# 可选的本地 Docker/Podman smoke（必须使用 digest，绝不会隐式拉取镜像）
+pnpm smoke:container -- --runtime docker --image ghcr.io/example/runner@sha256:<64-hex-digest>
 ```
 
 默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。最终发行目标是一个
