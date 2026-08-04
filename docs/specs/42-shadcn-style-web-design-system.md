@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a 已实现；conversation shell 与业务组件迁移仍按后续阶段推进）
+- 状态：Accepted（Phase 42a 与 Phase 42b-1 已实现；其余 conversation shell/业务组件迁移仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -264,9 +264,26 @@ while making the next migration reversible.
 
 Focused Web tests cover variant rendering, ARIA/label forwarding, disabled and
 loading behavior, token/helper contracts and primitive isolation. The Web
-focused gate currently passes 76 tests, typecheck and production build; the
-observed bundle is 79.42 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
+focused gate now passes 78 tests, typecheck and production build; the observed
+bundle is 79.87 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
 device emulation are claimed as evidence by Phase 42a.
+
+### Phase 42b-1 implementation update (2026-08-05)
+
+The first conversation-shell migration is now componentized under
+`apps/web/src/components/vibego/ConversationShell.tsx`. It owns the
+conversation stream, composer, `RunConsole` and bounded tool-output inspector,
+and consumes only typed props/callbacks from `App`. The composer uses the
+Phase 42a `Textarea` and `Button` primitives; approval, retry and cancel
+actions remain explicit callbacks owned by the existing application boundary.
+
+The extraction preserves the existing `run`/`StoredEvent` snapshot and SSE
+projection semantics, including the 24-card/128 KiB tool-output display cap.
+The component does not import `api.ts`, access storage, read credentials or
+create a second event stream. Topbar, workspace rail, context rail and the
+large Settings drawer remain in `App` for the next 42b-2/42c slices. Focused
+Web smoke tests cover empty/running/recovery/approval composer states and
+confirm the component stays secret/path-free.
 
 ## 9. 退出条件
 

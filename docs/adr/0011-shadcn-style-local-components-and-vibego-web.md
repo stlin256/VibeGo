@@ -82,3 +82,12 @@ daemon callbacks and responsive shell behavior remain unchanged until Phase
 42b has component-level regression coverage. The accepted boundaries around
 secrets, API access, Host-first same-origin delivery and the existing runtime
 authorities are unchanged.
+
+## Phase 42b-1 implementation update (2026-08-05)
+
+The first shell migration extracts the conversation stream, composer,
+run-console and bounded tool-output inspector into a typed `vibego` component.
+It uses the local Button/Textarea primitives and receives all run snapshots and
+actions from `App`; it does not own API calls, SSE, storage, approval policy or
+event persistence. This keeps the extraction reversible and leaves the
+workspace rail, context rail and Settings drawer for separately tested slices.
