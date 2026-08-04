@@ -190,6 +190,18 @@ The adapter is injected and network-free. It does not become a second
 scheduler, does not execute a run, and does not alter AgentLoop, RunManager,
 `run_events` or `goal_events`.
 
+## 50-R3 implementation update (2026-08-05)
+
+`packages/observability/src/resource-sampling-lifecycle.ts` now provides the
+injected lifecycle adapter and `resource-sampling-lifecycle.test.ts` supplies
+fake RunManager transitions plus Windows/macOS/Linux probe fixtures. A start
+requires `leaseAcquired=true`; disabled sampling is a no-op, repeated snapshots
+are idempotent, changed snapshots conflict, and pause/cancel/terminal stop and
+flush the collector. Recovery starts a new snapshot. Collector degradation is
+reported without throwing into the originating action. The observability gate
+is 54 passing tests; no shell, CLI, network or automatic daemon wiring was
+introduced.
+
 ## Acceptance matrix
 
 - interactive run outcome is unchanged when usage, sampling, pricing or audit

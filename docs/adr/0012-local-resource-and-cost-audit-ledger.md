@@ -159,3 +159,9 @@ a new run-scoped snapshot. Unsupported platform probes, queue overflow and
 writer errors stay fail-soft and expose degraded/unknown state. The adapter
 never invokes shell/PowerShell/CLI, scans a workspace or changes run event
 authorities.
+
+The adapter is implemented in
+`packages/observability/src/resource-sampling-lifecycle.ts`; the 54-test
+focused package gate covers lease gating, snapshot isolation, pause/recovery,
+terminal cleanup, degraded stop and platform probe fixtures. It remains opt-in
+and does not start from daemon boot.

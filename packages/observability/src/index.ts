@@ -425,6 +425,7 @@ export * from './provider-usage.js';
 export * from './provider-usage-lifecycle.js';
 export * from './pricing.js';
 export * from './resource-collector.js';
+export * from './resource-sampling-lifecycle.js';
 export * from './audit-adapter.js';
 export * from './lifecycle.js';
 export * from './api.js';

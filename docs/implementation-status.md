@@ -318,8 +318,8 @@ The following work is documented but not fully implemented yet:
   started.
   Spec 50-R2 provider usage/cost application adapter is implemented with 47
   focused tests; no default run wiring or network behavior is enabled.
-  Spec 50-R3 sampling lifecycle is now at its documentation gate; automatic
-  collector start/stop remains opt-in until this adapter and tests land.
+  Spec 50-R3 sampling lifecycle adapter is implemented with 54 focused tests;
+  automatic collector start/stop remains opt-in without default daemon wiring.
 - **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate

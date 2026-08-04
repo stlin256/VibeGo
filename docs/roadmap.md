@@ -526,7 +526,7 @@ conversation-first Web 设置卡均已覆盖 focused tests。未提供默认 pro
 关闭状态和未配置 verifier 时仍不会启动子进程或发网络请求；R4 才评估 run-scoped
 ToolExecutor bridge。
 
-## Spec 50：Observability lifecycle integration（R1/R2 已完成，R3 实施中，R4 规划）
+## Spec 50：Observability lifecycle integration（R1/R2/R3 已完成，R4 规划）
 
 详见 [Spec 50](specs/50-observability-lifecycle-integration.md)。本阶段在 daemon
 application/RunManager 边界接入唯一 usage ledger、pricing/reconciliation、CPU/RSS/disk
@@ -540,11 +540,10 @@ terminal 做 bounded replay，按 logical attempt 生成一次 usage/tool/resour
 audit batch；重复 payload 是 no-op，冲突 fail-closed，关闭采样不写 resource，
 writer 失败只返回 degraded。该切片不接入默认 RunManager.start，不修改
 AgentLoop、Scheduler、Approval、Sandbox、WorkspaceRegistry、`run_events` 或
-`goal_events`；下一步先做 provider usage/cost wiring（50-R2）。
-当前 observability package focused gate 为 38 tests passed，fixture 不启动模型、
+`goal_events`；R1 fixture focused gate 为 38 tests passed，fixture 不启动模型、
 工具、shell 或网络。
 
-50-R2 文档门禁已冻结：ProviderUsageObservation 先 normalize/reconcile，再按
+50-R2 实现遵循已冻结门禁：ProviderUsageObservation 先 normalize/reconcile，再按
 PricingCatalog revision 生成 ModelUsageRecord；缺失价格保持 unknown，partial/
 failure counters、latency、TTFT 不丢失，usageId 重复为 no-op、不同 payload
 fail-closed，writer 失败只返回 degraded。该 adapter 仍不接入默认 run 创建或
@@ -552,13 +551,16 @@ AgentLoop，network-free provider usage application fixture 已通过 focused te
 
 50-R2 已完成：`ProviderUsageLifecycleAdapter` 位于 observability application
 边界，47 个 focused tests 通过；它不改变默认 run 创建、AgentLoop、Scheduler、
-Approval、Sandbox、WorkspaceRegistry、`run_events` 或 `goal_events`，下一步进入
-低资源采样 lifecycle（50-R3）。
+Approval、Sandbox、WorkspaceRegistry、`run_events` 或 `goal_events`。
 
 50-R3 文档门禁已冻结：ResourceCollector 只在显式 Scheduler lease 后启动，
 pause/cancel/terminal stop+flush，recovery/retry 重新 capture snapshot；关闭
 采样不创建 collector，unsupported/overflow/writer failure 只产生 bounded
 degraded/unknown，不执行 shell/PowerShell/CLI 或 workspace scan。
+
+50-R3 已完成：`ResourceSamplingLifecycleAdapter` 通过 54 个 focused tests，
+只在 lease 后启动 collector，支持 pause/cancel/terminal stop+flush 和 recovery
+新 snapshot；daemon 默认启动、RunManager、AgentLoop 与现有事件 authority 均未接入。
 
 ### Spec 47-R3 implementation update (2026-08-04)
 
