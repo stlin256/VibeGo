@@ -53,7 +53,7 @@
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
-- `pnpm test`：通过，297 个测试全部通过（contracts 17、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 102、web 40；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试，以及 Phase 6a Knowledge settings/probe/run snapshot/Web 测试；
+- `pnpm test`：通过，298 个测试全部通过（contracts 17、goal-control 11、storage 17、scheduler 5、testkit 2、agent 20、context 5、model-openai 5、tools 4、policy 7、sandbox 6、execution 7、sandbox-runtime 9、tool-adapters 15、workspaces 7、auth 5、certificates 5、skill-mcp 10、daemon 103、web 40；Vitest 按 package 输出）；Spec 36 覆盖 settings store、workspace restore/rollback 和 daemon adapter；Spec 37/38 覆盖 ratio、conversation-first 与 New task focus contract；Spec 39 覆盖 Phase 0 contract privacy/bounds、Noop zero-side-effect、Phase 1 MemoryCore adapter、Phase 2 settings/API/Web degraded behavior、Phase 3 supervisor 生命周期/更新/回滚、Phase 4 bounded run integration、Phase 5 Proxy fallback/privacy/concurrency 与 MemoryKnowledge descriptor/readonly/limit/cancellation/privacy 测试，以及 Phase 6a Knowledge settings/probe/run snapshot/Web/SQLite recovery 测试；
 - `pnpm --filter @ready4vibe/web build`：通过，Vite JS 产物约 234 kB（gzip 约 72 kB），未发起真实模型请求；
 - `pnpm diff:check`：通过；
 - `pnpm-workspace.yaml` 显式允许 `esbuild` postinstall，安装时需要把 bundled Node 路径加入 `PATH`；这只影响本地依赖安装，不属于运行时资源依赖。
@@ -171,8 +171,8 @@ hashes. A failed or non-validated outcome cannot pass the pure completion guard,
 so it cannot create a Todo completion or quota-spend event.
 
 The verification baseline before the Web projection slice was 20 workspace packages
-and 206 passing tests. The current verification is 20 workspace packages and 297
-passing tests (Web 40, daemon 102, storage 17, contracts 17, workspaces 7).
+and 206 passing tests. The current verification is 20 workspace packages and 298
+passing tests (Web 40, daemon 103, storage 17, contracts 17, workspaces 7).
 Specs 36–39 add
 durable non-secret workspace settings, ratio-first layout contracts, and the
 conversation-first composer/focus contract plus the Agent Memory Phase 0

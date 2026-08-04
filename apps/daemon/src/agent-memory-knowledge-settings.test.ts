@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentMemoryKnowledgeProvider,
@@ -5,7 +8,7 @@ import type {
   AgentMemoryKnowledgeToolList,
   AgentMemoryStatus,
 } from '@ready4vibe/contracts';
-import { InMemorySettingsStore } from '@ready4vibe/storage';
+import { InMemorySettingsStore, SqliteSettingsStore } from '@ready4vibe/storage';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 
 const toolList: AgentMemoryKnowledgeToolList = {
@@ -95,5 +98,26 @@ describe('AgentMemoryKnowledgeSettingsManager', () => {
     expect(snapshot?.maxItems).toBe(4);
     await snapshot?.dispose();
     expect(vi.mocked(providers[0]!.close)).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores only bounded non-secret settings through the SQLite daemon store', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-knowledge-settings-'));
+    const databasePath = join(root, 'settings.sqlite');
+    try {
+      const firstStore = new SqliteSettingsStore(databasePath);
+      const first = new AgentMemoryKnowledgeSettingsManager({ settings: firstStore });
+      first.patch({ enabled: true, knowledgeId: 'wiki_demo', autoRetrieve: true, maxItems: 12, maxBytes: 16_384, timeoutMs: 1_250 });
+      expect(JSON.stringify(first.settingsSnapshot())).not.toMatch(/endpoint|api[_-]?key|secret|C:\\Users/iu);
+      await first.close();
+      firstStore.close();
+
+      const secondStore = new SqliteSettingsStore(databasePath);
+      const second = new AgentMemoryKnowledgeSettingsManager({ settings: secondStore });
+      expect(second.settingsSnapshot()).toMatchObject({ enabled: true, knowledgeId: 'wiki_demo', autoRetrieve: true, maxItems: 12, maxBytes: 16_384, timeoutMs: 1_250 });
+      await second.close();
+      secondStore.close();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
