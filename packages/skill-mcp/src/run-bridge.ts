@@ -28,6 +28,7 @@ export interface McpToolCallRequest {
 
 export interface McpToolCallPort {
   call(request: McpToolCallRequest): Promise<unknown>;
+  close?(): Promise<void>;
 }
 
 export interface McpExecutionLedgerOptions {
@@ -105,6 +106,7 @@ export class McpExecutionLedger {
 
 export interface McpProtocolRequestSession {
   request(method: string, params: unknown, signal?: AbortSignal): Promise<unknown>;
+  close?(): Promise<void>;
 }
 
 /** Adapter from the verified protocol session to the run-scoped call port. */
@@ -122,6 +124,10 @@ export class McpProtocolToolCallPort implements McpToolCallPort {
     } catch (error) {
       throw normalizeExecutionError(error, request.signal);
     }
+  }
+
+  async close(): Promise<void> {
+    await this.session.close?.();
   }
 }
 

@@ -468,4 +468,7 @@ The R4 application activation slice is now implemented: bounded
 `McpLiveActivationService` accepts only a matching server/manifest revision,
 allowlisted healthy-verified snapshot and injected call port; provider
 failures and ignored-signal timeouts remain degraded and do not start default
-transport. Live stdio/Streamable HTTP provider wiring and smoke remain pending.
+transport. `@ready4vibe/skill-mcp` also provides the injected
+`McpSessionActivationProvider` for public initialize/tools-list/tools-call
+protocol flow; fake-channel tests pass, while real opt-in stdio/Streamable HTTP
+smoke remains pending.

@@ -320,8 +320,11 @@ existing MCP settings status projection. Refresh replaces the binding for
 future runs; already captured runtimes remain unchanged.
 
 The daemon activation slice is covered by 9 focused tests (plus the existing
-3 binding tests). It does not install a default provider or claim live
-stdio/Streamable HTTP smoke.
+3 binding tests). `@ready4vibe/skill-mcp` now also provides
+`McpSessionActivationProvider`, which uses the public protocol session,
+`tools/list`, capability registry and session-backed call port behind an
+injected channel factory. Its 3 activation tests use fake channels only; no
+default provider or real stdio/Streamable HTTP smoke is installed.
 
 Exit: an activated MCP tool completes through the same approval/sandbox path
 as a built-in tool, while failure, recovery and retry cannot replay an old
