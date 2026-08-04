@@ -427,5 +427,7 @@ export * from './pricing.js';
 export * from './resource-collector.js';
 export * from './resource-sampling-lifecycle.js';
 export * from './audit-adapter.js';
+export * from './audit-actions.js';
+export * from './observability-export.js';
 export * from './lifecycle.js';
 export * from './api.js';

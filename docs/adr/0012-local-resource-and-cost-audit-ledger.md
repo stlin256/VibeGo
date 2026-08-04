@@ -166,7 +166,7 @@ focused package gate covers lease gating, snapshot isolation, pause/recovery,
 terminal cleanup, degraded stop and platform probe fixtures. It remains opt-in
 and does not start from daemon boot.
 
-## 50-R4 audit and export boundary (2026-08-05)
+## 50-R4 audit and export boundary (2026-08-05, implemented)
 
 Settings, approval, sandbox and provider/model changes use one validated audit
 application service and the existing hash-chain writer. Explicit export/import
@@ -174,3 +174,6 @@ is a local, bounded projection: records are revalidated, sorted canonically,
 redaction/privacy checks run before serialization, and a checksum plus audit
 chain verification detects tampering. Import returns validated facts only; it
 does not write, upload, or alter `run_events`/`goal_events` automatically.
+The implementation is covered by the observability package's 60 focused tests
+and remains an application boundary; automatic daemon/API/Web wiring is still
+deferred to a later release slice.

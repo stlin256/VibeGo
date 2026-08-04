@@ -202,16 +202,24 @@ reported without throwing into the originating action. The observability gate
 is 54 passing tests; no shell, CLI, network or automatic daemon wiring was
 introduced.
 
-## 50-R4 implementation gate (2026-08-05)
+## 50-R4 implementation update (2026-08-05)
 
 Audit actions for settings, approval, sandbox, model/provider changes and
-explicit export/verification will pass through the existing validated
+explicit export/verification now pass through the existing validated
 `AuditApplicationAdapter`. The port accepts bounded actor/transport/target
 metadata only; it never accepts prompts, commands, paths, environment values,
 raw provider responses or credentials. Export is an explicit local operation:
 the bundle is contract-validated, deterministically checksummed, bounded and
 redaction-safe; import only verifies and returns facts for an existing ledger
 writer and never uploads or mutates state by itself.
+
+The implementation lives in `packages/observability/src/audit-actions.ts` and
+`packages/observability/src/observability-export.ts`. The focused observability
+gate now passes 60 tests, including action/target allowlists, writer
+fail-soft behavior, deterministic export sorting/checksums, privacy rejection,
+audit-chain tamper detection and bounded import. This remains an explicit
+application port: no automatic daemon wiring, upload, second event source or
+new Web API was introduced.
 
 The existing authenticated Usage/Audit projections remain the Web authority;
 this slice does not add a second API, event stream, scheduler or audit ledger.
