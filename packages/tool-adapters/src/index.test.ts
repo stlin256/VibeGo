@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ArgvGuard, PathGuard } from '@ready4vibe/execution';
+import type { McpCapabilityDescriptor, McpCapabilitySnapshot, McpToolCallPort } from '@ready4vibe/skill-mcp';
 import { ApprovalPolicy, type ToolIntent } from '@ready4vibe/policy';
 import { SandboxResolver, type SandboxResolveRequest } from '@ready4vibe/sandbox';
 import { ToolRegistry } from '@ready4vibe/tools';
@@ -14,10 +15,60 @@ import {
   ToolAdapterError,
   ToolExecutor,
   ToolExecutorRuntime,
+  McpToolExecutorRuntime,
   ToolHandlerRegistry,
   type FileSystemAdapterFileSystem,
   type ProcessRunner,
 } from './index.js';
+
+const mcpConfig = {
+  workspaceId: 'workspace-1',
+  userMessage: 'search docs',
+  model: { provider: 'fixture', name: 'fixture' },
+  taskTrust: 'trusted-workspace' as const,
+  sandbox: { mode: 'read-only' as const, network: 'restricted' as const },
+  approval: 'on-request' as const,
+  limits: { maxTurns: 2, maxWallTimeMs: 60_000, maxModelInputTokens: 2_000, maxModelOutputTokens: 2_000, maxToolCalls: 4, maxOutputBytes: 16_384, maxContextBytes: 16_384 },
+  createdBySessionId: 'session-1',
+  clientRequestId: 'client-1',
+};
+
+function mcpDescriptor(overrides: Partial<McpCapabilityDescriptor> = {}): McpCapabilityDescriptor {
+  return {
+    schemaVersion: 'mcp-capability/v1',
+    source: 'mcp',
+    serverId: 'docs-server',
+    serverVersion: '1.0.0',
+    protocolVersion: '2025-06-18',
+    kind: 'tool',
+    id: 'search',
+    name: 'search',
+    version: '1.0.0',
+    revision: '1.0.0',
+    qualifiedName: 'docs-server/tool/search@1.0.0',
+    summary: 'Search docs.',
+    risk: 'read',
+    sandboxMode: 'workspace-read',
+    networkAccess: 'disabled',
+    approvalMode: 'none',
+    executable: true,
+    inputSchema: { type: 'object' },
+    ...overrides,
+  };
+}
+
+function mcpSnapshot(capabilities: readonly McpCapabilityDescriptor[]): McpCapabilitySnapshot {
+  return {
+    schemaVersion: 'mcp-capability-snapshot/v1',
+    serverId: 'docs-server',
+    serverVersion: '1.0.0',
+    protocolVersion: '2025-06-18',
+    health: 'healthy-verified',
+    healthCheckId: 1,
+    capabilities,
+    fingerprint: 'a'.repeat(64),
+  };
+}
 
 const registry = (): ToolRegistry => {
   const value = new ToolRegistry();
@@ -323,5 +374,75 @@ describe('ToolExecutorRuntime', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('McpToolExecutorRuntime', () => {
+  it('binds only executable MCP tools and routes calls through ToolExecutor policy/sandbox', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const snapshot = mcpSnapshot([
+        mcpDescriptor(),
+        { ...mcpDescriptor(), kind: 'resource', id: 'readme', name: 'readme', qualifiedName: 'docs-server/resource/readme@1.0.0', executable: false, risk: 'read', sandboxMode: 'workspace-read' },
+        { ...mcpDescriptor(), kind: 'prompt', id: 'summarize', name: 'summarize', qualifiedName: 'docs-server/prompt/summarize@1.0.0', executable: false, risk: 'read', sandboxMode: 'workspace-read' },
+      ]);
+      const port: McpToolCallPort = { call: vi.fn(async () => ({ matches: 2 })) };
+      const runtime = new McpToolExecutorRuntime({ snapshot, callPort: port, resolveWorkspaceRoot: () => root });
+      expect(runtime.descriptors).toHaveLength(1);
+      expect(runtime.descriptors[0]).toMatchObject({ id: 'docs-server/tool/search@1.0.0', name: 'docs-server/tool/search@1.0.0', risk: 'read' });
+      const result = await runtime.execute({
+        runId: 'run-1', turnId: 'turn-1', callId: 'call-1', descriptor: runtime.descriptors[0]!, input: { query: 'ts' }, config: mcpConfig, signal: new AbortController().signal,
+      });
+      expect(result).toEqual({ output: { source: 'mcp', serverId: 'docs-server', toolId: 'search', revision: '1.0.0', value: { matches: 2 } } });
+      expect(port.call).toHaveBeenCalledWith(expect.objectContaining({ runId: 'run-1', callId: 'call-1', input: { query: 'ts' } }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('shares identical calls, rejects replay conflicts, and forwards cancellation', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const descriptor = mcpDescriptor();
+      const controller = new AbortController();
+      const receivedSignals: AbortSignal[] = [];
+      const port: McpToolCallPort = { call: vi.fn(async (request) => { receivedSignals.push(request.signal); return { ok: true }; }) };
+      const runtime = new McpToolExecutorRuntime({ snapshot: mcpSnapshot([descriptor]), callPort: port, resolveWorkspaceRoot: () => root });
+      const base = { runId: 'run-1', turnId: 'turn-1', callId: 'call-1', descriptor: runtime.descriptors[0]!, config: mcpConfig, signal: controller.signal };
+      await expect(runtime.execute({ ...base, input: { query: 'same' } })).resolves.toMatchObject({ output: { value: { ok: true } } });
+      await expect(runtime.execute({ ...base, input: { query: 'same' } })).resolves.toMatchObject({ output: { value: { ok: true } } });
+      await expect(runtime.execute({ ...base, input: { query: 'different' } })).rejects.toMatchObject({ code: 'MCP_CALL_REPLAY_CONFLICT' });
+      expect(port.call).toHaveBeenCalledOnce();
+      expect(receivedSignals[0]).toBeInstanceOf(AbortSignal);
+      expect(receivedSignals[0]).not.toBe(controller.signal);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the normal approval continuation for a write MCP tool', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const descriptor = mcpDescriptor({ id: 'publish', name: 'publish', qualifiedName: 'docs-server/tool/publish@1.0.0', risk: 'write', sandboxMode: 'workspace-write' });
+      const port: McpToolCallPort = { call: vi.fn(async () => ({ published: true })) };
+      const runtime = new McpToolExecutorRuntime({ snapshot: mcpSnapshot([descriptor]), callPort: port, resolveWorkspaceRoot: () => root });
+      const config = { ...mcpConfig, sandbox: { mode: 'workspace-write' as const, writableRoots: ['.'], network: 'restricted' as const } };
+      const request = { runId: 'run-2', turnId: 'turn-1', callId: 'call-2', descriptor: runtime.descriptors[0]!, input: { title: 'x' }, config, signal: new AbortController().signal };
+      await expect(runtime.execute(request)).rejects.toMatchObject({ code: 'APPROVAL_REQUIRED' });
+      await runtime.approve(request, 1_000);
+      await expect(runtime.execute(request)).resolves.toMatchObject({ output: { value: { published: true } } });
+      expect(port.call).toHaveBeenCalledOnce();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed for unverified snapshots and never treats resources as tools', () => {
+    const unverified = { ...mcpSnapshot([{ ...mcpDescriptor(), executable: false }]), health: 'healthy-connectivity-only' as const } as unknown as McpCapabilitySnapshot;
+    expect(() => new McpToolExecutorRuntime({
+      snapshot: unverified,
+      callPort: { call: vi.fn() },
+      resolveWorkspaceRoot: () => 'C:\\workspace',
+    })).toThrowError(new ToolAdapterError('TOOL_FORBIDDEN'));
   });
 });

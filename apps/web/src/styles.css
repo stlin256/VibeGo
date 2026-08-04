@@ -26,6 +26,24 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .settings-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .settings-grid label { display: grid; gap: 5px; }
 .settings-grid input, .settings-grid select { min-height: 40px; padding: 9px 10px; }
+.settings-tabs { display: grid; gap: 12px; margin-top: 14px; }
+.settings-tab-list { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; border-bottom: 1px solid #263650; padding-bottom: 8px; }
+.settings-tab { min-height: 40px; padding: 0 13px; color: #cbe4ff; border: 1px solid transparent; background: transparent; }
+.settings-tab:hover { background: #17243c; }
+.settings-tab[aria-selected="true"] { color: var(--vibego-ink); border-color: rgb(92 225 230 / 52%); background: var(--vibego-cyan); }
+.settings-tab-panels { min-width: 0; }
+.settings-tab-panel { min-width: 0; }
+.settings-tab-panel[hidden] { display: none; }
+.settings-section { display: grid; gap: 0; grid-column: 1 / -1; margin-top: 4px; border-color: rgb(175 194 232 / 20%); background: rgb(8 17 29 / 54%); box-shadow: none; }
+.settings-section-header { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
+.settings-section-header .ui-card__title { margin: 5px 0 4px; }
+.settings-section-header .ui-card__description { margin: 0; color: var(--vibego-on-dark-muted); font-size: 12px; }
+.settings-section .ui-card__content { display: grid; gap: 10px; }
+.settings-run-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.settings-section .inline-actions label { min-width: min(100%, 160px); flex: 1 1 160px; }
+.settings-section[data-status="degraded"] { border-color: rgb(255 190 92 / 55%); }
+.settings-section[data-status="unavailable"] { border-color: rgb(189 102 90 / 60%); }
+.settings-section .ui-badge { flex: 0 0 auto; }
 .model-setup { grid-column: 1 / -1; display: grid; gap: 8px; margin-top: 4px; border-top: 1px solid #263650; padding-top: 14px; }
 .model-setup p { margin: 0; font-size: 12px; }
 .model-setup form { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
@@ -39,11 +57,20 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .toggle-row input { width: 18px; height: 18px; accent-color: var(--vibego-lime); }
 .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button:disabled { cursor: not-allowed; opacity: .48; }
+.locale-control { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: #95a9c3; font-size: 11px; }
+.locale-control span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.locale-control select { min-height: 44px; border: 1px solid #30415c; border-radius: var(--vibego-radius-sm); padding: 0 8px; color: #cbe4ff; background: #122039; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .reset-button { margin-top: 12px; color: #cbe4ff; border: 1px solid #30415c; background: transparent; }
 .reset-button:hover { background: #17243c; }
 .certificate-guidance { display: grid; gap: 4px; margin-top: 14px; border-top: 1px solid #263650; padding-top: 12px; }
 .certificate-guidance strong { overflow-wrap: anywhere; font-size: 13px; }
 .certificate-guidance p { margin: 0; font-size: 12px; }
+.deployment-readiness { display: grid; gap: 4px; margin-top: 12px; border-top: 1px solid #263650; padding-top: 12px; }
+.deployment-readiness strong { overflow-wrap: anywhere; font-size: 13px; }
+.deployment-readiness p { margin: 0; font-size: 12px; }
+.deployment-readiness[data-status="ready"] strong { color: var(--vibego-cyan); }
+.deployment-readiness[data-status="blocked"] strong { color: #ffbe5c; }
 dt { color: #6f86a7; font-size: 12px; } dd { max-width: 65%; margin: 0; color: #d7e1ef; font-size: 12px; text-align: right; overflow-wrap: anywhere; }
 form { display: grid; gap: 10px; }
 label { color: #95a9c3; font-size: 12px; }
@@ -221,6 +248,72 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 
+/* Spec 42a: semantic shadcn-style tokens and source-owned primitives. */
+:root {
+  --background: var(--vibego-ink);
+  --foreground: var(--vibego-on-dark);
+  --card: rgb(11 16 32 / 88%);
+  --card-foreground: var(--vibego-on-dark);
+  --popover: #0c1728;
+  --popover-foreground: var(--vibego-on-dark);
+  --primary: var(--vibego-cyan);
+  --primary-foreground: var(--vibego-ink-strong);
+  --secondary: #122039;
+  --secondary-foreground: #cbe4ff;
+  --muted: #17243c;
+  --muted-foreground: var(--vibego-on-dark-muted);
+  --accent: var(--vibego-blue);
+  --accent-foreground: #f7faff;
+  --destructive: #bd665a;
+  --destructive-foreground: #ffd0c9;
+  --border: #30415c;
+  --input: #0c1728;
+  --ring: #5ec9ff;
+  --radius: var(--vibego-radius-sm);
+}
+
+.ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid transparent; border-radius: var(--radius); padding: 0 16px; color: var(--primary-foreground); font-weight: 750; line-height: 1; transition: background-color .15s ease, border-color .15s ease, opacity .15s ease; }
+.ui-button--default { background: var(--primary); }
+.ui-button--default:hover:not(:disabled) { background: #8cebef; }
+.ui-button--secondary { color: var(--secondary-foreground); background: var(--secondary); }
+.ui-button--secondary:hover:not(:disabled) { background: #172b4b; }
+.ui-button--outline { color: var(--secondary-foreground); border-color: var(--border); background: transparent; }
+.ui-button--outline:hover:not(:disabled), .ui-button--ghost:hover:not(:disabled) { background: var(--muted); }
+.ui-button--ghost { color: var(--secondary-foreground); background: transparent; }
+.ui-button--destructive { color: var(--destructive-foreground); background: var(--destructive); }
+.ui-button--destructive:hover:not(:disabled) { background: #d87b6d; }
+.ui-button--size-sm { min-height: 36px; padding: 0 12px; font-size: 12px; }
+.ui-button--size-lg { min-height: 48px; padding: 0 20px; }
+.ui-button--size-icon { width: 44px; padding: 0; }
+.ui-button:focus-visible, .ui-input:focus-visible, .ui-textarea:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.ui-button:disabled { cursor: not-allowed; opacity: .48; }
+.ui-button[aria-busy="true"] { cursor: wait; }
+.ui-button__spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 999px; animation: ui-spin .75s linear infinite; }
+.ui-button__content { display: inline-flex; align-items: center; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+.ui-input, .ui-textarea { width: 100%; border: 1px solid var(--border); border-radius: var(--radius); color: var(--foreground); background: var(--input); }
+.ui-input { min-height: 44px; padding: 10px 12px; }
+.ui-textarea { min-height: 112px; padding: 12px; resize: vertical; line-height: 1.5; }
+.ui-input--invalid, .ui-textarea--invalid { border-color: var(--destructive); }
+.ui-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 12px; font-weight: 650; }
+.ui-card { border: 1px solid rgb(175 194 232 / 18%); border-radius: var(--radius); color: var(--card-foreground); background: var(--card); box-shadow: 0 18px 50px rgb(5 9 20 / 24%); }
+.ui-card__header, .ui-card__content { padding: 16px; }
+.ui-card__header { display: grid; gap: 5px; }
+.ui-card__title { margin: 0; color: var(--card-foreground); font-size: 16px; }
+.ui-card__description { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+.ui-card__content { padding-top: 0; }
+.ui-badge { display: inline-flex; align-items: center; width: fit-content; min-height: 24px; border: 1px solid transparent; border-radius: 999px; padding: 0 9px; font-size: 11px; font-weight: 750; line-height: 1; }
+.ui-badge--default { color: var(--primary-foreground); background: var(--primary); }
+.ui-badge--secondary { color: var(--secondary-foreground); background: var(--secondary); }
+.ui-badge--outline { color: var(--secondary-foreground); border-color: var(--border); background: transparent; }
+.ui-badge--destructive { color: var(--destructive-foreground); background: var(--destructive); }
+.ui-separator { flex: none; border: 0; background: var(--border); }
+.ui-separator--horizontal { width: 100%; height: 1px; }
+.ui-separator--vertical { width: 1px; min-height: 24px; align-self: stretch; }
+.ui-skeleton { display: block; min-height: 12px; border-radius: 999px; background: linear-gradient(90deg, var(--muted) 25%, #263650 50%, var(--muted) 75%); background-size: 200% 100%; animation: ui-skeleton 1.4s ease-in-out infinite; }
+@keyframes ui-skeleton { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .ui-button { transition: none; } .ui-button__spinner, .ui-skeleton { animation: none; } }
+
 /* Spec 38: conversation-first shell. The existing settings form remains a
    semantic component, but it is a dismissible drawer rather than the default
    reading surface. */
@@ -360,6 +453,19 @@ body { overflow-x: hidden; }
 .conversation-stream > .run-panel { min-height: 0; border: 0; border-radius: 0; padding: 18px 0 0; background: transparent; box-shadow: none; overflow: auto; }
 .composer-panel { position: sticky; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 2; padding: 16px 18px; }
 .composer-panel textarea { min-height: 88px; }
+
+/* Spec 56c: optional platform fold/safe-area hooks. Browsers that do not
+   expose viewport segments simply use the ratio-first layout above. These
+   variables are layout hints only; they never select a device-specific
+   component tree or a second conversation state. */
+:root { --vibego-safe-area-bottom: env(safe-area-inset-bottom, 0px); --vibego-fold-gap-inline: env(viewport-segment-left 1 0, 0px); }
+@media (horizontal-viewport-segments: 2) {
+  .app-shell { padding-inline-start: max(14px, var(--vibego-fold-gap-inline)); }
+  .composer-panel { scroll-margin-inline-start: var(--vibego-fold-gap-inline); }
+}
+@media (horizontal-viewport-segments: 3) {
+  .app-shell { padding-inline: max(10px, var(--vibego-fold-gap-inline)); }
+}
 
 @media (max-width: 599px) {
   .conversation-column { min-height: 0; }

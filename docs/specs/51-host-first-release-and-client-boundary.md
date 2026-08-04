@@ -1,6 +1,6 @@
 # Spec 51: Host-first release and future client boundary
 
-- Status: planned (51-R0 packaging gate)
+- Status: 51-R4 implemented (R1-R3a complete; R3b remains planned)
 - Date: 2026-08-04
 - Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -23,7 +23,7 @@ release.
 
 - The daemon and Vite Web app run independently in development.
 - Same-origin API/SSE, pairing, CSRF and LAN/TLS contracts are documented and
-  tested, but Web static assets are not yet bundled into the daemon release.
+  tested; the optional production daemon path now serves a built Web dist.
 - Certificate metadata/status is available; ACME issuance/renewal and a
   cross-platform launcher remain explicit adapters.
 - Native mobile clients do not exist and must not be pulled into the Web MVP.
@@ -116,37 +116,121 @@ that serves a built Web directory without changing the development server.
 Exit: a clean build can be opened through one host URL; API and SSE remain
 authenticated and relative.
 
-### 51-R2: cross-platform launcher
+#### 51-R1 implementation update (2026-08-05)
 
-Implement launcher lifecycle tests for Windows/macOS/Linux: argument parsing,
+The daemon accepts an optional absolute `webDistDir` and serves only built
+static files from that directory. `GET` and `HEAD` are supported; `/` and
+extensionless client routes fall back to `index.html`, while missing files with
+an extension return a bounded 404. `index.html` is `no-store`; hashed
+`/assets/*` files receive immutable cache headers. Percent-decoded traversal,
+NUL/control characters, symlink escapes and directories fail closed without
+revealing host paths. `/api/*`, `/health` and run SSE never enter the static
+resolver and retain their existing authentication, CSRF and origin behavior.
+
+The default source checkout keeps the Vite development server unchanged. The
+production `main` composition points to `apps/web/dist` (or an explicit
+`READY4VIBE_WEB_DIST_DIR`), and a missing build reports a safe
+`WEB_ASSETS_UNAVAILABLE` response rather than serving source files.
+
+The daemon static-serving fixture suite passes 4 tests (within the current
+152-test daemon package gate), covering index/assets/HEAD, SPA fallback, API and health
+isolation, extension asset misses, traversal, method and missing-build guards.
+The source checkout remains Vite-compatible; static serving is enabled only
+when `webDistDir` is supplied by the production composition.
+
+### 51-R2 launcher boundary
+
+R2 is a small, dependency-free Node launcher module, not an installer or a
+second execution plane. It owns only process lifecycle and host presentation:
+
+- parse a bounded argv contract (`--daemon`, `--data-dir`, `--host`, `--port`,
+  `--open`, `--ready-timeout-ms`), rejecting shell fragments, relative daemon
+  paths and unsafe ports;
+- resolve a per-user data directory for Windows, macOS and Linux, create it
+  with owner-only permissions where the platform exposes them, and keep only a
+  non-secret PID lease there;
+- reserve a free loopback port (or honor an explicit bounded port), spawn the
+  daemon with an argv array and minimal inherited environment, report a
+  same-origin URL, and optionally open it only after `--open` is supplied;
+- forward only redacted child output, reject an active PID lease, clean stale
+  leases, and terminate the tracked process tree on stop/restart or launcher
+  signals.
+
+R2 does not install Node, modify workspaces, write credentials, enable LAN,
+bypass TLS/pairing, perform updates, or inspect SQLite. Platform installers,
+bundled runtime, signed artifacts and upgrade/rollback remain Spec 53/57
+work. `scripts/host-launcher.mjs` and its eight Node test fixtures implement
+this boundary. The implementation is kept injectable so Windows process-tree
+and Unix process-group behavior can be tested without pretending that one host
+fixture is a field-device result.
+
+### 51-R2: cross-platform launcher exit contract
+
+The exit contract is now implemented by `scripts/host-launcher.mjs` and its
+Node fixtures for Windows/macOS/Linux behavior. It covers argument parsing,
 port discovery, process-tree shutdown, restart, log redaction, data directory
 permissions and stale process cleanup. No installer may write user secrets or
-modify workspace files.
+modify workspace files; installer and signed artifact work remain outside R2.
 
 Exit: a disposable package starts/stops the daemon and reports a usable URL on
 each supported platform fixture.
 
-### 51-R3: guided LAN/public certificate flow
+### 51-R3a: certificate readiness projection
 
-Connect the existing certificate metadata/settings UI to a safe certificate
-adapter. LAN default remains fail-closed without valid TLS unless the user
-explicitly selects development HTTP. ACME, OS certificate stores and public
-reverse proxies are optional adapters for a loopback/LAN Host, with
-dry-run/probe/renew/rollback tests. When a release profile selects a public
-domain, Spec 52 makes ACME issuance/renewal and rollback evidence a mandatory
-release gate.
+Connect the existing certificate metadata/settings UI to a safe, read-only
+readiness adapter. The adapter evaluates the already loaded certificate
+metadata against transport requirements and an optional bounded hostname:
+`ready` for a usable certificate, `degraded` for loopback HTTP or an
+approaching expiry window, and `blocked` for a required-but-missing,
+expired or hostname-mismatched certificate. It returns only a versioned reason
+code, bounded next-step guidance, transport impact and the existing metadata;
+it never returns PEM, private-key bytes or filesystem paths.
 
-Exit: certificate expiry, hostname mismatch, private-key failure, renewal
-failure and rollback produce safe guidance and never print key material.
+The daemon exposes this projection only through the existing authenticated
+read-only API boundary. LAN default remains fail-closed without valid TLS.
+ACME, OS certificate stores, public reverse proxies and renewal/rollback are
+R3b adapters and are not invoked by R3a.
 
-### 51-R4: client SDK contract (post-Web)
+Exit: missing/optional TLS, expiry, hostname mismatch and invalid certificate
+fixtures produce stable safe guidance and never print key material. The
+certificate package has eight focused tests and the daemon focused gate now
+passes 152 tests, including authenticated readiness route isolation.
 
-Generate or hand-maintain a small versioned TypeScript client over REST/SSE,
-with replay, cancellation, pairing and degraded projection tests. Do not add
-Android/iOS/HarmonyOS UI until this contract and host release have stabilized.
+### 51-R3b: guided LAN/public certificate flow
+
+Add explicit certificate configuration/probe UI and optional ACME/OS-store/
+reverse-proxy adapters only after R3a readiness contracts are stable. Any
+renewal or rollback must use candidate/previous material and retain the
+existing daemon transport/auth authority.
+
+### 51-R4: versioned TypeScript client SDK (implemented)
+
+Generate or hand-maintain a small versioned TypeScript client over REST/SSE.
+The first slice keeps pairing/session credentials in process memory, uses
+relative or explicit same-origin URLs without query tokens, exposes health,
+run create/read/cancel/retry/approval operations, and provides an async SSE
+stream with `Last-Event-ID` replay, monotonic sequence de-duplication,
+bounded reconnects, cancellation and terminal-event stop. A separate
+degraded projection helper returns stable reason codes without exposing raw
+network/HTTP internals.
+
+The SDK must not read SQLite, workspace roots, secrets or sidecar state and
+must not implement AgentLoop, Scheduler, Approval, Sandbox or Goal Control.
+Do not add Android/iOS/HarmonyOS UI until this contract and Host release have
+stabilized.
 
 Exit: a client can reconnect/resume and display conversation/approval/usage
 projections without direct database or filesystem access.
+
+#### 51-R4 implementation update (2026-08-05)
+
+`@ready4vibe/client-sdk` is the first versioned package and is implemented. It is dependency-light
+(only the existing contracts package), keeps access/CSRF/session data in an
+instance field, validates bounded paths/options, and caps SSE frames and
+reconnect attempts. Its fixtures cover pairing headers, cancellation,
+replay/resume, duplicate sequence suppression, terminal stop, degraded
+projection and secret-free URLs/errors. The Web app remains the current
+consumer; native clients are still post-release.
 
 ## Acceptance matrix
 

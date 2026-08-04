@@ -136,15 +136,26 @@ export class McpSettingsManager {
 
   async probe(signal?: AbortSignal): Promise<McpSettingsStatus> {
     if (!this.settingsValue.enabled) return this.status();
-    this.lastHealthAt = this.clock().toISOString();
     if (!this.probePort) return this.markDegraded('unavailable');
     const probeSignal = signal ?? new AbortController().signal;
-    let result: McpSettingsProbeResult;
     try {
-      result = McpSettingsProbeResultSchema.parse(await this.probePort.probe(this.settingsSnapshot(), probeSignal));
+      return this.recordProbeResult(await this.probePort.probe(this.settingsSnapshot(), probeSignal));
     } catch (error) {
       void error;
       return this.markDegraded('unavailable');
+    }
+  }
+
+  /** Accepts a bounded result from an application-level activation provider. */
+  recordProbeResult(input: unknown): McpSettingsStatus {
+    if (!this.settingsValue.enabled) return this.status();
+    this.lastHealthAt = this.clock().toISOString();
+    let result: McpSettingsProbeResult;
+    try {
+      result = McpSettingsProbeResultSchema.parse(input);
+    } catch (error) {
+      void error;
+      return this.markDegraded('schema');
     }
     if (result.serverId !== this.settingsValue.serverId || result.manifestRevision !== this.settingsValue.manifestRevision) {
       return this.markDegraded('schema');
@@ -167,6 +178,11 @@ export class McpSettingsManager {
       this.markDegraded('unavailable');
     }
     return this.status();
+  }
+
+  /** Records a stable degraded state without exposing provider error details. */
+  degrade(code: McpSettingsErrorCode = 'unavailable'): McpSettingsStatus {
+    return this.markDegraded(code);
   }
 
   private loadSettings(): McpSettings {

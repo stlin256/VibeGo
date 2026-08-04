@@ -1,6 +1,6 @@
 # ADR 0012：本地资源与费用审计账本
 
-- 状态：Accepted for Phase 43a/43b 与 44-R4（contracts、projection、ledger/rollup、显式 collector/audit adapter 已实现；API/Web 仍后置）
+- 状态：Accepted for Phase 43a/43b、44-R4、45-R5、50-R1、50-R2、50-R3、50-R4 与 50-R5（contracts、projection、ledger/rollup、显式 collector/audit adapter、authenticated API/Web projection、lifecycle ports、provider usage/cost adapter、sampling lifecycle adapter、audit/export application ports 和终态 usage bridge 已实现；自动资源采样、pricing settings 与 retention 仍后置）
 - 日期：2026-08-04
 - 相关：[Spec 43：资源、Token、费用与审计可观测性](../specs/43-resource-usage-and-cost-audit.md)
 - 相关：[Spec 41：Host-first 发行与客户端边界](../specs/41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](../specs/42-shadcn-style-web-design-system.md)
@@ -116,3 +116,81 @@ R4 将采样与审计实现为 `packages/observability` 内的可替换 applicat
 
 默认采样间隔、货币、保留天数、external sandbox 精确归因、价格导入格式和第一版是否包含审计
 导出/完整性校验，统一由 Spec 43 第 11 节讨论后冻结；这些选择不阻塞 Phase 43a。
+
+## 50-R1 application lifecycle boundary (2026-08-05)
+
+`packages/observability` owns a pure `ObservabilityLifecycleRecorder` port.
+The recorder receives bounded, already-redacted lifecycle facts and sends one
+idempotent batch to the existing observability writer for each logical attempt.
+It is a fixture/application adapter, not a second event source: no provider,
+tool, shell, filesystem, scheduler or run event is executed or persisted by
+this layer. Disabled sampling produces no resource record; replay with the
+same fingerprint is a no-op and a changed payload is a conflict. Writer errors
+are reported as degraded and never alter the source run result. The default
+RunManager and AgentLoop wiring remains intentionally unchanged until 50-R2/R3.
+The focused package gate covers the recorder and existing observability
+adapters with 38 passing tests; no live model, tool, shell or network is used.
+
+## 50-R2 provider usage and cost boundary (2026-08-05)
+
+Provider usage enters the ledger only after the public bounded observation is
+normalized and reconciled. The application adapter then applies the selected
+immutable pricing revision and appends model usage through the existing writer;
+unknown pricing is represented as missing/unknown cost, never a fabricated
+zero. Same `usageId` and semantic payload is a no-op, changed content is a
+conflict, and writer failure is degraded/fail-soft. Partial stream or provider
+failure records retain known counters and latency metadata without re-running a
+provider request. No raw response or credential crosses this port, and no
+AgentLoop, RunManager default start, `run_events` or `goal_events` behavior is
+changed.
+
+The R2 adapter is implemented in
+`packages/observability/src/provider-usage-lifecycle.ts` with 47 focused
+observability tests. It is transport-free and remains an opt-in application
+port; no default run or AgentLoop wiring was changed.
+
+## 50-R3 sampling lifecycle boundary (2026-08-05)
+
+Sampling is an injected lifecycle adapter around the existing bounded
+`ResourceCollector`. A Scheduler lease is an input fact, not a new scheduler;
+without it (or when sampling is disabled) no collector or writer call is made.
+Pause/cancel/terminal stop and flush the collector, while recovery/retry starts
+a new run-scoped snapshot. Unsupported platform probes, queue overflow and
+writer errors stay fail-soft and expose degraded/unknown state. The adapter
+never invokes shell/PowerShell/CLI, scans a workspace or changes run event
+authorities.
+
+The adapter is implemented in
+`packages/observability/src/resource-sampling-lifecycle.ts`; the 54-test
+focused package gate covers lease gating, snapshot isolation, pause/recovery,
+terminal cleanup, degraded stop and platform probe fixtures. It remains opt-in
+and does not start from daemon boot.
+
+## 50-R4 audit and export boundary (2026-08-05, implemented)
+
+Settings, approval, sandbox and provider/model changes use one validated audit
+application service and the existing hash-chain writer. Explicit export/import
+is a local, bounded projection: records are revalidated, sorted canonically,
+redaction/privacy checks run before serialization, and a checksum plus audit
+chain verification detects tampering. Import returns validated facts only; it
+does not write, upload, or alter `run_events`/`goal_events` automatically.
+The implementation is covered by the observability package's 60 focused tests
+and remains an application boundary; automatic daemon/API/Web wiring is still
+deferred to a later release slice.
+
+## 50-R5 terminal run-event usage bridge (implemented)
+
+`RunUsageObserver` is wired as an optional daemon application/`RunManager`
+boundary. After a run settles it replays only that run's existing bounded
+`run_events`, converts the projection to `ProviderUsageObservation` with
+`dataSource=run-event`, and submits it through the existing provider usage
+adapter and ledger. The call is fire-and-forget and fail-soft; it cannot alter
+the authoritative run result or make a second model/tool/shell invocation.
+
+This slice deliberately excludes automatic resource sampling, tool usage
+capture, pricing settings, a second event source, and any change to
+`AgentLoop`, `run_events`, `goal_events`, `Scheduler`, `Approval`, `Sandbox` or
+`WorkspaceRegistry`. Durable ledger idempotency remains the restart boundary;
+same usage content is a no-op and changed content is a conflict. Package and
+daemon focused fixtures cover privacy-safe replay, writer degradation/retry,
+duplicate delivery and run-result isolation.

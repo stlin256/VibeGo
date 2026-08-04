@@ -66,3 +66,120 @@ VibeGo 需要明确的业务组合行为时，才允许新增本地实现。任�
 
 先做 token/primitives，再做 conversation shell，再做 Settings/Approval/Goal/Memory cards，
 最后删除重复旧 CSS。每个阶段独立更新文档、测试、typecheck、bundle 检查和 Git 提交。
+
+## Phase 42a implementation update (2026-08-05)
+
+The first slice uses local, dependency-free primitives rather than adding a
+full UI runtime. Semantic tokens live in `styles.css`; `cn()` and a small
+variant helper live under `src/lib`; the UI primitives live under
+`src/components/ui`. This is compatible with the shadcn source-owned model
+and keeps the initial bundle/resource budget predictable. Radix or generated
+shadcn source may be introduced later only when a primitive needs focus
+management that native HTML cannot safely provide.
+
+Phase 42a deliberately does not rewrite `App.tsx`. Business composition,
+daemon callbacks and responsive shell behavior remain unchanged until Phase
+42b has component-level regression coverage. The accepted boundaries around
+secrets, API access, Host-first same-origin delivery and the existing runtime
+authorities are unchanged.
+
+## Phase 42b-1 implementation update (2026-08-05)
+
+The first shell migration extracts the conversation stream, composer,
+run-console and bounded tool-output inspector into a typed `vibego` component.
+It uses the local Button/Textarea primitives and receives all run snapshots and
+actions from `App`; it does not own API calls, SSE, storage, approval policy or
+event persistence. This keeps the extraction reversible and leaves the
+workspace rail, context rail and Settings drawer for separately tested slices.
+
+## Phase 42b-2 implementation update (2026-08-05)
+
+`WorkspaceRail` and `ContextRail` are now separate presentational components.
+They accept typed metadata/projections and callbacks, use Button/Card
+primitives, and preserve the existing CSS landmarks and responsive grid. The
+context component composes the existing read-only Goal and observability
+panels; it does not fetch data or become a second API/event authority. Settings
+remains in the application shell until the next migration gate.
+
+## Phase 42b-3 implementation update (2026-08-05)
+
+The topbar is extracted as `ConversationHeader`, while `App` keeps the
+Settings drawer and all interaction state. The component receives locale,
+connection, drawer and context snapshots plus explicit callbacks; it may use
+the local `Button` primitive and native `select` for the simple locale control.
+It must not import `api.ts`, read browser storage, access credentials, create an
+SSE channel, or own focus-return state. Existing CSS landmarks and keyboard
+shortcuts remain the compatibility contract; Settings and operation-card
+migration are not part of this slice.
+
+The focused Web gate covers connected/awaiting-pairing rendering, locale ARIA,
+Button primitive output and secret/path-free markup. The component adds no
+network, storage, SSE or runtime authority.
+
+## Phase 42c-1 implementation update (2026-08-05)
+
+Approval and recovery cards are extracted before the larger Settings Sheet.
+`ApprovalCard` and `RecoveryCard` receive bounded snapshots and explicit
+callbacks from `ConversationShell`; they do not import `ApiClient`, create
+approval/retry requests, or persist operation state. The deny action keeps the
+destructive Button variant, while retry continues to mean “new run” and never
+replays an interrupted tool call. Existing CSS landmarks and callback semantics
+are compatibility contracts for this slice.
+
+Focused tests cover approval details/no-details, destructive deny output,
+recovery retry presentation and secret/path/raw-argument-free markup; the
+slice adds no network, storage, SSE or runtime authority.
+
+## Phase 42c-2 implementation update (2026-08-05)
+
+The Settings Sheet shell is extracted before its forms and tabs. The local
+`SettingsSheet` component receives only open state, a ref, bounded copy, a close
+callback and children; `App` retains focus trapping/return, settings values,
+API calls, and secret-safe persistence. This is a presentational dialog shell,
+not a second settings authority or a new persistence/API surface.
+
+Focused tests cover open/closed projection, dialog ARIA, child-slot rendering,
+Button output and secret/path-free markup; form values, focus trap/return and
+all settings API behavior remain owned by `App`.
+
+## Phase 42c-3 implementation update (2026-08-05)
+
+The Settings Sheet composition now uses local `SettingsTabs` and
+`SettingsSection` components. They are presentational and dependency-light:
+the tab component provides the tablist/tab/tabpanel ARIA contract and the
+section component provides consistent status presentation for loading,
+degraded, unavailable, and ready states. They do not import `api.ts`, read
+storage, access credentials, or create a second settings/event authority.
+
+`App` remains responsible for active-tab state, form values, validation,
+callbacks, focus trapping/return, and secret-safe persistence. Existing fields
+are grouped into Run, Tools, and Access panels without changing their names,
+callbacks, or daemon contracts. Inactive panels remain bounded and hidden in
+the DOM to keep SSR/test output deterministic. The focused component tests
+cover keyboard/ARIA attributes, inactive panel hiding, status variants and
+secret/path-free rendering.
+
+## Phase 42d-1 implementation update (2026-08-05)
+
+The local tab primitive now owns only the standard keyboard movement contract:
+left/right (and up/down) move within the bounded tab list, while Home/End
+select the first/last tab. It keeps a single roving `tabIndex=0`, calls the
+existing `onTabChange` callback, and focuses the selected tab when a browser
+document is available. The resolver is pure and independently tested; no
+request, storage write, or settings authority moved into the component.
+
+This is an automated keyboard contract only. Manual assistive-technology,
+contrast, Playwright viewport, and physical-device evidence remain explicitly
+out of scope until the later 42d acceptance slices.
+
+## Phase 42d-2 implementation update (2026-08-05)
+
+Web validation is exposed as the repository-level `check:web` script. It
+delegates module build/typecheck/focused tests to the existing bounded
+`check:module` runner, then validates gzip budgets and whitespace errors. The
+budget reader consumes only generated Web assets and returns stable metadata;
+it has no access to secrets, daemon state, browser storage, or user content.
+
+This automation intentionally does not imply viewport, contrast, screen-reader
+or physical-device compatibility. Those require separate evidence and remain
+outside this slice.

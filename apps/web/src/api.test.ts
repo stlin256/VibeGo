@@ -146,12 +146,23 @@ describe('ApiClient', () => {
     expect(calls).toEqual(['/api/v1/certificates/status']);
   });
 
+  it('reads bounded deployment readiness without exposing transport secrets', async () => {
+    const calls: string[] = [];
+    const client = new ApiClient('', async (input) => {
+      calls.push(input);
+      return response({ schemaVersion: 'ready4vibe_deployment_readiness_v1', mode: 'lan', status: 'blocked', reasonCode: 'certificate-required', nextStep: 'configure-certificate', affectsInteractiveRun: true, evaluatedAt: '2026-08-05T00:00:00.000Z' });
+    });
+    await expect(client.deploymentReadiness()).resolves.toMatchObject({ mode: 'lan', status: 'blocked', reasonCode: 'certificate-required' });
+    expect(calls).toEqual(['/api/v1/deployment/readiness']);
+    expect(calls.join('')).not.toMatch(/token|secret|api[_-]?key/iu);
+  });
+
   it('configures model access through an authenticated body and exposes only safe status', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {
       calls.push({ input, init });
-      if (init?.method === 'POST') return response({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' });
-      return response({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+      if (init?.method === 'POST') return response({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory', credentialState: 'available' });
+      return response({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' });
     });
     await expect(client.configureModel({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' })).resolves.toMatchObject({ configured: true });
     await client.modelSettings();
@@ -161,6 +172,18 @@ describe('ApiClient', () => {
     expect(calls[0]?.input).not.toContain('test-secret');
     expect(calls[1]?.init?.method).toBe('GET');
     expect(calls[2]?.init?.method).toBe('DELETE');
+  });
+
+  it('uses the explicit model probe endpoint without accepting browser credentials', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ schemaVersion: 'ready4vibe_model_probe_result_v1', status: 'ready', checkedAt: '2026-08-05T00:00:00.000Z', latencyMs: 7, revision: 'probe-v1', errorCode: null, capabilities: { schemaVersion: 'ready4vibe_model_capability_snapshot_v1', providerId: 'openai-compatible', modelId: 'deepseek-v4-flash', descriptorRevision: 'probe-v1', capturedAt: '2026-08-05T00:00:00.000Z', streaming: 'unknown', toolCalls: 'unknown', vision: 'unknown', embeddings: 'unknown', contextLimit: 'unknown', outputLimit: 'unknown' } });
+    });
+    await expect(client.probeModel('https://api.deepseek.com/models')).resolves.toMatchObject({ status: 'ready' });
+    expect(calls[0]?.input).toBe('/api/v1/settings/model/probe');
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({ endpoint: 'https://api.deepseek.com/models', timeoutMs: 5000 }));
+    expect(String(calls[0]?.init?.body)).not.toContain('apiKey');
   });
 
   it('uses the authenticated agent-memory settings/probe/update/rollback endpoints without secrets', async () => {

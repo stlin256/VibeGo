@@ -1,6 +1,6 @@
 # Spec 50: Observability lifecycle integration
 
-- Status: planned (50-R0 research gate)
+- Status: accepted for 50-R5 (terminal run-event usage bridge; automatic resource sampling and pricing settings remain later)
 - Date: 2026-08-04
 - Related: [Spec 43](43-resource-usage-and-cost-audit.md), [Spec 44](44-provider-usage-management-and-upstream-reuse.md), [Spec 45](45-observability-api-and-web.md), [ADR 0012](../adr/0012-local-resource-and-cost-audit-ledger.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -122,6 +122,129 @@ verification; never auto-upload telemetry.
 
 Exit: Web and future clients consume versioned projections, pagination is
 bounded, and audit verification distinguishes valid, degraded and unknown.
+
+### 50-R5: terminal run-event usage bridge (implemented)
+
+`RunUsageObserver` is now wired as an optional daemon application boundary.
+After a run promise settles, `RunManager` reads only that run's existing
+bounded `run_events`, replays them through `replayModelUsage`, converts the
+records to `ProviderUsageObservation` with `dataSource=run-event`, and sends
+them through `ProviderUsageLifecycleAdapter` to the existing usage ledger.
+The observer is fire-and-forget: ledger/projection failure is reported as
+`degraded` and never changes the run result, delays the HTTP 202 response, or
+re-executes a model, tool, shell, approval, or sandbox operation.
+
+Stable usage IDs and durable ledger no-op/conflict semantics are preserved
+across daemon restart. Runs with no usage events produce a bounded no-op. The
+slice does not start `ResourceCollector`, record tool/resource samples,
+introduce pricing settings, or create another event stream. Existing tests
+without the optional observer remain behaviorally unchanged.
+
+Focused package and daemon fixtures prove completed/failed paths, duplicate
+terminal delivery idempotency, writer degradation/retry, run-result isolation,
+and projection privacy: no prompt, transcript, raw provider response, command,
+path, environment value or secret is stored.
+
+## 50-R1 implementation update (2026-08-05)
+
+The application boundary now has a pure `ObservabilityLifecycleRecorder` and
+an injected writer port. It accepts only bounded lifecycle observations and
+derives one idempotent model/tool/resource/audit batch per logical attempt.
+Create, retry, pause, cancel, recover and terminal transitions are represented
+in the fixture without calling a provider, tool, shell or filesystem. Replayed
+logical attempts are no-ops when their canonical payload is unchanged and
+fail-closed conflicts when it changes. Disabled sampling emits no resource
+sample. Writer failures return a bounded `degraded` result and never change the
+originating run outcome. Secret-shaped fields, environment values and absolute
+paths are rejected before the writer is called.
+
+This is an application-port slice only: the default `RunManager.start()` path,
+`AgentLoop`, `run_events`, `goal_events`, `Scheduler`, `Approval`, `Sandbox` and
+`WorkspaceRegistry` remain unchanged. Automatic lifecycle wiring is deferred to
+50-R2/R3 after provider usage and resource sampling acceptance.
+
+The implementation is `packages/observability/src/lifecycle.ts` with
+`lifecycle.test.ts`; the focused observability gate is 38 passing tests. The
+fixture is network-free and does not require a model credential or a live
+process.
+
+## 50-R2 implementation gate (2026-08-05)
+
+The next adapter will accept only the versioned
+`ProviderUsageObservation` contract, normalize it once, reconcile duplicate or
+complementary sources, apply an immutable `PricingCatalog` revision, and append
+bounded `ModelUsageRecord` values through the existing writer port. Missing
+pricing remains `unknown` instead of zero; reported, estimated and partial
+provider-failure token facts are preserved, including latency and TTFT when
+present. The adapter will be idempotent by `usageId`, fail closed on changed
+payloads, and return `degraded` on writer failure without changing a run result.
+
+No raw provider response, credential, prompt, tool output or network client is
+accepted by this boundary. It remains outside AgentLoop and the default
+RunManager start path; live provider smoke and automatic lifecycle wiring are
+deferred until the explicit release gate.
+
+## 50-R2 implementation update (2026-08-05)
+
+`packages/observability/src/provider-usage-lifecycle.ts` now implements the
+adapter and its network-free fixture. It normalizes each observation through
+the public contract, reconciles complementary `provider-usage`/`run-event`
+facts, applies the selected `PricingCatalog` revision, and appends only bounded
+model records. Unknown price dimensions remain explicit; token accuracy maps
+to exact/estimated/unknown cost accuracy, while partial failed responses retain
+known counters, latency and TTFT. A stable `usageId` payload is a no-op on
+replay and a changed payload is a conflict, including concurrent delivery.
+Writer failure is degraded and retryable. The package gate is 47 passing tests;
+no provider, tool, shell, network or credential is used.
+
+## 50-R3 implementation gate (2026-08-05)
+
+The sampling adapter will own only collector lifecycle state. It starts a
+bounded `ResourceCollector` after an explicit Scheduler lease, stops and flushes
+on pause/cancel/terminal, and can start a fresh snapshot after recovery/retry.
+Disabled sampling creates no collector and performs no writer call. Queue
+overflow, unsupported Windows/macOS/Linux probes, and writer failures remain
+bounded `degraded`/`unknown` signals; no shell, PowerShell, CLI or workspace
+scan is permitted. Retention is a policy value only in this phase—automatic
+deletion is not introduced.
+
+The adapter is injected and network-free. It does not become a second
+scheduler, does not execute a run, and does not alter AgentLoop, RunManager,
+`run_events` or `goal_events`.
+
+## 50-R3 implementation update (2026-08-05)
+
+`packages/observability/src/resource-sampling-lifecycle.ts` now provides the
+injected lifecycle adapter and `resource-sampling-lifecycle.test.ts` supplies
+fake RunManager transitions plus Windows/macOS/Linux probe fixtures. A start
+requires `leaseAcquired=true`; disabled sampling is a no-op, repeated snapshots
+are idempotent, changed snapshots conflict, and pause/cancel/terminal stop and
+flush the collector. Recovery starts a new snapshot. Collector degradation is
+reported without throwing into the originating action. The observability gate
+is 54 passing tests; no shell, CLI, network or automatic daemon wiring was
+introduced.
+
+## 50-R4 implementation update (2026-08-05)
+
+Audit actions for settings, approval, sandbox, model/provider changes and
+explicit export/verification now pass through the existing validated
+`AuditApplicationAdapter`. The port accepts bounded actor/transport/target
+metadata only; it never accepts prompts, commands, paths, environment values,
+raw provider responses or credentials. Export is an explicit local operation:
+the bundle is contract-validated, deterministically checksummed, bounded and
+redaction-safe; import only verifies and returns facts for an existing ledger
+writer and never uploads or mutates state by itself.
+
+The implementation lives in `packages/observability/src/audit-actions.ts` and
+`packages/observability/src/observability-export.ts`. The focused observability
+gate now passes 60 tests, including action/target allowlists, writer
+fail-soft behavior, deterministic export sorting/checksums, privacy rejection,
+audit-chain tamper detection and bounded import. This remains an explicit
+application port: no automatic daemon wiring, upload, second event source or
+new Web API was introduced.
+
+The existing authenticated Usage/Audit projections remain the Web authority;
+this slice does not add a second API, event stream, scheduler or audit ledger.
 
 ## Acceptance matrix
 

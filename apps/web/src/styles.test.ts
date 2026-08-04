@@ -23,4 +23,46 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.conversation-stream');
     expect(styles).toContain('.composer-panel { position: sticky;');
   });
+
+  it('keeps the 42c/42d settings tabs, status cards and overflow guards source-owned', () => {
+    expect(styles).toContain('.settings-tabs');
+    expect(styles).toContain('.settings-tab[aria-selected="true"]');
+    expect(styles).toContain('.settings-tab-panel[hidden]');
+    expect(styles).toContain('.settings-section[data-status="degraded"]');
+    expect(styles).toContain('.settings-run-fields');
+    expect(styles).toContain('.settings-section .inline-actions label');
+    expect(styles).toContain('body { overflow-x: hidden; }');
+    expect(styles).toContain('.goal-panel { overflow: hidden; }');
+  });
+
+  it('keeps the Phase 56a language control and accessibility hooks bounded', () => {
+    expect(styles).toContain('.locale-control');
+    expect(styles).toContain('.locale-control select { min-height: 44px;');
+    expect(styles).toContain('.sr-only');
+    expect(styles).toContain('button { border: 0; border-radius: var(--vibego-radius-sm); min-height: 44px;');
+    expect(styles).toContain('prefers-reduced-motion');
+  });
+
+  it('keeps Phase 56c safe-area and fold-segment hooks optional', () => {
+    expect(styles).toContain('env(safe-area-inset-bottom');
+    expect(styles).toContain('env(viewport-segment-left 1 0');
+    expect(styles).toContain('@media (horizontal-viewport-segments: 2)');
+    expect(styles).toContain('@media (horizontal-viewport-segments: 3)');
+    expect(styles).toContain('ratio-first layout above');
+  });
+
+  it('keeps deployment readiness bounded beside certificate guidance', () => {
+    expect(styles).toContain('.deployment-readiness');
+    expect(styles).toContain('.deployment-readiness[data-status="blocked"]');
+  });
+
+  it('keeps the Phase 42a semantic token and primitive contracts brand-aware', () => {
+    expect(styles).toContain('--background: var(--vibego-ink)');
+    expect(styles).toContain('--primary: var(--vibego-cyan)');
+    expect(styles).toContain('--destructive: #bd665a');
+    expect(styles).toContain('.ui-button--size-icon { width: 44px;');
+    expect(styles).toContain('.ui-card {');
+    expect(styles).toContain('.ui-skeleton {');
+    expect(styles).toContain('.ui-button__spinner');
+  });
 });

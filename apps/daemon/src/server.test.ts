@@ -323,6 +323,63 @@ describe('daemon health server', () => {
     expect(JSON.stringify(body)).not.toContain('cert.pem');
   });
 
+  it('serves certificate readiness through the same authenticated read-only boundary', async () => {
+    const unavailable = createDaemonServer();
+    servers.push(unavailable);
+    const unavailablePort = await listen(unavailable);
+    const unavailableResponse = await fetch(`http://127.0.0.1:${unavailablePort}/api/v1/certificates/readiness`);
+    expect(unavailableResponse.status).toBe(503);
+    expect(await unavailableResponse.json()).toMatchObject({ error: { code: 'CERTIFICATE_READINESS_UNAVAILABLE' } });
+
+    const server = createDaemonServer({
+      certificateReadiness: {
+        schemaVersion: 'ready4vibe_certificate_readiness_v1',
+        status: 'blocked',
+        reasonCode: 'certificate-required',
+        nextStep: 'Configure a valid certificate.',
+        affectsTransport: true,
+        daysRemaining: null,
+        hostname: null,
+      },
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/certificates/readiness`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ schemaVersion: 'ready4vibe_certificate_readiness_v1', status: 'blocked', reasonCode: 'certificate-required' });
+    expect(JSON.stringify(body)).not.toContain('PRIVATE KEY');
+    expect(JSON.stringify(body)).not.toContain('cert.pem');
+  });
+
+  it('serves deployment readiness as a bounded read-only projection and fails soft when absent', async () => {
+    const unavailable = createDaemonServer();
+    servers.push(unavailable);
+    const unavailablePort = await listen(unavailable);
+    const unavailableResponse = await fetch(`http://127.0.0.1:${unavailablePort}/api/v1/deployment/readiness`);
+    expect(unavailableResponse.status).toBe(503);
+    expect(await unavailableResponse.json()).toMatchObject({ error: { code: 'DEPLOYMENT_READINESS_UNAVAILABLE' } });
+
+    const server = createDaemonServer({
+      deploymentReadiness: {
+        schemaVersion: 'ready4vibe_deployment_readiness_v1',
+        mode: 'lan',
+        status: 'blocked',
+        reasonCode: 'certificate-required',
+        nextStep: 'configure-certificate',
+        affectsInteractiveRun: true,
+        evaluatedAt: '2026-08-05T00:00:00.000Z',
+      },
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/deployment/readiness`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ schemaVersion: 'ready4vibe_deployment_readiness_v1', mode: 'lan', status: 'blocked', reasonCode: 'certificate-required', nextStep: 'configure-certificate' });
+    expect(JSON.stringify(body)).not.toMatch(/api[_-]?key|secret|token|PRIVATE KEY|C:\\\\|\/var\//iu);
+  });
+
   it('serves authenticated read-only Goal projections and bounded event replay', async () => {
     const goalEventStore = await goalStoreForApi();
     const server = createDaemonServer({ goalEventStore });
@@ -523,6 +580,8 @@ describe('daemon health server', () => {
     expect(await denied.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
     const deniedCertificateStatus = await fetch(`${base}/api/v1/certificates/status`);
     expect(deniedCertificateStatus.status).toBe(401);
+    const deniedCertificateReadiness = await fetch(`${base}/api/v1/certificates/readiness`);
+    expect(deniedCertificateReadiness.status).toBe(401);
 
     const pairingStart = await fetch(`${base}/api/v1/pairing/start`, { method: 'POST' });
     const pairing = await pairingStart.json() as { code: string };
@@ -547,7 +606,7 @@ describe('daemon health server', () => {
     const base = `http://127.0.0.1:${port}/api/v1/settings/model`;
     const initial = await fetch(base);
     expect(initial.status).toBe(200);
-    expect(await initial.json()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    expect(await initial.json()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' });
     const configured = await fetch(base, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -560,6 +619,28 @@ describe('daemon health server', () => {
     const cleared = await fetch(base, { method: 'DELETE' });
     expect(cleared.status).toBe(200);
     expect(await cleared.json()).toMatchObject({ configured: false, source: 'unconfigured' });
+  });
+
+  it('serves the explicit authenticated model probe without accepting or returning credentials', async () => {
+    const modelSettings = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async (input, init) => {
+      expect(input).toBe('https://api.deepseek.com/models');
+      expect(init?.method).toBe('GET');
+      return new Response(JSON.stringify({ data: [{ id: 'deepseek-v4-flash' }] }), { status: 200 });
+    });
+    modelSettings.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    const server = createDaemonServer({ modelSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/model/probe`;
+    const result = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'https://api.deepseek.com/models', timeoutMs: 5000, apiKey: 'should-be-rejected' }) });
+    const body = await result.text();
+    expect(result.status).toBe(400);
+    expect(body).not.toContain('should-be-rejected');
+    const success = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: 'https://api.deepseek.com/models', timeoutMs: 5000 }) });
+    const successBody = await success.text();
+    expect(success.status).toBe(200);
+    expect(successBody).not.toContain('test-secret');
+    expect(JSON.parse(successBody)).toMatchObject({ status: 'ready', capabilities: { modelId: 'deepseek-v4-flash' } });
   });
 
   it('rejects a run whose provider selection does not match the captured daemon binding', async () => {

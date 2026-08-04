@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; R4 pending
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 package, opt-in daemon binding, injected activation, session drain and local live smoke implemented
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -19,8 +19,10 @@ grant.
   retrieval adapters exist.
 - The daemon does not automatically start an MCP subprocess or connect to a
   remote server on startup.
-- Capability health, activation snapshots, cancellation and real stdio/
-  Streamable HTTP smoke tests remain to be completed.
+- Capability health, activation snapshots, cancellation and explicit local
+  stdio/Streamable HTTP smoke are covered. Session ownership is drained
+  explicitly when a binding is refreshed or deactivated; no production MCP
+  process or remote endpoint is enabled by default.
 
 ## Research gate (49-R0)
 
@@ -228,13 +230,137 @@ composer.
 
 ### 49-R4: run-scoped execution bridge
 
-Connect only activated, approved MCP tools to the existing ToolExecutor and
-Sandbox. Apply cancellation and resource limits through the run's AbortSignal
-and Scheduler lease. Record safe request/result metadata in `run_events` and
-audit; bounded tool output remains source-labelled context.
+R4 is a run-scoped adapter, not a new execution subsystem. Only a tool in an
+immutable `McpCapabilitySnapshot` may be exposed to the model. The application
+captures the snapshot when a run is created; capability refresh, settings
+changes and transport replacement affect later runs only.
 
-Exit: an MCP tool can complete through the same approval/sandbox path as a
-built-in tool, and failure/recovery cannot replay an old request.
+The bridge has three explicit ports:
+
+1. `McpRunToolBinding` maps one executable MCP descriptor to the existing
+   `ToolRegistry`/`ToolExecutor` descriptor. It copies only the stable id,
+   revision, risk, summary, input schema, sandbox mode, network mode and
+   approval mode. Resources and prompts are never executable tools.
+2. `McpToolCallPort` performs one bounded `tools/call` through the already
+   verified `McpProtocolSession`/transport. It receives the run `AbortSignal`,
+   has a byte and timeout budget, and returns a redacted result or a stable
+   `MCP_*` error code. It never receives the daemon's ambient environment.
+3. `McpExecutionLedger` provides per-run idempotency. A key is
+   `runId/turnId/callId/descriptorRevision/fingerprint(input)`. A matching
+   completed request is a no-op replay that returns the bounded cached result;
+   a matching in-flight request is shared; a different payload or descriptor
+   revision fails closed. Recovery always creates a new run and cannot resume
+   an unknown in-flight request.
+
+The adapter is registered as a handler in the existing `ToolHandlerRegistry`
+and is invoked only by `ToolExecutorRuntime`. Therefore approval evaluation,
+approval continuation, sandbox resolution, workspace validation, Scheduler
+leases and cancellation remain owned by the current boundaries. The bridge
+does not call `ToolExecutor` recursively, create a second Approval/Scheduler/
+Sandbox, or modify the AgentLoop state machine.
+
+Bounded `tool.requested`, `tool.started`, `tool.output` and `tool.completed`
+events retain only ids, revisions, risk, attempt, byte counts, stable error
+codes and a redacted/truncated output. No MCP URL, command, argv, auth header,
+environment value, absolute path, raw JSON-RPC body or complete transcript is
+written to `run_events`, audit, logs or Web DTOs.
+
+The default daemon composition remains unchanged while R4 is opt-in. A
+missing, degraded or disabled MCP binding is omitted from the run snapshot;
+ordinary runs continue with the built-in runtimes. A failed or cancelled MCP
+call propagates a bounded tool failure and never silently retries. The only
+retry after approval is the existing explicit continuation path, and the
+idempotency ledger prevents duplicate remote execution.
+
+#### 49-R4 acceptance tests
+
+- only `healthy-verified`, allowlisted executable descriptors are bound;
+- resource/prompt descriptors and stale snapshot revisions are rejected;
+- ToolExecutor approval, Sandbox, WorkspaceRegistry and Scheduler are used;
+- run cancellation aborts the MCP request and closes the session;
+- response bytes and output context are bounded and source-labelled;
+- same call key is a no-op/shared in-flight request; changed input/revision is
+  a conflict;
+- daemon restart marks the old run `needs-recovery`, and retry creates a new
+  run without replaying the old MCP call;
+- disabled/degraded/default MCP settings perform no transport side effect;
+- no AgentLoop core-loop, RunManager default-start, `run_events` schema,
+  `goal_events`, Approval or Sandbox authority changes are required.
+
+#### 49-R4 pure bridge implementation slice (2026-08-04)
+
+`@ready4vibe/skill-mcp` now provides `McpExecutionLedger` and
+`McpProtocolToolCallPort`. `@ready4vibe/tool-adapters` provides
+`McpToolExecutorRuntime`, which projects executable descriptors into the
+existing `ToolRegistry` and sends calls through `ToolExecutorRuntime`.
+Metadata needed for idempotency is passed through the existing handler context
+as bounded run/turn/call identifiers; no AgentLoop state machine change is
+needed. The package slice has 36 skill-mcp tests and 19 tool-adapter tests.
+`apps/daemon` now adds `McpRunBindingManager`; it captures a verified snapshot
+per run and composes an undefined runtime by default. The daemon main path
+remains MCP-off until an application service explicitly activates a call port.
+The daemon binding/lifecycle slice has 5 focused tests; live transport
+activation is available through the injected service, and the explicit local
+stdio/Streamable HTTP smoke passes.
+
+#### 49-R4 application activation boundary
+
+`McpLiveActivationService` is the only application entry point for turning a
+verified transport result into a run binding. Its injected provider receives
+the non-secret settings snapshot and an `AbortSignal`, and may hold runtime
+credentials outside the settings/event/Web contracts. It must return a
+`manifestRevision`, a `healthy-verified` capability snapshot and an
+`McpToolCallPort`; the service checks server id, manifest revision, capability
+allowlist and executable-only descriptors before calling
+`McpRunBindingManager.activate`.
+
+Provider timeout, malformed candidate, stale revision, disallowed capability
+or transport failure deactivates the binding and records only a stable,
+bounded degraded status. It never falls back to a direct provider, starts a
+process, makes a network request, or blocks an ordinary run. A successful
+activation records only bounded revision/count/health metadata through the
+existing MCP settings status projection. Refresh replaces the binding for
+future runs; already captured runtimes remain unchanged.
+
+#### 49-R4 session ownership and drain
+
+An activation candidate may own a live protocol session and must provide an
+explicit asynchronous `close` operation. `McpRunBindingManager` transfers the
+candidate close operation into the active binding and gives each captured run
+runtime a single idempotent release lease. Refresh or deactivation retires the
+old binding: it is closed immediately when no run holds it, or after the last
+captured runtime releases it. A retired binding is never used for a new run.
+Daemon shutdown closes active and retired bindings best-effort after no new
+runs can be accepted. Session close failures are bounded diagnostics and never
+rewrite the originating run result. This is lifecycle bookkeeping only; it
+does not add a scheduler, event table, AgentLoop state transition or implicit
+retry.
+
+The daemon activation slice is covered by 10 focused tests and the binding /
+lifecycle slice by 5 focused tests. `@ready4vibe/skill-mcp` now also provides
+`McpSessionActivationProvider`, which uses the public protocol session,
+`tools/list`, capability registry and session-backed call port behind an
+injected channel factory. Its 3 activation tests use fake channels; the
+explicit `smoke:mcp` command additionally passes real stdio and loopback
+Streamable HTTP fixtures. No default provider or remote smoke is installed.
+
+Exit: an activated MCP tool completes through the same approval/sandbox path
+as a built-in tool, while failure, recovery and retry cannot replay an old
+request.
+
+#### 49-R4 explicit live smoke command
+
+The repository provides `pnpm smoke:mcp -- --transport stdio` and
+`pnpm smoke:mcp -- --transport streamable-http`. These commands first build the
+`skill-mcp` package, then run a fixed local fixture through the real stdio or
+Streamable HTTP channel, `McpProtocolSession`, capability registry and session
+activation provider. The stdio fixture is a bounded `node` child with
+`shell: false`, an explicit environment allowlist and no inherited
+credentials. The HTTP fixture binds only to loopback and uses the exact
+manifest URL. Both commands are opt-in, do not install a server, do not
+contact the Internet and are excluded from `pnpm verify`; failures produce
+stable redacted JSON and a non-zero exit code. This is transport evidence only
+and does not activate the daemon's MCP binding or change ordinary run behavior.
 
 ## Acceptance matrix
 

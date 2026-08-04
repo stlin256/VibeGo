@@ -143,6 +143,23 @@ provider-switch isolation and the safe mismatch response before `run.created`.
 Spec 50 remains responsible for automatic ledger lifecycle attachment; Goal
 Control, Approval, Sandbox and WorkspaceRegistry remain untouched.
 
+### R4 live model smoke boundary (2026-08-05)
+
+The R4 evidence command is `pnpm smoke:model` and is explicitly out-of-band.
+It accepts only a complete HTTPS endpoint, model id and an environment-variable
+name from which the process reads a credential. The credential is never a CLI
+argument, persisted setting, event, log or report field. The command uses the
+existing OpenAI-compatible stream adapter, a fixed harmless prompt and a
+bounded timeout; it returns a redacted `model-smoke/v1` report with stable
+status/error codes and nullable usage counters. It never starts the daemon,
+changes run state, retries a partial stream or enters `pnpm verify`.
+
+The implementation and one redacted live evidence run are complete: the
+DeepSeek-compatible endpoint returned a bounded healthy report with nullable
+usage semantics and no endpoint, credential, prompt or raw provider response
+in the report. This evidence does not enable network access for the daemon or
+change the default fake-provider path.
+
 ## Validation
 
 Every stage must run `pnpm typecheck`, `pnpm test`, `pnpm diff:check` and

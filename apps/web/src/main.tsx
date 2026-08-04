@@ -1,7 +1,8 @@
 import { StrictMode, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type GoalProjectionListResponse, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type GoalProjectionListResponse, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput } from './api.js';
 import { App } from './App.js';
+import { applyLocaleToDocument, loadLocale, saveLocale, type Locale } from './locale.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
 
@@ -11,10 +12,14 @@ function RuntimeApp(): JSX.Element {
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [error, setError] = useState<string>();
   const [profile, setProfile] = useState<RunProfile>(() => loadRunProfile());
+  const [locale, setLocale] = useState<Locale>(() => loadLocale());
   const [certificateStatus, setCertificateStatus] = useState<CertificateStatus>();
   const [certificateStatusUnavailable, setCertificateStatusUnavailable] = useState(false);
+  const [deploymentReadiness, setDeploymentReadiness] = useState<DeploymentReadinessStatus>();
+  const [deploymentReadinessUnavailable, setDeploymentReadinessUnavailable] = useState(false);
   const [modelSettings, setModelSettings] = useState<ModelSettingsStatus>();
   const [modelSettingsUnavailable, setModelSettingsUnavailable] = useState(false);
+  const [modelProbe, setModelProbe] = useState<ModelProbeResult>();
   const [agentMemorySettings, setAgentMemorySettings] = useState<AgentMemorySettingsStatus>();
   const [agentMemorySettingsUnavailable, setAgentMemorySettingsUnavailable] = useState(false);
   const [agentMemoryOperations, setAgentMemoryOperations] = useState<AgentMemoryOperationsStatus>();
@@ -45,6 +50,11 @@ function RuntimeApp(): JSX.Element {
   useEffect(() => {
     saveRunProfile(profile);
   }, [profile]);
+
+  useEffect(() => {
+    saveLocale(locale);
+    applyLocaleToDocument(locale);
+  }, [locale]);
 
   const refreshCertificateStatus = async (): Promise<void> => {
     try {
@@ -182,6 +192,7 @@ function RuntimeApp(): JSX.Element {
       setHealth(nextHealth);
       if (!nextHealth.auth.pairingRequired) {
         void refreshCertificateStatus();
+        void refreshDeploymentReadiness();
         void refreshModelSettings();
         void refreshAgentMemorySettings();
         void refreshAgentMemoryOperations();
@@ -203,6 +214,7 @@ function RuntimeApp(): JSX.Element {
       setError(undefined);
       setHealth(await client.health());
       await refreshCertificateStatus();
+      await refreshDeploymentReadiness();
       await refreshModelSettings();
       await refreshAgentMemorySettings();
       await refreshAgentMemoryOperations();
@@ -276,6 +288,27 @@ function RuntimeApp(): JSX.Element {
       setModelSettingsUnavailable(false);
       setError(undefined);
     } catch (reason) { setError(safeError(reason)); }
+  };
+
+  const probeModel = async (endpoint: string): Promise<void> => {
+    try {
+      setModelProbe(await client.probeModel(endpoint));
+      setError(undefined);
+    } catch (reason) {
+      setModelProbe(undefined);
+      setError(safeError(reason));
+      throw reason;
+    }
+  };
+
+  const refreshDeploymentReadiness = async (): Promise<void> => {
+    try {
+      setDeploymentReadiness(await client.deploymentReadiness());
+      setDeploymentReadinessUnavailable(false);
+    } catch {
+      setDeploymentReadiness(undefined);
+      setDeploymentReadinessUnavailable(true);
+    }
   };
 
   const patchAgentMemorySettings = async (input: AgentMemorySettingsPatchInput): Promise<void> => {
@@ -404,7 +437,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} locale={locale} onLocaleChange={setLocale} profile={profile} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {

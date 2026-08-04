@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InMemorySettingsStore, type SettingsStore } from '@ready4vibe/storage';
 import { createModelProvider, InMemoryModelSettingsManager, ModelSettingsError } from './model-config.js';
 
 describe('daemon model configuration', () => {
@@ -27,12 +28,12 @@ describe('daemon model configuration', () => {
 
   it('configures and clears a provider through a secret-free status boundary', () => {
     const manager = new InMemoryModelSettingsManager({});
-    expect(manager.status()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    expect(manager.status()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' });
     const status = manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
-    expect(status).toEqual({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' });
+    expect(status).toEqual({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory', credentialState: 'available' });
     expect(JSON.stringify(status)).not.toContain('test-secret');
     expect(manager.provider.id).toBe('openai-compatible');
-    expect(manager.clear()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured' });
+    expect(manager.clear()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' });
     expect(manager.provider.id).toBe('unconfigured');
   });
 
@@ -83,5 +84,65 @@ describe('daemon model configuration', () => {
     const manager = new InMemoryModelSettingsManager({});
     expect(() => manager.bindRun({ provider: 'fake', name: 'token=secret-value' })).toThrowError(new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.'));
     expect(() => manager.bindRun({ provider: 'fake', name: 'model\nname' })).toThrowError(new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.'));
+  });
+
+  it('probes only on explicit request, keeps the key out of the result, and does not replace the provider', async () => {
+    let calls = 0;
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async (_input, init) => {
+      calls += 1;
+      expect(init?.method).toBe('GET');
+      expect(init?.body).toBeUndefined();
+      return new Response(JSON.stringify({ data: [{ id: 'deepseek-v4-flash' }] }), { status: 200 });
+    });
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    const before = manager.provider.snapshot();
+    const result = await manager.probe({ endpoint: 'https://api.deepseek.com/models' });
+    expect(result).toMatchObject({ status: 'ready', capabilities: { modelId: 'deepseek-v4-flash' } });
+    expect(JSON.stringify(result)).not.toContain('test-secret');
+    expect(calls).toBe(1);
+    expect(manager.provider.snapshot()).toBe(before);
+  });
+
+  it('returns a bounded missing-credential result and rejects unsafe probe input', async () => {
+    const manager = new InMemoryModelSettingsManager({});
+    await expect(manager.probe({ endpoint: 'https://api.deepseek.com/models' })).resolves.toMatchObject({ status: 'blocked', errorCode: 'credential-store-unavailable' });
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    await expect(manager.probe({ endpoint: 'https://api.deepseek.com/models?token=secret' })).rejects.toThrowError(new ModelSettingsError('INVALID_PROBE_ENDPOINT', 'A complete HTTPS model-list endpoint is required.'));
+  });
+
+  it('persists only endpoint metadata and restores it as credential-required after restart', () => {
+    const settings = new InMemorySettingsStore();
+    const first = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings);
+    first.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    const stored = settings.get<unknown>('model', 'profile');
+    expect(JSON.stringify(stored)).not.toContain('test-secret');
+    expect(stored).toMatchObject({ schemaVersion: 'ready4vibe_model_settings_profile_v1', providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash' });
+
+    const restarted = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings);
+    expect(restarted.status()).toEqual({ configured: false, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'durable-profile', credentialState: 'required' });
+    expect(restarted.provider.id).toBe('unconfigured');
+    restarted.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'replacement-secret', model: 'deepseek-v4-flash' });
+    expect(settings.get<{ profileRevision: string }>('model', 'profile')?.profileRevision).toBe('settings-2');
+  });
+
+  it('does not replace the active provider when durable profile persistence fails', () => {
+    const failingSettings: SettingsStore = {
+      get: () => undefined,
+      set: () => { throw new Error('disk full'); },
+      delete: () => undefined,
+      close: () => undefined,
+    };
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, failingSettings);
+    expect(() => manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' })).toThrowError(new ModelSettingsError('PERSISTENCE_FAILED', 'Model endpoint profile could not be saved.'));
+    expect(manager.provider.id).toBe('unconfigured');
+    expect(manager.status().source).toBe('unconfigured');
+  });
+
+  it('clears durable metadata before removing the active provider', () => {
+    const settings = new InMemorySettingsStore();
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings);
+    manager.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+    expect(manager.clear().credentialState).toBe('none');
+    expect(settings.get('model', 'profile')).toBeUndefined();
   });
 });

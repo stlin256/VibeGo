@@ -96,6 +96,64 @@ runtime + Host launcher，未来如需要桌面原生体验再评估 Tauri 或�
 4. 再加入 LAN TLS、QR pairing、平台 secret store 和签名更新；
 5. 最后提供版本化 TypeScript client SDK，并开始 Android/iOS/HarmonyOS 客户端。
 
+### Spec 51-R1 static serving gate (2026-08-05)
+
+The first implementation slice adds an optional absolute Web dist directory
+to the daemon. Only `GET`/`HEAD` static requests are resolved; API, health and
+SSE routes stay outside the resolver and keep the existing AuthGate. The
+resolver performs percent-decoded traversal/control-character checks,
+rejects symlink/directory escapes, serves SPA fallback only for extensionless
+paths, and applies `no-store` to `index.html` plus immutable caching to hashed
+assets. A missing build returns a bounded unavailable response and never
+exposes a host path or source checkout file. This slice does not add a
+launcher, CORS, native client or second Web server.
+
+The R1 implementation is now present in `apps/daemon/src/static-web.ts` and
+the daemon composition passes `apps/web/dist` (overridable by
+`READY4VIBE_WEB_DIST_DIR`). Its four fixture tests pass alongside the daemon
+regression suite; no run/event/auth authority changed.
+
+### Spec 51-R2 launcher boundary (implemented 2026-08-05)
+
+This slice is deliberately a dependency-free Node launcher module. It may
+resolve a per-user data directory, reserve a bounded loopback port, spawn the
+existing daemon by argv, wait for a listening endpoint, print a relative-safe
+Host URL, and optionally open a browser only when explicitly requested. A
+non-secret PID lease prevents duplicate starts; stale leases are removed only
+when the recorded PID is no longer alive. Child output is redacted before it
+is forwarded, and stop/restart uses a process-group/Windows process-tree
+adapter selected by platform.
+
+The launcher does not enable LAN, weaken TLS/pairing, read or write workspace
+files, persist credentials, install a runtime, or create any new execution or
+event authority. `scripts/host-launcher.test.mjs` passes eight lifecycle tests
+covering platform paths, permissions, port discovery, PID lease cleanup,
+redacted logs, process-tree shutdown and disposable start/restart/stop.
+Packaging, signing, updates and rollback remain later release specs.
+
+### Spec 51-R3a certificate readiness boundary (implemented 2026-08-05)
+
+The certificate adapter first exposes a read-only readiness projection derived
+from the existing in-memory `CertificateStatus` and transport requirement. It
+can classify optional loopback HTTP, required-but-missing TLS, expiry and
+bounded SAN/hostname mismatch without reading files in the Web request path.
+The projection contains no PEM, private-key bytes or paths and is served only
+behind the existing AuthGate/CSRF/Origin boundary. ACME, OS certificate stores,
+reverse proxies, renewal and rollback remain explicit R3b adapters. The
+certificate package has eight focused tests; the daemon route is covered by
+the focused regression suite (152 daemon tests) and remains read-only.
+
+### Spec 51-R4 client boundary (implemented 2026-08-05)
+
+The shared client is a thin, versioned REST/SSE adapter. It stores pairing
+credentials only in the instance memory of the caller, sends CSRF only on
+mutating JSON requests, uses `Last-Event-ID`/`after` for replay, de-duplicates
+monotonic sequences and retries only bounded stream transport failures. It
+returns stable degraded projections instead of raw fetch/HTTP internals.
+It never becomes an execution authority or accesses Host files, SQLite,
+workspace paths, secrets or memory sidecars; native UIs remain consumers of
+this contract.
+
 ## 不变的事实源
 
 此 ADR 不修改或替换：

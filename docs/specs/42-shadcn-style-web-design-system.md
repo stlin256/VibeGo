@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（设计已确定；组件迁移待实现）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1 与 42d-2 已实现；其余 42d 验收仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -243,6 +243,168 @@ UI 状态分三层：
 - 对比 Web bundle 和低资源指标；
 - 删除未使用旧 CSS 和临时组件；
 - 在独立 Git 提交后进入 Host-first static serving 实现。
+
+### Phase 42a implementation update (2026-08-05)
+
+Phase 42a is now implemented as a dependency-light foundation for the Web
+surface. `apps/web/src/styles.css` exposes semantic shadcn-style tokens while
+retaining the VibeGo cyan/indigo/violet/lime brand mapping. The new
+`apps/web/src/lib/cn.ts` helper performs bounded class composition without a
+runtime styling framework, and `apps/web/src/components/ui/` contains tested
+Button, Input, Textarea, Label, Card, Badge, Separator and Skeleton primitives.
+
+The primitives are presentational only: they do not import `api.ts`, access
+browser storage, read credentials, or issue network requests. They preserve
+44px touch targets, focus-visible rings, disabled/loading/destructive variants,
+reduced-motion compatibility and semantic HTML. Existing App composition is
+intentionally not migrated in this slice; Phase 42b will replace business
+markup incrementally after each composition component has its own contract
+test. This keeps the current conversation-first behavior and bundle stable
+while making the next migration reversible.
+
+Focused Web tests cover variant rendering, ARIA/label forwarding, disabled and
+loading behavior, token/helper contracts and primitive isolation. The Web
+focused gate now passes 88 tests, typecheck and production build; the observed
+bundle is 80.68 KiB JS gzip and 5.82 KiB CSS gzip. No screenshots or
+device emulation are claimed as evidence by Phase 42a.
+
+### Phase 42b-1 implementation update (2026-08-05)
+
+The first conversation-shell migration is now componentized under
+`apps/web/src/components/vibego/ConversationShell.tsx`. It owns the
+conversation stream, composer, `RunConsole` and bounded tool-output inspector,
+and consumes only typed props/callbacks from `App`. The composer uses the
+Phase 42a `Textarea` and `Button` primitives; approval, retry and cancel
+actions remain explicit callbacks owned by the existing application boundary.
+
+The extraction preserves the existing `run`/`StoredEvent` snapshot and SSE
+projection semantics, including the 24-card/128 KiB tool-output display cap.
+The component does not import `api.ts`, access storage, read credentials or
+create a second event stream. The large Settings drawer remains in `App` for
+the next 42c slice. Focused
+Web smoke tests cover empty/running/recovery/approval composer states and
+confirm the component stays secret/path-free.
+
+### Phase 42b-2 implementation update (2026-08-05)
+
+The workspace rail and context rail are now extracted into
+`apps/web/src/components/vibego/WorkspaceRail.tsx` and
+`ContextRail.tsx`. They are presentational composition components: the rail
+receives the selected workspace label and explicit callbacks, while the context
+rail receives bounded Goal/observability projections and health metadata. Both
+use the local Button/Card primitives and keep settings, run creation, SSE and
+all server authority in `App`/`ApiClient`.
+
+Responsive class names and DOM landmarks remain unchanged (`workspace-rail`,
+`context-rail`, `Run context`, `Workspace navigation`). The extraction does
+not echo workspace paths, credentials, raw telemetry or event payloads, and it
+does not add a second request or event stream. The Settings drawer remains
+intentionally in `App` for the next 42c migration slice.
+
+### Phase 42b-3 implementation update (2026-08-05)
+
+The existing topbar is now extracted into the typed
+`components/vibego/ConversationHeader.tsx` presentational component. It owns
+only brand/status rendering and explicit callbacks for new task, context toggle,
+settings focus return, and locale selection. It preserves the current
+`topbar`/`topbar-actions` landmarks, `Control+N`/`Meta+N` hint, connection
+status projection, and ratio-first wrapping without adding a request, storage
+write, event stream, or server authority. The Settings drawer remains in `App`
+for the later 42c slice.
+
+The focused gate adds component smoke coverage for connected and
+awaiting-pairing states, verifies Button primitive usage and locale ARIA
+semantics, and rejects credentials, absolute paths, and raw event payloads in
+the rendered markup. The observed output remains below the 110 KiB JS /
+30 KiB CSS gzip budgets.
+
+### Phase 42c-1 implementation update (2026-08-05)
+
+The first operation-surface slice extracts the existing approval and recovery
+cards into typed `vibego` composition components. `ApprovalCard` receives a
+bounded `ApprovalSummary`, the run's sandbox mode, and an explicit allow/deny
+callback; `RecoveryCard` receives only the explicit retry callback. They remain
+presentational: no API, storage, SSE, approval policy, retry creation, tool
+execution, or event persistence may move into the components. The existing
+fail-closed semantics stay in the `App`/daemon callback boundary, including
+single-use approval decisions and recovery as a new run.
+
+The focused gate must cover approval metadata with and without sandbox details,
+recovery retry affordance, destructive deny styling, bounded markup, and the
+absence of credentials, absolute paths, raw tool arguments, or event payloads.
+Goal/Memory/Tool cards and operation persistence remain later
+42c slices. The focused Web gate now passes 88 tests with 80.68 KiB JS gzip
+and 5.82 KiB CSS gzip.
+
+### Phase 42c-2 implementation update (2026-08-05)
+
+This slice extracts the Settings Sheet shell into a typed
+`vibego/SettingsSheet.tsx` component. It owns only the dialog landmark,
+open/hidden projection, title/description/close affordance, and a bounded
+children slot. `App` continues to own settings state, form values, API
+callbacks, focus trap/return, and all secret-safe persistence behavior. The
+shell must preserve `settings-drawer`, `role="dialog"`, `aria-modal`,
+`aria-labelledby`, responsive CSS, and the existing close callback without
+creating a request, storage authority, or second settings source.
+
+The focused gate covers open and closed projections, close-button ARIA,
+child-slot rendering, Button primitive output, and secret/path-free markup.
+Tabs, form-group extraction, and Settings operation cards remain later 42c
+slices.
+
+### Phase 42c-3 implementation update (2026-08-05)
+
+The Settings Sheet now has a local, dependency-light tab and form-group
+contract. `SettingsTabs` owns only the tablist/tab/tabpanel ARIA relationship,
+active-tab presentation, and bounded tab selection callback. `SettingsSection`
+owns the repeated heading, description, and loading/degraded/unavailable status
+semantics. `App` continues to own the selected tab state, all field values,
+validation, API callbacks, focus trap/return, and secret-safe persistence.
+
+The first composition keeps all existing settings controls but groups them into
+Run, Tools, and Access panels. Inactive panels remain in the DOM with
+`hidden`/`aria-hidden` so server-rendered copy and accessibility relationships
+stay deterministic; no settings value is written to browser storage. The
+presentational components do not import `api.ts`, create requests, or change
+the daemon's settings authority. Focused tests cover tab semantics, panel
+selection, status variants, bounded copy, and secret/path-free markup.
+The focused Web gate now passes 94 tests, typecheck and production build; the
+observed output is 82.52 KiB JS gzip and 6.06 KiB CSS gzip, within the phase
+budgets.
+
+### Phase 42d-1 implementation update (2026-08-05)
+
+`SettingsTabs` now implements the bounded keyboard contract for the local
+tablist: `ArrowLeft`/`ArrowUp` and `ArrowRight`/`ArrowDown` move to the
+previous/next tab, while `Home` and `End` select the first/last tab. The
+selected tab remains the only `tabIndex=0` control; focus is moved to the
+newly selected tab without creating a request or changing any settings state
+outside the explicit `onTabChange` callback. A pure resolver is covered by
+unit tests so the behavior is deterministic without a browser test runner.
+
+This slice does not claim screen-reader/manual, Playwright, contrast, or
+physical-device evidence. Existing `hidden` panel, reduced-motion, safe-area,
+ratio and 44px touch-target contracts remain unchanged.
+
+### Phase 42d-2 implementation update (2026-08-05)
+
+The repository now has a fixed `check:web` gate for the Web module. It reuses
+the existing dependency-closure build/typecheck/focused-test runner, then
+checks the generated JavaScript and CSS gzip budgets and runs `git diff --check`.
+The script accepts no arbitrary shell fragments, does not invoke the full
+workspace test suite, and never reads model credentials, browser storage,
+workspace paths, or runtime event data. Bundle inspection is limited to the
+generated `apps/web/dist/assets` files and returns bounded sizes for CI/local
+diagnostics.
+
+The final local run completed with 94 Web tests, JS 80.41 KiB gzip and CSS
+5.90 KiB gzip under the 110/30 KiB budgets; `test:workflow` also passed its 31
+script tests. Vite's informational asset line remains separately recorded by
+the module build and is not used as a second gate.
+
+The gate is a repeatable build/test contract, not visual or physical-device
+evidence. Playwright, screen-reader/manual review, and real-device reports
+remain later acceptance work.
 
 ## 9. 退出条件
 

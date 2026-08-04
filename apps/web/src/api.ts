@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -24,6 +24,7 @@ export interface RunConfigInput {
 }
 
 export type RunProfile = Pick<RunConfigInput, 'workspaceId' | 'model' | 'taskTrust' | 'sandbox' | 'approval' | 'limits'>;
+export type DeploymentReadinessStatus = DeploymentReadiness;
 
 export const DEFAULT_RUN_PROFILE: RunProfile = {
   workspaceId: 'default',
@@ -164,7 +165,8 @@ export interface ModelSettingsStatus {
   providerId: string;
   baseUrl: string | null;
   modelName: string | null;
-  source: 'environment' | 'web-memory' | 'unconfigured';
+  source: 'environment' | 'web-memory' | 'durable-profile' | 'unconfigured';
+  credentialState: 'available' | 'required' | 'none';
 }
 
 export interface ModelSettingsInput {
@@ -173,6 +175,8 @@ export interface ModelSettingsInput {
   apiKey: string;
   model: string;
 }
+
+export type ModelProbeResult = ModelProbeResultContract;
 
 export interface ToolSettingsStatus {
   filesystemEnabled: boolean;
@@ -335,6 +339,10 @@ export class ApiClient {
     return this.request<CertificateStatus>('/api/v1/certificates/status', { method: 'GET' });
   }
 
+  async deploymentReadiness(): Promise<DeploymentReadinessStatus> {
+    return this.request<DeploymentReadinessStatus>('/api/v1/deployment/readiness', { method: 'GET' });
+  }
+
   async modelSettings(): Promise<ModelSettingsStatus> {
     return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'GET' });
   }
@@ -345,6 +353,10 @@ export class ApiClient {
 
   async clearModelSettings(): Promise<ModelSettingsStatus> {
     return this.request<ModelSettingsStatus>('/api/v1/settings/model', { method: 'DELETE' });
+  }
+
+  async probeModel(endpoint: string, timeoutMs = 5_000): Promise<ModelProbeResult> {
+    return this.request<ModelProbeResult>('/api/v1/settings/model/probe', { method: 'POST', body: JSON.stringify({ endpoint, timeoutMs }) });
   }
 
   async agentMemorySettings(): Promise<AgentMemorySettingsStatus> {

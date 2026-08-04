@@ -5,12 +5,12 @@ import { DEFAULT_RUN_PROFILE } from './api.js';
 
 describe('web console shell', () => {
   it('renders a pairing-first surface with responsive semantic controls', () => {
-    const html = renderToStaticMarkup(<App />);
+    const html = renderToStaticMarkup(<App locale="zh-CN" />);
     expect(html).toContain('输入一次性配对码');
     expect(html).toContain('pairing-code');
     expect(html).toContain('连接你的本地工作区');
     expect(html).toContain('VibeGo');
-    expect(html).toContain('不可信任务强制 external sandbox');
+    expect(html).toContain('不可信任务强制使用外部沙箱');
   });
 
   it('renders the non-secret run settings onboarding surface', () => {
@@ -51,11 +51,18 @@ describe('web console shell', () => {
   });
 
   it('renders model setup guidance without rendering the provider key', () => {
-    const html = renderToStaticMarkup(<App modelSettings={{ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory' }} />);
+    const html = renderToStaticMarkup(<App modelSettings={{ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'web-memory', credentialState: 'available' }} />);
     expect(html).toContain('MODEL ACCESS');
     expect(html).toContain('Configured via web-memory');
     expect(html).toContain('Save provider');
     expect(html).not.toContain('test-secret');
+  });
+
+  it('explains that a restored endpoint needs a credential without rendering a secret', () => {
+    const html = renderToStaticMarkup(<App modelSettings={{ configured: false, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'durable-profile', credentialState: 'required' }} />);
+    expect(html).toContain('Saved endpoint restored');
+    expect(html).toContain('https://api.deepseek.com');
+    expect(html).not.toMatch(/api[_-]?key\s*[:=]/iu);
   });
 
   it('renders the functional agent-memory settings card without secrets or paths', () => {
@@ -79,8 +86,12 @@ describe('web console shell', () => {
     expect(html).toContain('Retrieve once for each new run');
     expect(html).toContain('Save knowledge settings');
     expect(html).toContain('Probe knowledge');
-    expect(html).not.toContain('endpoint');
-    expect(html).not.toContain('C:\\Users');
+    const knowledgeStart = html.indexOf('knowledge-setup');
+    const mcpStart = html.indexOf('mcp-setup');
+    const knowledgeHtml = html.slice(knowledgeStart, mcpStart);
+    expect(knowledgeHtml).not.toMatch(/https?:\/\//iu);
+    expect(knowledgeHtml).not.toMatch(/api[_-]?key|Authorization|raw upstream/iu);
+    expect(knowledgeHtml).not.toContain('C:\\Users');
   });
 
   it('renders the optional MCP status card without endpoint URLs, commands, or secrets', () => {
@@ -176,6 +187,43 @@ describe('web console shell', () => {
     const missing = renderToStaticMarkup(<App health={health} certificateStatusUnavailable />);
     expect(missing).toContain('Certificate setup is required');
     expect(missing).not.toContain('.pem');
+    const blocked = renderToStaticMarkup(<App health={health} deploymentReadiness={{ schemaVersion: 'ready4vibe_deployment_readiness_v1', mode: 'lan', status: 'blocked', reasonCode: 'certificate-required', nextStep: 'configure-certificate', affectsInteractiveRun: true, evaluatedAt: '2026-08-05T00:00:00.000Z' }} />);
+    expect(blocked).toContain('DEPLOYMENT STATUS');
+    expect(blocked).toContain('blocked · lan');
+    expect(blocked).toContain('configure-certificate');
+    expect(blocked).not.toContain('C:\\Users');
+  });
+
+  it('renders bounded model probe status without any credential or raw response', () => {
+    const html = renderToStaticMarkup(<App modelProbe={{ schemaVersion: 'ready4vibe_model_probe_result_v1', status: 'ready', checkedAt: '2026-08-05T00:00:00.000Z', latencyMs: 7, revision: 'probe-v1', errorCode: null, capabilities: { schemaVersion: 'ready4vibe_model_capability_snapshot_v1', providerId: 'openai-compatible', modelId: 'deepseek-v4-flash', descriptorRevision: 'probe-v1', capturedAt: '2026-08-05T00:00:00.000Z', streaming: 'unknown', toolCalls: 'unknown', vision: 'unknown', embeddings: 'unknown', contextLimit: 'unknown', outputLimit: 'unknown' } }} onProbeModel={() => undefined} />);
+    expect(html).toContain('Model list endpoint');
+    expect(html).toContain('Probe models');
+    expect(html).toContain('deepseek-v4-flash');
+    expect(html).not.toMatch(/api[_-]?key|Authorization|raw upstream/iu);
+  });
+
+  it('renders the explicit locale control and bounded live status in Chinese', () => {
+    const html = renderToStaticMarkup(<App locale="zh-CN" onLocaleChange={() => undefined} />);
+    expect(html).toContain('＋ 新任务');
+    expect(html).toContain('语言');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('aria-label="实时状态"');
+    expect(html).toContain('等待配对');
+    expect(html).not.toContain('vibego.locale.v1');
+    expect(html).not.toMatch(/api[_-]?key|Authorization|C:\\Users/iu);
+  });
+
+  it('exposes a modal settings relationship and keyboard shortcut without secrets', () => {
+    const html = renderToStaticMarkup(<App locale="en-US" />);
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-controls="settings-drawer"');
+    expect(html).toContain('aria-keyshortcuts="Control+N Meta+N"');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-labelledby="settings-drawer-title"');
+    expect(html).toContain('Max context bytes');
+    expect(html).toContain('Untrusted tasks require an external sandbox');
+    expect(html).not.toMatch(/api[_-]?key=[^"& ]+|Authorization:|C:\\Users\\[A-Za-z0-9._-]+/iu);
   });
 
   it('renders an explicit approval card with allow and deny controls', () => {

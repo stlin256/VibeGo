@@ -1,8 +1,8 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
-- Date: 2026-08-04
-- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
+- Status: Phase 0/1/2/3/4/5/6 implemented（manifest、升级状态、SQLite snapshot/preflight/staging/apply adapter 与备份恢复 contract；安装器/升级器/daemon route 仍未接入）
+- Date: 2026-08-05
+- Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[ADR 0028](../adr/0028-sqlite-backup-snapshot-adapter.md)、[ADR 0029](../adr/0029-sqlite-restore-preflight.md)、[ADR 0030](../adr/0030-sqlite-restore-staging-adapter.md)、[ADR 0031](../adr/0031-sqlite-restore-apply-adapter.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
 ## 1. 目标
 
@@ -15,7 +15,7 @@
 
 ## 2. 当前差距
 
-- daemon 尚未内置 React 静态资源，开发仍依赖独立 Vite server。
+- daemon 已可在 Host-first release path 内置 React 静态资源；开发仍可使用独立 Vite server。
 - 尚无不要求用户安装 Node/pnpm 的跨平台 Host bundle 和统一 launcher。
 - SQLite 有持久化事件和 settings，但没有面向用户的版本化 backup/restore contract。
 - 已有 restart/recovery guard，但没有 candidate upgrade、migration dry-run、safe mode 和
@@ -55,6 +55,16 @@ createdAt
 ```
 
 Manifest 不得包含绝对路径、secret、API key、private key、完整命令或用户 workspace 内容。
+
+#### Phase 0 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now exposes a strict `host-manifest/v1` contract for
+the fields above. Product/channel/target/revision values are bounded, the
+artifact digest is a lowercase SHA-256 reference, and signature/attestation
+references reject credentials, query tokens, control characters and absolute
+paths. Unknown fields and invalid timestamps are rejected before a future
+installer or updater can act on a manifest. This slice is pure validation: it
+does not download, verify, install, migrate, switch or roll back any artifact.
 
 ### 4.2 安装体验
 
@@ -110,6 +120,114 @@ discovered
 
 升级请求（Web、定时器、CLI、未来 webhook）共享一个串行队列；运行中的 run 不做 Node
 模块热替换。新进程必须重新读取 snapshot，已运行的 run 继续使用原 snapshot。
+
+#### Phase 1 implementation update (2026-08-05)
+
+Before any installer or daemon integration, `@ready4vibe/contracts` now exposes
+the update phase enum, strict state snapshot and fail-closed transition helper.
+The helper only describes legal lifecycle movement; it does not download,
+verify, spawn, migrate, switch or roll back a process. `current`, `previous`
+and `candidate` revisions remain opaque bounded identifiers, and a transition
+cannot erase a failure or silently jump over verification/health gates. Six
+focused contract tests cover ordered gates, failure reasons, rollback
+preconditions and invalid transitions.
+
+#### Phase 2 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now also exposes strict metadata-only contracts for
+`backup-manifest/v1`, `RestorePlan`, `RestoreResult`, `RecoveryStatus` and
+`DiagnosticBundleDescriptor`. Backup entries use logical data-class identifiers
+and SHA-256 digests rather than local paths. Restore plans require explicit
+confirmation, preserve the current state and reject credential/workspace-file
+imports. Recovery and diagnostic projections use bounded reason codes and
+redacted sections; safe-mode operations are limited to health, settings,
+backup, restore, diagnostics and read-only event viewing.
+
+The Phase 2 slice does not open SQLite, copy or delete files, read credentials,
+start a subprocess, switch a data pointer, expose a Web route or automatically
+enter safe mode. Focused tests cover privacy/path/unknown-field rejection,
+backup entry identity, restore invariants, recovery operation bounds and
+redacted diagnostic descriptors. The new fixture has 6 tests; the full
+contracts module now passes 63 tests, typecheck and build.
+
+#### Phase 3 implementation update (2026-08-05)
+
+`@ready4vibe/storage` now provides an explicit `SqliteBackupSnapshotAdapter`.
+It checks the source database, runs SQLite `VACUUM INTO` in a caller-selected
+staging directory, verifies `PRAGMA integrity_check` on the snapshot, reads the
+bounded `user_version`, streams a SHA-256 digest and emits a validated
+`backup-manifest/v1` with only the `sqlite-database` logical data class. The
+destination is immutable: an existing target is rejected, writes go through a
+temporary file and an atomic no-replace link commit, and the temporary file is
+removed on failure.
+
+The adapter is an internal storage operation. It does not expose its absolute
+snapshot path through contracts/Web, and it never copies workspace files,
+credentials, raw environment values or event payloads into a Web response. It
+does not implement restore, migration, encryption, installer/updater or daemon
+routes. The new snapshot fixture has 4 tests; the complete storage module has
+35 passing tests plus typecheck and build. Focused storage tests cover successful reopen/integrity, digest and
+manifest projection, schema mismatch, corrupt source, output-size limit,
+destination immutability and temporary-file cleanup.
+
+#### Phase 4 implementation update (2026-08-05)
+
+`@ready4vibe/storage` now provides a read-only
+`SqliteRestorePreflightAdapter`. It parses `backup-manifest/v1`, checks the
+snapshot size and streaming digest, runs SQLite integrity and `user_version`
+probes, compares source/target schema versions and returns the existing
+`RestorePlan` contract. Equal schemas are `compatible`; a newer target is
+`requires-migration`; a target older than the snapshot is `blocked` with a
+bounded downgrade warning.
+
+Every plan requires explicit confirmation, preserves current state and sets
+credential/workspace-file import to false. Preflight never copies or deletes a
+database, executes migration, maps workspace paths, writes a `RestoreResult`,
+exposes a path through Web, or changes run/Goal/event authorities. Focused
+tests cover compatible/migration-required/blocked plans, digest/size/schema/
+integrity failure, missing snapshot, source-target collision and no-mutation
+current preservation.
+
+#### Phase 5 implementation update (2026-08-05)
+
+`@ready4vibe/storage` now provides a `SqliteRestoreStagingAdapter`. It composes
+the read-only Phase 4 preflight, copies a validated snapshot into a new
+caller-controlled staging candidate, verifies the temporary copy again, and
+commits it with no-replace hard-link semantics. The result contains an
+internal staging path for a future restore application service, but no path
+enters `RestorePlan`, Web responses, events or logs.
+
+Phase 5 preserves the current database byte-for-byte, rejects an existing
+candidate, cleans temporary files on every failure, and remains bounded by the
+manifest size/digest, SQLite `integrity_check` and `user_version`. It does not
+run migration, map workspaces, import credentials/files, switch a data pointer,
+write `RestoreResult`, or modify daemon/run/Goal authorities. The staging
+fixture has 12 tests; the complete storage module now passes 66 tests plus
+typecheck and build.
+
+#### Phase 6 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now provides a versioned
+`RestoreApplyConfirmation`. `@ready4vibe/storage` provides a
+`SqliteRestoreApplyAdapter` that accepts only a parsed, compatible
+`RestorePlan` and a confirmation whose `planId` and explicit approval match.
+It verifies the staged candidate again, preserves current as a new immutable
+previous hard-link, prepares a verified current candidate, and performs a
+guarded swap with rollback when the swap fails.
+
+Phase 6 returns a bounded `RestoreResult` in memory; it does not persist the
+result or expose local paths. It rejects migration-required/blocked plans,
+missing or pre-existing previous targets, duplicate application, credential or
+workspace-file import, unapproved requests and any schema/digest/integrity
+failure. The caller must hold an exclusive database access boundary while the
+swap runs; the adapter does not create a second lock or scheduler. It does not
+add a Web route, alter daemon startup, or change
+AgentLoop, RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry,
+`run_events` or `goal_events` authority.
+
+The confirmation fixture adds 2 contract tests and the apply fixture adds 9
+storage tests; the contracts module now passes 65 tests and the storage module
+now passes 66 tests plus typecheck/build.
 
 ### 5.3 数据库 migration
 

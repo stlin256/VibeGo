@@ -1,6 +1,6 @@
 # Spec 56：多语言、无障碍与真实设备兼容矩阵
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
+- Status: Phase 56a/56b implemented；Phase 56c pure Web fixture/report slice implemented（full catalog and real-device evidence remain later）
 - Date: 2026-08-04
 - Related: [Spec 37](37-ratio-responsive-ui.md)、[Spec 38](38-conversation-first-web-shell.md)、[Spec 42](42-shadcn-style-web-design-system.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -145,3 +145,108 @@ conversation、approval、settings、Goal、recovery、SSE reconnect 和 error s
 - 不以自动 axe 通过代替人工辅助技术验收；
 - 不在本阶段实现原生移动客户端、语音助手或完整 RTL 设计系统；
 - 不将截图、录屏、屏幕阅读器日志或性能 trace 中的 secret/raw transcript 纳入仓库。
+
+## 9. Phase 56a implementation update（2026-08-05）
+
+Phase 56a 先把 locale 和 accessibility 的运行时边界落到现有
+conversation-first Web shell，不新增 daemon API、device-specific backend 或第二套
+状态机：
+
+- `Locale` 只允许 `en-US | zh-CN`。显式 Web 偏好优先，其次是浏览器语言，最后回退
+  `en-US`；pairing/session preference 和更多语言后置。
+- locale 偏好使用独立的 `vibego.locale.v1` 非 secret browser-storage key，不能与
+  `RunProfile`、pairing token、credential、run/Goal event 或 URL 混用；损坏、超长或
+  secret-shaped 值 fail closed 到 `en-US`。
+- 初始 catalog 覆盖品牌、New task、composer、connection、settings、approval、error
+  status 和可见的 icon/button accessible name。缺少 key 必须使用稳定英文 fallback，不能
+  把 message key 本身展示给用户。
+- 根节点同步 `lang`，语言切换不重建 run、provider、Goal 或 SSE；当前 run 和草稿保持不变。
+- 核心状态区使用 bounded `aria-live`，icon-only controls 有 accessible name，primary
+  actions 保持键盘可达；focus-visible、reduced-motion 和 44px touch target 由 CSS/DOM
+  focused tests 门禁。
+- Phase 56a 只声明 emulated viewport contract，不能把它当作真实设备通过；Playwright
+  projects、屏幕阅读器人工证据、完整翻译审阅和三折叠实验室证据属于后续 Phase 56c。
+
+`apps/web` now provides the bounded locale adapter, dedicated storage key,
+root-document `lang` synchronization, language selector, core shell catalog and
+live-status landmark. Web-focused tests cover locale precedence, invalid/secret-
+shaped storage values, reset behavior, translated rendering and privacy-safe
+Chinese shell output; the existing ratio/reduced-motion CSS gates remain in
+place. This slice does not claim full catalog coverage or real-device pass.
+Unknown runtime message keys use a stable English `Unavailable` fallback rather
+than rendering the key itself.
+
+## 10. Phase 56b implementation boundary（2026-08-05）
+
+Phase 56b extends the same Web-only boundary with a focus contract and a
+bounded settings catalog:
+
+- The Settings drawer is a semantic dialog. Opening it focuses the close
+  action; `Tab`/`Shift+Tab` cycle only through enabled controls inside the
+  drawer; `Escape` closes it; closing returns focus to the button that opened
+  it. Focus behavior must be deterministic when the drawer has no optional
+  provider/tool cards.
+- The settings trigger exposes `aria-controls`, `aria-expanded`, and a dialog
+  relationship; the drawer exposes `role=dialog`, `aria-modal=true`, and a
+  stable labelled heading. The shortcut for New task remains visible to
+  assistive technology without intercepting text input.
+- Core settings/guardrail labels and actions use typed message keys in both
+  supported catalogs. Runtime fallback remains stable English and never emits
+  a key, raw error, path, or secret.
+- Focus helpers are pure and bounded in unit tests; DOM rendering tests assert
+  the semantic landmarks. This phase still does not claim screen-reader/manual
+  pass, visual regression pass, or real-device compatibility.
+
+`apps/web` now wires the focus scope to the Settings dialog: the close action
+receives focus on open, Tab navigation wraps within enabled dialog controls,
+Escape closes, and the remembered trigger receives focus on close. Core run
+profile, model, guardrail and limit labels are catalog-backed in both locales.
+Focused Web tests cover the pure index/filter helpers and dialog landmarks;
+58 Web tests, typecheck and production build pass. No run/provider/Goal/SSE
+state is changed by locale or focus interactions.
+
+## 11. Phase 56c implementation boundary（2026-08-05）
+
+Phase 56c implements the pure Web fixture/report contract for the eight
+ratio-oriented form factors. It does not start Playwright, inspect a real
+device, or change daemon/run behavior. The implementation may be used by
+focused unit tests and later release tooling, but a fixture is never evidence
+that a physical device passed.
+
+The fixture identifiers are stable and bounded:
+
+- `desktop-wide`, `desktop-portrait`, `phone`, `fold-cover`,
+  `fold-unfolded`, `fold-wide`, `tri-fold`, and `tablet`;
+- each fixture carries a bounded viewport width/height, aspect-ratio label,
+  orientation, input mode, and an optional hinge/safe-area profile;
+- no user agent, browser fingerprint, absolute path, raw transcript, user
+  content, token, API key, or environment variable may enter a fixture or
+  report.
+
+`WebCompatibilityReport` and `WebPerformanceReport` are versioned, strict
+projections. Their default result is `unverified`; only explicit bounded
+evidence can move a result to `pass`, `pass-with-known-issue`, `degraded`, or
+`blocked`. Compatibility evidence is limited to viewport/layout hooks,
+orientation, input affordance and safe-area/fold declarations. Performance
+evidence is limited to bounded timing counters and fixture metadata; it does
+not claim Core Web Vitals, hardware performance, browser permission behavior,
+or real-device/network characteristics.
+
+The report privacy boundary is fail-closed: unknown fields, secret-shaped
+values, absolute paths, oversized strings/arrays, raw error text and user
+content are rejected. A missing measurement remains `unverified`, not a
+synthetic zero or a guessed pass. The CSS layer may expose safe-area and
+fold-segment hooks through platform media features, but layout remains
+container/ratio-first and must continue to work when those features are
+absent.
+
+`apps/web/src/device-matrix.ts` now provides the stable fixture registry,
+strict parser and unverified compatibility-report factory. The parser rejects
+unknown fields, invalid geometry, unsafe text, absolute paths, secrets and
+oversized evidence. `apps/web/src/performance-report.ts` provides the matching
+bounded timing projection with null-by-default measurements. The Web CSS keeps
+optional `safe-area-inset-*` and `horizontal-viewport-segments` hooks while the
+existing ratio/container rules remain authoritative. Focused Web tests cover
+the fixtures, privacy boundary, default-unverified behavior, report bounds
+and CSS hooks; the Web package currently passes 66 tests, typecheck and
+production build. No Playwright or physical-device evidence is claimed.

@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import type { SecureContextOptions } from 'node:tls';
 import { describe, expect, it } from 'vitest';
-import { CertificateConfigError, inspectTlsCertificate, loadTlsCredentials, resolveTlsCertificatePaths } from './index.js';
+import { CertificateConfigError, buildCertificateReadiness, buildCertificateReadinessFromError, certificateMatchesHostname, inspectTlsCertificate, loadTlsCredentials, resolveTlsCertificatePaths } from './index.js';
 
 describe('TLS certificate configuration', () => {
   it('requires a complete explicit PEM file pair', () => {
@@ -66,5 +66,39 @@ describe('TLS certificate configuration', () => {
     expect(() => inspectTlsCertificate(Buffer.from('CERTIFICATE'), { createCertificate: () => ({ subject: '', issuer: '', validFrom: 'nope', validTo: 'nope', fingerprint256: '' }) })).toThrowError(
       new CertificateConfigError('TLS_CERTIFICATE_INVALID', 'TLS certificate metadata could not be inspected.'),
     );
+  });
+
+  it('classifies missing, expiring, expired and hostname-mismatched certificates without secrets', () => {
+    expect(buildCertificateReadiness(undefined, { tlsRequired: false })).toMatchObject({ status: 'degraded', reasonCode: 'tls-not-required', affectsTransport: false });
+    expect(buildCertificateReadiness(undefined, { tlsRequired: true })).toMatchObject({ status: 'blocked', reasonCode: 'certificate-required', affectsTransport: true });
+    const base = {
+      subject: 'CN=dev.example.test',
+      issuer: 'CN=Test CA',
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validTo: '2030-01-01T00:00:00.000Z',
+      daysRemaining: 20,
+      fingerprint256: 'AA:BB:CC',
+      subjectAltNames: ['dev.example.test', '*.lan.example.test', '192.0.2.10'],
+    } as const;
+    expect(buildCertificateReadiness(base, { tlsRequired: true, hostname: 'dev.example.test' })).toMatchObject({ status: 'degraded', reasonCode: 'certificate-expiring', daysRemaining: 20 });
+    expect(buildCertificateReadiness({ ...base, daysRemaining: -1 }, { tlsRequired: true, hostname: 'dev.example.test' })).toMatchObject({ status: 'blocked', reasonCode: 'certificate-expired', affectsTransport: true });
+    const mismatch = buildCertificateReadiness(base, { tlsRequired: true, hostname: 'other.example.test' });
+    expect(mismatch).toMatchObject({ status: 'blocked', reasonCode: 'certificate-hostname-mismatch' });
+    expect(JSON.stringify(mismatch)).not.toContain('PRIVATE KEY');
+  });
+
+  it('matches exact, single-label wildcard and IP SANs only', () => {
+    const certificate = { subjectAltNames: ['example.test', '*.lan.example.test', '192.0.2.10'] } as unknown as Parameters<typeof certificateMatchesHostname>[0];
+    expect(certificateMatchesHostname(certificate, 'example.test')).toBe(true);
+    expect(certificateMatchesHostname(certificate, 'one.lan.example.test')).toBe(true);
+    expect(certificateMatchesHostname(certificate, 'two.one.lan.example.test')).toBe(false);
+    expect(certificateMatchesHostname(certificate, '192.0.2.10')).toBe(true);
+    expect(certificateMatchesHostname(certificate, '192.0.2.11')).toBe(false);
+  });
+
+  it('maps certificate loader errors to bounded transport guidance', () => {
+    const readiness = buildCertificateReadinessFromError(new CertificateConfigError('TLS_CERTIFICATE_INVALID', 'private details'), { tlsRequired: true, hostname: 'dev.example.test' });
+    expect(readiness).toMatchObject({ status: 'blocked', reasonCode: 'certificate-invalid', hostname: 'dev.example.test' });
+    expect(JSON.stringify(readiness)).not.toContain('private details');
   });
 });

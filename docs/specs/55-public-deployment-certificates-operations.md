@@ -1,6 +1,6 @@
 # Spec 55：公网部署、证书自动化与运维文档
 
-- Status: Proposed（新增规划规格；不改变当前运行时）
+- Status: Phase 55a contract implemented（不改变当前运行时；ACME/adapter integration remains later）
 - Date: 2026-08-04
 - Related: [Spec 12](12-auth-transport.md)、[Spec 14](14-certificates-tls.md)、[Spec 24](24-certificate-status.md)、[Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
@@ -138,3 +138,51 @@ interactive run。诊断下载为 bounded、redacted bundle，并在生成前展
 - 不在 daemon 中永久保存 ACME/DNS private credential；
 - 不以“配置成功”代替真实 challenge、renewal、rollback 和断网恢复证据；
 - 不创建第二套认证、session、scheduler、approval 或执行平面。
+
+## 9. Phase 55a contract boundary（2026-08-05）
+
+Phase 55a implements a versioned, non-secret deployment profile and
+readiness projection in `@ready4vibe/contracts`. The profile describes only
+the selected transport topology and bounded operational limits:
+
+- `loopback`, `lan`, `tailscale`, `ssh`, `public-direct` and `public-proxy`
+  are explicit modes; none silently falls back to another mode;
+- LAN and public modes require TLS by default. An insecure LAN override is
+  represented explicitly and must project to `blocked`, never to `ready`;
+- certificate source/challenge, external hostname, trusted proxy CIDRs,
+  renewal window, connection limit and request-rate limit are bounded
+  metadata. Certificate private keys, ACME/DNS credentials, absolute paths and
+  forwarded headers are not fields in this contract;
+- readiness is `ready | degraded | blocked | unknown` with a stable reason
+  code, safe next step, evaluation timestamp and an explicit
+  `affectsInteractiveRun` flag. Raw adapter errors are not carried through.
+
+The pure readiness helper may classify missing certificate/hostname/proxy
+trust, unavailable Tailscale/SSH adapters and explicit insecure transport, but
+it does not open listeners, call ACME, modify firewall/DNS, spawn a forwarder,
+or alter `AuthGate`, `AgentLoop`, `RunManager`, `Scheduler`, `Approval`,
+`Sandbox`, `WorkspaceRegistry`, `run_events` or `goal_events`. Later phases may
+consume the projection from the existing authenticated settings boundary.
+
+## 10. Phase 55b read-only projection boundary（2026-08-05）
+
+Phase 55b exposes the already computed `DeploymentReadiness` through the
+existing authenticated daemon boundary at `GET /api/v1/deployment/readiness`.
+The route is read-only, uses the current `AuthGate`/Origin/CSRF rules, and
+returns `503` with a stable bounded error when the projection is unavailable.
+It does not accept a deployment mutation, certificate material, hostname
+override, proxy header or adapter command.
+
+The conversation-first Web shell may fetch this projection and show its mode,
+status, reason code and safe next-step guidance beside the existing TLS
+certificate status. Fetch failure is a bounded unavailable state and does not
+block pairing or an interactive run. Switching deployment mode, ACME staging,
+renewal, rollback, Tailscale/SSH process management and reverse-proxy setup
+remain later explicit actions.
+
+`apps/daemon` now serves the projection when injected by the application
+composition; missing injection returns the bounded
+`DEPLOYMENT_READINESS_UNAVAILABLE` response. `ApiClient.deploymentReadiness()`
+and the Settings drawer status card consume only the versioned fields. Focused
+daemon tests (156 total) and Web tests (68 total), daemon/Web typechecks and
+the Web production build pass.

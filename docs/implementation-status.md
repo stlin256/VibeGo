@@ -1,6 +1,6 @@
 # 实施状态与第一条纵切
 
-**状态：Accepted（Agent Memory Phase 6b 与 Goal Control Phase 2A 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53–57 为 Proposed release-hardening planning gates）**
+**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
 
 ## 当前实施范围
 
@@ -50,9 +50,43 @@
 42. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6a：独立 `agent-memory-knowledge/v1` settings、SQLite/InMemory persistence、authenticated GET/PATCH/probe、lazy environment/injected provider creation、bounded `search` retrieval 和 new-run snapshot isolation。默认 disabled/off 不创建 provider、不发 HTTP、不改 prompt；knowledge errors fail-soft，Web 不显示 endpoint、secret、原始响应或绝对路径。
 43. `packages/contracts`、`apps/daemon` 与 `apps/web` 已实现 Agent Memory Phase 6b 首个切片：版本化 `agent-memory-operations/v1` 只读 projection、bounded update history、health latency、recall hit/miss、write queue counters、`GET /api/v1/settings/agent-memory/updates` 和 Web 状态摘要；运行时状态独立持久化，不进入 `run_events`、`goal_events` 或 memory payload。settings 支持显式 immutable upstream commit ref lock；候选兼容 fixture 覆盖 health/search/conversation v3 envelope 与 privacy/schema fail-closed。当前/previous/candidate 清理保护和 daemon restart recovery 规则保持不变。
 44. `packages/goal-control` 与 `apps/daemon` 已实现 Spec 40 Phase 2A：`GoalWriteService` 和六个受认证 mutation route 覆盖 Goal 创建、Todo、Gate open/resolve、Evidence 和 validated Todo completion；eventId fingerprint 提供重试 no-op/conflict，controlRevision 提供 stale fail-closed，响应剥离 claim hash，输入拒绝 secret/path/未知字段。该切片不接入默认 run admission，也不改变 `run_events`、AgentLoop、RunManager、Scheduler、Approval、Sandbox 或 WorkspaceRegistry。
-45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；daemon 同源托管 React Web、发行包和统一 launcher 尚未实现，Android/iOS/HarmonyOS 原生客户端明确后置。
-46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
-47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；运行时采样、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
+45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；Spec 51-R1 静态托管、R2 launcher 生命周期、R3a certificate readiness projection 和 R4 versioned client SDK 均已实现。R2 launcher 是依赖零、可注入的参数/端口/PID lease/日志脱敏/进程树停止边界，8 个 Node fixture tests 已通过；certificate package 8 个 focused tests、daemon focused gate 152 tests、client SDK 5 个 focused tests 已通过。发行包/签名、R3b ACME/OS-store/renewal、R4 native UI 和 Android/iOS/HarmonyOS 原生客户端仍明确后置。
+46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a/42b/42c/42d-1/42d-2 已按切片落地，42d-2 固定了 `pnpm check:web` 的 focused test/typecheck/build 与 gzip/diff 门禁；组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
+47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection、Phase 43b 独立 in-memory/SQLite ledger 与 UTC hour rollup 已实现；Spec 45-R5 已接入认证 Usage/Audit projection 与 Web context panel，Spec 50-R5 已接入终态 run-event usage bridge。运行时资源采样、自动 pricing settings、retention 与显式导入仍后置。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界。
+48. `docs/specs/53-host-install-upgrade-backup-recovery.md` 已实现 Phase 0/1/2/3/4/5/6：`host-manifest/v1`、`host_update_state_v1`、`backup-manifest/v1`/restore/recovery/diagnostic strict contracts、`RestoreApplyConfirmation`、`SqliteBackupSnapshotAdapter`、只读 `SqliteRestorePreflightAdapter`、`SqliteRestoreStagingAdapter` 与 `SqliteRestoreApplyAdapter` 均有 bounded/privacy/path/integrity 校验；未知字段、credential/query token、绝对路径、无效时间、跳过验证、无 previous 回滚、credential/workspace-file import、越权 safe-mode operation、损坏数据库、schema mismatch、超限输出、digest/size/integrity/preflight/staging/apply 失败、未确认/错配 plan、既有 snapshot/candidate/previous 和 swap rollback 均 fail-closed。contracts focused suite 65 tests、storage focused suite 66 tests（含 snapshot fixture 4 tests、restore preflight fixture 10 tests、restore staging fixture 12 tests 与 restore apply fixture 9 tests）、storage typecheck/build 通过。该切片不下载、验证、安装、迁移、restore result 持久化、Web/daemon route 或第二锁/调度器，也不改变 daemon、workspace、run/Goal 事实源。
+49. `docs/specs/54-model-provider-onboarding.md` 已实现 Phase 0/1/2/3/4：`ModelProviderDescriptor`、`ModelEndpointProfile`、`ModelCredentialRef`、`ModelSettingsProfile`、capability/probe/setup-session contracts、显式 OpenAI-compatible `/models` probe、authenticated daemon probe route、Web Settings Probe 控件和 durable non-secret endpoint profile 均有版本、bounded、privacy/path 校验；profile 只保存 provider/endpoint/model metadata，API key 仍仅在进程内或环境注入，重启后返回 `durable-profile`/`credential-required` 并 fail-closed 直到重新输入 key；route 不接受 key/prompt/path/arbitrary headers，probe 不创建 run/event、不改变 provider 或 in-flight snapshot，当前仍不改 Spec 28 的默认 runtime/secret 边界。
+50a. `docs/specs/42-shadcn-style-web-design-system.md` 已实现 Phase 42a：`apps/web` 增加 semantic VibeGo token、无运行时依赖的 `cn`/variant helper 与 Button/Input/Textarea/Label/Card/Badge/Separator/Skeleton 基础 primitives；组件只做 presentational rendering，不访问 API、storage、secret 或事件事实源，保持 44px touch target、focus-visible、disabled/loading/destructive 和 reduced-motion 约束。现有 conversation shell 未在本阶段迁移，42b/42c/42d 仍后置。Web focused suite 76 tests、typecheck 和 production build 通过，JS/CSS gzip 分别为 79.42/5.82 KiB。
+50b. Spec 42 Phase 42b-1 已将 `conversation stream`、composer、`RunConsole` 与 bounded `ToolOutputInspector` 抽出为 `apps/web/src/components/vibego/ConversationShell.tsx`；组件只消费 App 注入的 run/event snapshot 与 callback，并使用 Phase 42a Button/Textarea primitives，不创建 API/SSE/storage/secret 访问或第二事实源。24-card/128 KiB tool-output cap、approval/retry/cancel 与 recovery 语义保持不变；Settings drawer 仍待 42c。Web focused suite 当前 78 tests、typecheck 和 production build 通过，JS/CSS gzip 为 79.87/5.82 KiB。
+50c. Spec 42 Phase 42b-2 已将 `WorkspaceRail` 与 `ContextRail` 抽出到 `apps/web/src/components/vibego/`；两者只接收 typed metadata/projection 与 callback，使用 Button/Card primitives，保留 `workspace-rail`、`context-rail`、Goal/observability read-only projection、responsive grid 和安全摘要语义，不创建 API/SSE/storage/secret 访问或第二事实源。Settings drawer 和 operation cards 仍待 42c。Web focused suite 当前 81 tests、typecheck 和 production build 通过，JS/CSS gzip 为 80.40/5.82 KiB。
+50d. Spec 42 Phase 42b-3 已将 topbar 抽出为 `apps/web/src/components/vibego/ConversationHeader.tsx`；组件只接收 locale、连接/上下文/设置快照与显式 callback，使用 Button primitive，保留 `topbar`/`topbar-actions`、`Control+N`/`Meta+N`、Settings focus-return、locale ARIA 和 ratio-first 换行，不创建 API/SSE/storage/secret 访问或第二事实源。connected/awaiting-pairing、secret/path-free focused tests、typecheck/build 通过；Web focused suite 当前 83 tests，JS/CSS gzip 为 80.54/5.82 KiB。Settings drawer 与 operation cards 仍待 42c。
+50e. Spec 42 Phase 42c-1 已将 `ApprovalCard` 与 `RecoveryCard` 抽出到 `apps/web/src/components/vibego/`；组件只消费 bounded approval/recovery projection 和显式 callback，保留 deny destructive variant、recovery new-run 语义与现有 CSS landmark，不创建 API/SSE/storage、Approval/RunManager 请求或第二事实源。details/no-details、retry、secret/path/raw-argument-free focused tests、typecheck/build 通过；Web focused suite 当前 86 tests，JS/CSS gzip 为 80.60/5.82 KiB。Goal/Memory/Tool cards 仍待后续 42c。
+50f. Spec 42 Phase 42c-2 已将 `SettingsSheet` 对话框壳抽出到 `apps/web/src/components/vibego/`；组件只消费 open/ref/bounded copy/children 与 close callback，保留 `settings-drawer`、dialog ARIA、响应式 CSS 和 App 的 focus trap/return、表单/API/secret-safe persistence 所有权，不创建 settings API、storage 或第二事实源。open/closed、ARIA、children-slot、Button primitive、secret/path-free focused tests、typecheck/build 通过；Web focused suite 当前 88 tests，JS/CSS gzip 为 80.68/5.82 KiB。Tabs、表单分组、Goal/Memory/Tool cards 仍待后续 42c。
+50g. Spec 42 Phase 42c-3 已增加 `SettingsTabs` 与 `SettingsSection` 本地组合组件：
+`App` 持有 Run/Tools/Access active-tab、字段状态、API callback、focus trap/return
+和 secret-safe persistence；组件仅负责 tablist/tabpanel ARIA、`hidden` inactive panel、
+重复表单组标题/描述及 ready/loading/degraded/unavailable 状态视觉语义。现有 workspace、
+model、memory、knowledge、MCP、tool、sandbox、run-default、TLS 与 deployment 字段和
+daemon authority 未改变；组件不访问 API/storage/secret、不创建第二 SSE 或事件事实源。
+新增 focused tests 覆盖 tab semantics、panel hiding、status variants、bounded copy 和
+secret/path-free markup；下一步仍是更深层 Goal/Memory/Tool card 抽取与 42d device/
+accessibility/bundle 验收。Web focused suite 当前 94 tests，typecheck 和 production
+build 通过，JS/CSS gzip 为 82.52/6.06 KiB。
+50h. Spec 42 Phase 42d-1 已为 `SettingsTabs` 增加 ArrowLeft/Right、ArrowUp/Down、Home、End
+键盘导航与单一 roving `tabIndex=0`；纯 resolver 和组件 contract tests 通过。该切片不宣称
+屏幕阅读器人工、Playwright、对比度或真实设备证据，也不改变 API、settings、run、SSE 或
+事件事实源。
+50i. Spec 42 Phase 42d-2 已增加固定 `check:web` 门禁：复用 Web 依赖闭包
+build/typecheck/focused tests，检查生成资产 JS/CSS gzip budget，并运行 `git diff --check`。
+脚本不运行全仓测试、不读取 secret、workspace、browser storage 或 daemon/run/Goal 事实源；
+bundle 报告只包含 bounded asset size metadata。Playwright、屏幕阅读器和真实设备证据仍后置。
+最近一次 `pnpm check:web` 通过 Web focused 94 tests、typecheck/build、JS/CSS gzip
+80.41/5.90 KiB；`pnpm test:workflow` 通过 31 个脚本 tests。
+50. `docs/specs/56-i18n-accessibility-device-matrix.md` 已实现 Phase 56a，并由 `docs/adr/0024-web-locale-and-accessibility-shell.md` 冻结边界：`apps/web` 提供 Web-only `en-US`/`zh-CN` locale preference、英文 fallback、根节点 `lang`、语言选择器、核心 shell 的 bounded accessibility 语义和 ratio-first focused gates；完整 catalog、真实设备和屏幕阅读器人工 evidence 尚未声称完成。
+51. Spec 56 Phase 56b 已实现：Settings drawer 的 dialog/focus scope、Escape/Tab/focus-return 和 settings/guardrail typed catalog 均有 Web focused tests；尚未声称完成屏幕阅读器人工验收、完整 catalog 或真实设备 evidence。
+52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
+53. Spec 55 Phase 55a 已实现：`packages/contracts/src/deployment-operations.ts` 提供 `deployment/v1` profile/readiness，将 loopback、LAN、Tailscale、SSH、public-direct、public-proxy 作为显式模式，LAN/public TLS 与 insecure override fail-closed，且不携带 private key、ACME/DNS credential、绝对路径或 raw adapter error；contracts focused suite 52 tests 与 typecheck 通过。本阶段不打开 listener、不接 ACME/forwarder，也不改变 AuthGate/daemon runtime。
+54. Spec 55 Phase 55b 已实现：复用现有 AuthGate 暴露只读 `GET /api/v1/deployment/readiness`，Web Settings drawer 显示 bounded mode/status/reason/next-step；缺失 projection 返回稳定 `DEPLOYMENT_READINESS_UNAVAILABLE` 并 fail-soft，不改变 pairing、interactive run、AgentLoop、run_events 或 transport listener，也不接受任何 deployment mutation。daemon focused suite 156 tests、Web focused suite 68 tests、daemon/Web typecheck 与 Web build 通过。
+55. Spec 57 Phase 57a 纯合约已实现：`packages/contracts/src/release-publishing.ts` 提供严格的 `release-manifest/v1` 与 ordered promotion state，校验 immutable tag/channel、source commit、artifact digest、target、signature/attestation/SBOM refs、compatibility range 和 rollback target；`artifactId=latest`、tag/version 不一致、secret/query/path reference 和未知字段均 fail-closed。stable 需要显式 approval，published 只能 withdraw。contracts focused suite 57 tests、typecheck 和 build 通过。本阶段不创建 GitHub workflow/release、不上传/签名 artifact，也不读取 credential、workspace 或运行时事实源。
 
 47a. `docs/specs/44-provider-usage-management-and-upstream-reuse.md`、`docs/adr/0013-upstream-research-and-provider-management-boundary.md`、`docs/prompts/44-provider-usage-management-implementation.md` 和 `docs/research/upstream-provider-usage.md` 已完成 Spec 44-R0：CC Switch、AxonHub、LiteLLM、Langfuse、OpenTelemetry 的 canonical URL、默认分支、pinned commit、LICENSE/NOTICE 边界、相关文件路径和语义摘要均已记录，所有复用决定均为 clean-room。没有复制上游源码、schema、UI、session 或 runtime，也未新增依赖；R1/R2/R3 的实现状态见下列条目。
 47b. Spec 44-R1 provider/usage contract slice 已完成：`packages/contracts/src/provider-usage.ts` 提供严格版本化 `ProviderDescriptor`、`ProviderCapabilitySnapshot`、`ProviderUsageObservation`、secret/path fail-closed 校验和 token 维度向后兼容扩展；`packages/observability/src/provider-usage.ts` 提供 immutable in-memory `ProviderRegistry`、capability snapshot 与纯 `normalizeProviderUsageObservation`，现有 run-event replay projection 显式保留 `dataSource`/input token semantics。测试覆盖 strictness、privacy、快照隔离、cache-inclusive/fresh、unknown counters 和幂等输入；仍不接入 AgentLoop、RunManager、daemon API 或默认 run。
@@ -90,7 +124,7 @@ RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry 或 `run_events`
 
 - 不在默认路径调用真实模型、网络、MCP、Skill 或 shell；真实模型只在显式 Web/环境配置后使用；
 - 不在 daemon 启动时修改用户 workspace、Git、系统设置或证书；filesystem/shell 只有用户从已认证 Web 设置显式开启、并经过路径/审批/sandbox 守卫后才可能产生副作用；
-- 当前尚未把 React Web 静态资源内置到 daemon，也没有发行包 launcher；源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 是下一阶段实现目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
+- Spec 51-R1 已把 React Web 静态资源以可选 dist 目录内置到 daemon；R2 launcher 只负责受限生命周期、URL 展示和显式浏览器打开，R3a 提供只读 certificate readiness projection；发行包/签名/更新与 R3b ACME/OS-store/renewal 仍未实现，源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 的完整打包是下一阶段目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
 - 不实现 ACME 自动签发、Windows 证书存储、VM runtime、MCP/Skill 外部连接或完整审批/diff UI；external sandbox CLI runner 已由 daemon 的显式设置 wiring，但默认关闭且不会自动拉取镜像或启动容器；Web/PWA 仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
@@ -293,11 +327,6 @@ freezes the single-authority, run-snapshot, fail-soft and host-first decisions.
 
 The following work is documented but not fully implemented yet:
 
-- **Spec 47** (`specs/47-model-context-agent-loop-productionization.md`): R1/R2
-  contracts, deterministic stream replay, cancellation/retry fixtures,
-  explicit OpenAI-compatible adapter and the R3 daemon bridge are implemented.
-  The opt-in live model smoke remains R4; the default still makes no network
-  request and no credential has been written to the repository.
 - **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1 policy
   compiler and the R2 injected host-restricted process runner are implemented
   bounded slices. Container smoke and full Web continuation remain later
@@ -308,14 +337,31 @@ The following work is documented but not fully implemented yet:
   authenticated non-secret MCP settings/status contract and Web card; its
   injected probe remains off by default, so the daemon still does not
   auto-start a process or access MCP transport on startup.
-- **Spec 50** (`specs/50-observability-lifecycle-integration.md`): automatic
-  RunManager/application lifecycle wiring for usage, cost, resource samples
-  and audit. Current ledgers, collector and API projection are available, but
-  sampling and complete lifecycle attachment are not default.
-- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
-  static Web serving, cross-platform launcher, LAN/public certificate adapter
-  and a future versioned client SDK. Current development still uses a separate
-  Vite server; native Android/iOS/HarmonyOS clients remain post-MVP.
+- **Spec 50** (`specs/50-observability-lifecycle-integration.md`): 50-R1 now
+  provides a pure application lifecycle recorder/fixture with bounded
+  idempotency, conflict detection, disabled-sampling no-op and fail-soft writer
+  errors. It is not wired into the default RunManager path; provider usage,
+
+  cost, automatic sampling and complete lifecycle attachment remain 50-R2/R3.
+  The focused observability package gate is 38 tests passed; no live runtime is
+  started.
+  Spec 50-R2 provider usage/cost application adapter is implemented with 47
+  focused tests; no default run wiring or network behavior is enabled.
+  Spec 50-R3 sampling lifecycle adapter is implemented with 54 focused tests;
+  automatic collector start/stop remains opt-in without default daemon wiring.
+  Spec 50-R4 audit action and explicit export/import is implemented with 60
+  focused observability tests. The adapter is bounded, deterministic and
+  privacy-checked; no upload, second event source or automatic daemon/API/Web
+  wiring is enabled. 50-R5 now adds an optional asynchronous terminal
+  run-event usage bridge: `RunUsageObserver` replays existing bounded run
+  events through the existing provider usage adapter without changing run
+  behavior. Resource/tool sampling and pricing settings remain outside this
+  slice; focused observability and daemon gates pass.
+- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): R1 static
+  Web serving is implemented with 4 fixture tests and the current daemon gate;
+  cross-platform launcher, LAN/public certificate adapter and future versioned
+  client SDK remain planned. Development can still use the separate Vite
+  server; native Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
   cross-cutting capability-profile and first-run UX gate is now specified. It
   defines preview, workspace-coding, advanced-local and custom profiles,
@@ -353,9 +399,10 @@ The documentation gate is now followed by a network-free model/context slice:
   token metadata without changing its state machine or event authority.
 
 `pnpm verify` previously passed with 396 tests for R1/R2. R3 now adds the
-daemon/application provider binding and application fixture; R4 opt-in live
-smoke remains deferred. Credentials remain out-of-band and the normal
-fake-provider path remains available.
+daemon/application provider binding and application fixture; R4 adds the
+explicit redacted live smoke command and seven network-free workflow tests.
+Credentials remain out-of-band and the normal fake-provider path remains
+available.
 
 ## Spec 47 R3 implementation note (2026-08-04)
 
@@ -373,9 +420,11 @@ AgentLoop state machine or introducing a second authority:
   provider-switch isolation, safe mismatch response and event privacy. No
   network request or durable observability-ledger write occurs in this slice.
 
-R4 live smoke and Spec 50 automatic usage-ledger lifecycle attachment remain
-deferred for the ordinary offline verification gate. A successful redacted
-live smoke is mandatory before the Spec 52 release gate; Goal admission,
+R4 live smoke is implemented outside the ordinary offline verification gate as
+`pnpm smoke:model` with an out-of-band environment secret reference and
+redacted report. A successful redacted live smoke is mandatory before the Spec
+52 release gate; one such DeepSeek-compatible evidence run passed without
+exposing endpoint, credential, prompt or raw response. Goal admission,
 `goal_events`, Approval, Sandbox, Scheduler and WorkspaceRegistry behavior
 remain unchanged until their separately specified integration phases.
 
@@ -406,40 +455,99 @@ unchanged in this slice.
 The focused host-runner suite has 17 tests and the current repository gate
 passes with 420 tests; no arbitrary host command is started by the test suite.
 
-## Spec 53–57 planning status (2026-08-04)
+## Spec 53–57 planning status (2026-08-05)
 
-The following release-hardening specifications were added as documentation-only
-planning gates. They are intentionally not described as implemented, and this
-change does not modify the existing AgentLoop, RunManager, Scheduler, Approval,
-Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
+The following release-hardening specifications remain planning gates unless
+explicitly noted below. Spec 53 Phase 0/1/2/3/4/5/6 and Spec 57 Phase 57a are
+implemented; the Phase 5 staging adapter remains a storage-only candidate step,
+while Phase 6 apply remains an explicit caller-confirmed storage/application
+adapter;
+this change does not modify the existing AgentLoop, RunManager, Scheduler,
+Approval, Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities:
 
-- **Spec 53** (`specs/53-host-install-upgrade-backup-recovery.md`) is Proposed.
-  It defines one-click Host bundles, platform signatures, immutable
-  `current/previous/candidate` updates, SQLite-consistent backup/restore,
-  migration preflight, safe mode and bounded recovery diagnostics. No installer,
-  updater, backup UI or migration runtime is implemented by the new document.
-- **Spec 54** (`specs/54-model-provider-onboarding.md`) is Proposed. It defines
-  local/cloud provider presets, explicit endpoint paths, OS-backed credential
-  references, bounded health/model probes, model capability snapshots and
-  provider/run isolation. It does not add a provider SDK, model download path or
-  new network behavior.
-- **Spec 55** (`specs/55-public-deployment-certificates-operations.md`) is
-  Proposed. It defines explicit public deployment modes, ACME staging/renewal/
-  rollback, reverse-proxy trust boundaries, Tailscale/SSH operational evidence
-  and versioned `docs/operations` runbooks. It does not expose a public listener,
-  install a proxy, change firewall rules or perform ACME calls.
-- **Spec 56** (`specs/56-i18n-accessibility-device-matrix.md`) is Proposed. It
-  defines `en-US`/`zh-CN` catalogs, WCAG 2.2 AA acceptance, keyboard/screen-reader
-  evidence, Playwright ratio fixtures and a real desktop/mobile/foldable/tablet
-  compatibility matrix. It does not claim that emulation is real-device proof.
-- **Spec 57** (`specs/57-release-publishing-pipeline.md`) is Proposed. It defines
-  protected tag/channel promotion, reproducible multi-platform builds, checksum,
-  platform signing, SBOM, provenance/attestation, draft-to-stable approval and
-  withdrawn/rollback procedures. It does not create GitHub Actions, publish a
-  release or upload artifacts.
+- **Spec 53** (`specs/53-host-install-upgrade-backup-recovery.md`) has implemented
+  Phase 0/1/2/3/4/5/6 contracts, `SqliteBackupSnapshotAdapter`, read-only
+  `SqliteRestorePreflightAdapter`, `SqliteRestoreStagingAdapter` and
+  `SqliteRestoreApplyAdapter` for integrity-checked, digest-bound, immutable
+  local snapshots and reviewable restore plans/candidates. Phase 5 remains
+  storage-only and does not switch current; Phase 6 requires explicit caller
+  confirmation, preserves current as previous, returns only an in-memory
+  bounded `RestoreResult`, and does not migrate or import credentials/files,
+  persist a result, expose a route or change daemon/run/Goal authorities.
+  Storage currently has 66 passing tests (including 12 staging and 9 apply
+  fixtures), and the apply adapter requires the caller's exclusive database
+  access boundary.
+- **Spec 54** (`specs/54-model-provider-onboarding.md`) has implemented
+  Phase 0/1/2/3/4 contracts, bounded model-list probe, authenticated daemon/Web
+  probe surface and a durable non-secret endpoint profile. Restart recovery
+  restores only provider/endpoint/model metadata and marks the credential as
+  required; API keys remain process-memory/environment-only. It does not add a
+  provider SDK, model download path, automatic provider switch or new network
+  behavior.
+- **Spec 55** (`specs/55-public-deployment-certificates-operations.md`) has an
+  implemented Phase 55a `deployment/v1` profile/readiness contract for explicit
+  loopback/LAN/Tailscale/SSH/public modes, TLS fail-closed and bounded
+  operational limits, plus a Phase 55b read-only readiness projection through
+  the existing AuthGate. It does not expose a public listener, install a proxy,
+  change firewall rules or perform ACME calls; later adapter/runbook phases
+  remain planned.
+- **Spec 56** (`specs/56-i18n-accessibility-device-matrix.md`) has implemented
+  Phase 56a/56b and an implemented Phase 56c pure Web slice. The current slice covers
+  `en-US`/`zh-CN`, bounded accessibility semantics, the settings focus scope,
+  typed settings/guardrail labels, eight ratio/device fixtures and strict
+  compatibility/performance report projections. It does not start Playwright,
+  claim emulation as real-device proof, or assert WCAG/manual evidence.
+- **Spec 57** (`specs/57-release-publishing-pipeline.md`) has an implemented
+  Phase 57a `release-manifest/v1` and ordered promotion contract for immutable
+  tag/channel, artifact checksum/target/evidence refs, stable approval and
+  withdrawn state. The contracts module has 57 focused tests plus typecheck and
+  build coverage. It does not create GitHub Actions, publish a release or upload
+  artifacts; later workflow and packaging phases remain planned.
 
 The research basis is recorded in
 `docs/research/53-57-release-install-model-operations-research.md`. Before any
 implementation commit, the relevant prerequisite matrix must be re-verified on
 the current checkout. New runtime behavior remains opt-in and disabled until its
 focused contracts, failure fixtures and release evidence are accepted.
+
+## Spec 49-R4 implementation note (2026-08-04)
+
+The R4 contract is implemented under [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md).
+Implementation is intentionally limited to a run-scoped adapter: an
+immutable healthy-verified MCP tool snapshot can be bound to the existing
+ToolRegistry/ToolExecutorRuntime, while Approval, Scheduler, Sandbox,
+WorkspaceRegistry, AgentLoop and `run_events` remain authoritative. Resources
+and prompts are not executable. A bounded per-run idempotency ledger prevents
+same-call replay and rejects changed input/revision; recovery creates a new
+run and cannot restore an unknown in-flight remote request. Disabled or
+degraded MCP settings remain a no-op for normal runs. The pure package slice
+is now implemented: `McpExecutionLedger`/`McpProtocolToolCallPort` in
+`@ready4vibe/skill-mcp` and `McpToolExecutorRuntime` in
+`@ready4vibe/tool-adapters`, with 36 and 19 focused tests respectively.
+`apps/daemon` now adds the opt-in `McpRunBindingManager` and includes its
+undefined runtime in the existing `composeToolRuntimes` run snapshot path;
+three binding tests cover disabled/unverified, snapshot isolation and unknown
+workspace behavior. No live MCP process/network smoke is claimed by this note;
+activation from a verified transport is available through the injected service.
+
+The R4 application activation slice is now implemented: bounded
+`McpLiveActivationService` accepts only a matching server/manifest revision,
+allowlisted healthy-verified snapshot and injected call port; provider
+failures and ignored-signal timeouts remain degraded and do not start default
+transport. `@ready4vibe/skill-mcp` also provides the injected
+`McpSessionActivationProvider` for public initialize/tools-list/tools-call
+protocol flow; fake-channel tests and the explicit real opt-in stdio/Streamable
+HTTP fixture smoke both pass. No default provider or remote endpoint is enabled.
+
+The R4 lifecycle slice now freezes session ownership: activation candidates
+need an explicit close port, run-captured MCP runtimes hold an idempotent lease,
+and refresh/deactivate retires old bindings until their last run releases them.
+This keeps protocol sessions from leaking or being closed under an in-flight
+run; shutdown remains best-effort and does not alter AgentLoop, RunManager's
+default start behavior, Scheduler, Approval, Sandbox, WorkspaceRegistry or
+event authorities.
+
+The smoke is implemented as an explicit `pnpm smoke:mcp` command over fixed
+local fixtures, outside daemon startup and the offline verification gate; its
+bounded report is secret/path-free. Both stdio and loopback Streamable HTTP
+runs passed on 2026-08-05.

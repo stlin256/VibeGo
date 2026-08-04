@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. Host-first same-origin Web distribution is now the accepted deployment direction but is not yet packaged; MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), and model onboarding contracts, explicit OpenAI-compatible model probe, and authenticated daemon probe route (Spec 54 Phase 0/1/2) are implemented and tested. The signed release bundle, ACME/OS certificate automation, OS keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -48,7 +48,7 @@ The core loop is deliberately small:
 | Workspaces | Guided single-user registry with safe labels/ids, explicit add/remove confirmation, daemon-local non-secret persistence, and per-run root snapshots |
 | Access | Single-user pairing, hashed bearer tokens, TTL/revocation, Origin/CSRF checks, query-token rejection |
 | Transport | Loopback HTTP by default; LAN opt-in with TLS fail-closed; explicit insecure LAN escape hatch for development |
-| Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE; production same-origin Host serving is specified and pending |
+| Web | React 19 + TypeScript + Vite responsive console with pairing, guided onboarding/settings, model setup, retry/recovery, approval cards, bounded tool-output inspector, cancel, metrics, and fetch-based SSE; production same-origin Host serving is implemented |
 | Goals | Phase 0 native TypeScript Goal Control contracts/projection/claim guards plus Phase 1 isolated SQLite `goal_events` adapter and authenticated read-only daemon projection/replay; Goal writes and default run admission remain disabled |
 
 ## Quick start
@@ -69,11 +69,23 @@ pnpm --filter @ready4vibe/daemon start
 
 # Optional local Docker/Podman smoke (digest required; never pulls an image)
 pnpm smoke:container -- --runtime docker --image ghcr.io/example/runner@sha256:<64-hex-digest>
+
+# Optional explicit live model smoke (key stays in this process environment)
+$env:READY4VIBE_MODEL_API_KEY = '<out-of-band-key>'
+pnpm smoke:model -- --endpoint https://api.deepseek.com/chat/completions --model deepseek-v4-flash --secret-env READY4VIBE_MODEL_API_KEY
 ```
 
+`pnpm smoke:model` is opt-in and outside `pnpm verify`. It makes one bounded
+OpenAI-compatible request, prints only a redacted status/latency/usage report,
+and never writes the key, endpoint, prompt, raw response, or report to the
+repository, daemon events, logs, or browser storage. Use a complete provider
+endpoint; a base URL without `/chat/completions` is intentionally rejected.
+
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
-path. The release target is a single Host URL where the daemon serves the compiled Web and
-the API/SSE same-origin; the launcher and static serving are tracked in Spec 41.
+path. When `pnpm build` has produced `apps/web/dist`, the daemon serves the compiled Web,
+API and SSE on one same-origin Host URL; `READY4VIBE_WEB_DIST_DIR` can point to another
+absolute dist directory. The development launcher is `node scripts/host-launcher.mjs`; a
+signed, Node-free release bundle remains a later Spec 53/57 deliverable.
 
 ## Host-first deployment target
 
@@ -156,7 +168,8 @@ apps/
   daemon/       HTTP(S) API, auth gate wiring, run manager, SSE
   web/          React + TypeScript responsive console
 packages/
-  contracts/    Zod contracts and run/event state validation
+  contracts/    Zod contracts, run/event validation, release and onboarding boundaries
+  client-sdk/   versioned REST/SSE client with pairing, replay and degraded projections
   storage/      in-memory and SQLite event stores
   scheduler/    bounded concurrency and workspace leases
   agent/        deterministic loop orchestration boundary
@@ -198,6 +211,7 @@ Brand direction is VibeGo: a dark navy canvas, cyan/indigo/violet accents, and a
 - Goal write APIs, Web Goal projection actions, and governed preflight after the native Phase 0/1 contracts, storage, and authenticated read-only projection slice;
 - ACME/certificate manager adapter and Tailscale/SSH transport adapters;
 - Host-first same-origin static Web serving, cross-platform launcher/release packages, and signed update/rollback;
+- OS keychain adapters and the next Spec 54 onboarding integration slice;
 - Android/iOS/HarmonyOS native clients after the Host/API/SSE contracts stabilize;
 - low-resource measurements, event retention, backup/export, and third-party provider/tool SDKs.
 

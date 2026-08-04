@@ -1,9 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
-import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
+import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type DeploymentReadiness, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
-import type { CertificateStatus } from '@ready4vibe/certificates';
+import type { CertificateReadiness, CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutationResult } from '@ready4vibe/goal-control';
 import { buildAuditResponse, buildPricingResponse, buildRunUsage, buildUsageSummary, buildUsageTimeseries, verifyAuditChain } from '@ready4vibe/observability';
@@ -18,6 +18,7 @@ import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './age
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
+import { serveStaticWeb } from './static-web.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -40,6 +41,8 @@ export interface DaemonServerOptions {
   bodyLimitBytes?: number;
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
+  certificateReadiness?: CertificateReadiness;
+  deploymentReadiness?: DeploymentReadiness;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
@@ -52,6 +55,8 @@ export interface DaemonServerOptions {
   mcpSettings?: McpSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
+  /** Absolute path to a built React/Vite dist directory; omitted in dev. */
+  webDistDir?: string;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -65,6 +70,8 @@ interface ResolvedDaemonServerOptions {
   runManager?: RunManager;
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
+  certificateReadiness?: CertificateReadiness;
+  deploymentReadiness?: DeploymentReadiness;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
@@ -77,6 +84,7 @@ interface ResolvedDaemonServerOptions {
   mcpSettings?: McpSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
+  webDistDir?: string;
 }
 
 export interface HealthResponse {
@@ -122,6 +130,8 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.runManager ? { runManager: options.runManager } : {}),
     ...(options.tls ? { tls: options.tls } : {}),
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
+    ...(options.certificateReadiness ? { certificateReadiness: options.certificateReadiness } : {}),
+    ...(options.deploymentReadiness ? { deploymentReadiness: options.deploymentReadiness } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
     ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
@@ -134,6 +144,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
+    ...(options.webDistDir ? { webDistDir: options.webDistDir } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -194,6 +205,8 @@ async function handleRequest(
     writeJson(response, 200, createHealthResponse(options));
     return;
   }
+
+  if (await serveStaticWeb(request, response, options.webDistDir ? { rootDir: options.webDistDir } : undefined)) return;
 
   const remoteAddress = request.socket.remoteAddress;
   const authorization = firstHeader(request.headers.authorization);
@@ -264,6 +277,32 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateStatus);
+    return;
+  }
+
+  if (pathname === '/api/v1/certificates/readiness') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.certificateReadiness) {
+      writeJson(response, 503, { error: { code: 'CERTIFICATE_READINESS_UNAVAILABLE', message: 'Certificate readiness is unavailable.' } });
+      return;
+    }
+    writeJson(response, 200, options.certificateReadiness);
+    return;
+  }
+
+  if (pathname === '/api/v1/deployment/readiness') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.deploymentReadiness) {
+      writeJson(response, 503, { error: { code: 'DEPLOYMENT_READINESS_UNAVAILABLE', message: 'Deployment readiness is unavailable.' } });
+      return;
+    }
+    writeJson(response, 200, options.deploymentReadiness);
     return;
   }
 
@@ -605,6 +644,32 @@ async function handleRequest(
     }
     try {
       writeJson(response, 200, options.modelSettings.configure(input));
+    } catch (error) {
+      if (error instanceof ModelSettingsError) {
+        writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/model/probe') {
+    if (!options.modelSettings) {
+      writeJson(response, 503, { error: { code: 'MODEL_SETTINGS_UNAVAILABLE', message: 'Model settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isModelProbeInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'A complete model-list endpoint is required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, await options.modelSettings.probe(input));
     } catch (error) {
       if (error instanceof ModelSettingsError) {
         writeJson(response, 400, { error: { code: error.code, message: error.message } });
@@ -1058,6 +1123,12 @@ function isModelSettingsInput(value: unknown): value is ModelSettingsInput {
     && 'baseUrl' in value && typeof value.baseUrl === 'string'
     && 'apiKey' in value && typeof value.apiKey === 'string'
     && 'model' in value && typeof value.model === 'string';
+}
+
+function isModelProbeInput(value: unknown): value is { endpoint: string; timeoutMs?: number } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || !Object.keys(value).every((key) => key === 'endpoint' || key === 'timeoutMs') || !('endpoint' in value) || typeof value.endpoint !== 'string' || value.endpoint.length === 0 || value.endpoint.length > 2_048) return false;
+  if (!('timeoutMs' in value) || value.timeoutMs === undefined) return true;
+  return typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) && value.timeoutMs >= 50 && value.timeoutMs <= 30_000;
 }
 
 function isToolSettingsInput(value: unknown): value is { filesystemEnabled: boolean } {

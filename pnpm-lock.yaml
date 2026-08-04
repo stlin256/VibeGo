@@ -59,6 +59,9 @@ importers:
       '@ready4vibe/scheduler':
         specifier: workspace:*
         version: link:../../packages/scheduler
+      '@ready4vibe/skill-mcp':
+        specifier: workspace:*
+        version: link:../../packages/skill-mcp
       '@ready4vibe/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -126,6 +129,12 @@ importers:
   packages/auth: {}
 
   packages/certificates: {}
+
+  packages/client-sdk:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/context: {}
 
@@ -228,6 +237,9 @@ importers:
       '@ready4vibe/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+      '@ready4vibe/skill-mcp':
+        specifier: workspace:*
+        version: link:../skill-mcp
       '@ready4vibe/tools':
         specifier: workspace:*
         version: link:../tools

@@ -7,13 +7,16 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "pnpm --filter @ready4vibe/contracts build && pnpm --filter @ready4vibe/observability build && pnpm --filter @ready4vibe/storage build && pnpm --filter @ready4vibe/scheduler build && pnpm --filter @ready4vibe/testkit build && pnpm --filter @ready4vibe/context build && pnpm --filter @ready4vibe/agent build && pnpm --filter @ready4vibe/model-openai build && pnpm --filter @ready4vibe/tools build && pnpm --filter @ready4vibe/policy build && pnpm --filter @ready4vibe/sandbox build && pnpm --filter @ready4vibe/execution build && pnpm --filter @ready4vibe/sandbox-runtime build && pnpm --filter @ready4vibe/tool-adapters build && pnpm --filter @ready4vibe/workspaces build && pnpm --filter @ready4vibe/auth build && pnpm --filter @ready4vibe/certificates build && pnpm --filter @ready4vibe/skill-mcp build && pnpm --filter @ready4vibe/goal-control build && pnpm --filter @ready4vibe/daemon build && pnpm --filter @ready4vibe/web build",
+    "build": "pnpm --filter @ready4vibe/contracts build && pnpm --filter @ready4vibe/client-sdk build && pnpm --filter @ready4vibe/observability build && pnpm --filter @ready4vibe/storage build && pnpm --filter @ready4vibe/scheduler build && pnpm --filter @ready4vibe/testkit build && pnpm --filter @ready4vibe/context build && pnpm --filter @ready4vibe/agent build && pnpm --filter @ready4vibe/model-openai build && pnpm --filter @ready4vibe/tools build && pnpm --filter @ready4vibe/policy build && pnpm --filter @ready4vibe/sandbox build && pnpm --filter @ready4vibe/execution build && pnpm --filter @ready4vibe/sandbox-runtime build && pnpm --filter @ready4vibe/skill-mcp build && pnpm --filter @ready4vibe/tool-adapters build && pnpm --filter @ready4vibe/workspaces build && pnpm --filter @ready4vibe/auth build && pnpm --filter @ready4vibe/certificates build && pnpm --filter @ready4vibe/goal-control build && pnpm --filter @ready4vibe/daemon build && pnpm --filter @ready4vibe/web build",
     "typecheck": "pnpm build && pnpm --filter \"@ready4vibe/*\" typecheck",
     "test": "pnpm build && pnpm --filter \"@ready4vibe/*\" test",
     "test:coverage": "pnpm build && pnpm --filter \"@ready4vibe/*\" test -- --coverage",
     "check:module": "node scripts/check-module.mjs",
-    "test:workflow": "node --test scripts/check-module.test.mjs scripts/smoke-container.test.mjs",
+    "check:web": "node scripts/check-web.mjs",
+    "test:workflow": "node --test scripts/check-module.test.mjs scripts/check-web.test.mjs scripts/host-launcher.test.mjs scripts/smoke-container.test.mjs scripts/smoke-mcp.test.mjs scripts/smoke-model.test.mjs",
     "smoke:container": "pnpm --filter @ready4vibe/sandbox-runtime build && node scripts/smoke-container.mjs",
+    "smoke:mcp": "pnpm --filter @ready4vibe/skill-mcp build && node scripts/smoke-mcp.mjs",
+    "smoke:model": "pnpm --filter @ready4vibe/model-openai build && node scripts/smoke-model.mjs",
     "diff:check": "git diff --check",
     "verify": "node scripts/verify-workspace.mjs"
   },

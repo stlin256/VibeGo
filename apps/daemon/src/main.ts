@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import { buildDeploymentReadiness, createDeploymentProfile, DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { AuthGate } from '@ready4vibe/auth';
-import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
+import { buildCertificateReadiness, inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
@@ -18,7 +18,9 @@ import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervisor.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsManager } from './mcp-settings.js';
+import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { GoalWriteService } from '@ready4vibe/goal-control';
+import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -27,6 +29,10 @@ if (tlsEnabled && !certificatePaths) {
 }
 const tlsCredentials = tlsEnabled && certificatePaths ? loadTlsCredentials(certificatePaths) : undefined;
 const certificateStatus = tlsCredentials ? inspectTlsCertificate(tlsCredentials.cert) : undefined;
+const certificateReadiness = buildCertificateReadiness(certificateStatus, { tlsRequired });
+const deploymentReadiness = buildDeploymentReadiness(createDeploymentProfile(transportMode), {
+  certificate: certificateReadiness.status === 'ready' ? 'ready' : certificateReadiness.status === 'degraded' ? 'degraded' : 'blocked',
+});
 const allowedOrigins = process.env.READY4VIBE_ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
 const authGate = new AuthGate({
   mode: transportMode,
@@ -40,6 +46,9 @@ mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
 const observabilityLedger = new SqliteObservabilityLedger(join(dataDir, 'events.sqlite'));
+const observabilityUsageObserver = new RunUsageObserver({
+  adapter: new ProviderUsageLifecycleAdapter({ writer: observabilityLedger }),
+});
 const goalWriteService = new GoalWriteService(goalEventStore, { producer: 'daemon-goal-api' });
 let settingsStore: SqliteSettingsStore;
 try {
@@ -63,7 +72,7 @@ try {
   eventStore.close();
   throw error;
 }
-const modelSettings = new InMemoryModelSettingsManager();
+const modelSettings = new InMemoryModelSettingsManager(process.env, undefined, undefined, settingsStore);
 let agentMemorySettings!: AgentMemorySettingsManager;
 let agentMemoryKnowledgeSettings!: AgentMemoryKnowledgeSettingsManager;
 const agentMemoryRuntime = new TencentMemoryRuntimeSupervisor({
@@ -98,21 +107,26 @@ const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry }
 // persist non-secret intent and request a later injected probe without causing
 // a child process or network request during daemon startup.
 const mcpSettings = new McpSettingsManager({ settings: settingsStore });
+// R4 is opt-in: until an application service activates a verified snapshot,
+// this manager contributes no runtime and performs no transport side effect.
+const mcpRuntimeBinding = new McpRunBindingManager(workspaceRegistry);
 const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
   modelBindingForRun: (config) => modelSettings.bindRun(config.model),
-  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
+  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config), mcpRuntimeBinding.runtimeForRun(config)]),
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
+  observabilityUsageObserver,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 try {
   await runManager.recoverAfterRestart();
   await agentMemorySettings.start();
 } catch (error) {
+  await mcpRuntimeBinding.close();
   await agentMemorySettings.close();
   await agentMemoryKnowledgeSettings.close();
   await observabilityLedger.close();
@@ -128,6 +142,8 @@ const server = createDaemonServer({
   storageKind: 'sqlite',
   runManager,
   ...(certificateStatus ? { certificateStatus } : {}),
+  certificateReadiness,
+  deploymentReadiness,
   modelSettings,
   toolSettings,
   gitSettings,
@@ -137,6 +153,7 @@ const server = createDaemonServer({
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   mcpSettings,
+  webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
@@ -150,6 +167,7 @@ server.listen(port, host, () => {
 const shutdown = (): void => {
   server.close(() => {
     void (async () => {
+      await mcpRuntimeBinding.close();
       await agentMemorySettings.close();
       await agentMemoryKnowledgeSettings.close();
       await observabilityLedger.close();

@@ -20,6 +20,7 @@
     "@ready4vibe/execution": "workspace:*",
     "@ready4vibe/policy": "workspace:*",
     "@ready4vibe/sandbox": "workspace:*",
+    "@ready4vibe/skill-mcp": "workspace:*",
     "@ready4vibe/tools": "workspace:*"
   }
 }
