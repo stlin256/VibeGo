@@ -64,6 +64,8 @@
 
 50. Spec 48-R4 的不可信任务审批续接集成 fixture 已补齐：`untrusted-content` + `external-sandbox` + digest image 先产生 `approval.required`，经认证 approve 后只在同一 run 的显式 continuation 点执行一次注入式 container runner；duplicate/deny/cancel/runtime unavailable 均 fail-closed，Web approval card 只展示 bounded provider/digest/network 元数据，不改变 AgentLoop 核心状态机或现有事件事实源。
 
+51. Spec 49-R1 transport slice 实施中：先在 `packages/skill-mcp` 增加注入式 stdio/Streamable HTTP channel factory 与 bounded `McpProtocolSession` contract，覆盖 initialize、progress、request id、timeout/cancel、auth/status 映射和 deterministic close；transport 不创建 ToolRegistry、Approval、Scheduler、Sandbox 或 daemon startup side effect。
+
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；

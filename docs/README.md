@@ -48,7 +48,7 @@
 - [Harness 上游实现研究](research/upstream-harness-implementations.md) 与 [ADR 0016](adr/0016-clean-room-harness-productionization.md)：基于 Codex、OpenHands、Aider、Goose、MCP TypeScript SDK、LiteLLM、Langfuse、Continue 和 OpenTelemetry 的 pinned checkout，冻结 clean-room、单一执行事实源、run snapshot、degraded 和 host-first 边界。
 - [Spec 47：Model/Context/AgentLoop productionization](specs/47-model-context-agent-loop-productionization.md)：真实 provider/context/streaming loop、可选 live smoke 和无 secret 验证。
 - [Spec 48：Approval/Sandbox/Shell runtime closure](specs/48-approval-sandbox-shell-runtime.md)：Codex-like compiled policy、低风险自动审批边界、Windows/容器运行时和恢复门禁。
-- [Spec 49：MCP/Skill transport and capability lifecycle](specs/49-mcp-skill-transport-and-capability-lifecycle.md)：stdio/Streamable HTTP、健康分级、能力快照、取消与 ToolRegistry 激活。
+- [Spec 49：MCP/Skill transport and capability lifecycle](specs/49-mcp-skill-transport-and-capability-lifecycle.md)：R1 注入式 stdio/Streamable HTTP session 边界已进入实施；健康分级、能力快照与 ToolRegistry 激活按后续阶段推进。
 - [Spec 50：Observability lifecycle integration](specs/50-observability-lifecycle-integration.md)：将 usage/cost/resource/audit ledger 在 application/RunManager 边界接入，保持 fail-soft 与隐私约束。
 - [Spec 51：Host-first release and client boundary](specs/51-host-first-release-and-client-boundary.md)：daemon 静态托管 Web、跨平台 launcher、LAN/public TLS 适配与后置 Android/iOS/HarmonyOS client SDK 边界。
 - [TencentDB 融合实施提示词](prompts/39-tencentdb-agent-memory-implementation.md)：可直接交给另一位开发者或 Agent，按 Contract → MemoryCore → Web Settings → Supervisor → Proxy/Knowledge 顺序实施，并保留 dirty worktree。

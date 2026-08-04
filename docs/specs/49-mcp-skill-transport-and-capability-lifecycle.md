@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: planned (49-R0 research gate)
+- Status: accepted for 49-R1 transport slice
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -106,6 +106,25 @@ ports; no daemon auto-start.
 
 Exit: a transport result maps to a single bounded `ToolError`/health DTO and
 never includes raw headers, env or response bodies.
+
+#### R1 contract slice (2026-08-04)
+
+`@ready4vibe/skill-mcp` now owns two injected channel factories and a bounded
+protocol session. `McpStdioChannelFactory` starts only through an injected
+argv/spawn port, uses newline-delimited JSON-RPC framing, an explicit env
+allowlist and deterministic child close. `McpStreamableHttpChannelFactory`
+posts to the exact manifest URL through an injected fetch port, sends bounded
+content/accept headers plus optional in-memory auth headers, and never appends
+paths or query credentials. Both factories map 401/403/429/5xx, malformed or
+oversized payloads, disconnect, timeout and AbortSignal cancellation to stable
+`McpTransportError` codes without returning raw body/header/env data.
+
+`McpProtocolSession` opens once, performs `initialize`, exposes the bounded
+server capability result and request-id correlation, forwards progress
+notifications through an injected callback, and closes on every failure or
+cancellation. It is a transport/session boundary only: it does not activate a
+ToolRegistry descriptor, grant approval, acquire a Scheduler lease or invoke a
+Sandbox. No daemon startup or default run path creates a session.
 
 ### 49-R2: activation and registry
 
