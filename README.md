@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, and responsive Web/PWA run console are implemented and tested. Host-first same-origin Web distribution is now the accepted deployment direction but is not yet packaged; MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, and optional daemon-hosted Web dist (Spec 51-R1) are implemented and tested. The launcher/release bundle, MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -82,8 +82,9 @@ repository, daemon events, logs, or browser storage. Use a complete provider
 endpoint; a base URL without `/chat/completions` is intentionally rejected.
 
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
-path. The release target is a single Host URL where the daemon serves the compiled Web and
-the API/SSE same-origin; the launcher and static serving are tracked in Spec 41.
+path. When `pnpm build` has produced `apps/web/dist`, the daemon serves the compiled Web,
+API and SSE on one same-origin Host URL; `READY4VIBE_WEB_DIST_DIR` can point to another
+absolute dist directory. The launcher/release bundle remains tracked in Spec 51-R2.
 
 ## Host-first deployment target
 

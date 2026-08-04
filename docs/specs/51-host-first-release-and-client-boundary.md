@@ -1,6 +1,6 @@
 # Spec 51: Host-first release and future client boundary
 
-- Status: in progress (51-R1 static serving gate)
+- Status: 51-R1 implemented (R2-R4 remain planned)
 - Date: 2026-08-04
 - Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -23,7 +23,7 @@ release.
 
 - The daemon and Vite Web app run independently in development.
 - Same-origin API/SSE, pairing, CSRF and LAN/TLS contracts are documented and
-  tested, but Web static assets are not yet bundled into the daemon release.
+  tested; the optional production daemon path now serves a built Web dist.
 - Certificate metadata/status is available; ACME issuance/renewal and a
   cross-platform launcher remain explicit adapters.
 - Native mobile clients do not exist and must not be pulled into the Web MVP.
@@ -116,7 +116,7 @@ that serves a built Web directory without changing the development server.
 Exit: a clean build can be opened through one host URL; API and SSE remain
 authenticated and relative.
 
-#### 51-R1 implementation gate (2026-08-05)
+#### 51-R1 implementation update (2026-08-05)
 
 The daemon accepts an optional absolute `webDistDir` and serves only built
 static files from that directory. `GET` and `HEAD` are supported; `/` and
@@ -131,6 +131,12 @@ The default source checkout keeps the Vite development server unchanged. The
 production `main` composition points to `apps/web/dist` (or an explicit
 `READY4VIBE_WEB_DIST_DIR`), and a missing build reports a safe
 `WEB_ASSETS_UNAVAILABLE` response rather than serving source files.
+
+The daemon static-serving fixture suite passes 4 tests (within the 151-test
+daemon package gate), covering index/assets/HEAD, SPA fallback, API and health
+isolation, extension asset misses, traversal, method and missing-build guards.
+The source checkout remains Vite-compatible; static serving is enabled only
+when `webDistDir` is supplied by the production composition.
 
 ### 51-R2: cross-platform launcher
 

@@ -142,6 +142,7 @@ const server = createDaemonServer({
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   mcpSettings,
+  webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),

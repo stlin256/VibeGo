@@ -18,6 +18,7 @@ import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './age
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
+import { serveStaticWeb } from './static-web.js';
 
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
@@ -52,6 +53,8 @@ export interface DaemonServerOptions {
   mcpSettings?: McpSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
+  /** Absolute path to a built React/Vite dist directory; omitted in dev. */
+  webDistDir?: string;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -77,6 +80,7 @@ interface ResolvedDaemonServerOptions {
   mcpSettings?: McpSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
+  webDistDir?: string;
 }
 
 export interface HealthResponse {
@@ -134,6 +138,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
+    ...(options.webDistDir ? { webDistDir: options.webDistDir } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -194,6 +199,8 @@ async function handleRequest(
     writeJson(response, 200, createHealthResponse(options));
     return;
   }
+
+  if (await serveStaticWeb(request, response, options.webDistDir ? { rootDir: options.webDistDir } : undefined)) return;
 
   const remoteAddress = request.socket.remoteAddress;
   const authorization = firstHeader(request.headers.authorization);

@@ -108,6 +108,11 @@ assets. A missing build returns a bounded unavailable response and never
 exposes a host path or source checkout file. This slice does not add a
 launcher, CORS, native client or second Web server.
 
+The R1 implementation is now present in `apps/daemon/src/static-web.ts` and
+the daemon composition passes `apps/web/dist` (overridable by
+`READY4VIBE_WEB_DIST_DIR`). Its four fixture tests pass alongside the daemon
+regression suite; no run/event/auth authority changed.
+
 ## 不变的事实源
 
 此 ADR 不修改或替换：

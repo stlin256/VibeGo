@@ -585,14 +585,14 @@ live provider smoke is now implemented as the later opt-in R4 command for the
 offline development gate; Spec 52 still requires a successful redacted smoke
 report before release review.
 
-## Spec 51：Host-first release and client boundary（R1 门禁已冻结）
+## Spec 51：Host-first release and client boundary（R1 已实现，R2-R4 规划）
 
 详见 [Spec 51](specs/51-host-first-release-and-client-boundary.md) 与现有 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md)。本阶段完成 daemon 静态托管 React Web、跨平台 launcher、单 Host URL、LAN/public TLS/certificate adapter 和未来 TypeScript client SDK。远程用户只需浏览器 URL 与 pairing；Android/iOS/HarmonyOS UI 后置，不读取 SQLite/sidecar，不复制 AgentLoop/Approval/Sandbox。
 
-51-R1 先冻结静态托管边界：daemon 仅从显式 Web dist 目录提供 GET/HEAD、SPA fallback
+51-R1 已实现静态托管边界：daemon 仅从显式 Web dist 目录提供 GET/HEAD、SPA fallback
 和安全缓存；`/api`、health、SSE 保留现有 AuthGate/CSRF/Origin；缺失构建、路径穿越、
-symlink escape 和目录请求均 fail-closed。launcher、TLS/ACME、Tailscale/SSH 与 client SDK
-留在后续 R2-R4。
+symlink escape 和目录请求均 fail-closed。daemon static fixture 4 tests、daemon package
+151 tests 已通过；launcher、TLS/ACME、Tailscale/SSH 与 client SDK 留在后续 R2-R4。
 
 ## Spec 52：Capability profiles 与 first-run experience（规划）
 

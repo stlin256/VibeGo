@@ -90,7 +90,7 @@ RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry 或 `run_events`
 
 - 不在默认路径调用真实模型、网络、MCP、Skill 或 shell；真实模型只在显式 Web/环境配置后使用；
 - 不在 daemon 启动时修改用户 workspace、Git、系统设置或证书；filesystem/shell 只有用户从已认证 Web 设置显式开启、并经过路径/审批/sandbox 守卫后才可能产生副作用；
-- 当前尚未把 React Web 静态资源内置到 daemon，也没有发行包 launcher；源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 是下一阶段实现目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
+- Spec 51-R1 已把 React Web 静态资源以可选 dist 目录内置到 daemon；发行包 launcher 尚未实现，源码开发仍可使用独立 Vite，Host-first 同源发行和远程只开 URL 的完整打包是下一阶段目标。Android/iOS/HarmonyOS 客户端不在当前实现范围内；
 - 不实现 ACME 自动签发、Windows 证书存储、VM runtime、MCP/Skill 外部连接或完整审批/diff UI；external sandbox CLI runner 已由 daemon 的显式设置 wiring，但默认关闭且不会自动拉取镜像或启动容器；Web/PWA 仍不替代 daemon 安全边界；
 - 不把 `InMemoryEventStore` 当作生产持久化；
 - 不把 `/health` 当作认证、LAN、模型或 sandbox 可用性证明；
@@ -319,10 +319,11 @@ The following work is documented but not fully implemented yet:
   focused observability tests. The adapter is bounded, deterministic and
   privacy-checked; no upload, second event source or automatic daemon/API/Web
   wiring is enabled.
-- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
-  static Web serving, cross-platform launcher, LAN/public certificate adapter
-  and a future versioned client SDK. Current development still uses a separate
-  Vite server; native Android/iOS/HarmonyOS clients remain post-MVP.
+- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): R1 static
+  Web serving is implemented with 4 fixture tests and a 151-test daemon gate;
+  cross-platform launcher, LAN/public certificate adapter and future versioned
+  client SDK remain planned. Development can still use the separate Vite
+  server; native Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
   cross-cutting capability-profile and first-run UX gate is now specified. It
   defines preview, workspace-coding, advanced-local and custom profiles,

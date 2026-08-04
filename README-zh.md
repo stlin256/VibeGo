@@ -8,7 +8,7 @@
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring 和响应式 Web/PWA 控制台已经实现并通过测试。Host-first 同源 Web 发行方向已确定但尚未打包；MCP/Skill 激活、ACME 自动化、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台和可选的 daemon Web dist 托管（Spec 51-R1）已经实现并通过测试。Host launcher/release bundle、MCP/Skill 激活、ACME 自动化、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -79,8 +79,8 @@ pnpm smoke:model -- --endpoint https://api.deepseek.com/chat/completions --model
 OpenAI-compatible 请求，只输出脱敏的状态、延迟和 usage 摘要，不会把 key、地址、提示词、原始响应或报告写入仓库、事件、日志或浏览器。必须使用完整的 provider endpoint，直接使用没有 `/chat/completions` 的基础 URL 会被拒绝。
 
 默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。最终发行目标是一个
-Host URL：daemon 同时托管编译后的 Web、API 和 SSE；launcher 与静态托管实现记录在
-Spec 41 中。
+Host URL：daemon 同时托管编译后的 Web、API 和 SSE；`READY4VIBE_WEB_DIST_DIR` 可指向
+另一个绝对 dist 目录，launcher/release bundle 记录在 Spec 51-R2 中。
 
 ## Host-first 部署目标
 
