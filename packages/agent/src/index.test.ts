@@ -58,7 +58,28 @@ describe('AgentLoop', () => {
     const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
     const loop = new AgentLoop({ eventStore, scheduler, modelProvider: provider });
 
-    const result = await loop.run({ runId: 'run_normal', config: config() });
+    const result = await loop.run({
+      runId: 'run_normal',
+      config: config(),
+      modelSnapshot: {
+        schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
+        providerId: 'fake-model',
+        model: 'deterministic',
+        pricingModel: 'deterministic',
+        descriptorRevision: 'fake-rev-1',
+        endpointPolicy: { kind: 'provider-default' },
+        capabilities: {
+          streaming: true,
+          toolCalls: true,
+          structuredOutput: true,
+          reasoning: false,
+          promptCaching: false,
+          audioInput: false,
+          audioOutput: false,
+        },
+        capturedAt: '2026-08-04T00:00:00.000Z',
+      },
+    });
     const events = await eventStore.read('run_normal');
     expect(result).toMatchObject({ runId: 'run_normal', status: 'completed', output: 'hello' });
     expect(events.map((event) => event.type)).toEqual([
@@ -68,6 +89,11 @@ describe('AgentLoop', () => {
     ]);
     expect(scheduler.activeCount()).toBe(0);
     expect(provider.requests[0]?.metadata.runId).toBe('run_normal');
+    expect(events[0]?.payload).toMatchObject({ modelSnapshot: { providerId: 'fake-model', descriptorRevision: 'fake-rev-1' } });
+    expect(events.find((event) => event.type === 'model.requested')?.payload).toMatchObject({
+      providerId: 'fake-model',
+      requestId: provider.requests[0]?.metadata.requestId,
+    });
   });
 
   it('turns a provider error into a safe failed run', async () => {

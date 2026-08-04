@@ -4,6 +4,7 @@ import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
+import { OpenAICompatibleProvider } from '@ready4vibe/model-openai';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { TencentMemoryProxyProvider } from './memory-proxy-provider.js';
 import { RunManager, RunManagerError } from './run-manager.js';
@@ -250,6 +251,114 @@ describe('RunManager restart recovery', () => {
     await vi.waitFor(() => expect(runManager.completion(started.runId)).toBeDefined());
     expect(runManager.completion(started.runId)).toMatchObject({ status: 'completed', output: 'proxy' });
     expect(baseModel.requests).toHaveLength(0);
+  });
+
+  it('runs a real OpenAI-compatible two-turn tool call through the application bridge', async () => {
+    let fetchCalls = 0;
+    const provider = new OpenAICompatibleProvider({
+      id: 'openai-compatible',
+      endpoint: 'https://provider.example.test/v1/chat/completions',
+      apiKey: 'test-secret',
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        const chunks = fetchCalls === 1
+          ? [
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_echo","function":{"name":"echo","arguments":"{\\"value\\":1}"}}]}}]}\n\n',
+            'data: {"choices":[{"finish_reason":"tool_calls"}]}\n\n',
+            'data: [DONE]\n\n',
+          ]
+          : [
+            'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+            'data: {"choices":[{"finish_reason":"stop"}]}\n\n',
+            'data: [DONE]\n\n',
+          ];
+        return responseFromChunks(chunks);
+      },
+    });
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo a value' }],
+      execute: vi.fn(async ({ input }: { input: unknown }) => ({ output: { received: input } })),
+    };
+    const manager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler({ ...DEFAULT_SCHEDULER_POLICY, maxActiveRuns: 1 }),
+      modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }),
+      modelBindingForRun: () => ({
+        provider,
+        snapshot: {
+          schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
+          providerId: 'openai-compatible',
+          model: 'fixture-model',
+          pricingModel: 'fixture-model',
+          descriptorRevision: 'fixture-rev-1',
+          endpointPolicy: { kind: 'explicit-url', baseUrl: 'https://provider.example.test/v1/chat/completions' },
+          capabilities: {
+            streaming: true,
+            toolCalls: true,
+            structuredOutput: false,
+            reasoning: false,
+            promptCaching: false,
+            audioInput: false,
+            audioOutput: false,
+          },
+          capturedAt: '2026-08-04T12:00:00.000Z',
+        },
+      }),
+      toolRuntime: runtime,
+    });
+
+    const started = await manager.start({ ...config, model: { provider: 'openai-compatible', name: 'fixture-model' }, limits: { ...config.limits, maxTurns: 2 } });
+    await vi.waitFor(() => expect(manager.completion(started.runId)).toBeDefined());
+
+    expect(manager.completion(started.runId)).toMatchObject({ status: 'completed', output: 'done' });
+    expect(fetchCalls).toBe(2);
+    expect(runtime.execute).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call_echo', input: { value: 1 } }));
+    const events = await eventStore.read(started.runId);
+    expect(events[0]?.payload).toMatchObject({ modelSnapshot: { providerId: 'openai-compatible', descriptorRevision: 'fixture-rev-1' } });
+    expect(events.filter((event) => event.type === 'model.requested')).toHaveLength(2);
+    expect(events.find((event) => event.type === 'model.requested')?.payload).toMatchObject({ providerId: 'openai-compatible' });
+    expect(JSON.stringify(events)).not.toContain('test-secret');
+    await expect(manager.snapshot(started.runId)).resolves.toMatchObject({ modelSnapshot: { providerId: 'openai-compatible', descriptorRevision: 'fixture-rev-1' } });
+  });
+
+  it('freezes the provider binding for an in-flight run when settings switch', async () => {
+    const first = new FakeModelProvider({ delayMs: 10, events: [{ type: 'text-delta', text: 'first' }, { type: 'completed', finishReason: 'stop' }] });
+    const second = new FakeModelProvider({ events: [{ type: 'text-delta', text: 'second' }, { type: 'completed', finishReason: 'stop' }] });
+    const snapshot = (revision: string) => ({
+      schemaVersion: 'ready4vibe_model_provider_snapshot_v1' as const,
+      providerId: 'fake-model',
+      model: 'deterministic',
+      pricingModel: 'deterministic',
+      descriptorRevision: revision,
+      endpointPolicy: { kind: 'provider-default' as const },
+      capabilities: {
+        streaming: true,
+        toolCalls: true,
+        structuredOutput: true,
+        reasoning: false,
+        promptCaching: false,
+        audioInput: false,
+        audioOutput: false,
+      },
+      capturedAt: '2026-08-04T12:00:00.000Z',
+    });
+    let binding = { provider: first, snapshot: snapshot('first-rev') };
+    const manager = new RunManager({
+      eventStore: new InMemoryEventStore(),
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: first,
+      modelBindingForRun: () => binding,
+    });
+
+    const started = await manager.start(config);
+    binding = { provider: second, snapshot: snapshot('second-rev') };
+    await vi.waitFor(() => expect(manager.completion(started.runId)).toBeDefined());
+
+    expect(manager.completion(started.runId)).toMatchObject({ status: 'completed', output: 'first' });
+    expect(first.requests).toHaveLength(1);
+    expect(second.requests).toHaveLength(0);
+    expect((await manager.eventStore.read(started.runId))[0]?.payload).toMatchObject({ modelSnapshot: { descriptorRevision: 'first-rev' } });
   });
 });
 

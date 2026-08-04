@@ -2,10 +2,12 @@ import { v7 as uuidv7 } from 'uuid';
 import { ContextBudgetError, ContextManager, type ContextItem } from '@ready4vibe/context';
 import {
   assertTransition,
+  ModelProviderSnapshotSchema,
   parseRunConfig,
   type EventStore,
   type ModelEvent,
   type ModelProvider,
+  type ModelProviderSnapshot,
   type ModelRequest,
   type RunConfig,
   type RunStatus,
@@ -27,6 +29,8 @@ export interface AgentRunRequest {
   modelProvider?: ModelProvider;
   /** Tool runtime captured for this run; when omitted the loop default is used. */
   toolRuntime?: ToolRuntime;
+  /** Secret-free provider/capability snapshot captured by the application service. */
+  modelSnapshot?: ModelProviderSnapshot;
 }
 
 export interface AgentRunResult {
@@ -82,6 +86,7 @@ export class AgentLoop {
 
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const config = parseRunConfig(request.config);
+    const modelSnapshot = request.modelSnapshot ? ModelProviderSnapshotSchema.parse(request.modelSnapshot) : undefined;
     const modelProvider = request.modelProvider ?? this.options.modelProvider;
     const toolRuntime = request.toolRuntime ?? this.options.toolRuntime;
     const runId = request.runId ?? `run_${uuidv7()}`;
@@ -128,7 +133,10 @@ export class AgentLoop {
     };
 
     try {
-      await this.append(runId, 'run.created', 'user', correlationId, { config });
+      await this.append(runId, 'run.created', 'user', correlationId, {
+        config,
+        ...(modelSnapshot ? { modelSnapshot } : {}),
+      });
       let contextResult: ReturnType<ContextManager['build']>;
       try {
         const context = new ContextManager({
@@ -201,7 +209,10 @@ const messages: unknown[] = [...contextResult.messages];
         await this.append(runId, 'model.requested', 'orchestrator', turnId, {
           turnId,
           model: config.model.name,
+          providerId: modelProvider.id,
+          requestId: modelRequest.metadata.requestId,
           toolCount: modelTools.length,
+          ...(modelSnapshot ? { descriptorRevision: modelSnapshot.descriptorRevision } : {}),
         });
 
         let completed = false;

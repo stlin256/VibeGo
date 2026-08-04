@@ -1,4 +1,4 @@
-import type { ModelEvent, ModelProvider } from '@ready4vibe/contracts';
+import { ModelProviderSnapshotSchema, type ModelEvent, type ModelProvider, type ModelProviderSnapshot } from '@ready4vibe/contracts';
 import { OpenAICompatibleProvider } from '@ready4vibe/model-openai';
 
 export type ModelSettingsSource = 'environment' | 'web-memory' | 'unconfigured';
@@ -18,11 +18,22 @@ export interface ModelSettingsInput {
   model: string;
 }
 
+export interface ModelRunSelection {
+  provider: string;
+  name: string;
+}
+
+export interface ModelProviderBinding {
+  readonly provider: ModelProvider;
+  readonly snapshot: ModelProviderSnapshot;
+}
+
 export interface ModelSettingsManager {
   readonly provider: ModelProvider;
   status(): ModelSettingsStatus;
   configure(input: ModelSettingsInput): ModelSettingsStatus;
   clear(): ModelSettingsStatus;
+  bindRun(selection: ModelRunSelection): ModelProviderBinding;
 }
 
 export function createModelProvider(env: NodeJS.ProcessEnv = process.env): ModelProvider {
@@ -59,11 +70,14 @@ export class ModelSettingsError extends Error {
 export class InMemoryModelSettingsManager implements ModelSettingsManager {
   readonly provider: SwitchingModelProvider;
   private currentStatus: ModelSettingsStatus;
+  private revision = 0;
+  private readonly clock: () => Date;
 
-  constructor(env: NodeJS.ProcessEnv = process.env) {
+  constructor(env: NodeJS.ProcessEnv = process.env, clock: () => Date = () => new Date()) {
     const provider = createModelProvider(env);
     this.provider = new SwitchingModelProvider(provider);
     this.currentStatus = statusFromEnvironment(env, provider);
+    this.clock = clock;
   }
 
   status(): ModelSettingsStatus {
@@ -78,6 +92,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
       apiKey: normalized.apiKey,
     });
     this.provider.replace(nextProvider);
+    this.revision += 1;
     this.currentStatus = {
       configured: true,
       providerId: normalized.provider,
@@ -90,6 +105,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
 
   clear(): ModelSettingsStatus {
     this.provider.replace(createUnconfiguredProvider());
+    this.revision += 1;
     this.currentStatus = {
       configured: false,
       providerId: 'unconfigured',
@@ -98,6 +114,42 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
       source: 'unconfigured',
     };
     return this.status();
+  }
+
+  bindRun(selection: ModelRunSelection): ModelProviderBinding {
+    if (typeof selection.name !== 'string' || selection.name.trim().length === 0 || selection.name.length > 256 || /[\r\n]/u.test(selection.name)) {
+      throw new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.');
+    }
+    if (this.currentStatus.configured && selection.provider !== this.currentStatus.providerId) {
+      throw new ModelSettingsError('INVALID_PROVIDER', 'The requested model provider is not configured for this daemon.');
+    }
+    const provider = this.provider.snapshot();
+    let snapshot: ModelProviderSnapshot;
+    try {
+      snapshot = ModelProviderSnapshotSchema.parse({
+        schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
+        providerId: provider.id,
+        model: selection.name.trim(),
+        pricingModel: selection.name.trim(),
+        descriptorRevision: `settings-${this.revision}`,
+        endpointPolicy: this.currentStatus.baseUrl
+          ? { kind: 'explicit-url', baseUrl: this.currentStatus.baseUrl }
+          : { kind: 'provider-default' },
+        capabilities: {
+          streaming: provider.capabilities.streaming,
+          toolCalls: provider.capabilities.toolCalls,
+          structuredOutput: provider.capabilities.structuredOutput,
+          reasoning: false,
+          promptCaching: false,
+          audioInput: false,
+          audioOutput: false,
+        },
+        capturedAt: this.clock().toISOString(),
+      });
+    } catch {
+      throw new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.');
+    }
+    return { provider, snapshot };
   }
 }
 

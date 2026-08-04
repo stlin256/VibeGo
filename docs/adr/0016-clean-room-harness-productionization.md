@@ -125,6 +125,24 @@ pure translators rather than copied upstream schemas. The repository gate
 passes with 396 tests; the unchanged daemon path is the rollback boundary for
 the next R3 bridge.
 
+### R3 application bridge implementation (2026-08-04)
+
+R3 may connect the already-tested provider adapter through `RunManager`, but it
+must do so through an injected binding boundary. The binding returns the
+provider instance and a validated `ModelProviderSnapshot`; it never returns a
+credential. `RunManager` captures it once per run and `AgentLoop` only records
+bounded provider/request metadata in the existing `run_events` stream. A
+configured provider mismatch fails before `run.created`; a settings change
+cannot replace a provider in an in-flight run.
+
+The R3 acceptance fixture uses an injected fake fetch implementation to produce
+an OpenAI-compatible two-turn/tool-call conversation. It exercises the real
+daemon application service, Scheduler lease and ToolRuntime, but does not call
+the network or write the observability ledger. The implementation also covers
+provider-switch isolation and the safe mismatch response before `run.created`.
+Spec 50 remains responsible for automatic ledger lifecycle attachment; Goal
+Control, Approval, Sandbox and WorkspaceRegistry remain untouched.
+
 ## Validation
 
 Every stage must run `pnpm typecheck`, `pnpm test`, `pnpm diff:check` and

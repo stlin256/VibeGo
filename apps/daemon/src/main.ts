@@ -97,6 +97,7 @@ const runManager = new RunManager({
   eventStore,
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
+  modelBindingForRun: (config) => modelSettings.bindRun(config.model),
   toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config)]),
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   agentMemorySettings,
