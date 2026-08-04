@@ -44,6 +44,9 @@ importers:
       '@ready4vibe/model-openai':
         specifier: workspace:*
         version: link:../../packages/model-openai
+      '@ready4vibe/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@ready4vibe/policy':
         specifier: workspace:*
         version: link:../../packages/policy

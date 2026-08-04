@@ -206,6 +206,7 @@ Start with a spec or an issue-sized boundary, keep the change modular, add tests
 pnpm typecheck
 pnpm test
 pnpm diff:check
+pnpm verify
 ```
 
 Do not commit API keys, private certificates, workspace secrets, or generated runtime data.

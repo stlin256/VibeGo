@@ -199,4 +199,5 @@ export * from './agent-memory-operations.js';
 export * from './agent-memory-knowledge.js';
 export * from './agent-memory-knowledge-settings.js';
 export * from './observability.js';
+export * from './observability-api.js';
 export * from './provider-usage.js';

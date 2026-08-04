@@ -11,7 +11,8 @@
     "typecheck": "pnpm build && pnpm --filter \"@ready4vibe/*\" typecheck",
     "test": "pnpm build && pnpm --filter \"@ready4vibe/*\" test",
     "test:coverage": "pnpm build && pnpm --filter \"@ready4vibe/*\" test -- --coverage",
-    "diff:check": "git diff --check"
+    "diff:check": "git diff --check",
+    "verify": "node scripts/verify-workspace.mjs"
   },
   "devDependencies": {
     "@types/node": "22.15.30",

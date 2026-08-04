@@ -229,3 +229,38 @@ writer failure, and audit-chain integrity. No default daemon/run path, AgentLoop
 RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events`, or
 `goal_events` behavior changed; authenticated API, Web Usage/Audit, export/import,
 and automatic sampling settings remain R5 work.
+
+## Spec 45 R0 implementation note (2026-08-04)
+
+R5 API/Web projection work is now scoped in `docs/specs/45-observability-api-and-web.md` and
+`docs/adr/0014-observability-api-and-web-projection.md`. The planned boundary injects the existing
+observability ledger into the daemon, exposes authenticated bounded Usage/Audit reads and explicit
+rebuild/verify operations, and keeps browser output free of raw payloads, secrets, commands and
+absolute paths. The R5 implementation and tests are recorded in the section below.
+
+## Spec 45 R5 implementation note (2026-08-04)
+
+The documentation gate is now followed by a bounded implementation slice:
+
+- `apps/daemon/src/main.ts` injects the existing observability ledger into the
+  daemon server and closes it on initialization, recovery, and shutdown paths;
+  `RunManager`, AgentLoop, Scheduler, Approval, Sandbox, WorkspaceRegistry,
+  `run_events`, and `goal_events` remain unchanged.
+- `apps/daemon/src/server.ts` exposes authenticated summary, timeseries, run
+  usage, audit page, pricing, rebuild, and verify endpoints with bounded parsing
+  and stable degraded error codes.
+- `packages/contracts/src/observability-api.ts` and
+  `packages/observability/src/api.ts` provide versioned DTOs and pure projections;
+  `apps/web/src/ObservabilityPanel.tsx` consumes them in the existing responsive
+  conversation context rail.
+- Tests cover daemon/API, contract, projection, browser client, and degraded UI
+  behavior. Automatic sampling settings, export/import, and pricing catalog
+wiring remain out of this slice.
+
+## Spec 46 implementation note (2026-08-04)
+
+The fixed verification gate is documented in Spec 46/ADR 0015. The repository
+script exposed as `pnpm verify` runs the existing typecheck, test,
+diff-check, and Git diff-check commands in a deterministic fail-fast order; it
+does not install dependencies, mutate the worktree, or expose environment
+secrets.

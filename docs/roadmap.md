@@ -365,6 +365,29 @@ Spec 43b 已提供唯一独立 ledger/rollup，44-R2 已补齐 provider usage �
 去重和 conflict port，不创建第二套账本；44-R3 已完成基于同一 `PricingRule`/`cost` contract 的
 纯内存 pricing catalog 与 BigInt cost projection；44-R4 已完成 Node/adapter resource collector、
 bounded queue、degraded 状态和 audit application adapter。退出顺序为：44-R5 认证 API、Web
-Usage/Audit 和显式导入。任何上游
+Usage/Audit 和显式导入。当前下一步为 Spec 45 的只读 Usage/Audit projection；任何上游
 commit、许可证、路径或语义变化都重新触发 R0；当前 Spec 43 的 contracts/ledger 实现状态以其
 Spec 和 `implementation-status.md` 为准，现有 interactive run 行为保持不变。
+
+## Spec 45：Observability API 与 Web Usage/Audit projection（45-R5 基础切片已完成）
+
+### Spec 45 R5 implementation update (2026-08-04)
+
+The first API/Web projection slice is complete: authenticated bounded summary,
+timeseries, run usage, audit, pricing, rebuild, and verify endpoints now reuse
+the existing ledger, while the Web context rail renders a non-blocking Usage/Audit
+panel. Automatic sampling settings, export/import, and pricing catalog wiring
+remain later work; interactive runs and Goal behavior are unchanged.
+
+详见 [Spec 45](specs/45-observability-api-and-web.md) 与
+[ADR 0014](adr/0014-observability-api-and-web-projection.md)。R5 只通过现有 AuthGate 和
+Host-first daemon 注入 observability ledger，提供 bounded summary、timeseries、run usage、
+audit verify/replay 和只读 pricing projection；Web 以 context panel 消费，不读取 SQLite、不
+返回 raw payload，也不改变 interactive run 或 Goal 行为。
+
+## Spec 46：Automated verification workflow（已接受）
+
+详见 [Spec 46](specs/46-automated-verification-workflow.md) 与
+[ADR 0015](adr/0015-automated-verification-workflow.md)。`pnpm verify` 固定执行
+typecheck → test → diff:check → git diff --check，失败即停，不安装依赖、不改工作区、
+不触碰模型凭据；它复用现有 package scripts，作为每次实质性提交前的统一门禁。

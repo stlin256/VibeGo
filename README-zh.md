@@ -176,6 +176,7 @@ packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
 pnpm typecheck
 pnpm test
 pnpm diff:check
+pnpm verify
 ```
 
 不要提交 API key、私有证书、workspace secret 或运行时数据。

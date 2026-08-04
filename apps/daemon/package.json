@@ -24,6 +24,7 @@
     "@ready4vibe/execution": "workspace:*",
     "@ready4vibe/goal-control": "workspace:*",
     "@ready4vibe/model-openai": "workspace:*",
+    "@ready4vibe/observability": "workspace:*",
     "@ready4vibe/policy": "workspace:*",
     "@ready4vibe/sandbox": "workspace:*",
     "@ready4vibe/scheduler": "workspace:*",

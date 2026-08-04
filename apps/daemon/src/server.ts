@@ -1,10 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
+import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutationResult } from '@ready4vibe/goal-control';
+import { buildAuditResponse, buildPricingResponse, buildRunUsage, buildUsageSummary, buildUsageTimeseries, verifyAuditChain } from '@ready4vibe/observability';
+import type { ObservabilityLedger } from '@ready4vibe/storage';
+import type { PricingCatalog } from '@ready4vibe/observability';
 import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
@@ -44,6 +48,8 @@ export interface DaemonServerOptions {
   goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  observabilityLedger?: ObservabilityLedger;
+  pricingCatalog?: PricingCatalog;
 }
 
 interface ResolvedDaemonServerOptions {
@@ -66,6 +72,8 @@ interface ResolvedDaemonServerOptions {
   goalWriteService?: GoalWriteService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
+  observabilityLedger?: ObservabilityLedger;
+  pricingCatalog?: PricingCatalog;
 }
 
 export interface HealthResponse {
@@ -120,6 +128,8 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
+    ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
+    ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
   };
 
   const requestListener = (request: IncomingMessage, response: ServerResponse): void => {
@@ -245,6 +255,130 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateStatus);
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/summary') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const range = parseObservabilityRange(url.searchParams.get('range'));
+    try {
+      const [models, tools, samples] = await Promise.all([
+        options.observabilityLedger.listModelUsage(),
+        options.observabilityLedger.listToolUsage(),
+        options.observabilityLedger.listResourceSamples(),
+      ]);
+      writeJson(response, 200, buildUsageSummary(models, tools, samples, range));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Observability projection is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/timeseries') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const range = parseObservabilityRange(url.searchParams.get('range'));
+    const metric = parseObservabilityMetric(url.searchParams.get('metric'));
+    try {
+      const [models, samples] = await Promise.all([
+        options.observabilityLedger.listModelUsage(),
+        options.observabilityLedger.listResourceSamples(),
+      ]);
+      writeJson(response, 200, buildUsageTimeseries(models, samples, metric, range));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Observability projection is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/pricing') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.pricingCatalog) {
+      writeJson(response, 200, {
+        schemaVersion: 'ready4vibe_observability_api_v1', status: 'degraded', generatedAt: new Date().toISOString(), rules: [],
+      });
+      return;
+    }
+    try {
+      writeJson(response, 200, buildPricingResponse(options.pricingCatalog.list()));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_PRICING_UNAVAILABLE', message: 'Pricing projection is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/usage/rebuild') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    try {
+      const rollups = await options.observabilityLedger.rebuildRollups();
+      writeJson(response, 200, { schemaVersion: 'ready4vibe_observability_api_v1', status: 'ready', generatedAt: new Date().toISOString(), rollupsRebuilt: rollups.length });
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_REBUILD_FAILED', message: 'Usage rollup rebuild failed.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/audit/verify') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    try {
+      const events = await options.observabilityLedger.listAuditEvents();
+      const verified = verifyAuditEvents(events);
+      writeJson(response, 200, { schemaVersion: 'ready4vibe_observability_api_v1', status: verified ? 'ready' : 'degraded', generatedAt: new Date().toISOString(), verified });
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_VERIFY_FAILED', message: 'Audit verification is unavailable.' } });
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/audit/events') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const after = parseObservabilityAuditCursor(url.searchParams.get('after'));
+    const action = parseObservabilityFilter(url.searchParams.get('action'));
+    const outcome = parseObservabilityFilter(url.searchParams.get('outcome'));
+    try {
+      writeJson(response, 200, buildAuditResponse(await options.observabilityLedger.listAuditEvents(), after, {
+        ...(action === undefined ? {} : { action }), ...(outcome === undefined ? {} : { outcome }),
+      }));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Audit projection is unavailable.' } });
+    }
     return;
   }
 
@@ -714,6 +848,29 @@ async function handleRequest(
     return;
   }
 
+  const runUsageMatch = /^\/api\/v1\/runs\/([^/]+)\/usage$/u.exec(pathname);
+  if (runUsageMatch) {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.observabilityLedger) {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_UNAVAILABLE', message: 'Observability ledger is unavailable.' } });
+      return;
+    }
+    const runId = decodeRunId(runUsageMatch[1]);
+    try {
+      const [models, tools] = await Promise.all([
+        options.observabilityLedger.listModelUsage(),
+        options.observabilityLedger.listToolUsage(),
+      ]);
+      writeJson(response, 200, buildRunUsage(runId, models, tools));
+    } catch {
+      writeJson(response, 503, { error: { code: 'OBSERVABILITY_READ_FAILED', message: 'Run usage projection is unavailable.' } });
+    }
+    return;
+  }
+
   const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel|retry))?$/.exec(pathname);
   if (!runMatch) {
     writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
@@ -949,6 +1106,36 @@ function parseCursor(value: string | string[] | null): number {
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new RequestError(400, 'INVALID_CURSOR', 'Invalid event cursor.');
   return parsed;
+}
+
+function parseObservabilityRange(value: string | null): ObservabilityRange {
+  const candidate = value === null || value.trim() === '' ? '24h' : value;
+  const parsed = ObservabilityRangeSchema.safeParse(candidate);
+  if (!parsed.success) throw new RequestError(400, 'INVALID_OBSERVABILITY_RANGE', 'Range must be 24h, 7d, or 30d.');
+  return parsed.data;
+}
+
+function parseObservabilityMetric(value: string | null): ObservabilityMetric {
+  const parsed = ObservabilityMetricSchema.safeParse(value ?? 'cpu');
+  if (!parsed.success) throw new RequestError(400, 'INVALID_OBSERVABILITY_METRIC', 'Metric must be cpu, memory, disk, tokens, or cost.');
+  return parsed.data;
+}
+
+function parseObservabilityAuditCursor(value: string | null): number {
+  if (value === null || value.trim() === '') return 0;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 1_000_000_000_000) throw new RequestError(400, 'INVALID_AUDIT_CURSOR', 'Invalid audit cursor.');
+  return parsed;
+}
+
+function parseObservabilityFilter(value: string | null): string | undefined {
+  if (value === null || value.trim() === '') return undefined;
+  if (value.length > 64 || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/u.test(value)) throw new RequestError(400, 'INVALID_AUDIT_FILTER', 'Invalid audit filter.');
+  return value;
+}
+
+function verifyAuditEvents(events: readonly AuditEvent[]): boolean {
+  return verifyAuditChain(events);
 }
 
 function decodeRunId(value: string | undefined): string {

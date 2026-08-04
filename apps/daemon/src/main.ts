@@ -5,7 +5,7 @@ import { AuthGate } from '@ready4vibe/auth';
 import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { SqliteEventStore, SqliteGoalEventStore, SqliteSettingsStore } from '@ready4vibe/storage';
+import { SqliteEventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
@@ -38,11 +38,13 @@ const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
+const observabilityLedger = new SqliteObservabilityLedger(join(dataDir, 'events.sqlite'));
 const goalWriteService = new GoalWriteService(goalEventStore, { producer: 'daemon-goal-api' });
 let settingsStore: SqliteSettingsStore;
 try {
   settingsStore = new SqliteSettingsStore(join(dataDir, 'events.sqlite'));
 } catch (error) {
+  await observabilityLedger.close();
   goalEventStore.close();
   eventStore.close();
   throw error;
@@ -54,6 +56,7 @@ try {
     persistence: new SqliteWorkspaceRegistryPersistence(settingsStore),
   });
 } catch (error) {
+  await observabilityLedger.close();
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -81,6 +84,7 @@ try {
   });
 } catch (error) {
   if (agentMemorySettings) await agentMemorySettings.close().catch(() => undefined);
+  await observabilityLedger.close();
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -105,6 +109,7 @@ try {
 } catch (error) {
   await agentMemorySettings.close();
   await agentMemoryKnowledgeSettings.close();
+  await observabilityLedger.close();
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -122,6 +127,7 @@ const server = createDaemonServer({
   gitSettings,
   sandboxSettings,
   workspaceRegistry,
+  observabilityLedger,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   goalEventStore,
@@ -136,12 +142,15 @@ server.listen(port, host, () => {
 
 const shutdown = (): void => {
   server.close(() => {
-    void agentMemorySettings.close().finally(() => {
-      void agentMemoryKnowledgeSettings.close().finally(() => {
-        settingsStore.close();
-        goalEventStore.close();
-        eventStore.close();
-      });
+    void (async () => {
+      await agentMemorySettings.close();
+      await agentMemoryKnowledgeSettings.close();
+      await observabilityLedger.close();
+      settingsStore.close();
+      goalEventStore.close();
+      eventStore.close();
+    })().catch(() => {
+      // Shutdown is best effort; the HTTP server has already stopped accepting work.
     });
   });
 };

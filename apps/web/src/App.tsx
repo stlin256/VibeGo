@@ -1,8 +1,9 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type GitSettingsStatus, type HealthResponse, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
+import { ObservabilityPanel } from './ObservabilityPanel.js';
 import './styles.css';
 
 export interface AppProps {
@@ -54,9 +55,15 @@ export interface AppProps {
   goalProjectionUnavailable?: boolean;
   goalProjectionRefreshing?: boolean;
   onRefreshGoalProjection?: () => Promise<void> | void;
+  usageSummary?: UsageSummary;
+  auditEvents?: AuditEventsResponse;
+  observabilityLoading?: boolean;
+  observabilityUnavailable?: boolean;
+  observabilityRefreshing?: boolean;
+  onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, modelSettings, modelSettingsUnavailable = false, onConfigureModel, onClearModelSettings, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
   const [modelBaseUrl, setModelBaseUrl] = useState('https://api.deepseek.com');
@@ -407,6 +414,7 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
         </section>
         {connected && <aside className="context-rail" data-open={contextOpen} aria-label="Run context">
           <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} />
+          <ObservabilityPanel {...(usageSummary ? { summary: usageSummary } : {})} {...(auditEvents ? { audit: auditEvents } : {})} loading={observabilityLoading} unavailable={observabilityUnavailable} refreshing={observabilityRefreshing} {...(onRefreshObservability ? { onRefresh: onRefreshObservability } : {})} />
           <section className="panel connection-panel">
             <div className="eyebrow">CONNECTION</div>
             <h2>Connected workspace</h2>

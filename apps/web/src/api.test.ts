@@ -82,6 +82,32 @@ describe('ApiClient', () => {
     expect(calls[1]?.input).not.toContain('token');
   });
 
+  it('uses bounded usage and audit projections without placing credentials in URLs', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const client = new ApiClient('', async (input, init) => {
+      calls.push({ input, init });
+      return response({ schemaVersion: 'ready4vibe_observability_api_v1', status: 'ready', generatedAt: '2026-08-04T00:00:00.000Z', range: '24h', from: '2026-08-03T00:00:00.000Z', to: '2026-08-04T00:00:00.000Z', modelAttempts: 0, modelRequests: 0, toolCalls: 0, tokens: { input: { total: null, knownRecords: 0, unknownRecords: 0 }, output: { total: null, knownRecords: 0, unknownRecords: 0 }, cachedInput: { total: null, knownRecords: 0, unknownRecords: 0 }, reasoning: { total: null, knownRecords: 0, unknownRecords: 0 } }, resources: { sampleCount: 0, droppedSampleCount: 0 }, cost: { currency: null, amountMicros: null, accuracy: 'not-applicable' }, events: [], after: 0, nextAfter: null, rules: [] });
+    });
+    await client.usageSummary('7d');
+    await client.usageTimeseries('tokens', '24h');
+    await client.runUsage('run_usage_01');
+    await client.auditEvents(42, { action: 'run.completed', outcome: 'succeeded' });
+    await client.pricing();
+    await client.rebuildUsage();
+    await client.verifyAudit();
+    expect(calls.map((call) => call.input)).toEqual([
+      '/api/v1/usage/summary?range=7d',
+      '/api/v1/usage/timeseries?metric=tokens&range=24h',
+      '/api/v1/runs/run_usage_01/usage',
+      '/api/v1/audit/events?after=42&action=run.completed&outcome=succeeded',
+      '/api/v1/usage/pricing',
+      '/api/v1/usage/rebuild',
+      '/api/v1/audit/verify',
+    ]);
+    expect(calls[5]?.init?.method).toBe('POST');
+    expect(calls.map((call) => call.input).join('')).not.toMatch(/access|secret|api[_-]?key/iu);
+  });
+
   it('posts approval decisions in the body without putting credentials in the URL', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const fetcher: FetchLike = async (input, init) => {
