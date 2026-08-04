@@ -641,3 +641,4 @@ function safeTransportMessage(code: McpTransportErrorCode): string {
 
 export * from './transport.js';
 export * from './capability.js';
+export * from './run-bridge.js';

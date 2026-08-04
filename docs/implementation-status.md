@@ -454,6 +454,9 @@ WorkspaceRegistry, AgentLoop and `run_events` remain authoritative. Resources
 and prompts are not executable. A bounded per-run idempotency ledger prevents
 same-call replay and rejects changed input/revision; recovery creates a new
 run and cannot restore an unknown in-flight remote request. Disabled or
-degraded MCP settings remain a no-op for normal runs. The implementation and
-focused tests are pending in the next commits; no default daemon wiring or
-live MCP process/network smoke is claimed by this note.
+degraded MCP settings remain a no-op for normal runs. The pure package slice
+is now implemented: `McpExecutionLedger`/`McpProtocolToolCallPort` in
+`@ready4vibe/skill-mcp` and `McpToolExecutorRuntime` in
+`@ready4vibe/tool-adapters`, with 33 and 19 focused tests respectively. No
+default daemon wiring or live MCP process/network smoke is claimed by this
+note; those remain the next R4 application slice.

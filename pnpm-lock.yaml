@@ -228,6 +228,9 @@ importers:
       '@ready4vibe/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+      '@ready4vibe/skill-mcp':
+        specifier: workspace:*
+        version: link:../skill-mcp
       '@ready4vibe/tools':
         specifier: workspace:*
         version: link:../tools

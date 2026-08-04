@@ -462,8 +462,10 @@ new run and never resumes an unknown in-flight remote call. MCP metadata in
 safe error codes and truncated output; URLs, commands, argv, headers,
 environment values, absolute paths and raw protocol bodies remain excluded.
 
-The default daemon remains MCP-off. Disabled/degraded status omits the bridge
-and never blocks ordinary runs. See [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md)
+The pure package bridge is implemented and focused-tested; daemon/RunManager
+composition and live transport smoke remain pending. The default daemon
+remains MCP-off. Disabled/degraded status omits the bridge and never blocks
+ordinary runs. See [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md)
 and the detailed acceptance tests in [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md).
 
 详见 [Spec 49](specs/49-mcp-skill-transport-and-capability-lifecycle.md)。本阶段将现有

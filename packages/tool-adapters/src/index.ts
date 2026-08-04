@@ -1,5 +1,6 @@
 import type { AgentToolDescriptor, ToolRuntime, ToolRuntimeRequest, ToolRuntimeResult } from '@ready4vibe/agent';
 import type { SandboxPolicy } from '@ready4vibe/contracts';
+import { McpExecutionError, McpExecutionLedger, type McpCapabilityDescriptor, type McpCapabilitySnapshot, type McpToolCallPort } from '@ready4vibe/skill-mcp';
 import {
   ArgvGuard,
   ArgvGuardError,
@@ -40,6 +41,14 @@ export interface ToolExecutionRequest {
   intent: ToolIntent;
   sandbox: SandboxResolveRequest;
   input: unknown;
+  metadata?: ToolExecutionMetadata;
+}
+
+export interface ToolExecutionMetadata {
+  readonly runId: string;
+  readonly turnId: string;
+  readonly callId: string;
+  readonly descriptorRevision: string;
 }
 
 export interface ToolHandlerContext {
@@ -47,6 +56,7 @@ export interface ToolHandlerContext {
   readonly intent: ToolIntent;
   readonly sandbox: ResolvedSandbox;
   readonly signal: AbortSignal;
+  readonly metadata?: ToolExecutionMetadata;
 }
 
 export interface ToolHandler {
@@ -119,9 +129,11 @@ export class ToolExecutor {
         intent: request.intent,
         sandbox,
         signal: controller.signal,
+        ...(request.metadata ? { metadata: request.metadata } : {}),
       });
     } catch (error) {
       if (error instanceof SandboxUnavailableError || error instanceof ToolAdapterError) throw error;
+      if (error instanceof McpExecutionError) throw error;
       throw new ToolAdapterError('TOOL_FAILED');
     } finally {
       signal?.removeEventListener('abort', onAbort);
@@ -190,6 +202,12 @@ export class ToolExecutorRuntime implements ToolRuntime {
       intent: this.options.createIntent({ ...request, descriptor }),
       sandbox: this.options.createSandboxRequest({ ...request, descriptor }),
       input: request.input,
+      metadata: {
+        runId: request.runId,
+        turnId: request.turnId,
+        callId: request.callId,
+        descriptorRevision: descriptor.version,
+      },
     }, request.signal);
     return { output };
   }
@@ -212,6 +230,152 @@ export class ToolExecutorRuntime implements ToolRuntime {
   approvalDetails(request: ToolRuntimeRequest): ApprovalDetails | undefined {
     return this.options.approvalDetails?.(request);
   }
+}
+
+export interface McpToolExecutorRuntimeOptions {
+  readonly snapshot: McpCapabilitySnapshot;
+  readonly callPort: McpToolCallPort;
+  readonly resolveWorkspaceRoot: (request: ToolRuntimeRequest) => string;
+  readonly sandboxResolver?: SandboxResolver;
+  readonly ledger?: McpExecutionLedger;
+  readonly approvalDetails?: (request: ToolRuntimeRequest) => ApprovalDetails | undefined;
+}
+
+/**
+ * Run-scoped MCP binding. It projects a verified capability snapshot into the
+ * existing ToolExecutor boundary; it never owns policy, sandbox or scheduling
+ * decisions and it cannot execute resources/prompts.
+ */
+export class McpToolExecutorRuntime implements ToolRuntime {
+  readonly descriptors: readonly AgentToolDescriptor[];
+  private readonly runtime: ToolExecutorRuntime;
+
+  constructor(options: McpToolExecutorRuntimeOptions) {
+    if (options.snapshot.health !== 'healthy-verified') throw new ToolAdapterError('TOOL_FORBIDDEN');
+    const executable = options.snapshot.capabilities.filter((descriptor) => descriptor.kind === 'tool' && descriptor.executable === true);
+    if (executable.length === 0) throw new ToolAdapterError('TOOL_FORBIDDEN');
+
+    const registry = new ToolRegistry();
+    const handlers = new ToolHandlerRegistry();
+    const originals = new Map<string, McpCapabilityDescriptor>();
+    const projected: AgentToolDescriptor[] = [];
+    const ledger = options.ledger ?? new McpExecutionLedger();
+    for (const descriptor of executable) {
+      const id = descriptor.qualifiedName;
+      if (originals.has(id)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+      const sandboxMode = mcpSandboxMode(descriptor);
+      registry.register({
+        id,
+        version: descriptor.revision,
+        risk: descriptor.risk,
+        summary: descriptor.summary,
+        supportedSandboxModes: [sandboxMode],
+        ...(descriptor.inputSchema === undefined ? {} : { inputSchema: { ...descriptor.inputSchema } }),
+      });
+      originals.set(id, descriptor);
+      handlers.register(new McpToolHandler(descriptor, options.callPort, ledger));
+      projected.push({
+        name: id,
+        id,
+        version: descriptor.revision,
+        risk: descriptor.risk,
+        summary: descriptor.summary,
+        ...(descriptor.inputSchema === undefined ? {} : { inputSchema: { ...descriptor.inputSchema } }),
+      });
+    }
+    this.descriptors = Object.freeze(projected);
+    const executor = new ToolExecutor({
+      registry,
+      approvalPolicy: new ApprovalPolicy(registry),
+      sandboxResolver: options.sandboxResolver ?? new SandboxResolver(),
+      handlers,
+    });
+    this.runtime = new ToolExecutorRuntime({
+      registry,
+      executor,
+      descriptors: this.descriptors,
+      resolveWorkspaceRoot: options.resolveWorkspaceRoot,
+      createIntent: (request) => {
+        const original = originals.get(request.descriptor.id);
+        if (!original) throw new ToolAdapterError('TOOL_FORBIDDEN');
+        const sandboxMode = mcpSandboxMode(original);
+        const networkAccess = original.networkAccess === 'enabled' ? 'enabled' : sandboxNetwork(request.config.sandbox);
+        return {
+          workspaceId: request.config.workspaceId,
+          toolId: request.descriptor.id,
+          toolVersion: request.descriptor.version,
+          risk: request.descriptor.risk,
+          taskTrust: request.config.taskTrust,
+          sandboxMode,
+          ...(sandboxMode === 'external-sandbox' && request.config.sandbox.mode === 'external-sandbox' ? { sandboxProvider: request.config.sandbox.provider } : {}),
+          networkAccess,
+          approvalPolicy: request.config.approval,
+          policyRevision: `mcp-${options.snapshot.fingerprint}`,
+          sessionId: request.config.createdBySessionId,
+        };
+      },
+      createSandboxRequest: (request) => ({ taskTrust: request.config.taskTrust, policy: request.config.sandbox }),
+      ...(options.approvalDetails ? { approvalDetails: options.approvalDetails } : {}),
+    });
+  }
+
+  execute(request: ToolRuntimeRequest): Promise<ToolRuntimeResult> {
+    return this.runtime.execute(request);
+  }
+
+  approve(request: ToolRuntimeRequest, ttlMs: number): Promise<void> {
+    if (!this.runtime.approve) return Promise.reject(new ToolAdapterError('APPROVAL_REQUIRED'));
+    return this.runtime.approve(request, ttlMs);
+  }
+
+  approvalDetails(request: ToolRuntimeRequest): ApprovalDetails | undefined {
+    return this.runtime.approvalDetails(request);
+  }
+}
+
+class McpToolHandler implements ToolHandler {
+  readonly id: string;
+  readonly version: string;
+
+  constructor(
+    private readonly descriptor: McpCapabilityDescriptor,
+    private readonly callPort: McpToolCallPort,
+    private readonly ledger: McpExecutionLedger,
+  ) {
+    this.id = descriptor.qualifiedName;
+    this.version = descriptor.revision;
+  }
+
+  async execute(input: unknown, context: ToolHandlerContext): Promise<unknown> {
+    const metadata = context.metadata;
+    if (!metadata) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const result = await this.ledger.execute({
+      runId: metadata.runId,
+      turnId: metadata.turnId,
+      callId: metadata.callId,
+      descriptor: this.descriptor,
+      input,
+      signal: context.signal,
+    }, (request) => this.callPort.call(request));
+    return {
+      source: 'mcp',
+      serverId: this.descriptor.serverId,
+      toolId: this.descriptor.id,
+      revision: this.descriptor.revision,
+      value: result,
+    };
+  }
+}
+
+function mcpSandboxMode(descriptor: McpCapabilityDescriptor): ToolSandboxMode {
+  if (descriptor.sandboxMode === 'workspace-read') return 'read-only';
+  if (descriptor.sandboxMode === 'workspace-write') return 'workspace-write';
+  if (descriptor.sandboxMode === 'external-sandbox') return 'external-sandbox';
+  throw new ToolAdapterError('TOOL_FORBIDDEN');
+}
+
+function sandboxNetwork(policy: SandboxPolicy): 'restricted' | 'enabled' {
+  return 'network' in policy ? policy.network : 'restricted';
 }
 
 export interface FileSystemAdapterFileSystem {

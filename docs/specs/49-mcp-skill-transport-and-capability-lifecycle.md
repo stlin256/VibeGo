@@ -1,6 +1,6 @@
 # Spec 49: MCP/Skill transport and capability lifecycle
 
-- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 contract frozen and implementation in progress
+- Status: 49-R1, 49-R2 and 49-R3 optional settings/status slice implemented; 49-R4 pure bridge slice implemented, daemon wiring pending
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 19](19-mcp-transport-boundary.md), [Spec 20](20-tool-executor-runtime.md), [Spec 42](42-shadcn-style-web-design-system.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -284,6 +284,17 @@ idempotency ledger prevents duplicate remote execution.
 - disabled/degraded/default MCP settings perform no transport side effect;
 - no AgentLoop core-loop, RunManager default-start, `run_events` schema,
   `goal_events`, Approval or Sandbox authority changes are required.
+
+#### 49-R4 pure bridge implementation slice (2026-08-04)
+
+`@ready4vibe/skill-mcp` now provides `McpExecutionLedger` and
+`McpProtocolToolCallPort`. `@ready4vibe/tool-adapters` provides
+`McpToolExecutorRuntime`, which projects executable descriptors into the
+existing `ToolRegistry` and sends calls through `ToolExecutorRuntime`.
+Metadata needed for idempotency is passed through the existing handler context
+as bounded run/turn/call identifiers; no AgentLoop state machine change is
+needed. The package slice has 33 skill-mcp tests and 19 tool-adapter tests.
+Daemon/RunManager opt-in composition and live transport smoke remain pending.
 
 Exit: an activated MCP tool completes through the same approval/sandbox path
 as a built-in tool, while failure, recovery and retry cannot replay an old
