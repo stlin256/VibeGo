@@ -128,3 +128,5 @@ this layer. Disabled sampling produces no resource record; replay with the
 same fingerprint is a no-op and a changed payload is a conflict. Writer errors
 are reported as degraded and never alter the source run result. The default
 RunManager and AgentLoop wiring remains intentionally unchanged until 50-R2/R3.
+The focused package gate covers the recorder and existing observability
+adapters with 38 passing tests; no live model, tool, shell or network is used.

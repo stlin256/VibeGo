@@ -314,6 +314,8 @@ The following work is documented but not fully implemented yet:
   errors. It is not wired into the default RunManager path; provider usage,
 
   cost, automatic sampling and complete lifecycle attachment remain 50-R2/R3.
+  The focused observability package gate is 38 tests passed; no live runtime is
+  started.
 - **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): daemon
   static Web serving, cross-platform launcher, LAN/public certificate adapter
   and a future versioned client SDK. Current development still uses a separate

@@ -141,6 +141,11 @@ This is an application-port slice only: the default `RunManager.start()` path,
 `WorkspaceRegistry` remain unchanged. Automatic lifecycle wiring is deferred to
 50-R2/R3 after provider usage and resource sampling acceptance.
 
+The implementation is `packages/observability/src/lifecycle.ts` with
+`lifecycle.test.ts`; the focused observability gate is 38 passing tests. The
+fixture is network-free and does not require a model credential or a live
+process.
+
 ## Acceptance matrix
 
 - interactive run outcome is unchanged when usage, sampling, pricing or audit

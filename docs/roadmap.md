@@ -541,6 +541,8 @@ audit batch；重复 payload 是 no-op，冲突 fail-closed，关闭采样不写
 writer 失败只返回 degraded。该切片不接入默认 RunManager.start，不修改
 AgentLoop、Scheduler、Approval、Sandbox、WorkspaceRegistry、`run_events` 或
 `goal_events`；下一步先做 provider usage/cost wiring（50-R2）。
+当前 observability package focused gate 为 38 tests passed，fixture 不启动模型、
+工具、shell 或网络。
 
 ### Spec 47-R3 implementation update (2026-08-04)
 
