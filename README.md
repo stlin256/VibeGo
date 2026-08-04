@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, optional daemon-hosted Web dist (Spec 51-R1), and dependency-free Host launcher lifecycle (Spec 51-R2) are implemented and tested. The signed release bundle, MCP/Skill activation, ACME automation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, optional daemon-hosted Web dist (Spec 51-R1), dependency-free Host launcher lifecycle (Spec 51-R2), and read-only certificate readiness projection (Spec 51-R3a) are implemented and tested. The signed release bundle, ACME/OS certificate automation, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 

@@ -585,20 +585,27 @@ live provider smoke is now implemented as the later opt-in R4 command for the
 offline development gate; Spec 52 still requires a successful redacted smoke
 report before release review.
 
-## Spec 51：Host-first release and client boundary（R1-R2 已实现，R3-R4 规划）
+## Spec 51：Host-first release and client boundary（R1-R3a 已实现，R3b-R4 规划）
 
-详见 [Spec 51](specs/51-host-first-release-and-client-boundary.md) 与现有 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md)。本规格覆盖 daemon 静态托管 React Web、跨平台 launcher、单 Host URL、LAN/public TLS/certificate adapter 和未来 TypeScript client SDK；当前 R1-R2 已实现，R3-R4 仍按门禁推进。远程用户只需浏览器 URL 与 pairing；Android/iOS/HarmonyOS UI 后置，不读取 SQLite/sidecar，不复制 AgentLoop/Approval/Sandbox。
+详见 [Spec 51](specs/51-host-first-release-and-client-boundary.md) 与现有 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md)。本规格覆盖 daemon 静态托管 React Web、跨平台 launcher、单 Host URL、LAN/public TLS/certificate adapter 和未来 TypeScript client SDK；当前 R1-R3a 已实现，R3b-R4 仍按门禁推进。远程用户只需浏览器 URL 与 pairing；Android/iOS/HarmonyOS UI 后置，不读取 SQLite/sidecar，不复制 AgentLoop/Approval/Sandbox。
 
 51-R1 已实现静态托管边界：daemon 仅从显式 Web dist 目录提供 GET/HEAD、SPA fallback
 和安全缓存；`/api`、health、SSE 保留现有 AuthGate/CSRF/Origin；缺失构建、路径穿越、
 symlink escape 和目录请求均 fail-closed。daemon static fixture 4 tests、daemon package
-151 tests 已通过。
+152 tests 已通过。
 
 51-R2 已实现依赖零、可注入测试的 Host launcher 生命周期边界：解析受限参数、按平台
 解析 per-user data dir、保留 loopback 默认和显式端口、PID lease/stale cleanup、redacted
 child log、优雅停止/重启和显式 `--open`。8 个 Node fixture tests 已通过。它不安装
 Node、不启用 LAN、不写 workspace/secret、不绕过 TLS/pairing；TLS/ACME、Tailscale/SSH、
 签名发行包和升级/回滚仍留在 R3-R4 与 Spec 53/55/57。
+
+51-R3a 已实现证书 readiness projection：复用已加载的非 secret metadata，按
+TLS-required、loopback optional、expiry window 和 bounded SAN/hostname 判定 `ready`/
+`degraded`/`blocked`，通过现有认证只读 API 提供稳定 reason/next-step；证书包 8 个 focused
+tests、daemon focused gate 152 tests 已通过。R3a 不读取浏览器
+上传的私钥，不接 ACME/DNS/OS store/自动续期；配置向导、candidate/previous renewal
+和 rollback 留在 R3b。
 
 ## Spec 52：Capability profiles 与 first-run experience（规划）
 

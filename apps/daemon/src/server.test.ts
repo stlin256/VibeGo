@@ -323,6 +323,35 @@ describe('daemon health server', () => {
     expect(JSON.stringify(body)).not.toContain('cert.pem');
   });
 
+  it('serves certificate readiness through the same authenticated read-only boundary', async () => {
+    const unavailable = createDaemonServer();
+    servers.push(unavailable);
+    const unavailablePort = await listen(unavailable);
+    const unavailableResponse = await fetch(`http://127.0.0.1:${unavailablePort}/api/v1/certificates/readiness`);
+    expect(unavailableResponse.status).toBe(503);
+    expect(await unavailableResponse.json()).toMatchObject({ error: { code: 'CERTIFICATE_READINESS_UNAVAILABLE' } });
+
+    const server = createDaemonServer({
+      certificateReadiness: {
+        schemaVersion: 'ready4vibe_certificate_readiness_v1',
+        status: 'blocked',
+        reasonCode: 'certificate-required',
+        nextStep: 'Configure a valid certificate.',
+        affectsTransport: true,
+        daysRemaining: null,
+        hostname: null,
+      },
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/certificates/readiness`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ schemaVersion: 'ready4vibe_certificate_readiness_v1', status: 'blocked', reasonCode: 'certificate-required' });
+    expect(JSON.stringify(body)).not.toContain('PRIVATE KEY');
+    expect(JSON.stringify(body)).not.toContain('cert.pem');
+  });
+
   it('serves authenticated read-only Goal projections and bounded event replay', async () => {
     const goalEventStore = await goalStoreForApi();
     const server = createDaemonServer({ goalEventStore });
@@ -523,6 +552,8 @@ describe('daemon health server', () => {
     expect(await denied.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
     const deniedCertificateStatus = await fetch(`${base}/api/v1/certificates/status`);
     expect(deniedCertificateStatus.status).toBe(401);
+    const deniedCertificateReadiness = await fetch(`${base}/api/v1/certificates/readiness`);
+    expect(deniedCertificateReadiness.status).toBe(401);
 
     const pairingStart = await fetch(`${base}/api/v1/pairing/start`, { method: 'POST' });
     const pairing = await pairingStart.json() as { code: string };

@@ -1,6 +1,6 @@
 # Spec 51: Host-first release and future client boundary
 
-- Status: 51-R2 implemented (R1 complete; R3-R4 remain planned)
+- Status: 51-R3a implemented (R1-R2 complete; R3b-R4 remain planned)
 - Date: 2026-08-04
 - Related: [Spec 41](41-host-first-distribution-and-client-boundary.md), [Spec 24](24-certificate-status.md), [Spec 25](25-configuration-onboarding.md), [Spec 52](52-capability-profiles-and-first-run-experience.md), [ADR 0010](../adr/0010-host-first-same-origin-web-and-client-boundary.md), [upstream harness research](../research/upstream-harness-implementations.md)
 
@@ -132,8 +132,8 @@ production `main` composition points to `apps/web/dist` (or an explicit
 `READY4VIBE_WEB_DIST_DIR`), and a missing build reports a safe
 `WEB_ASSETS_UNAVAILABLE` response rather than serving source files.
 
-The daemon static-serving fixture suite passes 4 tests (within the 151-test
-daemon package gate), covering index/assets/HEAD, SPA fallback, API and health
+The daemon static-serving fixture suite passes 4 tests (within the current
+152-test daemon package gate), covering index/assets/HEAD, SPA fallback, API and health
 isolation, extension asset misses, traversal, method and missing-build guards.
 The source checkout remains Vite-compatible; static serving is enabled only
 when `webDistDir` is supplied by the production composition.
@@ -175,18 +175,33 @@ modify workspace files; installer and signed artifact work remain outside R2.
 Exit: a disposable package starts/stops the daemon and reports a usable URL on
 each supported platform fixture.
 
-### 51-R3: guided LAN/public certificate flow
+### 51-R3a: certificate readiness projection
 
-Connect the existing certificate metadata/settings UI to a safe certificate
-adapter. LAN default remains fail-closed without valid TLS unless the user
-explicitly selects development HTTP. ACME, OS certificate stores and public
-reverse proxies are optional adapters for a loopback/LAN Host, with
-dry-run/probe/renew/rollback tests. When a release profile selects a public
-domain, Spec 52 makes ACME issuance/renewal and rollback evidence a mandatory
-release gate.
+Connect the existing certificate metadata/settings UI to a safe, read-only
+readiness adapter. The adapter evaluates the already loaded certificate
+metadata against transport requirements and an optional bounded hostname:
+`ready` for a usable certificate, `degraded` for loopback HTTP or an
+approaching expiry window, and `blocked` for a required-but-missing,
+expired or hostname-mismatched certificate. It returns only a versioned reason
+code, bounded next-step guidance, transport impact and the existing metadata;
+it never returns PEM, private-key bytes or filesystem paths.
 
-Exit: certificate expiry, hostname mismatch, private-key failure, renewal
-failure and rollback produce safe guidance and never print key material.
+The daemon exposes this projection only through the existing authenticated
+read-only API boundary. LAN default remains fail-closed without valid TLS.
+ACME, OS certificate stores, public reverse proxies and renewal/rollback are
+R3b adapters and are not invoked by R3a.
+
+Exit: missing/optional TLS, expiry, hostname mismatch and invalid certificate
+fixtures produce stable safe guidance and never print key material. The
+certificate package has eight focused tests and the daemon focused gate now
+passes 152 tests, including authenticated readiness route isolation.
+
+### 51-R3b: guided LAN/public certificate flow
+
+Add explicit certificate configuration/probe UI and optional ACME/OS-store/
+reverse-proxy adapters only after R3a readiness contracts are stable. Any
+renewal or rollback must use candidate/previous material and retain the
+existing daemon transport/auth authority.
 
 ### 51-R4: client SDK contract (post-Web)
 

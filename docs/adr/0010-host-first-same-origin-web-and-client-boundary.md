@@ -131,6 +131,18 @@ covering platform paths, permissions, port discovery, PID lease cleanup,
 redacted logs, process-tree shutdown and disposable start/restart/stop.
 Packaging, signing, updates and rollback remain later release specs.
 
+### Spec 51-R3a certificate readiness boundary (implemented 2026-08-05)
+
+The certificate adapter first exposes a read-only readiness projection derived
+from the existing in-memory `CertificateStatus` and transport requirement. It
+can classify optional loopback HTTP, required-but-missing TLS, expiry and
+bounded SAN/hostname mismatch without reading files in the Web request path.
+The projection contains no PEM, private-key bytes or paths and is served only
+behind the existing AuthGate/CSRF/Origin boundary. ACME, OS certificate stores,
+reverse proxies, renewal and rollback remain explicit R3b adapters. The
+certificate package has eight focused tests; the daemon route is covered by
+the focused regression suite (152 daemon tests) and remains read-only.
+
 ## 不变的事实源
 
 此 ADR 不修改或替换：

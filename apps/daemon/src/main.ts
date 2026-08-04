@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
 import { AuthGate } from '@ready4vibe/auth';
-import { inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
+import { buildCertificateReadiness, inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteEventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
@@ -28,6 +28,7 @@ if (tlsEnabled && !certificatePaths) {
 }
 const tlsCredentials = tlsEnabled && certificatePaths ? loadTlsCredentials(certificatePaths) : undefined;
 const certificateStatus = tlsCredentials ? inspectTlsCertificate(tlsCredentials.cert) : undefined;
+const certificateReadiness = buildCertificateReadiness(certificateStatus, { tlsRequired });
 const allowedOrigins = process.env.READY4VIBE_ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
 const authGate = new AuthGate({
   mode: transportMode,
@@ -133,6 +134,7 @@ const server = createDaemonServer({
   storageKind: 'sqlite',
   runManager,
   ...(certificateStatus ? { certificateStatus } : {}),
+  certificateReadiness,
   modelSettings,
   toolSettings,
   gitSettings,

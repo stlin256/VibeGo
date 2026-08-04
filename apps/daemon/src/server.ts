@@ -3,7 +3,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import type { StoredEvent } from '@ready4vibe/contracts';
 import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
-import type { CertificateStatus } from '@ready4vibe/certificates';
+import type { CertificateReadiness, CertificateStatus } from '@ready4vibe/certificates';
 import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutationResult } from '@ready4vibe/goal-control';
 import { buildAuditResponse, buildPricingResponse, buildRunUsage, buildUsageSummary, buildUsageTimeseries, verifyAuditChain } from '@ready4vibe/observability';
@@ -41,6 +41,7 @@ export interface DaemonServerOptions {
   bodyLimitBytes?: number;
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
+  certificateReadiness?: CertificateReadiness;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
@@ -68,6 +69,7 @@ interface ResolvedDaemonServerOptions {
   runManager?: RunManager;
   tls?: DaemonTlsOptions;
   certificateStatus?: CertificateStatus;
+  certificateReadiness?: CertificateReadiness;
   modelSettings?: ModelSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
@@ -126,6 +128,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.runManager ? { runManager: options.runManager } : {}),
     ...(options.tls ? { tls: options.tls } : {}),
     ...(options.certificateStatus ? { certificateStatus: options.certificateStatus } : {}),
+    ...(options.certificateReadiness ? { certificateReadiness: options.certificateReadiness } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
     ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
@@ -271,6 +274,19 @@ async function handleRequest(
       return;
     }
     writeJson(response, 200, options.certificateStatus);
+    return;
+  }
+
+  if (pathname === '/api/v1/certificates/readiness') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.certificateReadiness) {
+      writeJson(response, 503, { error: { code: 'CERTIFICATE_READINESS_UNAVAILABLE', message: 'Certificate readiness is unavailable.' } });
+      return;
+    }
+    writeJson(response, 200, options.certificateReadiness);
     return;
   }
 

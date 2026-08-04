@@ -8,7 +8,7 @@
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、可选的 daemon Web dist 托管（Spec 51-R1）和依赖零的 Host launcher 生命周期（Spec 51-R2）已经实现并通过测试。签名发行包、MCP/Skill 激活、ACME 自动化、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、可选的 daemon Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）和只读证书 readiness projection（Spec 51-R3a）已经实现并通过测试。签名发行包、ACME/系统证书自动化、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
