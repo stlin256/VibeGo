@@ -22,6 +22,16 @@ CC Switch、AxonHub、LiteLLM、Langfuse 和 OpenTelemetry 对 token 分桶、�
 7. usage、resource、audit 的降级只能显示 `degraded/unknown`，不能阻塞 interactive run、静默改变 quota 或绕过现有安全门禁；
 8. future native clients 只消费稳定 projection，不读取 SQLite 或上游目录。
 
+R1 的具体落点是 `packages/contracts` 中的严格 `ProviderDescriptor`、
+`ProviderCapabilitySnapshot`、`ProviderUsageObservation` schema，以及独立纯内存 registry/normalizer
+端口；这些合约只传递 bounded metadata 和已提取的 counters，不接触 raw provider response、secret
+或运行时 AgentLoop。现有 `ModelUsageRecord` 是唯一 usage record，新增字段必须保持向后兼容并由
+normalizer 显式填充。
+
+44-R1 已完成该 contract slice：schema、privacy/fail-closed 校验、immutable capability snapshot
+和纯内存 normalizer 均位于 `packages/contracts`/`packages/observability`，没有接入默认 run、
+AgentLoop、RunManager、daemon API 或第二套事实源；R2 才允许进入独立 ledger/dedup/reconcile。
+
 ## 44-R0 证据结果
 
 以下 pinned source 已完成 README、LICENSE/NOTICE、manifest 和相关实现路径的核对，详细文件清单与

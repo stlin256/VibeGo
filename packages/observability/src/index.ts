@@ -288,6 +288,8 @@ export function replayModelUsage(events: readonly StoredEvent[]): UsageProjectio
       requestId: state.requestId ?? derivedId('request', runId, state.turnId, String(attempt)),
       providerId,
       model: state.model,
+      requestModel: state.model,
+      pricingModel: state.model,
       attempt,
       startedAt: state.startedAt,
       ...(completedAt ? { completedAt } : {}),
@@ -295,6 +297,8 @@ export function replayModelUsage(events: readonly StoredEvent[]): UsageProjectio
       status,
       tokens,
       tokenAccuracy: Object.keys(tokens).length > 0 ? 'reported' : 'unknown',
+      inputTokenSemantics: 'unknown',
+      dataSource: 'run-event',
     };
     records.push(ModelUsageRecordSchema.parse(record));
   }
@@ -416,3 +420,5 @@ function derivedId(prefix: string, ...parts: string[]): string {
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
+
+export * from './provider-usage.js';

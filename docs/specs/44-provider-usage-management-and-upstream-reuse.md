@@ -1,6 +1,6 @@
 # Spec 44：Provider、Token、费用管理与上游源码复用
 
-- 状态：Accepted；44-R0 上游研究门禁已完成，44-R1 及后续运行时实现仍受下方阶段门禁约束
+- 状态：Accepted；44-R0 上游研究门禁与 44-R1 provider/usage contract slice 已完成，44-R2 及后续运行时实现仍受下方阶段门禁约束
 - 日期：2026-08-04
 - 范围：model provider registry、usage/cost normalization、pricing management、audit projections 和开源项目复用
 - 相关：
@@ -167,6 +167,33 @@ CLI session 或运行时，也没有新增上游依赖。
 
 44-R1 至 44-R5 应复用 Spec 43 的 contracts，不得另造一套 token 或 cost 类型。任何 phase 都必须先更新 Spec、ADR、implementation-status，再修改代码。
 
+### 5.1 44-R1 contract slice
+
+44-R1 只定义可测试的 provider/usage 端口，不接入 AgentLoop、RunManager、默认 run 创建路径或
+daemon API：
+
+- `ProviderDescriptor` 是严格、版本化的 bounded metadata：provider id/display name、协议类别、
+  endpoint policy、`authRef`（只允许 secret-store 引用）和 capability flags；descriptor 不保存
+  API key、Authorization、环境变量、完整 URL 查询 secret 或绝对路径；
+- `ProviderCapabilitySnapshot` 在 run 创建时复制并冻结 descriptor 的 capability；注册表后续更新不能
+  改变已有 snapshot，provider 切换只影响新 run；
+- `ProviderUsageObservation` 只接受已经从 provider response 提取的 bounded counters 和稳定 identity，
+  不接受或持久化 raw response。normalizer 输出现有 `ModelUsageRecord`，并显式填写
+  `inputTokenSemantics`（`fresh`/`cache-inclusive`/`unknown`）、`dataSource`、`requestModel`/
+  `pricingModel` 和可选 `reconciledFrom`；token taxonomy 复用 Spec 43 的 `ModelUsageRecord.tokens`，
+  可扩展 cache creation、audio 和 prediction 维度但不创建第二套 cost 类型；
+- registry、normalizer 和 snapshot 都是纯内存/纯函数能力；未知 provider、未知协议、超长字段、secret、
+  绝对路径和不一致 identity 必须 fail-closed；价格未配置时保持无 `cost`/unknown，不填 0；
+- R1 测试必须覆盖 descriptor strictness、secret/path redaction、capability snapshot isolation、
+  cache-inclusive/fresh 语义、unknown counter 保留和 normalizer 幂等输入。R1 完成后再进入 R2 ledger。
+
+44-R1 已实现：`packages/contracts/src/provider-usage.ts` 提供上述严格 schema 与 privacy 校验，
+`packages/observability/src/provider-usage.ts` 提供 immutable in-memory registry、capability
+snapshot 和 `ProviderUsageObservation` → `ModelUsageRecord` normalizer；`ModelUsageRecord.tokens`
+向后兼容扩展 cache creation、audio 和 prediction 维度，并支持 request/pricing model、来源和
+reconciliation metadata；现有 `run_events` replay projection 也显式标记 `dataSource=run-event`
+与未知 input token semantics。该切片没有新增运行时依赖，也没有改变 interactive run 行为。
+
 ## 6. 测试与验收
 
 - 同一 provider/message/request 的重复上报不重复计费；不同语义返回 conflict；
@@ -180,4 +207,4 @@ CLI session 或运行时，也没有新增上游依赖。
 
 ## 7. 当前状态
 
-截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44-R0 已完成五个 pinned source 的研究和复用门禁；44-R1 尚未开始，不能把研究结论当作运行时接入，也不能把上游仓库作为 VibeGo 依赖。
+截至 2026-08-04，Spec 43 的 contracts/纯 projection 与 Phase 43b ledger/rollup 已完成，resource collector、pricing engine、认证 API 和 Web 仍是后续阶段。Spec 44-R0 与 44-R1 provider/usage contract slice 已完成；R1 仍是独立的 schema/registry/normalizer bounded context，不能把研究结论当作运行时接入，也不能把上游仓库作为 VibeGo 依赖。

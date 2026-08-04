@@ -29,6 +29,10 @@ describe('model usage replay projection', () => {
       providerId: 'deepseek',
       model: 'deepseek-v4-flash',
       status: 'completed',
+      requestModel: 'deepseek-v4-flash',
+      pricingModel: 'deepseek-v4-flash',
+      dataSource: 'run-event',
+      inputTokenSemantics: 'unknown',
       tokens: { input: 10, output: 3 },
       tokenAccuracy: 'reported',
     });

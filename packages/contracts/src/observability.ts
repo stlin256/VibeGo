@@ -72,14 +72,20 @@ export type ResourceSample = z.infer<typeof ResourceSampleSchema>;
 export const ModelUsageStatusSchema = z.enum(['completed', 'failed', 'cancelled', 'timed-out', 'unknown']);
 export type ModelUsageStatus = z.infer<typeof ModelUsageStatusSchema>;
 
-const ModelTokenCountsSchema = z.object({
+export const ModelTokenCountsSchema = z.object({
   input: uint.optional(),
   output: uint.optional(),
   cachedInput: uint.optional(),
+  cacheCreation: uint.optional(),
   reasoning: uint.optional(),
   toolInput: uint.optional(),
   toolOutput: uint.optional(),
+  audioInput: uint.optional(),
+  audioOutput: uint.optional(),
+  acceptedPrediction: uint.optional(),
+  rejectedPrediction: uint.optional(),
 }).strict();
+export type ModelTokenCounts = z.infer<typeof ModelTokenCountsSchema>;
 
 const CostSchema = z.object({
   currency: z.string().regex(/^[A-Z]{3,8}$/u),
@@ -96,6 +102,8 @@ export const ModelUsageRecordSchema = z.object({
   requestId: id,
   providerId: label,
   model: label,
+  requestModel: label.optional(),
+  pricingModel: label.optional(),
   attempt: z.number().int().positive().max(128),
   startedAt: ISO_TIMESTAMP,
   completedAt: ISO_TIMESTAMP.optional(),
@@ -104,9 +112,20 @@ export const ModelUsageRecordSchema = z.object({
   status: ModelUsageStatusSchema,
   tokens: ModelTokenCountsSchema,
   tokenAccuracy: z.enum(['reported', 'estimated', 'unknown']),
+  inputTokenSemantics: z.enum(['fresh', 'cache-inclusive', 'unknown']).optional(),
+  dataSource: z.enum(['provider-usage', 'run-event', 'session-import', 'reconciled']).optional(),
+  reconciledFrom: z.array(id).min(2).max(8).optional(),
   cost: CostSchema.optional(),
   sourceRevision: revision.optional(),
-}).strict().superRefine(addPrivacyIssues);
+}).strict().superRefine((value, context) => {
+  addPrivacyIssues(value, context);
+  if (value.dataSource === 'reconciled' && !value.reconciledFrom) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['reconciledFrom'], message: 'reconciled usage requires reconciledFrom' });
+  }
+  if (value.dataSource !== 'reconciled' && value.reconciledFrom) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['reconciledFrom'], message: 'reconciledFrom is only valid for reconciled usage' });
+  }
+});
 export type ModelUsageRecord = z.infer<typeof ModelUsageRecordSchema>;
 
 export const ToolUsageStatusSchema = ModelUsageStatusSchema;
@@ -246,7 +265,7 @@ export function findObservabilityPrivacyViolations(value: unknown, path: readonl
   }
   if (typeof value !== 'object' || value === null) return violations;
   for (const [key, child] of Object.entries(value)) {
-    const safeCounterKey = /^(?:tokens?|input|output|cachedInput|reasoning|toolInput|toolOutput|tokenAccuracy|knownRecords|unknownRecords)$/u.test(key);
+    const safeCounterKey = /^(?:tokens?|input|output|cachedInput|cacheCreation|reasoning|toolInput|toolOutput|audioInput|audioOutput|acceptedPrediction|rejectedPrediction|tokenAccuracy|inputTokenSemantics|dataSource|reconciledFrom|knownRecords|unknownRecords)$/u.test(key);
     const nextPath = [...path, key];
     if (!safeCounterKey && SECRET_KEY.test(key)) violations.push(`secret-shaped field is not allowed at ${nextPath.join('.')}`);
     violations.push(...findObservabilityPrivacyViolations(child, nextPath));
