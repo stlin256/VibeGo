@@ -347,3 +347,18 @@ daemon/API/Web，也不改变 interactive run、Goal、AgentLoop、Scheduler、A
 
 后续顺序为：43c 低资源 host/tool/sandbox collectors →
 43d token/cost normalization 与认证 API → 43e Web Usage/Audit surfaces 和实测资源预算。
+
+## Spec 44：Provider/Usage 管理与上游源码复用门禁（文档已完成，44-R0 待执行）
+
+详见 [Spec 44](specs/44-provider-usage-management-and-upstream-reuse.md)、
+[ADR 0013](adr/0013-upstream-research-and-provider-management-boundary.md) 和
+[实施提示词](prompts/44-provider-usage-management-implementation.md)。本阶段把
+CC Switch、AxonHub、LiteLLM、Langfuse 和 OpenTelemetry 的可借鉴语义映射到
+VibeGo 原生 Provider registry、usage normalizer、pricing catalog、dedup/reconcile、
+resource sample、audit 和 projection；不引入完整 proxy、Tauri、Python runtime、CLI
+session 扫描或第二套事实源。
+
+退出顺序为：44-R0 固定上游 commit/许可证/路径证据 → 44-R1 provider/usage contracts
+→ 44-R2 独立 ledger 与 rollup → 44-R3 pricing → 44-R4 resource/audit collectors
+→ 44-R5 认证 API、Web Usage/Audit 和显式导入。44-R0 完成前不得复制上游代码或开始
+运行时扩展；当前 Spec 43 的 contracts/ledger 实现状态以其 Spec 和 `implementation-status.md` 为准，现有 interactive run 行为保持不变。
