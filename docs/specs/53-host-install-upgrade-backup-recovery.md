@@ -1,7 +1,7 @@
 # Spec 53：Host 一键安装、签名升级、备份迁移与故障恢复
 
-- Status: Phase 0/1 implemented（manifest 与纯状态契约；安装器/升级器/备份恢复仍未接入）
-- Date: 2026-08-04
+- Status: Phase 0/1/2 implemented（manifest、升级状态与备份恢复纯 contract；安装器/升级器/备份恢复 runtime 仍未接入）
+- Date: 2026-08-05
 - Related: [Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 52](52-capability-profiles-and-first-run-experience.md)、[Spec 36](36-durable-workspace-settings.md)、[Spec 39](39-tencentdb-agent-memory-integration.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
 ## 1. 目标
@@ -131,6 +131,24 @@ and `candidate` revisions remain opaque bounded identifiers, and a transition
 cannot erase a failure or silently jump over verification/health gates. Six
 focused contract tests cover ordered gates, failure reasons, rollback
 preconditions and invalid transitions.
+
+#### Phase 2 implementation update (2026-08-05)
+
+`@ready4vibe/contracts` now also exposes strict metadata-only contracts for
+`backup-manifest/v1`, `RestorePlan`, `RestoreResult`, `RecoveryStatus` and
+`DiagnosticBundleDescriptor`. Backup entries use logical data-class identifiers
+and SHA-256 digests rather than local paths. Restore plans require explicit
+confirmation, preserve the current state and reject credential/workspace-file
+imports. Recovery and diagnostic projections use bounded reason codes and
+redacted sections; safe-mode operations are limited to health, settings,
+backup, restore, diagnostics and read-only event viewing.
+
+The Phase 2 slice does not open SQLite, copy or delete files, read credentials,
+start a subprocess, switch a data pointer, expose a Web route or automatically
+enter safe mode. Focused tests cover privacy/path/unknown-field rejection,
+backup entry identity, restore invariants, recovery operation bounds and
+redacted diagnostic descriptors. The new fixture has 6 tests; the full
+contracts module now passes 63 tests, typecheck and build.
 
 ### 5.3 数据库 migration
 
