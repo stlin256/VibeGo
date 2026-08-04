@@ -282,10 +282,9 @@ The following work is documented but not fully implemented yet:
   The opt-in live model smoke remains R4; the default still makes no network
   request and no credential has been written to the repository.
 - **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1 policy
-  compiler is the current implementation slice; it is pure, deterministic and
-  fail-closed with exact bounded grants. Windows process tree/container smoke
-  and full Web continuation remain later phases. Existing adapters remain
-  explicit and default-off.
+  compiler and the R2 injected host-restricted process runner are implemented
+  bounded slices. Container smoke and full Web continuation remain later
+  phases. Existing daemon shell wiring remains explicit and default-off.
 - **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): real
   stdio/Streamable HTTP transport, health classification, capability snapshot
   and ToolRegistry activation. Current MCP/Skill transport remains injected
@@ -359,4 +358,18 @@ stores raw arguments, commands, paths, environment values, or secrets. Existing
 `ApprovalPolicy` callers and all execution/event authorities remain unchanged;
 R2 process execution, R3 container smoke and R4 Web continuation are deferred.
 The focused policy suite has 17 tests and the repository gate now passes with
-412 tests; no live process, container, network or model credential is used.
+412 tests for the R1 slice; no live process, container, network or model
+credential is used.
+
+## Spec 48 R2 implementation note (2026-08-04)
+
+The host runner is documented before runtime code changes. It remains an
+opt-in `@ready4vibe/sandbox-runtime` adapter with injected spawn, realpath and
+tree-termination ports. Tests cover workspace/cwd containment, symlink escape,
+argv and environment rejection, `.cmd`/PowerShell argv fixtures, output
+truncation, timeout, cancellation, startup failure and minimal environment;
+they do not start arbitrary host commands. Daemon, AgentLoop, Scheduler,
+Approval, SandboxResolver, WorkspaceRegistry and event authorities are
+unchanged in this slice.
+The focused host-runner suite has 17 tests and the current repository gate
+passes with 420 tests; no arbitrary host command is started by the test suite.

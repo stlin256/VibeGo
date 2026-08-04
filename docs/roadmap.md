@@ -403,10 +403,11 @@ application service。真实 LLM smoke 只允许通过独立命令和进程外 s
 OpenAI-compatible endpoint adapter；该切片已覆盖 provider snapshot、Responses/
 Anthropic-shaped fixture replay、token/byte compaction 与 pre-stream retry，daemon
 R3 daemon/application bridge is now implemented; live smoke remains the later
-opt-in R4 command. The R3 slice gate passed with 402 tests; the current
-repository gate is `pnpm verify` with 412 tests after Spec 48-R1.
+opt-in R4 command. The R3 slice gate passed with 402 tests; the R1 gate passed
+with 412 tests; the current repository gate is `pnpm verify` with 420 tests
+after Spec 48-R2.
 
-## Spec 48：Approval/Sandbox/Shell runtime closure（48-R1 实施中）
+## Spec 48：Approval/Sandbox/Shell runtime closure（48-R2 已实现，R3 规划）
 
 详见 [Spec 48](specs/48-approval-sandbox-shell-runtime.md) 与
 [ADR 0017](adr/0017-policy-compiler-and-bounded-approval.md)。48-R1 先交付纯
@@ -417,8 +418,11 @@ Sandbox 或 WorkspaceRegistry。后续再完成 Windows/Unix 进程树、外部�
 approval continuation；模型输出永远不是授权，host-restricted 不得显示为强隔离，危险工具
 仍需审批/沙箱/调度三重门禁。
 
-48-R1 的 focused policy tests 与全仓 `pnpm verify` 已通过（当前 412 tests）；
-真实进程、容器和 Web approval continuation 保持后续阶段。
+48-R1 的 focused policy tests 与全仓 `pnpm verify` 已通过（该切片 412 tests）；
+48-R2 现在补齐注入式 host-restricted process runner：argv/shell:false、
+workspace realpath、最小环境、超时/输出上限和 Windows tree-termination port；
+该切片 focused sandbox-runtime tests 17 个，全仓门禁当前 420 tests；真实进程、
+容器和 Web approval continuation 保持后续阶段。
 
 ## Spec 49：MCP/Skill transport and capability lifecycle（规划）
 

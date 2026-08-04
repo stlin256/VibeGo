@@ -2,6 +2,8 @@ import { isAbsolute, parse, relative, resolve, sep } from 'node:path';
 import { spawn as defaultSpawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { ArgvGuard, ArgvGuardError } from '@ready4vibe/execution';
 
+export * from './host-process.js';
+
 export type ContainerRuntime = 'docker' | 'podman';
 export type SandboxRuntimeName = ContainerRuntime | 'vm';
 export type SandboxNetwork = 'restricted' | 'enabled';
