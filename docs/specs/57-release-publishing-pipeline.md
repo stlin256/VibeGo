@@ -1,7 +1,7 @@
 # Spec 57：Release 发布流水线与供应链证明
 
-- Status: Phase 57a contract boundary frozen（不改变当前运行时；GitHub workflow/artifact publishing remains later）
-- Date: 2026-08-04
+- Status: Phase 57a contract implemented（纯合约；不改变当前运行时；GitHub workflow/artifact publishing remains later）
+- Date: 2026-08-05
 - Related: [Spec 46](46-automated-verification-workflow.md)、[Spec 51](51-host-first-release-and-client-boundary.md)、[Spec 53](53-host-install-upgrade-backup-recovery.md)、[Spec 55](55-public-deployment-certificates-operations.md)、[研究记录](../research/53-57-release-install-model-operations-research.md)
 
 ## 1. 目标
@@ -173,7 +173,7 @@ Stable 发布前由人工确认：
 
 ## 11. Phase 57a contract boundary（2026-08-05）
 
-Phase 57a freezes a pure `release-manifest/v1` and promotion-state contract
+Phase 57a implements a pure `release-manifest/v1` and promotion-state contract
 before any GitHub Actions or packaging work. The manifest is an immutable
 description, not a download instruction:
 
@@ -192,3 +192,21 @@ run CI, read credentials or inspect a user workspace. It does not alter Host,
 AgentLoop, RunManager, Scheduler, Approval, Sandbox, `run_events` or
 `goal_events`; later workflow stages consume the projection as an external
 release authority.
+
+## 12. Phase 57a implementation evidence
+
+The pure contract slice is implemented in
+`packages/contracts/src/release-publishing.ts` and exported from the package
+barrel. It validates the `release-manifest/v1` and promotion-state schemas,
+rejects mutable `latest` revisions, requires `tag` to match
+`productVersion`, and exposes the ordered promotion transition helper.
+
+Focused verification on 2026-08-05:
+
+- `packages/contracts/src` — 15 files, 57 tests passed;
+- `pnpm --filter @ready4vibe/contracts typecheck` — passed;
+- `pnpm --filter @ready4vibe/contracts build` — passed;
+- `git diff --check` — passed before commit.
+
+No GitHub workflow, release upload, signing, SBOM/provenance generation,
+installer, artifact download or runtime update behavior is part of this phase.

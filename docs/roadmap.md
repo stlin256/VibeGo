@@ -1,6 +1,6 @@
 # 分阶段路线图
 
-**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 53–57 已新增为 Proposed release-hardening planning gates）**
+**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 57 Phase 57a 纯发布合约已实现，其余 release-hardening 阶段仍为规划）**
 
 每个阶段都是一个可回滚的 Git 提交或小提交组。完成条件包含：代码、单元测试、文档更新、验证命令和已知限制。
 
@@ -628,9 +628,9 @@ Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。
 
-## Spec 53–57：面向可发布与更广泛用户的 Release hardening（规划）
+## Spec 53–57：面向可发布与更广泛用户的 Release hardening（分阶段）
 
-新增规格均为 Proposed planning gate，暂不改变当前运行时，也不替换既有
+新增规格均为 Proposed planning gate，除 Spec 57 Phase 57a 纯合约外，暂不改变当前运行时，也不替换既有
 AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 `run_events` 或 `goal_events` 的权威地位：
 
@@ -655,10 +655,12 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
   catalog；Phase 56c 已实现八类 fixture、严格 compatibility/performance report
   contract 与 safe-area/fold CSS hook 的纯 Web slice；完整 catalog、WCAG 2.2 AA 人工审阅、Playwright
   device emulation 和真实设备 evidence matrix 仍后置，不以模拟器通过替代真实设备验收。
-- [Spec 57](specs/57-release-publishing-pipeline.md)：Phase 57a 先冻结严格的
-  `release-manifest/v1` 与有序 promotion contract；后续接入 tag/channel、可重复多平台构建、
-  checksum、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
-  release evidence 和 withdrawn/rollback 流程。
+- [Spec 57](specs/57-release-publishing-pipeline.md)：Phase 57a 已实现严格的
+  `release-manifest/v1` 与有序 promotion contract，含 immutable tag/channel、artifact
+  checksum/target/evidence refs、stable approval 和 withdrawn 状态；contracts 模块
+  通过 57 个 focused tests、typecheck 与 build。后续接入 tag/channel workflow、可重复多平台
+  构建、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
+  release evidence 和 withdrawn/rollback runtime 流程。
 
 推荐实施顺序为 `53 → 54 → 56 → 55 → 57`；Spec 57 的 stable gate 必须汇总前四项的
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读

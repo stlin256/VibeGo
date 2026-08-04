@@ -35,3 +35,16 @@ offline and prevents accidental publication side effects during development.
 
 No GitHub workflow, release upload, platform signing, SBOM generation,
 attestation, installer, artifact download or stable promotion is performed.
+
+## Implementation evidence
+
+Phase 57a is implemented as a pure `@ready4vibe/contracts` slice. The exported
+schemas reject unknown fields, secret-shaped/query-bearing/path-like references
+and mutable `latest` revisions; a manifest tag must match its SemVer product
+version. The promotion helper permits only the ordered transitions and keeps a
+published release withdraw-only.
+
+On 2026-08-05 the contracts module passed 57 focused tests, typecheck and
+build. This implementation does not modify AgentLoop, RunManager, Scheduler,
+Approval, Sandbox, WorkspaceRegistry, `run_events` or `goal_events`, and it
+does not create or publish a release.

@@ -206,3 +206,4 @@ export * from './mcp-settings.js';
 export * from './host-release.js';
 export * from './model-provider-onboarding.js';
 export * from './deployment-operations.js';
+export * from './release-publishing.js';
