@@ -52,7 +52,8 @@
 44. `packages/goal-control` 与 `apps/daemon` 已实现 Spec 40 Phase 2A：`GoalWriteService` 和六个受认证 mutation route 覆盖 Goal 创建、Todo、Gate open/resolve、Evidence 和 validated Todo completion；eventId fingerprint 提供重试 no-op/conflict，controlRevision 提供 stale fail-closed，响应剥离 claim hash，输入拒绝 secret/path/未知字段。该切片不接入默认 run admission，也不改变 `run_events`、AgentLoop、RunManager、Scheduler、Approval、Sandbox 或 WorkspaceRegistry。
 45. `docs/specs/41-host-first-distribution-and-client-boundary.md` 与 `docs/adr/0010-host-first-same-origin-web-and-client-boundary.md` 已冻结 Host-first 边界；daemon 同源托管 React Web、发行包和统一 launcher 尚未实现，Android/iOS/HarmonyOS 原生客户端明确后置。
 46. `docs/specs/42-shadcn-style-web-design-system.md` 与 `docs/adr/0011-shadcn-style-local-components-and-vibego-web.md` 已接受；Phase 42a 尚未开始，组件选型遵循 shadcn registry/Radix 等成熟组件库优先，只有记录理由后才允许自定义 primitive。
-47. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
+47. `docs/specs/43-resource-usage-and-cost-audit.md` 与 `docs/adr/0012-local-resource-and-cost-audit-ledger.md` 的 Phase 43a contracts/纯 model-usage replay projection 已实现；运行时采样、SQLite ledger、费用 API 和 Web 尚未接入。AxonHub/CC Switch 的 token 分桶、缓存语义、稳定去重、价格明细和 rollup 经验已写入参考边界，采样/货币/保留/导入细节仍待确认。
+48. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → observability → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
 ## 验证结果（2026-08-04）
 

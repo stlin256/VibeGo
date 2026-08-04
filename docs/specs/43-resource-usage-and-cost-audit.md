@@ -1,6 +1,6 @@
 # Spec 43：资源、Token、费用与审计可观测性
 
-- 状态：Phase 43a（contracts 与纯 projection 已冻结，运行时采样/账本/API/UI 后置）
+- 状态：Phase 43a 已实现（contracts 与纯 projection；运行时采样/账本/API/UI 后置）
 - 日期：2026-08-04
 - 适用范围：Host daemon、React Web、SQLite、AgentLoop 运行记录和后续原生客户端 API
 - 相关：[Spec 03：模型与上下文契约](03-model-context-contract.md)、[Spec 38：Conversation-first Web shell](38-conversation-first-web-shell.md)、[Spec 41：Host-first 发行与客户端边界](41-host-first-distribution-and-client-boundary.md)、[Spec 42：shadcn 风格 Web 设计系统](42-shadcn-style-web-design-system.md)
