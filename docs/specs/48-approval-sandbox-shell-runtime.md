@@ -148,6 +148,32 @@ engine. It must probe, start a bounded container, execute a harmless fixture,
 capture redacted status and dispose deterministically. The command is never
 part of unit CI or daemon startup and never pulls an image implicitly.
 
+#### R3 contract slice (2026-08-04 design gate)
+
+The command is `pnpm smoke:container -- --runtime <docker|podman> --image
+<name@sha256:digest> [--workspace <absolute-root>]`. The image is required to
+be an immutable digest; the workspace defaults to the current directory only
+after the CLI resolves it to an absolute server-side path. The command accepts
+no user-provided container command. It runs the fixed harmless fixture
+`sh -c "printf ready4vibe-smoke"` with `network=restricted`, an empty writable
+root set, `--pull=never`, `--rm`, `--init`, bounded pids/memory/CPU/timeout and
+output limits. `shell:false` is used for both the engine probe and container
+launch.
+
+The probe invokes only `<runtime> version` with a minimal environment and
+bounded output. The result is a versioned, redacted report containing runtime,
+digest, status (`healthy|unavailable|failed|cancelled`), exit/timing flags and
+stable error codes; raw engine/container output, environment values and paths
+are never emitted. Missing engines are `unavailable`; invalid digests,
+network/resource violations, timeout, cancellation, fixture mismatch and
+cleanup failures are fail-closed `failed`/`cancelled` outcomes.
+
+The implementation exposes injected probe/spawn/executor ports so unit tests
+can cover healthy engine, missing engine, wrong digest, network/resource
+violations, timeout, cancellation and deterministic cleanup without starting a
+real engine. A real smoke is explicitly invoked by the user and is excluded
+from `pnpm verify` and daemon startup.
+
 Exit: healthy engine, missing engine, wrong digest, port/network violation,
 resource limit, timeout, cancellation and cleanup are reproducible.
 

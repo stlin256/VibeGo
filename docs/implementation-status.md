@@ -60,6 +60,8 @@
 47d. Spec 44-R3 pricing slice 已完成：复用 `PricingRule`/`ModelUsageRecord.cost`，`packages/contracts/src/observability.ts` 增加 bounded `CostItem`/tier/price mode contract，`packages/observability/src/pricing.ts` 以纯内存 `PricingCatalog` 和 BigInt cost projection 支持 per-unit、flat-fee、tiered、历史 revision 与 unknown cost；不接入默认 run。
 48. 每个包/应用都有单元测试和 typecheck；根目录 `build` 会按 contracts → storage → scheduler → testkit → context → agent → model-openai → tools → policy → sandbox → execution → sandbox-runtime → tool-adapters → workspaces → auth → certificates → skill-mcp → goal-control → observability → daemon → web 顺序构建，避免 workspace package export 在 clean checkout 下缺少 `dist` 类型。
 
+49. Spec 48-R3 已完成文档与 ADR 门禁，进入实现：将新增显式 `pnpm smoke:container` 命令和 `sandbox-runtime` 注入式 smoke contract；固定 digest、restricted network、`--pull=never`、bounded fixture、probe/cleanup/report 边界，默认不进入 `pnpm verify`、daemon 启动或 run 创建路径。
+
 ## 验证结果（2026-08-04）
 
 - `pnpm typecheck`：通过（20 个 workspace package）；
