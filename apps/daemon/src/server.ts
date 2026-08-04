@@ -399,7 +399,7 @@ async function handleRequest(
     return;
   }
 
-  const agentMemoryAction = /^\/api\/v1\/settings\/agent-memory\/(probe|update|rollback)$/u.exec(pathname)?.[1];
+  const agentMemoryAction = /^\/api\/v1\/settings\/agent-memory\/(probe|update|rollback|webhook)$/u.exec(pathname)?.[1];
   if (agentMemoryAction) {
     if (!options.agentMemorySettings) {
       writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
@@ -411,7 +411,9 @@ async function handleRequest(
     }
     const result = agentMemoryAction === 'probe'
       ? await options.agentMemorySettings.probe()
-      : agentMemoryAction === 'update' ? await options.agentMemorySettings.update() : await options.agentMemorySettings.rollback();
+      : agentMemoryAction === 'update' ? await options.agentMemorySettings.update()
+        : agentMemoryAction === 'webhook' ? await options.agentMemorySettings.enqueueUpdate()
+          : await options.agentMemorySettings.rollback();
     writeJson(response, 200, result);
     return;
   }

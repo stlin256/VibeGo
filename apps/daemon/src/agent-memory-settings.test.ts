@@ -76,6 +76,25 @@ describe('AgentMemorySettingsManager', () => {
     expect(rolledBack).toMatchObject({ status: { degraded: true, lastErrorCode: 'rollback', updateState: 'rollback' } });
   });
 
+  it('reconfigures the optional runtime on a settings toggle and ignores stale async status', async () => {
+    const runtimeStatus = readyStatus();
+    const runtime = {
+      start: vi.fn(async () => runtimeStatus),
+      probe: vi.fn(async () => runtimeStatus),
+      update: vi.fn(async () => runtimeStatus),
+      rollback: vi.fn(async () => runtimeStatus),
+      close: vi.fn(async () => undefined),
+    };
+    const manager = new AgentMemorySettingsManager({ settings: new InMemorySettingsStore(), runtime });
+    manager.patch({ enabled: true, ...identity });
+    manager.patch({ enabled: false });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(runtime.start).toHaveBeenCalledTimes(2);
+    expect(manager.status().status).toMatchObject({ enabled: false, mode: 'off', updateState: 'disabled' });
+    await manager.close();
+    expect(runtime.close).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed on invalid patch or corrupt durable values', () => {
     const settings = new InMemorySettingsStore();
     const manager = new AgentMemorySettingsManager({ settings });

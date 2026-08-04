@@ -511,6 +511,9 @@ describe('daemon health server', () => {
     const update = await fetch(`${base}/update`, { method: 'POST' });
     expect(update.status).toBe(200);
     expect(await update.json()).toMatchObject({ status: { lastErrorCode: 'update' } });
+    const webhook = await fetch(`${base}/webhook`, { method: 'POST' });
+    expect(webhook.status).toBe(200);
+    expect(await webhook.json()).toMatchObject({ status: { lastErrorCode: 'update' } });
     const rollback = await fetch(`${base}/rollback`, { method: 'POST' });
     expect(rollback.status).toBe(200);
     expect(await rollback.json()).toMatchObject({ status: { lastErrorCode: 'rollback' } });

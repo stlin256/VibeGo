@@ -15,6 +15,7 @@ import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { InMemoryGitSettingsManager } from './git-settings.js';
 import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
+import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervisor.js';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -56,9 +57,14 @@ try {
   throw error;
 }
 const modelSettings = new InMemoryModelSettingsManager();
-let agentMemorySettings: AgentMemorySettingsManager;
+let agentMemorySettings!: AgentMemorySettingsManager;
+const agentMemoryRuntime = new TencentMemoryRuntimeSupervisor({
+  runtimeRoot: join(dataDir, 'agent-memory-runtime'),
+  settings: () => agentMemorySettings.settingsSnapshot(),
+  environment: { ...process.env, READY4VIBE_DATA_DIR: dataDir },
+});
 try {
-  agentMemorySettings = new AgentMemorySettingsManager({ settings: settingsStore });
+  agentMemorySettings = new AgentMemorySettingsManager({ settings: settingsStore, runtime: agentMemoryRuntime });
 } catch (error) {
   settingsStore.close();
   goalEventStore.close();
@@ -78,6 +84,7 @@ const runManager = new RunManager({
 });
 try {
   await runManager.recoverAfterRestart();
+  await agentMemorySettings.start();
 } catch (error) {
   await agentMemorySettings.close();
   settingsStore.close();

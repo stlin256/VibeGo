@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter 与 Phase 2 settings/status API 已落地；其余集成仍按 Spec 39 分阶段）
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API 与 Phase 3 runtime supervisor 已落地；其余集成仍按 Spec 39 分阶段）
 - 日期：2026-08-03
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
@@ -93,6 +93,34 @@ MemoryCore recall 结果转换成现有 `ContextItem`，使用
 上游分支、启动命令、健康路径和 Node/package-manager 要求从候选 revision 的 manifest
 和 README 解析或由版本化 adapter 声明；任何 API/schema 不兼容都在候选阶段失败，
 不得污染当前实例。
+
+### 6.1 Phase 3 supervisor contract
+
+Phase 3 的 `TencentMemoryRuntimeSupervisor` 是一个 daemon-owned application-service
+边界。它只接收已通过 `AgentMemorySettingsSchema` 的非 secret policy，并通过可注入
+的 command runner、process launcher、health client 和 clock 执行更新；测试和未来的
+Windows/Unix 适配不需要把 shell 或 filesystem 逻辑泄漏到 AgentLoop。
+
+状态目录使用不可变布局：`revisions/<sha>` 保存已构建版本，`candidates/<sha>` 保存
+正在验证的 worktree，`state/pointers.json` 用临时文件 + rename 原子保存 current/
+previous，`state/current.json` 与 `state/previous.json` 是便于诊断的镜像，只保存
+revision、port、mode 和时间戳。任何候选步骤失败都保留 current；只有候选 health 与
+MemoryCore smoke 都成功，才替换 current 指针，随后 drain 旧进程并更新 previous。
+切换后的健康失败必须停止新实例、恢复 previous 指针并重新通过 health/smoke。
+
+`update()`、`rollback()`、定时器和 webhook notification 共用一个 promise queue；同一
+时刻最多有一个 fetch/build/switch。daemon 重启只读取指针和设置，不重放旧工具调用，
+并按 current revision 启动一个新的 sidecar 实例。Supervisor 不做 Node 模块热替换，也
+不修改 `run_events`、`goal_events`、Scheduler、Approval、Sandbox 或 Workspace。
+
+截至 2026-08-04 的上游证据：`feat/server_team` 为
+`0aff21a2d9f2b8a0354aaa80a2e586aab4054562`；该 revision 的 README 声明 Node `>=22.16`，
+`MemoryCore/package.json` 声明 npm build、`@tencentdb-agent-memory/memory-sdk-ts-v2`
+`1.0.0-beta.2` 与 MIT license。Supervisor 将这些作为候选 manifest/README 的兼容性
+检查输入，不把 branch 名或私有 module path 硬编码成运行时依赖。该 revision 的 Git
+tree 没有 MemoryCore 或仓库根部的 npm/pnpm/yarn lockfile，因此当前默认更新会在
+`NO_LOCKFILE` 阶段 fail-closed；不会退化为非 frozen install。上游补齐 lockfile 或
+用户提供后续版本化 builder 后，才允许候选继续 build/typecheck。
 
 ### 7. Proxy 模式不能复用隐式 URL 拼接
 

@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API implemented（未接入 AgentLoop/默认 run 路径）；Phase 3+ Draft
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor implemented（未接入 AgentLoop/默认 run 路径）；Phase 4+ Draft
 - 日期：2026-08-03
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -386,18 +386,28 @@ stateDiagram-v2
 目录布局由 daemon 数据目录派生，不能写入 `events.sqlite`：
 
 ```text
-<daemon-data>/tencent-memory/
+<daemon-data>/agent-memory-runtime/
   revisions/<revision>/                 # immutable source/build tree
   candidates/<revision>/                # candidate worktree/build tree
   state/current.json                    # current revision and endpoint metadata
   state/previous.json                   # last known good revision
+  state/pointers.json                   # atomic source of truth for both pointers
   state/update.json                     # update state and last error code
   data/memory-core/<revision>/          # sidecar-owned data, if upstream requires it
 ```
 
 `current.json` 和 `previous.json` 只保存 revision、mode、port、health timestamp 和
-schema version；不保存密钥。若 upstream 需要 API key 或模型凭据，继续使用 daemon 的
-secret boundary，并通过进程环境或启动参数注入，不进入 Web status、事件或 Git worktree。
+schema version；`pointers.json` 通过临时文件 + rename 原子保存二者，是重启时的权威
+恢复源，前两个文件只是便于诊断的镜像。所有这些文件都不保存密钥。若 upstream 需要
+API key 或模型凭据，继续使用 daemon 的 secret boundary，并通过进程环境或启动参数
+注入，不进入 Web status、事件或 Git worktree。
+
+Phase 3 的候选构建子进程只接收最小系统环境（PATH、Windows 临时目录和用户目录等），
+不会继承 ready4vibe 的模型密钥、MemoryCore key 或完整环境变量。sidecar 启动时可由
+daemon 环境显式提供 `READY4VIBE_MEMORY_CORE_API_KEY`、
+`READY4VIBE_MEMORY_CORE_LLM_API_KEY`、`READY4VIBE_MEMORY_CORE_LLM_BASE_URL` 和
+`READY4VIBE_MEMORY_CORE_LLM_MODEL`；这些值只进入子进程，不进入 settings/status、日志
+或指针文件。
 
 ### 9.4 自动更新算法
 
@@ -466,6 +476,7 @@ run 使用已冻结的 snapshot。
 | `POST` | `/api/v1/settings/agent-memory/probe` | 检查当前 sidecar/SDK 能力 |
 | `POST` | `/api/v1/settings/agent-memory/update` | 立即检查上游并执行候选构建/切换 |
 | `POST` | `/api/v1/settings/agent-memory/rollback` | 回退到 previous revision |
+| `POST` | `/api/v1/settings/agent-memory/webhook` | 受现有 daemon auth 保护的更新通知，进入同一串行队列 |
 | `GET` | `/api/v1/settings/agent-memory/updates` | 返回 bounded 更新记录和错误摘要 |
 
 建议响应形状：
@@ -552,10 +563,13 @@ AgentLoop 创建 run。
 
 ### Phase 3：Runtime Supervisor 与自动更新
 
-- 实现 current/previous/candidate 目录和指针；
-- 实现 upstream 检查、候选 worktree、构建、health、SDK smoke、原子切换；
-- 增加立即更新、定时更新、串行化、保留旧版本和显式回滚；
-- 覆盖构建失败、健康失败、切换后失败、daemon 重启和旧进程回收。
+- ✅ 实现 current/previous/candidate 目录和 bounded 指针状态；
+- ✅ 实现 upstream ref 检查、候选 worktree、manifest/README 读取、frozen install、build/typecheck、health、MemoryCore smoke 和原子切换；
+- ✅ 增加立即更新、定时触发、外部 webhook enqueue、串行化、保留旧版本和显式回滚；
+- ✅ 覆盖构建失败、健康失败、切换后失败、daemon 重启、Windows 子进程回收和端口释放；
+- ✅ 更新只通过注入的命令/进程端口执行，主进程不加载 upstream module、不在 current 目录原地 `git pull`。
+- ✅ 候选没有可识别 lockfile 时以 `NO_LOCKFILE` fail-closed，不执行非 frozen install；
+  2026-08-04 核对的 `feat/server_team` 当前正处于该兼容性门禁，保持现有 current 不变。
 
 ### Phase 4：Proxy 与 Knowledge
 
