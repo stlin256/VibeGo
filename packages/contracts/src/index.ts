@@ -195,3 +195,4 @@ export function parseRunConfig(input: unknown): RunConfig {
 
 export * from './goal.js';
 export * from './agent-memory.js';
+export * from './agent-memory-knowledge.js';

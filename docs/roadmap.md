@@ -271,4 +271,9 @@ Phase 5 已增加 daemon-local `TencentMemoryProxyProvider`：Proxy 使用显式
 侧 recall/write 保持 validated no-op，避免重复记忆写入。Proxy 在流开始前失败时可按
 `fallbackToDirectProvider` 回退到同一 run 的直连 Provider；部分流不会重放，状态只标记
 degraded。Proxy credential 仅来自进程运行时，未加入 settings、Web、事件或文档。
-MemoryKnowledge 只读 adapter、Proxy sidecar 自动构建/切换和运营 history 仍是后续阶段。
+Phase 5 同时增加独立的 MemoryKnowledge 只读 adapter：它通过 `/v3/tools/list` 与
+`/v3/tools/call` 提供 Wiki/CodeGraph descriptor 和静态只读白名单，执行 bounded、
+可取消、privacy-checked 的调用，并转换为 untrusted retrieval `ContextItem`。它不注册
+任意 ToolRuntime，不进入默认 run 创建路径，也不改变 Goal/run/Scheduler/Approval/Sandbox
+事实源。Knowledge 应用服务配置、审批/资源预算、Proxy sidecar 自动构建/切换和运营 history
+仍是后续阶段。

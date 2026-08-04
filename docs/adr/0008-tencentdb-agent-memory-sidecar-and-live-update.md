@@ -1,6 +1,6 @@
 # ADR 0008：TencentDB Agent Memory sidecar 与自动更新
 
-- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration 与 Phase 5 Proxy adapter 已落地；Knowledge 仍按 Spec 39 后置）
+- 状态：Accepted（Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration 与 Phase 5 Proxy/MemoryKnowledge adapter 已落地；Knowledge 工具化仍后置）
 - 日期：2026-08-04
 - 相关规格：[Spec 39：TencentDB Agent Memory 可切换融合与自动更新](../specs/39-tencentdb-agent-memory-integration.md)
 
@@ -163,6 +163,22 @@ Phase 5 不把 Proxy sidecar 的构建、revision 切换或 secret 写入 settin
 Supervisor；现阶段支持显式外部 Proxy endpoint，sidecar 自动构建/切换保留到后续
 阶段。这样在 Proxy 未运行、health 超时或响应协议错误时，普通 Web 和直连模型仍可用。
 
+### 7.2 Phase 5 的 MemoryKnowledge adapter 落地边界
+
+MemoryKnowledge 使用独立的 `MemoryKnowledgeProvider`，只调用公开的
+`POST /v3/tools/list` 与 `POST /v3/tools/call`。adapter 固定校验
+`x-tdai-service-id`、`knowledge_id`、工具名和 bounded params，并只允许文档化的
+Wiki/CodeGraph 只读白名单；管理、写入、索引和未知工具在 HTTP 请求前 fail-closed。
+descriptor、HTTP envelope、结果条数/字节数、超时和取消均在 adapter 侧校验。响应只生成
+带 `source='retrieval'`、`trust='untrusted'` 的 `ContextItem` 候选，仍需经过现有
+`ContextManager`；adapter 不注册 `ToolRuntime`、不执行 Approval/Sandbox，也不修改
+`AgentLoop`、`RunManager`、`run_events`、`goal_events` 或 Goal admission。任何上游错误、
+malformed/schema、secret-shaped 内容或绝对路径都只产生 bounded degraded 结果。
+
+本阶段不把知识资源 ID、sidecar endpoint 或 credential 加入 durable settings，也不在
+默认 run 创建路径自动触发知识检索；后续应用服务必须先补充显式资源配置、审批/资源预算
+和回归测试，才可将它作为可选的 run context source。
+
 ## 被拒绝的方案
 
 ### 完整复制 TencentDB 源码到 ready4vibe
@@ -217,7 +233,7 @@ revision、evidence 和 recovery 语义。
 3. daemon settings API、Web 开关、状态卡片和新 run snapshot；
 4. Supervisor 的 current/previous、候选 build/health/smoke、切换/回滚；
 5. MemoryProxy 专用 Provider；
-6. MemoryKnowledge 只读 Adapter 和后续工具评估。
+6. MemoryKnowledge 只读 Adapter（已落地）和后续工具评估。
 
 任何阶段都不得把 TencentDB 接到 Goal admission、Scheduler、Approval 或 Sandbox 的
 绕过路径；任何候选 revision 未通过 contract/health/smoke test，都不得成为 current。

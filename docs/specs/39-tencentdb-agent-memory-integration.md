@@ -1,6 +1,6 @@
 # Spec 39：TencentDB Agent Memory 可切换融合与自动更新
 
-- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy adapter implemented；Knowledge 与运营增强为后续阶段
+- 状态：Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 settings/status API、Phase 3 runtime supervisor、Phase 4 bounded run integration、Phase 5 Proxy 与 MemoryKnowledge adapter implemented；Knowledge 工具化与运营增强仍后置
 - 日期：2026-08-04
 - 适用范围：ready4vibe daemon、Web Settings、AgentLoop 前后置上下文、运行时进程管理
 - 上游项目：[TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
@@ -109,7 +109,7 @@ scheduler, SSE stream, or run admission gate.
 | --- | --- | --- | --- |
 | MemoryCore | L0/L1/L2/L3 记忆、记忆元数据、召回和写回 | Node.js/TypeScript；Node >=22.16；HTTP Gateway 默认 `8420`；SQLite/本地文件 | 首选方式：独立进程 + `@tencentdb-agent-memory/memory-sdk-ts-v2` |
 | MemoryProxy | 透明转发 OpenAI/Anthropic，请求前注入记忆、请求后写回 | 默认端口 `8096`；对上游模型提供代理入口 | 可选兼容方式：专用 Proxy Provider，不直接拼接现有 Provider URL |
-| MemoryKnowledge | Wiki、CodeGraph、异步索引及知识工具 | 默认端口 `8421`；`/v3/tools/list`、`/v3/tools/call` | 后置 Adapter；先作为受限检索能力，不改变 Goal 事实源 |
+| MemoryKnowledge | Wiki、CodeGraph、异步索引及知识工具 | 默认端口 `8421`；`/v3/tools/list`、`/v3/tools/call` | daemon-local 只读 Adapter；应用服务注入后置，不改变 Goal 事实源 |
 
 MemoryCore v3 请求需要 `teamId`、`agentId`、`userId`，`sessionId` 可选。ready4vibe
 必须显式维护这组身份映射，不从原始 prompt 或任意浏览器字段推导。MemoryCore 负责
@@ -367,11 +367,35 @@ proxy sidecar build/switch orchestration remains a later phase.
 
 ### 8.4 MemoryKnowledge
 
-MemoryKnowledge 作为后置 Adapter，先通过 `/v3/tools/list` 获取受支持工具，再以
+MemoryKnowledge 通过 daemon-local Adapter 先以 `/v3/tools/list` 获取受支持工具，再以
 `/v3/tools/call` 调用明确的 Wiki/CodeGraph 查询。首版只允许只读、bounded、可取消的
 检索；结果仍转换成 `ContextItem(source='retrieval')`，不能直接注册为任意
 `ToolRuntime`。待工具 descriptor、审批和运行时资源预算有完整测试后，才评估加入
 AgentLoop tool-call 列表。
+
+#### Phase 5 MemoryKnowledge adapter contract (implemented)
+
+The daemon now has a `MemoryKnowledgeProvider` boundary for the public
+MemoryKnowledge HTTP surface. It is separate from the `AgentMemoryProvider`
+data-plane recall/write port and does not import upstream modules. The adapter:
+
+- sends only `POST /v3/tools/list` and `POST /v3/tools/call` with an explicit,
+  validated `knowledgeId`, `toolName`, bounded params and `x-tdai-service-id`;
+- projects only the static read-only Wiki/CodeGraph allowlist (`get_info`,
+  `search`, `list_pages`, `read_page`, `get_graph`, `list_raw`, `read_raw`, and
+  the documented CodeGraph queries) and rejects management/unknown tools before
+  an upstream call;
+- applies independent timeout, `AbortSignal`, response-byte, result-count and
+  content-byte limits. HTTP errors, malformed envelopes, schema mismatch,
+  oversized output, secret-shaped values and absolute paths become a bounded
+  degraded result without exposing upstream bodies;
+- converts accepted output into untrusted `ContextItem(source='retrieval')`
+  candidates. The caller must still pass them through `ContextManager`; raw
+  output is not written to run/Goal events and the adapter does not register a
+  `ToolRuntime` or grant approval/sandbox authority;
+- remains daemon-local in this phase. Knowledge resource settings, automatic
+  sidecar supervision and automatic run injection are deferred until a later
+  application-service slice supplies explicit resource policy and tests.
 
 ## 9. Runtime Supervisor 与 revision 切换
 
@@ -616,8 +640,10 @@ AgentLoop 创建 run。
 
 - ✅ 增加专用 `TencentMemoryProxyProvider` 和显式 endpoint contract；
 - ✅ 验证 Proxy 健康、正确路径/headers、直连 fallback、失败降级、并发和运行中 snapshot；
-- 增加 MemoryKnowledge 只读检索 Adapter；
-- 暂不把 `/v3/tools/call` 直接注册为任意 ToolRuntime，先完成 descriptor/approval/limit 测试。
+- ✅ 增加 MemoryKnowledge 只读检索 Adapter、工具 descriptor、Wiki/CodeGraph 白名单、
+  bounded/cancellable call 和 `ContextItem` 转换；
+- ✅ 覆盖 unknown/management tool、timeout、5xx、malformed/schema、超大响应、AbortSignal
+  和 secret/绝对路径 privacy fixture；不把它接入默认 run 创建路径。
 
 ### Phase 6：运营与上游兼容
 
@@ -638,7 +664,7 @@ AgentLoop 创建 run。
 - write-back 只发送 compact summary/evidence refs，不发送原始 transcript 和 secret；
 - ✅ Proxy 端点路径不会错误地重复追加 `/chat/completions`；
 - ✅ Proxy health、identity headers、pre-stream fallback、partial-stream fail-closed、secret/privacy 和并发隔离有测试；
-- Knowledge 结果只读、bounded、可取消。
+- ✅ Knowledge 结果只读、bounded、可取消，并在进入 ContextManager 前标记为 untrusted retrieval。
 
 ### Daemon/Run 集成
 
