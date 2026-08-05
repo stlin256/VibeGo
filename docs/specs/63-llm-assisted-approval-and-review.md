@@ -1,8 +1,8 @@
 # Spec 63: LLM-assisted approval and review
 
 - Status: 63-7 event projection and explicitly authorized same-as-run live
-  smoke implemented; dedicated provider integration and full release evidence
-  remain staged
+  smoke implemented; 63-8 dedicated provider injection seam is next, while
+  production profile resolution and full release evidence remain staged
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -362,6 +362,26 @@ Reports contain only provider/model identifiers, decision/reason codes,
 latency, aggregate usage and bounded response-shape diagnostics. Live evidence
 is separate from unit fixtures and is not part of default `pnpm verify`.
 Dedicated-provider live evidence and full release verification remain staged.
+
+### 63-8: dedicated provider injection seam (next bounded slice)
+
+The dedicated source must use an explicitly injected provider binding resolved
+from the daemon's existing model/secret boundary. The adapter may not infer a
+profile from the browser, reuse the active run provider by accident, or create
+a second credential store. The binding contains a secret-free
+`ModelProviderSnapshot` plus a runtime-only `ModelProvider`; its
+`ApprovalReviewerSnapshot` carries `reviewerSource=dedicated` and the selected
+profile id. The same bounded request, exact-key fingerprint, timeout,
+schema/privacy checks and fail-closed decision mapping as same-as-run are
+reused.
+
+The first implementation is an application-port seam and focused fixture only:
+the production daemon supplies no resolver by default, so a configured
+dedicated setting remains `degraded` and ordinary runs remain independent.
+An injected resolver must return `undefined` for an unknown profile, stale
+snapshot, missing credential or provider mismatch. This slice does not add a
+second scheduler, ApprovalBroker, event table, browser credential path or
+multi-profile persistence. Dedicated live smoke is a later explicit gate.
 
 ## 11. Acceptance matrix
 

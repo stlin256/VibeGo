@@ -1384,3 +1384,14 @@ same-as-run DeepSeek smoke is also healthy after an explicit reason-code
 contract correction; the redacted evidence is in
 `reports/spec63-7-live-review-smoke-2026-08-05.md`. Dedicated-provider live
 evidence and full release verification remain staged.
+
+### Spec 63-8 dedicated reviewer injection boundary (2026-08-06)
+
+The next bounded slice is frozen by [ADR 0046](adr/0046-dedicated-reviewer-provider-injection.md).
+It adds a generic dedicated reviewer adapter and an explicit daemon application
+resolver seam, but the production daemon will continue to provide no resolver
+by default. A dedicated setting therefore remains `degraded` until a validated
+multi-profile provider/secret boundary is supplied. The adapter must reuse the
+same bounded safety metadata, snapshot isolation, exact-key fingerprint and
+fail-closed behavior as same-as-run; it must not add a credential store,
+second scheduler, approval authority or event table.
