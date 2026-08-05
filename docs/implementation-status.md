@@ -849,8 +849,8 @@ Goal and event authorities. It does not copy upstream code, add Python/srt, or
 claim that the existing generic OpenAI-compatible adapter is already a complete
 DeepSeek integration. `61-1` contract/capability and `61-2` protocol
 adapter/streaming work are complete; `61-3` daemon/AgentLoop/context integration
-is the current implementation slice. Web settings, real smoke and failure evidence
-remain staged under 61-4 through 61-7.
+is in progress through the existing `modelBindingForRun` seam. Web settings, real
+smoke and failure evidence remain staged under 61-4 through 61-7.
 
 ### Spec 61-1 contract checkpoint (2026-08-05)
 
@@ -876,6 +876,15 @@ replays a partial stream. Focused adapter evidence is 7/7 tests with package
 typecheck/build passing; the existing `model-openai` package remains 19/19. No
 daemon route, AgentLoop branch, run/goal event or default provider binding changed;
 61-3 owns the application snapshot integration.
+
+### Spec 61-3 application binding checkpoint (in progress, 2026-08-05)
+
+The integration slice will add an opt-in DeepSeek binding to the existing daemon
+model settings path. An explicit provider selection captures a `DeepSeekProvider`,
+the generic provider snapshot and a secret-free `DeepSeekRunSnapshot` once before
+`run.created`; changing settings later cannot replace the in-flight provider.
+The default unconfigured/OpenAI-compatible path, Goal admission, Scheduler,
+Approval, Sandbox, WorkspaceRegistry and event authorities remain unchanged.
 
 ## Spec 62 planning note (2026-08-05)
 

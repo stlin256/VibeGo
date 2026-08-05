@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2 已完成；61-3 integration 待实施；本文件不把规划写成已完成能力）
+- Status: Draft（61-0/61-1/61-2 已完成；61-3 integration 实施中；本文件不把规划写成已完成能力）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -383,6 +383,11 @@ no-replay；`packages/model-deepseek` focused tests 7/7、typecheck/build 通过
 将 provider snapshot 接入现有 daemon application service；保持 AgentLoop 核心状态机、
 Scheduler、Approval、Sandbox、WorkspaceRegistry 和 event authorities 不变。完成多调用
 turn、ContextManager 回填、tool-call ledger、recovery no-replay 和 immutable snapshot。
+当前先通过已有 `modelBindingForRun` seam 接入显式 DeepSeek env/provider 选择：binding
+必须一次性捕获运行时 provider、generic `ModelProviderSnapshot` 和 secret-free
+`DeepSeekRunSnapshot`，并由 AgentLoop 在 `run.created` 保存；设置切换只影响新 run，
+interactive 默认 provider、Goal admission、Scheduler、Approval、Sandbox、Workspace
+和 `run_events`/`goal_events` 权威保持不变。
 
 ### 61-4：Thinking、reviewer 与 provider-owned search
 

@@ -972,8 +972,9 @@ contract/capability 实施，仍只记录为 Draft。61-1 checkpoint 已完成 s
 `deepseek-provider/v1` Zod contracts 与 8/8 focused tests；它不发起网络请求、不改变
 AgentLoop 或默认 run，61-2 显式协议 streaming adapter 已完成；该 adapter 只接受
 complete endpoint、运行时 credential 和冻结 config snapshot，首个可见 delta 后不透明重试，
-三种 profile 与 7/7 focused tests 已验证，下一步为 61-3 的 daemon/AgentLoop/context
-snapshot integration。
+三种 profile 与 7/7 focused tests 已验证，当前进入 61-3 的 daemon/AgentLoop/context
+snapshot integration：只通过已有 `modelBindingForRun` seam 捕获 provider/config，默认
+interactive run 路径保持不变。
 
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 
