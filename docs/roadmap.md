@@ -1028,3 +1028,6 @@ implemented. A Windows focused run passed all five gates and produced an
 ignored bounded bundle; the workflow fixture gate reports 47/47 tests passed.
 This is verification evidence only and leaves live provider, remote, full-host,
 cross-platform and release claims partial or blocked.
+
+The post-commit rerun at `f3843f2` passed all five focused steps and refreshed
+the ignored bundle at `.ready4vibe/evidence/2026-08-05/f3843f2f0fd644a98ec20e5e8b8dbaab653d6329/`.

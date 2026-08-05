@@ -88,6 +88,11 @@ test:workflow` reports 47/47 tests passed. The bundle is explicitly labelled
 `verification-gate-only`; the full plan and all live/remote/release gates remain
 opt-in and are not implied by this result.
 
+The post-commit rerun at `f3843f2` passed all five focused steps again. Its
+ignored bundle is `.ready4vibe/evidence/2026-08-05/f3843f2f0fd644a98ec20e5e8b8dbaab653d6329/`;
+the manifest contains only bounded status, timing, command descriptors and
+digests.
+
 ## 3. 证据等级与结果语义
 
 每项测试结果必须带有 `evidenceLevel` 和 `claim`：

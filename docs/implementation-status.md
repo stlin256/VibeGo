@@ -815,6 +815,9 @@ ignored runtime directory; `pnpm test:workflow` passes 47/47. The runner keeps
 failed, blocked and not-run distinct and does not claim live LLM, remote,
 full-host, cross-platform or signed-release evidence.
 
+After commit `f3843f2`, the same five-step focused plan was rerun successfully;
+the bounded bundle is under `.ready4vibe/evidence/2026-08-05/f3843f2f0fd644a98ec20e5e8b8dbaab653d6329/`.
+
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation
