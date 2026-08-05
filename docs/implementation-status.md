@@ -1047,3 +1047,20 @@ latency around 120 ms, two resource samples and zero dropped samples. The
 workflow suite passes 59/59 and `@ready4vibe/observability` passes 66/66. The
 report contains bounded aggregate metrics only; real provider, user workspace,
 physical-device, cross-platform and release gates remain partial or blocked.
+
+## Spec 61-0 prerequisite audit checkpoint (2026-08-05)
+
+The mandatory Spec 61-0 audit is recorded in
+[`docs/reports/61-0-prerequisite-audit-2026-08-05.md`](reports/61-0-prerequisite-audit-2026-08-05.md).
+It explicitly audits Spec 01 through Spec 60, including the existing Spec 58
+and Spec 59 documents. The result is a prerequisite-gate pass only: Spec 58
+and Spec 59 remain Draft umbrella specs with implemented slices, while real
+provider failure/recovery, governed task validation, host/remote/certificate,
+device, and signed-release evidence remain partial or blocked.
+
+The current `pnpm test:workflow` result is 59/59 on `d462ca1`. The last complete
+`pnpm verify` result (22 workspace projects, 796 tests) is from `8876a99` and is
+explicitly stale for the later certificate/performance implementation commits;
+it must be rerun on the current commit before any release-ready documentation
+claim. No default interactive run, event authority, AgentLoop, Scheduler,
+Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.

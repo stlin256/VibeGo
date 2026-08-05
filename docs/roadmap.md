@@ -1125,3 +1125,20 @@ The runner is fixed-parameter, deterministic-provider, bounded and redacted;
 workflow tests pass 59/59 and the observability package passes 66/66. These
 results are application/resource evidence only, not a capacity, device,
 cross-platform or release claim.
+
+### Spec 61-0 prerequisite audit checkpoint (2026-08-05)
+
+The required Spec 61-0 audit is recorded in
+[`docs/reports/61-0-prerequisite-audit-2026-08-05.md`](reports/61-0-prerequisite-audit-2026-08-05.md).
+It confirms that Spec 58 and Spec 59 already exist and records their actual
+status as Draft umbrella specs with implemented slices, rather than treating
+them as missing work. The report supplies a Spec 01–60 source/test/runtime
+matrix and keeps incomplete real-provider failure, governed validation,
+permission host execution, ACME/Tailscale/SSH, real-device, and signed-release
+evidence explicitly partial or blocked.
+
+The current focused workflow gate is 59/59 on `d462ca1`. The prior full gate at
+`8876a99` is retained as historical evidence only because it predates the later
+certificate/performance code; a fresh `pnpm verify` is required before any
+release-ready README or roadmap status. The default interactive run path and
+the independent `run_events`/`goal_events` authorities remain unchanged.
