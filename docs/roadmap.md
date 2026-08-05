@@ -1454,7 +1454,12 @@ The bounded implementation is complete: `smoke:dedicated-reviewer` resolves an
 explicit profile through the daemon manager and exercises the dedicated adapter
 without a run or event. Its offline fixture passes 4/4 and keeps secret,
 endpoint, prompt, raw response and path data out of the report. A user-
-authorized live request is still required for dedicated-provider evidence.
+authorized live request is recorded below for dedicated-provider evidence.
+
+The authorized live run on commit `408c68b` returned a redacted healthy
+dedicated review (`allow`/`eligible`, 3413 ms, aggregate usage 541/306). This
+is adapter evidence only: no run, approval grant, tool execution, event write,
+capacity or public-deployment claim is made.
 
 ### Spec 58-6 task-specific Goal verifier registry design freeze (2026-08-06)
 

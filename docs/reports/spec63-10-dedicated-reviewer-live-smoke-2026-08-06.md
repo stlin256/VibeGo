@@ -15,6 +15,19 @@ provider/malformed/resolver failures and secret-shaped input.
 The fixture report contains only bounded provider/model/profile labels, status,
 decision/reason code, latency and aggregate usage. It contains no key, secret
 environment name, endpoint, prompt, raw response, headers, approval arguments,
-path, full snapshot or event payload. A user-authorized live request is still
-required for dedicated-provider evidence; a healthy adapter result is not
+path, full snapshot or event payload. A user-authorized live request is
+recorded below for dedicated-provider evidence; a healthy adapter result is not
 release or capacity evidence.
+
+## Authorized live adapter evidence
+
+- Checkout: `408c68b`
+- Result: `status=healthy`, `decision=allow`, `reasonCode=eligible`
+- Bounded latency: `3413 ms`
+- Aggregate usage: `inputTokens=541`, `outputTokens=306`
+
+The request used an explicit dedicated profile and a process-only credential
+reference. It exercised only profile resolution and
+`DedicatedApprovalReviewer`; it did not create a daemon listener, run, event,
+ApprovalBroker grant or tool call. The credential, secret reference name,
+endpoint, prompt, raw response and headers were not recorded.

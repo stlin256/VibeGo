@@ -1471,7 +1471,13 @@ credential, resolves the exact profile and invokes `DedicatedApprovalReviewer`
 without creating a run, event, listener or tool runtime. Reports contain only
 bounded provider/model/profile, decision/reason, latency and usage metadata;
 fixture failures remain explicit `blocked`/`failed`. The focused script passes
-4/4; no dedicated live provider result is claimed yet.
+4/4; the authorized live result is recorded below.
+
+An explicitly authorized live run then exercised the same path and returned
+`healthy`/`allow`/`eligible` with bounded latency 3413 ms and usage 541/306.
+The run created no daemon session, run, event, approval grant or tool call; the
+result is adapter evidence only and is recorded in the redacted Spec 63-10
+report.
 
 ### Spec 58-6 task-specific Goal verifier registry implementation checkpoint (2026-08-06)
 

@@ -376,6 +376,13 @@ provider/malformed/resolver failures and secret-shaped input. The fixture
 report is `dedicated-reviewer-smoke/v1`; live provider execution remains a
 separate opt-in and is not implied by the offline pass.
 
+An explicitly authorized live run on the current `408c68b` checkout also
+completed the dedicated path with `status=healthy`, `decision=allow`,
+`reasonCode=eligible`, bounded latency `3413 ms` and aggregate usage `541/306`.
+The smoke only exercised the reviewer adapter; it did not create a run, grant
+approval, execute a tool or write an event. The redacted record is maintained
+in the Spec 63-10 evidence report.
+
 ### 63-8: dedicated provider injection seam
 
 The dedicated source must use an explicitly injected provider binding resolved
