@@ -66,3 +66,14 @@ optimistic stale revision, reservation transition/exactly-once consume,
 validated-evidence gating, recovery attempt isolation and bounded handoff
 events. Tests must not start a real provider, process, shell, MCP server or
 sandbox.
+
+## Implementation evidence (2026-08-05)
+
+The v1 contracts and pure reducer/write service are implemented in
+`packages/contracts/src/goal-control-v1.ts` and
+`packages/goal-control/src/v1.ts`. The SQLite adapter in
+`packages/storage/src/goal-control-v1.ts` reuses `goal_events` and migrates the
+bounded `control_revision` column without touching `run_events`. Focused gates
+pass with 82 contracts tests, 22 Goal Control tests and 69 storage tests.
+Governed admission, terminal-run verification, Goal Web workflow and real
+provider evidence remain the later Spec 58-2 through 58-5 boundaries.

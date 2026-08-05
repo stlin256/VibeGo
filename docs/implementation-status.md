@@ -548,20 +548,44 @@ fixture or opt-in smoke evidence exists. The focused Goal/daemon/Web gate passed
 with 78/17/66/180/96 tests and the full `pnpm verify` gate passed with 668 tests
 across 22 workspace projects.
 
-This is a documentation-only gate. It authorizes only Spec 58-1 contract and
-pure-reducer work; it does not add `GoalAdmissionService`, quota reservation,
-validation writeback, a Goal-aware default run path, or any second scheduler.
+At the time of the 58-0 audit this was a documentation-only gate. It
+authorized only Spec 58-1 contract and pure-reducer work; the implementation
+below now records that the v1 quota reservation contract/reducer is present,
+while `GoalAdmissionService`, validation writeback, the Goal-aware default run
+path and any second scheduler remain out of scope.
 
 ## Spec 58-1 contract/reducer boundary note (2026-08-05)
 
-[ADR 0036](adr/0036-goal-control-v1-domain-and-replay-boundary.md) freezes the
-next additive slice: versioned Goal binding, admission decision, quota
-reservation, validation evidence and recovery records; mixed v0/v1 replay with
-deterministic checksums; and a pure idempotent write/reducer service. The slice
-will keep v0 callers and SQLite `goal_events` compatibility, reject raw or
-secret-shaped payloads, and remain outside `GoalAdmissionService`,
+[ADR 0036](adr/0036-goal-control-v1-domain-and-replay-boundary.md) froze and
+the 58-1 implementation now provides versioned Goal binding, admission
+decision, quota reservation, validation evidence and recovery records; mixed
+v0/v1 replay with deterministic checksums; and a pure idempotent write/reducer
+service. It keeps v0 callers and SQLite `goal_events` compatibility, rejects
+raw or secret-shaped payloads, and remains outside `GoalAdmissionService`,
 `RunManager.start`, `run_events`, Scheduler, Approval, Sandbox and Workspace
 authority until the later 58-2 integration gate.
+
+## Spec 58-1 Goal domain contract/reducer implementation note (2026-08-05)
+
+The additive v1 Goal domain slice is implemented under
+[ADR 0036](adr/0036-goal-control-v1-domain-and-replay-boundary.md):
+
+- `packages/contracts/src/goal-control-v1.ts` defines strict binding, admission,
+  quota reservation, validation evidence, recovery, event envelope and
+  projection schemas with bounded privacy/path checks;
+- `packages/goal-control/src/v1.ts` provides deterministic mixed v0/v1 replay,
+  an in-memory event store, reservation transition reducer and pure
+  `GoalControlV1WriteService` with request/event idempotency and optimistic
+  revision checks;
+- `packages/storage/src/goal-control-v1.ts` persists v1 events in the existing
+  independent `goal_events` table with `BEGIN IMMEDIATE`, goal-local sequences,
+  no-op/conflict handling and a backwards-compatible `control_revision` column.
+
+Focused gates passed with 82 contracts tests, 22 Goal Control tests and 69
+storage tests. This is still a domain/storage slice: no `GoalAdmissionService`,
+default `RunManager.start` change, Web mutation workflow, terminal verifier or
+real governed run was added. `run_events`, AgentLoop, Scheduler, Approval,
+Sandbox and WorkspaceRegistry remain unchanged authorities.
 
 ## Spec 59 planning note (2026-08-05)
 

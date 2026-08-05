@@ -82,6 +82,7 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
         append_sequence INTEGER NOT NULL CHECK (append_sequence > 0),
         event_id TEXT PRIMARY KEY,
         fingerprint TEXT NOT NULL,
+        control_revision INTEGER NOT NULL DEFAULT 0,
         schema_version TEXT NOT NULL,
         event_type TEXT NOT NULL,
         recorded_at TEXT NOT NULL,
@@ -94,6 +95,7 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
       );
       CREATE INDEX IF NOT EXISTS goal_events_goal_seq_idx ON goal_events (goal_id, append_sequence);
     `);
+    this.ensureControlRevisionColumn();
   }
 
   async append<TPayload = Record<string, unknown>>(event: NewGoalEvent<TPayload>): Promise<StoredGoalEvent<TPayload>> {
@@ -268,5 +270,12 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
 
   private ensureOpen(): void {
     if (this.closed) throw new SqliteGoalEventStoreError('goal event store is closed');
+  }
+
+  private ensureControlRevisionColumn(): void {
+    const columns = this.database.prepare('PRAGMA table_info(goal_events)').all() as unknown as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === 'control_revision')) {
+      this.database.exec('ALTER TABLE goal_events ADD COLUMN control_revision INTEGER NOT NULL DEFAULT 0');
+    }
   }
 }
