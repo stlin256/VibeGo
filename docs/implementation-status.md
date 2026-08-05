@@ -830,3 +830,20 @@ The smoke is implemented as an explicit `pnpm smoke:mcp` command over fixed
 local fixtures, outside daemon startup and the offline verification gate; its
 bounded report is secret/path-free. Both stdio and loopback Streamable HTTP
 runs passed on 2026-08-05.
+
+## Spec 58-5 harness smoke audit (2026-08-05)
+
+The current checkout has a provider-only `scripts/smoke-model.mjs`, but no
+`smoke:harness` runner. The accepted implementation boundary is a small,
+explicit HTTP smoke client that composes the existing daemon server with the
+real OpenAI-compatible provider and an isolated in-memory fixture. Interactive
+requests must traverse daemon -> RunManager -> AgentLoop -> ContextManager via
+`/api/v1/runs`; governed requests must additionally traverse the explicit Goal
+admission and terminal writeback services via `/api/v1/runs/governed`.
+
+The smoke report is bounded and redacted. It is not allowed to print or persist
+the secret, prompt, raw model response, headers, tool arguments, environment
+variable names or absolute paths. No live-provider evidence is claimed until a
+user-authorized run supplies the endpoint/model/secret reference. The first
+governed fixture verifier is intentionally named and bounded; it does not
+replace task-specific validation or the Spec 60 release gate.

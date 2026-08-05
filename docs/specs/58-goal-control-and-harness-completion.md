@@ -476,3 +476,39 @@ an explainable preflight card only when authenticated callbacks are present;
 successful mutations refresh the projection and stale/conflict errors stay
 inline. Claim/release, governed submit, recovery UI and live provider smoke are
 intentionally still deferred.
+
+## Spec 58-5 audit and minimum smoke contract (2026-08-05)
+
+The current checkout already has a provider-only `smoke:model` command, but it
+does not yet have `smoke:harness`. The first 58-5 implementation is therefore
+limited to a redacted, explicit smoke runner over the existing daemon
+application boundary. It must not become a second composition root or a second
+runtime state machine.
+
+The runner accepts `interactive` or `governed` mode and uses an explicit
+provider endpoint, model id and environment-variable secret reference. It
+builds the existing `createDaemonServer` with an in-memory EventStore and the
+real OpenAI-compatible provider, then sends an HTTP request to the existing
+run route. The model request consequently passes through `RunManager`,
+`AgentLoop` and its `ContextManager` construction. No tool runtime, MCP/Skill,
+shell, host process, or networked tool is enabled by the smoke fixture.
+
+Governed mode additionally seeds an isolated Goal/Todo/claim fixture, uses the
+existing `GoalAdmissionService` and `GoalRunWritebackService`, and waits for a
+validated terminal writeback before reporting quota consumption. The verifier
+used by this first smoke is an explicit bounded fixture verifier; it is not a
+claim of task-specific semantic validation. Interactive mode never constructs
+or calls Goal admission and remains available when Goal state is absent.
+
+The report is `harness-smoke/v1` and contains only mode, provider/model labels,
+bounded status/error code, elapsed time, event-type counts, run id and (for
+governed mode) bounded Goal outcome references. It must not contain the secret,
+secret environment variable name, prompt, model output, headers, raw response,
+tool arguments, absolute paths or a full event payload. Missing credentials,
+provider failure, timeout and governed validation failure are explicit
+`blocked`/`failed` outcomes; they never fall back to a fake provider.
+
+This slice adds focused script tests and a module-level build/test gate. It does
+not claim live evidence until a user-authorized provider run is executed with
+the command and its redacted report is reviewed. Container, MCP, Tailscale,
+SSH and ACME smoke commands remain separate release-profile gates.

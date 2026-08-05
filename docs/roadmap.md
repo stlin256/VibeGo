@@ -936,3 +936,21 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 统一状态与品牌表达，要求配置以 Web onboarding/settings 为主路径、命令可复现、能力
 声明不夸大、中文同步，并通过链接、命令、隐私和真实用户审阅门禁。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
+
+## Spec 58-5 audit checkpoint (2026-08-05)
+
+The repository already contains `smoke:model` for provider-protocol checks, but
+there was no `smoke:harness` command. The 58-5 implementation is scoped to one
+explicit, redacted runner that exercises the existing daemon HTTP boundary,
+`RunManager`, `AgentLoop` and `ContextManager` with a real provider. Its
+`interactive` mode uses `/api/v1/runs`; its `governed` mode uses the explicit
+`/api/v1/runs/governed` route with an isolated Goal fixture and the existing
+admission/writeback services. It never enables tools, MCP/Skill, shell, host
+execution or a second scheduler.
+
+The first governed smoke uses a named bounded fixture verifier and therefore
+does not by itself promote task-specific validation to release evidence. The
+command reports only redacted status, bounded timing/usage, event-type counts
+and safe references. Missing secret/provider configuration is a blocked result,
+not a fake-provider substitute. A user-authorized live run remains required by
+Spec 60 before 58-5 or 59-5 can be marked release-ready.
