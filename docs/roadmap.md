@@ -1258,9 +1258,10 @@ unchanged.
 ### Spec 62-0 current prerequisite audit (2026-08-06)
 
 The fresh post-Spec-61 matrix is [`62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `0a41cb4` the fixed workflow fixture is 78/78; the capability probe/run
-snapshot slice and dedicated-reviewer injection seam are focused-tested. Spec
-60's current `pnpm verify` static/unit gate also passes; Spec 62 may correct bounded user-facing
+At `07daed3` the fixed workflow fixture is 82/82; contracts (120/120),
+model-deepseek (20/20), daemon (269/269), the capability probe/run snapshot
+slice, task-specific verifier registry and dedicated-reviewer smoke are
+focused-tested. Spec 60's current `pnpm verify` static/unit gate also passes; Spec 62 may correct bounded user-facing
 documentation, but it cannot claim release-ready Goal/full-host/ACME/
 Tailscale/SSH/real-device/signed-release support while the matrix remains
 partial or blocked. The earlier 2026-08-05 audit remains historical.
@@ -1480,4 +1481,8 @@ focused tests cover strict descriptor/privacy validation, duplicate/stale
 registration, missing/non-ready/user-owned lanes, authoritative task-class
 derivation, bounded verifier input, exact id/revision matching and quota
 release. No semantic verifier is registered by the default daemon; live
-task-specific validation and the broader 58-6 A–G module closure remain staged.
+task-specific validation, verifier timeout/cancellation and the broader 58-6
+A–G module closure remain staged. The next bounded gate adds a timeout and
+AbortSignal boundary around verifier execution; a timeout must write only
+bounded inconclusive evidence and release the reservation without changing
+interactive runs or any existing authority.

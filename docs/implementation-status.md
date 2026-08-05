@@ -1245,15 +1245,19 @@ Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.
 
 The fresh audit for the post-Spec-61 checkout is recorded in
 [`docs/reports/62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `0a41cb4` on `main`, the bounded workflow fixture is 78/78 and the current
-capability slice passes contracts 112/112, model-deepseek 20/20 and daemon
-247/247 focused suites. The current full `pnpm verify` also passes typecheck,
-build, all workspace test jobs and both diff checks. The audit still marks Spec 62 as
+At `07daed3` on `main`, the bounded workflow fixture is 82/82 and the current
+capability slice passes contracts 120/120, model-deepseek 20/20 and daemon
+269/269 focused suites. Spec 58-6 task-specific verifier-registry and Spec 63-10
+dedicated-reviewer fixtures are included in these current gates. The current full
+`pnpm verify` also passes typecheck, build, all workspace test jobs and both diff checks. The audit still marks Spec 62 as
 documentation-constrained rather than release-ready: real-device,
 public-certificate, Tailscale/SSH, installer/signing/SBOM, cross-platform host
 and complete Spec 60 evidence remain partial or blocked. Spec 61 remains
 partial for provider-owned search/reasoning, production tool/reviewer evidence
-and its documentation handoff. The report is the current prerequisite matrix;
+and its documentation handoff. Spec 63-10 has bounded dedicated-reviewer live
+adapter evidence, but it is not run/tool/release evidence. Spec 58-6 has an
+explicit registry boundary; verifier timeout/cancellation and semantic task
+validation remain open. The report is the current prerequisite matrix;
 the 2026-08-05 report remains historical.
 
 ## Verification follow-up: deterministic observability window fixture (2026-08-05)
@@ -1481,8 +1485,8 @@ report.
 
 ### Spec 58-6 task-specific Goal verifier registry implementation checkpoint (2026-08-06)
 
-The implementation slice is now specified under [ADR 0050](adr/0050-task-specific-goal-verifier-registry.md).
-It will add a strict versioned `GoalVerifierDescriptorV1` contract and a small
+The implementation slice is specified under [ADR 0050](adr/0050-task-specific-goal-verifier-registry.md).
+It adds a strict versioned `GoalVerifierDescriptorV1` contract and a small
 daemon-owned registry keyed by authoritative Todo `taskClass`. Automatic
 selection is limited to `advancement`, `monitor` and `blocker`; `user_action`
 and `user_gate` remain fail-closed. The writeback service will pass only the
@@ -1492,4 +1496,6 @@ mismatch yields bounded `inconclusive` evidence and releases quota. The default
 daemon registers no semantic verifier, so existing interactive and governed
 fail-closed behavior remains unchanged. The contracts suite passes 120 tests;
 the daemon focused registry/writeback run passes 269 tests with typecheck and
-diff checks.
+diff checks. A bounded verifier timeout/cancellation slice is the next
+implementation gate; it will fail closed and release reservations without
+changing the default registry or run authorities.

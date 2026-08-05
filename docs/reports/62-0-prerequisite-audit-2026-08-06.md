@@ -7,7 +7,7 @@ and records evidence strength separately from release claims.
 ## Gate decision
 
 **62-0 audit: complete; Spec 62 release-documentation gate: constrained.** The
-matrix is current for commit `0a41cb4`, but it does not authorize claims that
+matrix is current for commit `07daed3`, but it does not authorize claims that
 remain `partial`, `blocked`, or `not-run`. README changes may correct bounded
 status, setup and safety guidance; they must not call the project release-ready
 until Spec 60 and the required runtime/device/release gates are complete.
@@ -16,27 +16,29 @@ until Spec 60 and the required runtime/device/release gates are complete.
 
 | Check | Evidence |
 | --- | --- |
-| Branch / commit | `main` / `0a41cb4` (`origin/main`); clean worktree at audit start |
+| Branch / commit | `main` / `07daed3` (`origin/main`); clean worktree at audit start |
 | Remote | `origin` points to the public VibeGo repository |
 | Package manager | `pnpm@11.9.0` from `package.json` |
 | Node | bundled validation runtime `v24.14.0` |
 | Workspace graph | `pnpm-workspace.yaml`: `apps/*` and `packages/*`, 22 projects |
 | Lockfile | `pnpm-lock.yaml` present; not changed by this audit |
-| Workflow fixture | `pnpm test:workflow`: **78/78 passed** |
-| Focused current slice | contracts 112/112, model-deepseek 20/20, daemon 247/247; affected typecheck/build gates pass |
-| Full static/unit gate | `pnpm verify`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
+| Workflow fixture | `pnpm test:workflow`: **82/82 passed** |
+| Focused current slice | contracts 120/120, model-deepseek 20/20, daemon 269/269; Spec 58-6 verifier-registry and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
+| Full static/unit gate | `pnpm verify` at `07daed3`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
 | Secret boundary | no provider key, private key, cookie, full environment, or user workspace was read or written |
 
 ## Evidence legend
 
 | ID | Meaning and limit |
 | --- | --- |
-| E1 | Current bounded workflow fixture, 78/78; not a full release gate |
+| E1 | Current bounded workflow fixture, 82/82; not a full release gate |
 | E2 | Focused package/application tests and typechecks recorded in the implementation status; only affected current slices were rerun |
 | E3 | Explicitly authorized DeepSeek text/governed/cancel/context-limit reports from the preceding live commit; no broad capacity or provider-failure claim |
 | E4 | Existing model, permission, recovery, transport, MCP, container, certificate and performance fixtures; they prove bounded application behavior only |
-| E5 | Current full static/unit `pnpm verify` at `0a41cb4`; does not cover live/remote/device/release gates |
+| E5 | Current full static/unit `pnpm verify` at `07daed3`; does not cover live/remote/device/release gates |
 | E6 | Required physical devices, public ACME/TLS, Tailscale/SSH, clean-host install, signing/SBOM/attestation and production host-runner evidence |
+| E7 | Spec 63-10 dedicated-reviewer offline fixture and separately authorized redacted DeepSeek adapter smoke; no run/tool/event or release-capacity claim |
+| E8 | Spec 58-6 task-specific verifier registry focused tests; registry is empty in the default daemon and semantic task validation remains open |
 
 ## Spec 01–61 matrix
 
@@ -104,21 +106,21 @@ gate cannot honestly be claimed from this checkout.
 | 55 | public deployment/certs; E1/E4 | rotation fixture | blocked for release | ACME/renewal/public listener |
 | 56 | i18n/accessibility/devices; E1/E2 | pure ratio fixtures | blocked for real-device release | manual matrix/screen reader |
 | 57 | release publishing; E1/E2 | manifest contract | blocked | workflow/artifact/sign/SBOM |
-| 58 | Goal/Harness umbrella; E1/E3/E4 | bounded harness/governed smoke | partial | task verifier/recovery/release |
+| 58 | Goal/Harness umbrella; E1/E3/E4/E8 | bounded harness/governed smoke | partial | verifier timeout/recovery/module closure/release |
 | 59 | permission profiles; E1/E4 | permission smoke | partial | host/container/platform/release |
 | 60 | complete verification; E1/E3/E5 | focused/live slices | blocked | current full gate/failures/remote/release |
-| 61 | DeepSeek provider; E1/E2/E3 | text/governed/cancel/context-limit | partial | reasoning/search/tool/reviewer/docs |
+| 61 | DeepSeek provider; E1/E2/E3/E7 | text/governed/cancel/context-limit; dedicated reviewer adapter | partial | reasoning/search/tool/reviewer production/docs |
 
 ## Required blockers and re-acceptance
 
 The former stale full-gate blocker is resolved by the current `pnpm verify`
-run at `0a41cb4`; the remaining blockers below are runtime, remote, device or
+run at `07daed3`; the remaining blockers below are runtime, remote, device or
 release evidence gaps.
 
 | Blocker | Return spec | Evidence required |
 | --- | --- | --- |
 | Provider 5xx/timeout and broad failure evidence | 60-4/47 | explicitly authorized bounded live negative smoke, never a fake pass |
-| Task-specific Goal validation/recovery | 58-6/60-3 | independent verifier, crash/retry evidence and no old tool replay |
+| Task-specific Goal validation/recovery | 58-6/60-3 | bounded verifier timeout/cancellation, independent semantic verifier, crash/retry evidence and no old tool replay |
 | Host/container/platform parity | 48/59-5 | permission/container cleanup evidence on target platforms |
 | ACME/public/Tailscale/SSH | 55/60-6 | staging-only certificate and explicit remote adapter smoke |
 | Real device/accessibility matrix | 56/62-6 | desktop/portrait/phone/fold/tri-fold/tablet plus screen reader review |
