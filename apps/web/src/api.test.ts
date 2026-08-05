@@ -174,6 +174,25 @@ describe('ApiClient', () => {
     expect(calls[2]?.init?.method).toBe('DELETE');
   });
 
+  it('uses the authenticated capability-profile settings projection with revision fencing', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = {
+      schemaVersion: 'ready4vibe_capability_profile_settings_status_v1',
+      settings: { schemaVersion: 'ready4vibe_capability_profile_settings_v1', profile: { schemaVersion: 'ready4vibe_capability_profile_v1', profileId: 'preview', transportMode: 'loopback', modelMode: 'fake', filesystemMode: 'off', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'none', policyRevision: 'policy-1', requiresAcknowledgement: false, updatedAt: '2026-08-05T00:00:00.000Z' }, profileRevision: 'profile-1', updatedAt: '2026-08-05T00:00:00.000Z' },
+      resolution: { schemaVersion: 'ready4vibe_capability_profile_resolution_v1', status: 'ready', reasonCode: 'PROFILE_READY', requestedProfile: {}, effectiveProfile: {}, policyRevision: 'policy-1', evaluatedAt: '2026-08-05T00:00:00.000Z' },
+      currentRevision: 'profile-1', previousRevision: null,
+    } as const;
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.capabilityProfileSettings();
+    await client.patchCapabilityProfileSettings({ profile: status.settings.profile, expectedRevision: 'profile-1' });
+    await client.resetCapabilityProfileSettings('profile-2');
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/capability-profile', '/api/v1/settings/capability-profile', '/api/v1/settings/capability-profile/reset']);
+    expect(calls[1]?.init?.method).toBe('PATCH');
+    expect(calls[1]?.init?.body).toContain('profile-1');
+    expect(calls[2]?.init?.body).toBe(JSON.stringify({ expectedRevision: 'profile-2' }));
+    expect(calls.map((call) => JSON.stringify(call.init?.body ?? '')).join('')).not.toMatch(/api[_-]?key|private[_-]?key|C:\\Users/iu);
+  });
+
   it('uses the explicit model probe endpoint without accepting browser credentials', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

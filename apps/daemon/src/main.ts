@@ -19,6 +19,8 @@ import { TencentMemoryRuntimeSupervisor } from './tencent-memory-runtime-supervi
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsManager } from './mcp-settings.js';
 import { McpRunBindingManager } from './mcp-runtime-binding.js';
+import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalWriteService } from '@ready4vibe/goal-control';
 import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
 
@@ -107,6 +109,17 @@ const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry }
 // persist non-secret intent and request a later injected probe without causing
 // a child process or network request during daemon startup.
 const mcpSettings = new McpSettingsManager({ settings: settingsStore });
+const capabilityProfileSettings = new DurableCapabilityProfileSettingsManager({
+  settings: settingsStore,
+  policy: () => createCapabilityProfilePolicy({
+    transportMode,
+    modelSettings,
+    toolSettings,
+    sandboxSettings,
+    mcpSettings,
+    workspaceRegistry,
+  }),
+});
 // R4 is opt-in: until an application service activates a verified snapshot,
 // this manager contributes no runtime and performs no transport side effect.
 const mcpRuntimeBinding = new McpRunBindingManager(workspaceRegistry);
@@ -153,6 +166,7 @@ const server = createDaemonServer({
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   mcpSettings,
+  capabilityProfileSettings,
   webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,
@@ -188,4 +202,39 @@ function parsePort(value: string): number {
     throw new Error(`invalid READY4VIBE_PORT: ${value}`);
   }
   return portNumber;
+}
+
+function createCapabilityProfilePolicy(input: {
+  transportMode: 'loopback' | 'lan' | 'tailscale' | 'ssh';
+  modelSettings: InMemoryModelSettingsManager;
+  toolSettings: InMemoryToolSettingsManager;
+  sandboxSettings: InMemorySandboxSettingsManager;
+  mcpSettings: McpSettingsManager;
+  workspaceRegistry: InMemoryWorkspaceRegistry;
+}): CapabilityProfilePolicy {
+  const transport = input.transportMode === 'loopback' ? 'loopback'
+    : input.transportMode === 'lan' ? 'lan-tls' : input.transportMode;
+  const model = input.modelSettings.status();
+  const tools = input.toolSettings.status();
+  const sandbox = input.sandboxSettings.status();
+  const mcp = input.mcpSettings.status();
+  const workspaceReady = input.workspaceRegistry.status().workspaces.length > 0;
+  return {
+    policyRevision: 'daemon-policy-1',
+    transportModes: [transport],
+    modelModes: model.configured ? ['off', 'fake', 'configured'] : ['off', 'fake'],
+    filesystemModes: tools.filesystemEnabled ? ['off', 'workspace-read', 'workspace-write'] : ['off'],
+    shellModes: sandbox.enabled ? ['off', 'external-sandbox'] : ['off'],
+    networkModes: ['off', 'restricted'],
+    mcpSkillModes: mcp.available ? ['off', 'configured'] : ['off'],
+    approvalModes: ['none', 'on-request'],
+    transportHealth: { [transport]: 'ready' },
+    workspaceHealth: workspaceReady ? 'ready' : 'missing',
+    modelHealth: model.configured ? 'ready' : 'missing',
+    filesystemHealth: tools.filesystemEnabled ? 'ready' : 'missing',
+    externalSandboxHealth: sandbox.enabled && sandbox.healthy ? 'ready' : 'missing',
+    hostRunnerHealth: 'missing',
+    networkHealth: 'off',
+    mcpSkillHealth: mcp.available ? 'ready' : mcp.settings.enabled ? 'degraded' : 'missing',
+  };
 }

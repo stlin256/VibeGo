@@ -680,7 +680,7 @@ same-origin REST、run create/read/cancel/retry/approval，以及带 `Last-Event
 去重、有限重连、取消和终态停止的 SSE。SDK 不读 SQLite/workspace/secret，不复制任何
 执行权威；native UI 仍以后置消费者处理。
 
-## Spec 52：Capability profiles 与 first-run experience（R1 strict contract/resolver 已实现，runtime integration 待实现）
+## Spec 52：Capability profiles 与 first-run experience（R1 已实现，R2/R3a settings projection 进行中）
 
 详见 [Spec 52](specs/52-capability-profiles-and-first-run-experience.md) 及其
 [前置验证报告](reports/52-prerequisite-verification-2026-08-05.md)。本规格把
@@ -695,7 +695,24 @@ Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM
 2026-08-05 完成；ADR 0033 已冻结版本化 Capability Profile contract，strict
 contract 已在 `packages/contracts` 落地，纯 resolver 已在 `packages/policy` 落地，
 下一步才进入 daemon application boundary，
-不改变任何默认权限或 run 创建行为。
+不改变任何默认权限或 run 创建行为。R2/R3a 的首个 application slice 采用现有
+`daemon_settings` 持久化非 secret profile intent，并通过认证的
+`GET/PATCH /api/v1/settings/capability-profile` 返回 resolver 的 effective profile、
+status 与稳定 reason code；expected revision 冲突时 fail-closed，reset 只回到
+`preview` 而不删除历史。该 slice 不接入 `RunManager.start`，不启动 provider/process/
+network，不修改 AgentLoop、Scheduler、Approval、Sandbox、WorkspaceRegistry、
+`run_events` 或 `goal_events`。对应边界见 [ADR 0034](adr/0034-capability-profile-settings-and-resolution-projection.md)。
+
+R2/R3a settings projection 已实现：`packages/contracts` 增加 strict
+settings/patch/status DTO，daemon 使用 `profile-N` optimistic revision，stale
+policy 会 fail-closed 并恢复为 `preview`，认证 API 覆盖 GET/PATCH/reset 与现有
+LAN pairing/auth gate。该切片 focused gate 为 contracts 74、policy 24、daemon
+35（含现有 daemon fixtures），不启动任何 provider/process/network，不改变默认
+run 创建或事件事实源。R2 profile cards/blocked guidance 已实现：Web client 只在
+内存中保存 projection，四个 profile cards、Advanced Local acknowledgement、
+effective/reason/revision guidance 和 reset/conflict handling 均复用现有 Settings
+Sheet；Web focused gate 为 96 tests。浏览器不决定权限、不存储 credentials/path，
+daemon resolver 仍是唯一权威。随后才在独立变更中绑定 profile/run snapshot。
 
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。
@@ -749,3 +766,28 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
+
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（Draft）
+
+详见 [Spec 58](specs/58-goal-control-and-harness-completion.md)。当前 Goal Control
+已经有严格 contracts、独立 `goal_events`、projection/replay、bounded mutation API
+和只读 Web projection，但 governed admission、GoalRunBinding 与 RunManager 的应用层
+组合、独立 validation writeback、quota reservation/consume exactly-once、Goal Web
+操作流和真实端到端 Harness 证据仍未完成。
+
+Spec 58 将 Goal 作为第一条“从基础概念到生产闭环”的纵切，同时定义 Model、Context、
+AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability、
+Transport/Certificate 和 Host/Release 的 A–G 成熟度标准。它要求先重新复核此前所有
+Spec，再按 `58-0 → 58-7` 独立提交推进；在完成前，Goal 不得接入默认 interactive run，
+也不得把 fake-only 或 design-only 证据标记为 stable。
+
+## Spec 59：Permission Profiles、低打扰自动审批与 Full-host 模式（Draft）
+
+详见 [Spec 59](specs/59-permission-profiles-and-low-interruption-approval.md)。该规格
+不修改 Spec 52，而是作为后续权限体验切片补充两个明确模式：推荐的 `workspace-coding`
+只在选定 workspace 内工作并使用 bounded-auto 减少低风险审批打扰；高级 `full-host`
+在一次明确确认后允许主机级文件/进程能力，并可使用可信 session 的 session-auto。
+
+full-host 不是默认权限，不自动开启网络，不接受 untrusted content，也不能绕过 Goal、
+quota、Scheduler、Approval、Sandbox 或 managed policy。Spec 59 将按
+`59-0 → 59-5` 独立提交推进，并在实现完成前保持当前 run 行为不变。

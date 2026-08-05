@@ -363,21 +363,26 @@ The following work is documented but not fully implemented yet:
   R3b ACME/OS-store/renewal, signed release artifacts and native
   Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
-  cross-cutting capability-profile and first-run UX gate is now specified; ADR
-  0033 freezes the R1 contract boundary. The strict
+  cross-cutting capability-profile and first-run UX gate is now specified;
+  ADR 0033 freezes the R1 contract boundary and ADR 0034 freezes the durable
+  settings/projection boundary. The strict
   `ready4vibe_capability_profile_v1` contract is implemented in
   `packages/contracts` with 5 focused tests (71 contract tests total).
-  `@ready4vibe/policy` now provides the pure resolver with 7 focused tests
-  (24 policy tests total); daemon integration remains pending. The plan defines
-  preview, workspace-coding, advanced-local and custom profiles,
+  `@ready4vibe/policy` provides the pure resolver with 7 focused tests (24
+  policy tests total). The R2/R3a application slice now adds a versioned,
+  secret-free daemon settings snapshot, optimistic revision checks, stale
+  policy recovery to `preview`, and an authenticated resolver projection with
+  LAN auth coverage. The contracts/daemon focused gate is 74/24/35 tests
+  respectively at this slice. It does not change default run creation or
+  start any runtime. Profile cards, profile/run snapshot binding and the later
+  Goal/transport/ACME/release gates remain independently planned. The R2 Web
+  card slice is now implemented in the existing Settings Sheet with four
+  profile cards, Advanced Local acknowledgement and bounded effective-mode
+  guidance; Web focused tests total 96. It consumes the projection without
+  moving authority into the browser. The
+  plan defines preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
-  profile/run snapshot isolation and Host-first acceptance. Its release gate
-  additionally covers Goal governed admission, real Tailscale/SSH transport,
-  ACME staging/renewal, a core Harness completeness matrix and a mandatory
-  out-of-band real LLM smoke. The mandatory R0 prerequisite gate passed on
-  2026-08-05; the versioned contract design is now frozen by ADR 0033. The
-  contract-only slice and pure resolver remain below the daemon boundary; no
-  new default capability or run-path behavior is authorized. Native clients
+  profile/run snapshot isolation and Host-first acceptance. Native clients
   remain post-release and do not block the Web/Host release.
 
 These six specs are design/planning gates only. They do not change the
@@ -515,6 +520,32 @@ The research basis is recorded in
 implementation commit, the relevant prerequisite matrix must be re-verified on
 the current checkout. New runtime behavior remains opt-in and disabled until its
 focused contracts, failure fixtures and release evidence are accepted.
+
+## Spec 58 planning note (2026-08-05)
+
+`docs/specs/58-goal-control-and-harness-completion.md` is a Draft planning gate.
+It records the known maturity gap: Goal contracts, replay, SQLite persistence,
+bounded mutation and read-only Web projection exist, while governed admission,
+GoalRunBinding application composition, validation writeback, quota reservation /
+exactly-once spend, Goal operation UX and daemon-path real LLM evidence remain
+unimplemented. The same A–G maturity ladder is required for other core modules
+that currently have only contracts, fixtures or fake runtime evidence.
+
+Spec 58 does not change current runtime behavior. Until its explicit phases and
+release evidence are accepted, unbound interactive runs remain outside Goal
+admission and `run_events`, `goal_events`, AgentLoop, RunManager, Scheduler,
+Approval, Sandbox and WorkspaceRegistry retain their existing authority.
+
+## Spec 59 planning note (2026-08-05)
+
+`docs/specs/59-permission-profiles-and-low-interruption-approval.md` is a Draft
+follow-up specification. It adds the requested permission ergonomics without
+changing Spec 52: `workspace-coding` is workspace-scoped with bounded automatic
+approval for exact low-risk keys, while `full-host` is an explicit trusted-session
+mode with optional session-auto approval. Full-host is never the default, never a
+fallback for untrusted content or an unhealthy external sandbox, and never widens
+network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
+No runtime behavior is claimed by this planning note.
 
 ## Spec 49-R4 implementation note (2026-08-04)
 

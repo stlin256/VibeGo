@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const CAPABILITY_PROFILE_SCHEMA_VERSION = 'ready4vibe_capability_profile_v1' as const;
+export const CAPABILITY_PROFILE_RESOLUTION_SCHEMA_VERSION = 'ready4vibe_capability_profile_resolution_v1' as const;
 
 const CONTROL_TEXT = /^[^\u0000-\u001F\u007F\r\n]*$/u;
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
@@ -80,6 +81,37 @@ export const CapabilityProfileSchema = z.object({
   }
 });
 export type CapabilityProfile = z.infer<typeof CapabilityProfileSchema>;
+
+export const CapabilityResolutionStatusSchema = z.enum(['ready', 'degraded', 'blocked']);
+export type CapabilityResolutionStatus = z.infer<typeof CapabilityResolutionStatusSchema>;
+
+export const CapabilityResolutionReasonCodeSchema = z.enum([
+  'PROFILE_READY',
+  'CAPABILITY_NARROWED',
+  'STALE_POLICY_REVISION',
+  'TRANSPORT_UNAVAILABLE',
+  'WORKSPACE_REQUIRED',
+  'WORKSPACE_UNAVAILABLE',
+  'MODEL_UNAVAILABLE',
+  'FILESYSTEM_UNAVAILABLE',
+  'SANDBOX_UNAVAILABLE',
+  'HOST_RUNNER_UNAVAILABLE',
+  'NETWORK_NOT_ALLOWED',
+  'MCP_SKILL_UNAVAILABLE',
+  'INVALID_SERVER_POLICY',
+]);
+export type CapabilityResolutionReasonCode = z.infer<typeof CapabilityResolutionReasonCodeSchema>;
+
+export const CapabilityProfileResolutionSchema = z.object({
+  schemaVersion: z.literal(CAPABILITY_PROFILE_RESOLUTION_SCHEMA_VERSION),
+  status: CapabilityResolutionStatusSchema,
+  reasonCode: CapabilityResolutionReasonCodeSchema,
+  requestedProfile: CapabilityProfileSchema,
+  effectiveProfile: CapabilityProfileSchema.nullable(),
+  policyRevision: OpaqueIdSchema,
+  evaluatedAt: TimestampSchema,
+}).strict();
+export type CapabilityProfileResolution = z.infer<typeof CapabilityProfileResolutionSchema>;
 
 export function parseCapabilityProfile(input: unknown): CapabilityProfile {
   return CapabilityProfileSchema.parse(input);

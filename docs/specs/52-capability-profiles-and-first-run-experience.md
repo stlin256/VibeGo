@@ -1,7 +1,8 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R1 strict contract and pure resolver implemented (runtime integration
-  pending; no default behavior change)
+- Status: R1 strict contract/resolver and R2/R3a durable settings projection
+  with authenticated API implemented (profile cards and run snapshot binding
+  remain pending; no default run-path behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
   persistence, policy/approval boundaries, transport/certificate adapters,
@@ -495,12 +496,57 @@ path or starts any runtime.
   framework.
 - Add desktop, portrait, phone, foldable and tablet viewport fixtures.
 
+#### R2 profile-card implementation slice (2026-08-05, implemented)
+
+The existing conversation-first Settings Sheet will add a compact capability
+profile card group before workspace/model controls. The cards show the four
+stable profile ids, the daemon-returned `ready|degraded|blocked` status,
+effective capability summary and stable reason/next-step guidance. Selecting
+or resetting a card sends only the complete validated profile intent plus the
+current `profileRevision`; the browser never computes authorization, stores a
+credential, or receives a daemon path. Optimistic conflicts remain visible as
+a bounded error and require a fresh status read. The card layout reuses the
+existing VibeGo primitives and ratio-first CSS so desktop, portrait, phone,
+  foldable and tablet fixtures preserve the one-action conversation flow.
+
+`apps/web/src/api.ts` now consumes the authenticated capability-profile
+settings/reset routes, `apps/web/src/main.tsx` refreshes the projection after
+health/pairing and keeps mutations in memory, and `apps/web/src/App.tsx` adds
+the four cards plus Advanced Local acknowledgement and bounded effective-mode
+guidance. The Web focused suite has 96 tests. This remains an intent/status
+surface: profile/run snapshot binding is still a separate R3 slice.
+
 ### 52-R3: Existing runtime integration
 
 - Wire the resolver through existing settings, approval, sandbox, scheduler,
   workspace and RunManager application boundaries.
 - Verify that disabled modes make zero provider/process/network calls.
 - Verify that a changed profile never alters an already running run.
+
+#### R2/R3a application-settings slice (2026-08-05, implemented)
+
+The first application-boundary slice persists only the validated,
+secret-free profile intent in the existing `daemon_settings` boundary. The
+daemon exposes a versioned `GET/PATCH /api/v1/settings/capability-profile`
+projection containing the current profile revision and the pure resolver's
+effective profile, status and reason code. The policy evidence is injected by
+the daemon from existing transport, workspace, model, filesystem, sandbox and
+MCP settings; the browser cannot widen it. Updates use an expected revision
+and fail closed on stale or concurrent writes. Resetting the profile returns
+to `preview` without deleting run or Goal history.
+
+This slice deliberately does **not** attach the profile to `RunConfig`, change
+`RunManager.start`, alter the AgentLoop state machine, grant a tool, start a
+process, call a provider, change Scheduler/Approval/Sandbox authority, or
+modify `run_events`/`goal_events`. Profile/run snapshot binding and contextual
+Web cards remain the next independently tested slice.
+
+The implementation is covered by strict contracts in
+`packages/contracts/src/capability-profile-settings.ts`, the durable daemon
+manager in `apps/daemon/src/capability-profile-settings.ts`, and authenticated
+server fixtures for restart, stale revision, reset, privacy and LAN auth. The
+focused contract suite has 74 tests and the daemon focused settings/API suite
+has 35 tests at this gate.
 
 ### 52-R4: Goal governed admission
 

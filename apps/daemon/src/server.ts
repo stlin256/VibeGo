@@ -17,6 +17,7 @@ import { GitSettingsError, type GitSettingsManager } from './git-settings.js';
 import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
+import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 import { serveStaticWeb } from './static-web.js';
 
@@ -53,6 +54,7 @@ export interface DaemonServerOptions {
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
+  capabilityProfileSettings?: CapabilityProfileSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   /** Absolute path to a built React/Vite dist directory; omitted in dev. */
@@ -82,6 +84,7 @@ interface ResolvedDaemonServerOptions {
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
+  capabilityProfileSettings?: CapabilityProfileSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   webDistDir?: string;
@@ -142,6 +145,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
+    ...(options.capabilityProfileSettings ? { capabilityProfileSettings: options.capabilityProfileSettings } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
     ...(options.webDistDir ? { webDistDir: options.webDistDir } : {}),
@@ -168,6 +172,12 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       }
       if (error instanceof McpSettingsError) {
         const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      if (error instanceof CapabilityProfileSettingsError) {
+        const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503
+          : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409 : 400;
         writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }
@@ -680,6 +690,38 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/capability-profile') {
+    if (!options.capabilityProfileSettings) {
+      writeJson(response, 503, { error: { code: 'CAPABILITY_PROFILE_SETTINGS_UNAVAILABLE', message: 'Capability profile settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.capabilityProfileSettings.status());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or PATCH required' } }, { Allow: 'GET, PATCH' });
+      return;
+    }
+    writeJson(response, 200, options.capabilityProfileSettings.patch(await readJson(request, options.bodyLimitBytes)));
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/capability-profile/reset') {
+    if (!options.capabilityProfileSettings) {
+      writeJson(response, 503, { error: { code: 'CAPABILITY_PROFILE_SETTINGS_UNAVAILABLE', message: 'Capability profile settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    const expectedRevision = readExpectedRevision(input);
+    writeJson(response, 200, options.capabilityProfileSettings.reset(expectedRevision));
+    return;
+  }
+
   if (pathname === '/api/v1/settings/agent-memory') {
     if (!options.agentMemorySettings) {
       writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
@@ -1107,6 +1149,21 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
 
 function isPairingInput(value: unknown): value is { code: string } {
   return typeof value === 'object' && value !== null && 'code' in value && typeof value.code === 'string' && value.code.length > 0 && value.code.length <= 64;
+}
+
+function readExpectedRevision(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new RequestError(400, 'INVALID_REQUEST', 'Expected revision must be a bounded revision string.');
+  }
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).some((key) => key !== 'expectedRevision')) {
+    throw new RequestError(400, 'INVALID_REQUEST', 'Only expectedRevision is accepted.');
+  }
+  if (record.expectedRevision === undefined) return undefined;
+  if (typeof record.expectedRevision !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(record.expectedRevision)) {
+    throw new RequestError(400, 'INVALID_REQUEST', 'Expected revision must be a bounded revision string.');
+  }
+  return record.expectedRevision;
 }
 
 function isApprovalInput(value: unknown): value is { approvalId: string; decision: 'allow' | 'deny' } {

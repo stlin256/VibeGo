@@ -1,4 +1,5 @@
 import {
+  CAPABILITY_PROFILE_RESOLUTION_SCHEMA_VERSION,
   parseCapabilityProfile,
   type CapabilityApprovalMode,
   type CapabilityFilesystemMode,
@@ -10,24 +11,9 @@ import {
   type CapabilityTransportMode,
 } from '@ready4vibe/contracts';
 
-export const CAPABILITY_PROFILE_RESOLUTION_SCHEMA_VERSION = 'ready4vibe_capability_profile_resolution_v1' as const;
-
 export type CapabilityHealth = 'ready' | 'degraded' | 'blocked' | 'missing';
-export type CapabilityResolutionStatus = 'ready' | 'degraded' | 'blocked';
-export type CapabilityResolutionReasonCode =
-  | 'PROFILE_READY'
-  | 'CAPABILITY_NARROWED'
-  | 'STALE_POLICY_REVISION'
-  | 'TRANSPORT_UNAVAILABLE'
-  | 'WORKSPACE_REQUIRED'
-  | 'WORKSPACE_UNAVAILABLE'
-  | 'MODEL_UNAVAILABLE'
-  | 'FILESYSTEM_UNAVAILABLE'
-  | 'SANDBOX_UNAVAILABLE'
-  | 'HOST_RUNNER_UNAVAILABLE'
-  | 'NETWORK_NOT_ALLOWED'
-  | 'MCP_SKILL_UNAVAILABLE'
-  | 'INVALID_SERVER_POLICY';
+export type CapabilityResolutionStatus = import('@ready4vibe/contracts').CapabilityResolutionStatus;
+export type CapabilityResolutionReasonCode = import('@ready4vibe/contracts').CapabilityResolutionReasonCode;
 
 export interface CapabilityProfilePolicy {
   readonly policyRevision: string;
