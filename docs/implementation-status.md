@@ -1230,7 +1230,9 @@ reviewer, search and governed evidence remain separate gates.
 `openai-compatible` as the default. DeepSeek requires the complete endpoint,
 explicit profile, model and `--secret-env`; it binds through the existing daemon
 path and reports provider/profile/scenario, bounded timing, event counts, usage
-and stable errors only. The fixture covers provider construction without hidden
+and stable errors only; the SSE projection preserves bounded `DEEPSEEK_*`
+provider errors instead of collapsing them into a generic harness failure. The
+fixture covers provider construction without hidden
 path joining, interactive routing, run metadata, capability-gated high thinking,
 and explicit daemon cancellation. No new scheduler, event ledger, approval
 authority or sandbox authority was introduced; tool/reviewer/search and live

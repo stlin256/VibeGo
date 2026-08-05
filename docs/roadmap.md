@@ -1242,6 +1242,7 @@ DeepSeek and daemon/harness readiness remain separate, opt-in gates.
 explicit profile, model and `--secret-env`; it uses the existing daemon,
 RunManager, Scheduler and event path. Fixture coverage includes secret-free
 provider construction, profile/path validation, interactive routing, run
-metadata, capability-gated high thinking and explicit daemon cancellation.
+metadata, capability-gated high thinking, bounded `DEEPSEEK_*` error mapping and
+explicit daemon cancellation.
 Tool/Approval/Sandbox, reviewer/search and live provider evidence remain
 separate gates.

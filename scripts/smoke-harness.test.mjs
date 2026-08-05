@@ -216,6 +216,21 @@ test('DeepSeek provider mode uses the ordinary harness route and preserves snaps
   assert.doesNotMatch(JSON.stringify(result), /sk-|api.example|ready4vibe-harness-smoke/iu);
 });
 
+test('preserves bounded DeepSeek provider errors through the harness SSE projection', async () => {
+  const result = await runHarnessSmoke({
+    ...valid,
+    provider: 'deepseek',
+    endpointProfile: 'openai-chat-completions',
+    thinkingMode: 'auto',
+  }, {
+    secretValue: () => 'sk-' + 'e'.repeat(32),
+    provider: providerForHarnessEvents(),
+    runtimeFactory: async () => fakeRuntime({ failed: true, failedCode: 'DEEPSEEK_HTTP_401', mode: 'interactive' }),
+  });
+  assert.equal(result.status, 'failed');
+  assert.equal(result.errorCode, 'DEEPSEEK_HTTP_401');
+});
+
 test('DeepSeek thinking high remains blocked without a ready capability snapshot', async () => {
   const result = await runHarnessSmoke({
     ...valid,
@@ -259,7 +274,7 @@ test('exit codes and safe error mapping are stable', () => {
   assert.equal(safeHarnessErrorCode(new Error('secret at C:\\private')), 'HARNESS_FAILED');
 });
 
-function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = false, delayMs = 1_000 }) {
+function fakeRuntime({ observed, mode, goal = false, failed = false, failedCode = 'MODEL_HTTP_401', delayed = false, delayMs = 1_000 }) {
   observed ??= {};
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -278,7 +293,7 @@ function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = f
     if (url.pathname === '/api/v1/runs/run_harness0001/events') {
       if (delayed) await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
       const terminal = failed
-        ? { type: 'run.failed', payload: { code: 'MODEL_HTTP_401', safeMessage: 'credentials rejected' } }
+        ? { type: 'run.failed', payload: { code: failedCode, safeMessage: 'credentials rejected' } }
         : observed.cancelled
           ? { type: 'run.cancelled', payload: { reason: 'user-cancelled-during-model' } }
         : { type: 'run.completed', payload: { summary: 'raw provider output', exitReason: 'model-completed' } };

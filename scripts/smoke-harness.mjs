@@ -641,7 +641,7 @@ function safeHttpErrorCode(status, body) {
 }
 
 function safeEventErrorCode(value) {
-  return typeof value === 'string' && /^(?:MODEL|RUN|HARNESS)_[A-Z0-9_]{1,64}$/u.test(value) ? value : 'HARNESS_RUN_FAILED';
+  return typeof value === 'string' && /^(?:DEEPSEEK|MODEL|RUN|HARNESS)_[A-Z0-9_]{1,64}$/u.test(value) ? value : 'HARNESS_RUN_FAILED';
 }
 
 function countEventTypes(events) {
