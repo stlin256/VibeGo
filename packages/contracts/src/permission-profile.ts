@@ -4,6 +4,7 @@ export const PERMISSION_PROFILE_SCHEMA_VERSION = 'ready4vibe_permission_profile_
 export const PERMISSION_PROFILE_RESOLUTION_SCHEMA_VERSION = 'ready4vibe_permission_profile_resolution_v1' as const;
 export const PERMISSION_PROFILE_SETTINGS_SCHEMA_VERSION = 'ready4vibe_permission_profile_settings_v1' as const;
 export const PERMISSION_PROFILE_SETTINGS_STATUS_SCHEMA_VERSION = 'ready4vibe_permission_profile_settings_status_v1' as const;
+export const PERMISSION_PROFILE_RUN_SNAPSHOT_SCHEMA_VERSION = 'ready4vibe_permission_profile_run_snapshot_v1' as const;
 export const PERMISSION_SESSION_GRANT_SCHEMA_VERSION = 'ready4vibe_permission_session_grant_v1' as const;
 export const PERMISSION_CONFIRMATION_SCHEMA_VERSION = 'ready4vibe_permission_confirmation_v1' as const;
 export const PERMISSION_CONFIRMATION_REQUEST_SCHEMA_VERSION = 'ready4vibe_permission_confirmation_request_v1' as const;
@@ -238,7 +239,10 @@ export const PermissionGrantScopeSchema = z.object({
   if (value.approvalPosture === 'session-auto' && value.profileId === 'workspace-coding') {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['profileId'], message: 'workspace-coding cannot use session-auto' });
   }
-  if (value.approvalPosture === 'bounded-auto' && !value.approvalKey && !value.approvalKeyFingerprint) {
+  // A session grant must carry the exact key it authorizes. A run snapshot
+  // records only the bounded posture; the existing compiler still computes
+  // and checks the per-call exact key when kind is `run`.
+  if (value.approvalPosture === 'bounded-auto' && value.kind === 'session' && !value.approvalKey && !value.approvalKeyFingerprint) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['approvalKey'], message: 'bounded-auto requires an exact approval key' });
   }
   if (value.approvalKey && value.approvalKeyFingerprint && value.approvalKey.argumentFingerprint !== value.approvalKeyFingerprint) {
@@ -246,6 +250,97 @@ export const PermissionGrantScopeSchema = z.object({
   }
 });
 export type PermissionGrantScope = z.infer<typeof PermissionGrantScopeSchema>;
+
+/** Run-bound scope metadata. Unlike a session grant it does not itself grant
+ * session-auto or bounded-auto; the existing compiler performs per-call
+ * approval-key checks against this captured posture. */
+export const PermissionRunScopeSchema = z.object({
+  kind: z.literal('run'),
+  profileId: PermissionProfileIdSchema,
+  filesystemScope: PermissionFilesystemScopeSchema,
+  processScope: PermissionProcessScopeSchema,
+  networkMode: PermissionNetworkModeSchema,
+  mcpSkillMode: PermissionMcpSkillModeSchema,
+  approvalPosture: ApprovalPostureSchema,
+  taskTrust: PermissionTaskTrustSchema,
+  workspaceId: OpaqueIdSchema.optional(),
+  sandboxRevision: RevisionSchema.optional(),
+  confirmationRef: OpaqueIdSchema.optional(),
+  approvalKey: PermissionApprovalKeySchema.optional(),
+  approvalKeyFingerprint: FingerprintSchema.optional(),
+}).strict().superRefine((value, context) => {
+  if (value.filesystemScope === 'workspace-only' && !value.workspaceId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['workspaceId'], message: 'workspace run scope requires a workspaceId' });
+  }
+  if (value.processScope === 'host' && value.filesystemScope !== 'host') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['filesystemScope'], message: 'host process scope requires host filesystem scope' });
+  }
+  if (value.processScope === 'external-sandbox' && !value.sandboxRevision) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['sandboxRevision'], message: 'external-sandbox run scopes require a sandboxRevision' });
+  }
+  if ((value.filesystemScope === 'host' || value.processScope === 'host') && !value.confirmationRef) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['confirmationRef'], message: 'host run scopes require a confirmation reference' });
+  }
+  if ((value.filesystemScope === 'host' || value.processScope === 'host') && value.taskTrust === 'untrusted-content') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['taskTrust'], message: 'untrusted content cannot receive a host run scope' });
+  }
+  if (value.approvalKey && value.approvalKeyFingerprint && value.approvalKey.argumentFingerprint !== value.approvalKeyFingerprint) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['approvalKeyFingerprint'], message: 'approval key fingerprint mismatch' });
+  }
+});
+export type PermissionRunScope = z.infer<typeof PermissionRunScopeSchema>;
+
+/**
+ * Secret-free, immutable permission decision captured at the daemon run
+ * boundary. It is metadata only; the existing runtime/approval/sandbox
+ * authorities remain responsible for the actual call.
+ */
+export const PermissionProfileRunSnapshotSchema = z.object({
+  schemaVersion: z.literal(PERMISSION_PROFILE_RUN_SNAPSHOT_SCHEMA_VERSION),
+  status: PermissionResolutionStatusSchema,
+  reasonCode: PermissionReasonCodeSchema,
+  profileRevision: RevisionSchema,
+  policyRevision: RevisionSchema,
+  requestedProfile: PermissionProfileSchema,
+  effectiveProfile: PermissionProfileSchema.nullable(),
+  effectiveScope: PermissionRunScopeSchema.nullable(),
+  grantId: OpaqueIdSchema.nullable(),
+  grantExpiresAt: TimestampSchema.nullable(),
+  capturedAt: TimestampSchema,
+}).strict().superRefine((value, context) => {
+  const active = value.status === 'ready' || value.status === 'degraded';
+  if (active && value.effectiveProfile === null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveProfile'], message: 'ready or degraded snapshots require an effective profile' });
+  }
+  if (!active && value.effectiveProfile !== null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveProfile'], message: 'blocked snapshots cannot contain an effective profile' });
+  }
+  if (active && value.effectiveScope === null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveScope'], message: 'ready or degraded snapshots require an effective scope' });
+  }
+  if (!active && value.effectiveScope !== null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveScope'], message: 'blocked snapshots cannot contain an effective scope' });
+  }
+  if (value.requestedProfile.profileRevision !== value.profileRevision) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['profileRevision'], message: 'profileRevision must match requestedProfile' });
+  }
+  if (value.requestedProfile.policyRevision !== value.policyRevision) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['policyRevision'], message: 'policyRevision must match requestedProfile' });
+  }
+  if (value.effectiveProfile && value.effectiveProfile.profileRevision !== value.profileRevision) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveProfile', 'profileRevision'], message: 'effective profile revision must match snapshot' });
+  }
+  if (value.effectiveProfile && value.effectiveProfile.policyRevision !== value.policyRevision) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveProfile', 'policyRevision'], message: 'effective profile policy revision must match snapshot' });
+  }
+  if (value.effectiveScope && value.effectiveScope.kind !== 'run') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['effectiveScope', 'kind'], message: 'run snapshots require a run-scoped effective scope' });
+  }
+  if ((value.grantId === null) !== (value.grantExpiresAt === null)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['grantExpiresAt'], message: 'grant expiry must be paired with grantId' });
+  }
+});
+export type PermissionProfileRunSnapshot = z.infer<typeof PermissionProfileRunSnapshotSchema>;
 
 export const PermissionGrantStatusSchema = z.enum(['active', 'expired', 'revoked', 'exhausted']);
 export type PermissionGrantStatus = z.infer<typeof PermissionGrantStatusSchema>;
@@ -373,7 +468,7 @@ export const PermissionStatusSchema = z.object({
   currentRevision: RevisionSchema,
   requestedProfile: PermissionProfileSchema,
   effectiveProfile: PermissionProfileSchema.nullable(),
-  effectiveScope: PermissionGrantScopeSchema.nullable(),
+  effectiveScope: PermissionRunScopeSchema.nullable(),
   grant: PermissionSessionGrantSchema.nullable(),
   grantExpiresAt: TimestampSchema.nullable(),
   evaluatedAt: TimestampSchema,
@@ -418,6 +513,10 @@ export function parsePermissionProfileSettingsPatch(value: unknown): PermissionP
 
 export function parsePermissionProfileSettingsStatus(value: unknown): PermissionProfileSettingsStatus {
   return PermissionProfileSettingsStatusSchema.parse(value);
+}
+
+export function parsePermissionProfileRunSnapshot(value: unknown): PermissionProfileRunSnapshot {
+  return PermissionProfileRunSnapshotSchema.parse(value);
 }
 
 export function parsePermissionSessionGrant(value: unknown): PermissionSessionGrant {

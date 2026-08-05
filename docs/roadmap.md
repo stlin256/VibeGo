@@ -876,6 +876,22 @@ tests, with dependency-closure build and selected-package typecheck passing.
 The subsequent full `pnpm verify` passed all workspace build/typecheck/test and
 diff gates as well.
 
+## Spec 59-3 implementation checkpoint: daemon settings, grants and run snapshot
+
+The 59-3 implementation described by [ADR 0042](adr/0042-permission-settings-grants-and-run-snapshot.md)
+is complete. The daemon now persists authenticated, non-secret
+`permission-profile/v1` intent, keeps bounded full-host confirmations/session
+grants in memory, and enforces revision, TTL, usage, revoke and single-user
+session binding. New HTTP runs capture a deep-frozen permission snapshot before
+`run.created`; governed runs receive the same snapshot only after Goal
+admission, while the historical interactive route remains independent of Goal
+admission and still rejects explicit `runMode=governed` requests.
+
+Focused contracts, policy, agent and daemon tests pass, including grant
+restart loss, full-host capability-unavailable fail-closed behavior, snapshot
+isolation after settings changes and the ordinary-route regression. Web
+permission controls are intentionally deferred to Spec 59-4.
+
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 
 详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程

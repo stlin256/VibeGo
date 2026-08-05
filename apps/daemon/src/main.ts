@@ -20,6 +20,7 @@ import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-se
 import { McpSettingsManager } from './mcp-settings.js';
 import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalControlV1WriteService, GoalWriteService } from '@ready4vibe/goal-control';
@@ -128,6 +129,19 @@ const capabilityProfileSettings = new DurableCapabilityProfileSettingsManager({
     workspaceRegistry,
   }),
 });
+const permissionProfileSettings = new DurablePermissionProfileSettingsManager({
+  settings: settingsStore,
+  policy: () => createCapabilityProfilePolicy({
+    transportMode,
+    modelSettings,
+    toolSettings,
+    sandboxSettings,
+    mcpSettings,
+    workspaceRegistry,
+  }),
+  workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
+  defaultWorkspaceId: workspaceRegistry.status().workspaces.find((workspace) => workspace.isDefault)?.id ?? 'default',
+});
 // R4 is opt-in: until an application service activates a verified snapshot,
 // this manager contributes no runtime and performs no transport side effect.
 const mcpRuntimeBinding = new McpRunBindingManager(workspaceRegistry);
@@ -158,7 +172,7 @@ const goalRunWriteback = new GoalRunWritebackService({
   goalStore: goalControlV1EventStore,
   runManager,
   goalControl: goalControlV1WriteService,
-  admitGoverned: (input) => goalAdmissionService.admit(input),
+  admitGoverned: (input, runOptions) => goalAdmissionService.admit(input, runOptions),
 });
 goalAdmissionService = new GoalAdmissionService({
   goalStore: goalControlV1EventStore,
@@ -227,6 +241,7 @@ const server = createDaemonServer({
   agentMemoryKnowledgeSettings,
   mcpSettings,
   capabilityProfileSettings,
+  permissionProfileSettings,
   webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,

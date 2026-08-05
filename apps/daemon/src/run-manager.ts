@@ -9,11 +9,13 @@ import {
   CapabilityProfileRunSnapshotSchema,
   ModelProviderSnapshotSchema,
   PermissionProfileSchema,
+  PermissionProfileRunSnapshotSchema,
   type PermissionProfile,
   parseRunConfig,
   type AgentMemoryRecallResult,
   type AgentMemoryWriteRequest,
   type CapabilityProfileRunSnapshot,
+  type PermissionProfileRunSnapshot,
   type EventStore,
   type ModelProvider,
   type ModelProviderSnapshot,
@@ -43,6 +45,7 @@ export interface RunSnapshot {
   config: RunConfig;
   modelSnapshot?: ModelProviderSnapshot;
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
+  permissionSnapshot?: PermissionProfileRunSnapshot;
   lastEventSeq: number;
   output: string;
   approvals: readonly ApprovalRequest[];
@@ -63,7 +66,7 @@ export interface RunManagerOptions {
   modelProviderForRun?: (config: RunConfig) => ModelProvider;
   modelBindingForRun?: (config: RunConfig) => ModelProviderBinding;
   capabilityProfileForRun?: (config: RunConfig) => CapabilityProfileRunSnapshot;
-  /** Optional pre-resolved permission binding; settings persistence is 59-3. */
+  /** Optional pre-resolved permission binding; settings persistence is owned by the daemon application service. */
   permissionProfileForRun?: (config: RunConfig) => PermissionProfileApplication | undefined;
   toolRuntime?: ToolRuntime;
   toolRuntimeForRun?: (config: RunConfig, capabilitySnapshot?: CapabilityProfileRunSnapshot) => ToolRuntime | undefined;
@@ -83,6 +86,7 @@ export interface RunManagerOptions {
 export interface RunStartOptions {
   readonly runId?: string;
   readonly capabilitySnapshot?: CapabilityProfileRunSnapshot;
+  readonly permissionSnapshot?: PermissionProfileRunSnapshot;
 }
 
 export class RunManagerError extends Error {
@@ -162,7 +166,24 @@ export class RunManager {
     }
     if (capabilitySnapshot) assertRunConfigWithinCapabilityProfile(config, capabilitySnapshot);
     let permissionProfile: PermissionProfile | undefined;
-    if (this.permissionProfileForRun) {
+    let permissionSnapshot: PermissionProfileRunSnapshot | undefined;
+    if (options.permissionSnapshot) {
+      try {
+        permissionSnapshot = cloneAndFreeze(PermissionProfileRunSnapshotSchema.parse(options.permissionSnapshot));
+      } catch {
+        throw new RunManagerError('PERMISSION_PROFILE_INVALID', 'The permission profile snapshot is invalid.');
+      }
+      if (permissionSnapshot.status === 'blocked' || permissionSnapshot.effectiveProfile === null) {
+        throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', `The permission profile is blocked: ${permissionSnapshot.reasonCode}.`);
+      }
+      try {
+        permissionProfile = PermissionProfileSchema.parse(permissionSnapshot.effectiveProfile);
+        assertRunConfigWithinPermissionProfile(config, permissionProfile);
+      } catch (error) {
+        if (error instanceof RunManagerError) throw error;
+        throw new RunManagerError('PERMISSION_PROFILE_INVALID', 'The permission profile snapshot is invalid.');
+      }
+    } else if (this.permissionProfileForRun) {
       try {
         const application = this.permissionProfileForRun(config);
         if (application !== undefined) {
@@ -197,6 +218,7 @@ export class RunManager {
       modelProvider: capturedMemory?.modelProvider ?? capturedModelBinding.provider,
       ...(!capturedMemory?.modelProvider && capturedModelBinding.snapshot ? { modelSnapshot: capturedModelBinding.snapshot } : {}),
       ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
+      ...(permissionSnapshot ? { permissionSnapshot } : {}),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
       ...([...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...memoryContext, ...knowledgeContext] } : {}),
     });
@@ -236,14 +258,14 @@ export class RunManager {
     await observer.recordTerminal(runId, events);
   }
 
-  async retryRecovered(runId: string): Promise<{ runId: string; status: 'queued'; retryOf: string } | 'not-found' | 'not-recoverable'> {
+  async retryRecovered(runId: string, startOptions: RunStartOptions = {}): Promise<{ runId: string; status: 'queued'; retryOf: string } | 'not-found' | 'not-recoverable'> {
     const snapshot = await this.snapshot(runId);
     if (!snapshot) return 'not-found';
     if (snapshot.status !== 'needs-recovery') return 'not-recoverable';
     const started = await this.start({
       ...snapshot.config,
       clientRequestId: `recovery_${uuidv7()}`,
-    });
+    }, startOptions);
     return { ...started, retryOf: runId };
   }
 
@@ -255,6 +277,7 @@ export class RunManager {
     if (!config) return undefined;
     const modelSnapshot = readModelSnapshot(created?.payload);
     const capabilitySnapshot = readCapabilitySnapshot(created?.payload);
+    const permissionSnapshot = readPermissionSnapshot(created?.payload);
     let status: RunStatus = 'created';
     let output = '';
     let final: RunSnapshot['final'];
@@ -286,6 +309,7 @@ export class RunManager {
       config,
       ...(modelSnapshot ? { modelSnapshot } : {}),
       ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
+      ...(permissionSnapshot ? { permissionSnapshot } : {}),
       lastEventSeq: events.at(-1)?.seq ?? 0,
       output,
       approvals: this.approvalBroker.pending(runId),
@@ -553,6 +577,45 @@ function readCapabilitySnapshot(value: unknown): CapabilityProfileRunSnapshot | 
   if (typeof value !== 'object' || value === null || !('capabilitySnapshot' in value)) return undefined;
   const parsed = CapabilityProfileRunSnapshotSchema.safeParse(value.capabilitySnapshot);
   return parsed.success ? parsed.data : undefined;
+}
+
+function readPermissionSnapshot(value: unknown): PermissionProfileRunSnapshot | undefined {
+  if (typeof value !== 'object' || value === null || !('permissionSnapshot' in value)) return undefined;
+  const parsed = PermissionProfileRunSnapshotSchema.safeParse(value.permissionSnapshot);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function assertRunConfigWithinPermissionProfile(config: RunConfig, profile: PermissionProfile): void {
+  const network = sandboxNetwork(config);
+  if (profile.workspaceId && profile.workspaceId !== config.workspaceId) {
+    throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', 'The permission profile is bound to another workspace.');
+  }
+  if (config.taskTrust === 'untrusted-content' && (profile.filesystemScope === 'host' || profile.processScope === 'host')) {
+    throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', 'Untrusted content cannot use host permissions.');
+  }
+  if ((profile.filesystemScope === 'host' || profile.processScope === 'host') && config.sandbox.mode !== 'danger-full-access') {
+    throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', 'Host permissions require explicit danger-full-access sandboxing.');
+  }
+  if (profile.processScope === 'external-sandbox' && config.sandbox.mode !== 'external-sandbox') {
+    throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', 'The permission profile requires an external sandbox.');
+  }
+  if (profile.networkMode === 'off' && network === 'enabled') {
+    throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', 'The permission profile does not enable networked tools.');
+  }
+  if (profile.networkMode !== 'enabled' && network === 'enabled') {
+    throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', 'The permission profile does not allow the requested network mode.');
+  }
+}
+
+function cloneAndFreeze<T>(value: T): T {
+  const clone = JSON.parse(JSON.stringify(value)) as T;
+  return deepFreeze(clone);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== 'object' || value === null) return value;
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  return Object.freeze(value);
 }
 
 function isStatusPayload(value: unknown): value is { to: RunStatus } {

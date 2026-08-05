@@ -646,6 +646,28 @@ and selected-package typecheck. The subsequent full `pnpm verify` also passed:
 all workspace build/typecheck/test gates, `diff:check` and `git diff --check`
 completed successfully.
 
+## Spec 59-3 implementation note (2026-08-05)
+
+The 59-3 slice is implemented under [ADR 0042](adr/0042-permission-settings-grants-and-run-snapshot.md).
+`DurablePermissionProfileSettingsManager` persists only the validated,
+non-secret `permission-profile/v1` intent through `daemon_settings`; revision
+conflicts and stale policy revisions recover or fail closed. Full-host
+confirmation and session grants are daemon-memory-only, bound to the AuthGate
+session and single `local-user`, and enforce TTL, usage limits and revoke.
+`RunManager` receives a deep-frozen `PermissionProfileRunSnapshot` before
+`run.created`; HTTP-created runs capture it at the authenticated application
+boundary, and governed runs pass it only after Goal admission. A daemon restart
+drops grants, and a missing host runner returns `CAPABILITY_UNAVAILABLE` rather
+than falling back to another executor.
+
+Focused validation for this slice passes: contracts permission tests (10),
+policy permission tests (7), agent tests (21), and the affected daemon files
+(63 tests). The daemon regression for the ordinary interactive route is also
+covered: a flat `runMode=governed` request remains rejected by `/api/v1/runs`
+and must use `/api/v1/runs/governed`. Web permission controls remain Spec 59-4.
+No AgentLoop core-loop, Scheduler, ApprovalBroker, SandboxResolver,
+Goal-control authority, or event-table schema was changed.
+
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 
 The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).

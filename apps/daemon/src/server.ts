@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import type { StoredEvent } from '@ready4vibe/contracts';
+import { parseRunConfig, type StoredEvent } from '@ready4vibe/contracts';
 import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type DeploymentReadiness, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateReadiness, CertificateStatus } from '@ready4vibe/certificates';
@@ -18,6 +18,7 @@ import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './age
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import { PermissionProfileSettingsError, type PermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { GoalAdmissionError, GoalAdmissionService } from './goal-admission.js';
 import type { GoalRunWritebackService } from './goal-writeback.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
@@ -59,6 +60,7 @@ export interface DaemonServerOptions {
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
+  permissionProfileSettings?: PermissionProfileSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   /** Absolute path to a built React/Vite dist directory; omitted in dev. */
@@ -91,6 +93,7 @@ interface ResolvedDaemonServerOptions {
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
+  permissionProfileSettings?: PermissionProfileSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   webDistDir?: string;
@@ -154,6 +157,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
     ...(options.capabilityProfileSettings ? { capabilityProfileSettings: options.capabilityProfileSettings } : {}),
+    ...(options.permissionProfileSettings ? { permissionProfileSettings: options.permissionProfileSettings } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
     ...(options.webDistDir ? { webDistDir: options.webDistDir } : {}),
@@ -186,6 +190,14 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       if (error instanceof CapabilityProfileSettingsError) {
         const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503
           : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      if (error instanceof PermissionProfileSettingsError) {
+        const status = error.code === 'CORRUPT_SETTINGS' || error.code === 'PERSISTENCE_FAILED' ? 503
+          : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409
+            : error.code === 'AUTHENTICATION_REQUIRED' ? 401
+              : error.code === 'POLICY_DENIED' ? 403 : 400;
         writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }
@@ -245,6 +257,7 @@ async function handleRequest(
     writeAuthError(response, authDecision.failureCode ?? 'AUTH_REQUIRED');
     return;
   }
+  const authenticatedSessionId = authDecision?.sessionId;
 
   if (pathname === '/api/v1/pairing/start') {
     if (request.method !== 'POST') {
@@ -762,6 +775,64 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/permissions') {
+    if (!options.permissionProfileSettings) {
+      writeJson(response, 503, { error: { code: 'PERMISSION_SETTINGS_UNAVAILABLE', message: 'Permission profile settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.permissionProfileSettings.status());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or PATCH required' } }, { Allow: 'GET, PATCH' });
+      return;
+    }
+    writeJson(response, 200, options.permissionProfileSettings.patch(await readJson(request, options.bodyLimitBytes)));
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/permissions/confirm-full-host') {
+    if (!options.permissionProfileSettings) {
+      writeJson(response, 503, { error: { code: 'PERMISSION_SETTINGS_UNAVAILABLE', message: 'Permission profile settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const auth = authenticatedSessionId ? { sessionId: authenticatedSessionId, userId: 'local-user' } : undefined;
+    writeJson(response, 200, options.permissionProfileSettings.confirmFullHost(await readJson(request, options.bodyLimitBytes), auth));
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/permissions/revoke') {
+    if (!options.permissionProfileSettings) {
+      writeJson(response, 503, { error: { code: 'PERMISSION_SETTINGS_UNAVAILABLE', message: 'Permission profile settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const auth = authenticatedSessionId ? { sessionId: authenticatedSessionId, userId: 'local-user' } : undefined;
+    writeJson(response, 200, options.permissionProfileSettings.revoke(await readJson(request, options.bodyLimitBytes), auth));
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/permissions/status') {
+    if (!options.permissionProfileSettings) {
+      writeJson(response, 503, { error: { code: 'PERMISSION_SETTINGS_UNAVAILABLE', message: 'Permission profile settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    writeJson(response, 200, options.permissionProfileSettings.permissionStatus(authenticatedSessionId, 'local-user'));
+    return;
+  }
+
   if (pathname === '/api/v1/settings/agent-memory') {
     if (!options.agentMemorySettings) {
       writeJson(response, 503, { error: { code: 'AGENT_MEMORY_SETTINGS_UNAVAILABLE', message: 'Agent memory settings are unavailable.' } });
@@ -1031,8 +1102,10 @@ async function handleRequest(
       writeJson(response, 400, { error: { code: 'GOVERNED_ROUTE_REQUIRED', message: 'Use the explicit /api/v1/runs/governed route for Goal admission.' } });
       return;
     }
+    const boundInput = bindAuthenticatedSession(input, authenticatedSessionId);
+    const permissionSnapshot = options.permissionProfileSettings ? capturePermissionSnapshot(boundInput, options.permissionProfileSettings, authenticatedSessionId) : undefined;
     try {
-      const started = await options.runManager.start(input);
+      const started = await options.runManager.start(boundInput, permissionSnapshot ? { permissionSnapshot } : {});
       writeJson(response, 202, started);
     } catch (error) {
       if (isValidationError(error)) {
@@ -1061,8 +1134,10 @@ async function handleRequest(
       writeJson(response, 503, { error: { code: 'GOAL_ADMISSION_UNAVAILABLE', message: 'Governed Goal admission is unavailable.' } });
       return;
     }
+    const rawInput = bindAuthenticatedSession(await readJson(request, options.bodyLimitBytes), authenticatedSessionId);
+    const permissionSnapshot = options.permissionProfileSettings ? capturePermissionSnapshot(rawInput, options.permissionProfileSettings, authenticatedSessionId) : undefined;
     try {
-      const started = await options.goalAdmissionService.admit(await readJson(request, options.bodyLimitBytes));
+      const started = await options.goalAdmissionService.admit(rawInput, permissionSnapshot ? { permissionSnapshot } : undefined);
       writeJson(response, 202, started);
     } catch (error) {
       if (error instanceof GoalAdmissionError) {
@@ -1163,7 +1238,11 @@ async function handleRequest(
       writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Explicit retry confirmation is required.' } });
       return;
     }
-    const outcome = await options.runManager.retryRecovered(runId);
+    const recoveredSnapshot = await options.runManager.snapshot(runId);
+    const permissionSnapshot = options.permissionProfileSettings && recoveredSnapshot
+      ? capturePermissionSnapshot(recoveredSnapshot.config, options.permissionProfileSettings, authenticatedSessionId)
+      : undefined;
+    const outcome = await options.runManager.retryRecovered(runId, permissionSnapshot ? { permissionSnapshot } : {});
     if (outcome === 'not-found') {
       writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
       return;
@@ -1190,7 +1269,11 @@ async function handleRequest(
       return;
     }
     try {
-      const outcome = await options.goalRunWriteback.retryGoverned(runId, { agentId: input.agentId });
+      const recoveredSnapshot = await options.runManager.snapshot(runId);
+      const permissionSnapshot = options.permissionProfileSettings && recoveredSnapshot
+        ? capturePermissionSnapshot(recoveredSnapshot.config, options.permissionProfileSettings, authenticatedSessionId)
+        : undefined;
+      const outcome = await options.goalRunWriteback.retryGoverned(runId, { agentId: input.agentId }, permissionSnapshot ? { permissionSnapshot } : {});
       if (outcome === 'not-found') {
         writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
         return;
@@ -1524,7 +1607,36 @@ function isValidationError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'issues' in error;
 }
 
-function isGovernedEnvelope(value: unknown): boolean {
+function bindAuthenticatedSession(value: unknown, sessionId: string | undefined): unknown {
+  if (!sessionId || typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  if (isGovernedEnvelope(value) && 'config' in value) {
+    const config = typeof value.config === 'object' && value.config !== null && !Array.isArray(value.config)
+      ? { ...value.config, createdBySessionId: sessionId }
+      : value.config;
+    return { ...value, config };
+  }
+  return { ...value, createdBySessionId: sessionId };
+}
+
+function capturePermissionSnapshot(
+  value: unknown,
+  manager: PermissionProfileSettingsManager,
+  authenticatedSessionId: string | undefined,
+): import('@ready4vibe/contracts').PermissionProfileRunSnapshot | undefined {
+  const configInput = isGovernedEnvelope(value) && 'config' in value && typeof value.config === 'object' && value.config !== null ? value.config : value;
+  try {
+    return manager.snapshotForRun(parseRunConfig(configInput), authenticatedSessionId);
+  } catch (error) {
+    if (isValidationError(error)) return undefined;
+    throw error;
+  }
+}
+
+function isGovernedEnvelope(value: unknown): value is { readonly runMode: 'governed'; readonly config?: unknown } & Record<string, unknown> {
+  // Spec 58's governed request is flat (runMode plus Goal metadata and the
+  // existing RunConfig fields). Keep that shape as the route discriminator;
+  // the optional nested config branch is accepted only for authenticated
+  // session binding and permission snapshot extraction.
   return typeof value === 'object' && value !== null && !Array.isArray(value) && 'runMode' in value && value.runMode === 'governed';
 }
 

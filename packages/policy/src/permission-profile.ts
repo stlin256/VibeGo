@@ -81,7 +81,7 @@ export function resolvePermissionProfile(input: PermissionProfileApplicationInpu
   }
 
   const workspaceRequired = profile.filesystemScope === 'workspace-only'
-    || profile.processScope !== 'none'
+    || profile.processScope === 'external-sandbox'
     || profile.mcpSkillMode === 'configured';
   if (workspaceRequired && (!profile.workspaceId || profile.workspaceId !== input.run.workspaceId)) {
     return blocked('WORKSPACE_UNAVAILABLE', input.run.approval);

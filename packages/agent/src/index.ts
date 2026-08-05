@@ -3,6 +3,7 @@ import { ContextBudgetError, ContextManager, type ContextItem } from '@ready4vib
 import {
   assertTransition,
   CapabilityProfileRunSnapshotSchema,
+  PermissionProfileRunSnapshotSchema,
   ModelProviderSnapshotSchema,
   parseRunConfig,
   type EventStore,
@@ -10,6 +11,7 @@ import {
   type ModelProvider,
   type ModelProviderSnapshot,
   type CapabilityProfileRunSnapshot,
+  type PermissionProfileRunSnapshot,
   type ModelRequest,
   type RunConfig,
   type RunStatus,
@@ -35,6 +37,8 @@ export interface AgentRunRequest {
   modelSnapshot?: ModelProviderSnapshot;
   /** Secret-free capability profile decision captured by the application service. */
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
+  /** Secret-free permission profile decision captured by the application service. */
+  permissionSnapshot?: PermissionProfileRunSnapshot;
 }
 
 export interface AgentRunResult {
@@ -92,6 +96,7 @@ export class AgentLoop {
     const config = parseRunConfig(request.config);
     const modelSnapshot = request.modelSnapshot ? ModelProviderSnapshotSchema.parse(request.modelSnapshot) : undefined;
     const capabilitySnapshot = request.capabilitySnapshot ? CapabilityProfileRunSnapshotSchema.parse(request.capabilitySnapshot) : undefined;
+    const permissionSnapshot = request.permissionSnapshot ? deepFreeze(PermissionProfileRunSnapshotSchema.parse(request.permissionSnapshot)) : undefined;
     const modelProvider = request.modelProvider ?? this.options.modelProvider;
     const toolRuntime = request.toolRuntime ?? this.options.toolRuntime;
     const runId = request.runId ?? `run_${uuidv7()}`;
@@ -142,6 +147,7 @@ export class AgentLoop {
         config,
         ...(modelSnapshot ? { modelSnapshot } : {}),
         ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
+        ...(permissionSnapshot ? { permissionSnapshot } : {}),
       });
       let contextResult: ReturnType<ContextManager['build']>;
       try {
@@ -526,6 +532,12 @@ const messages: unknown[] = [...contextResult.messages];
   ): Promise<unknown> {
     return this.options.eventStore.append({ runId, type, source, correlationId, payload });
   }
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== 'object' || value === null) return value;
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  return Object.freeze(value);
 }
 
 interface PendingToolCall {

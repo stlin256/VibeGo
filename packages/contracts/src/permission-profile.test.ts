@@ -4,6 +4,7 @@ import {
   PERMISSION_CONFIRMATION_SCHEMA_VERSION,
   PERMISSION_APPROVAL_KEY_SCHEMA_VERSION,
   PERMISSION_PROFILE_RESOLUTION_SCHEMA_VERSION,
+  PERMISSION_PROFILE_RUN_SNAPSHOT_SCHEMA_VERSION,
   PERMISSION_PROFILE_SCHEMA_VERSION,
   PERMISSION_PROFILE_SETTINGS_SCHEMA_VERSION,
   PERMISSION_PROFILE_SETTINGS_STATUS_SCHEMA_VERSION,
@@ -17,6 +18,7 @@ import {
   parsePermissionProfile,
   parsePermissionApprovalKey,
   parsePermissionProfileResolution,
+  parsePermissionProfileRunSnapshot,
   parsePermissionProfileSettings,
   parsePermissionProfileSettingsStatus,
   parsePermissionRevokeRequest,
@@ -278,5 +280,35 @@ describe('permission profile contracts', () => {
       previousRevision: null,
       secret: 'token=bad',
     })).toThrow();
+  });
+
+  it('accepts an immutable run snapshot and rejects blocked snapshots with capabilities', () => {
+    const snapshot = parsePermissionProfileRunSnapshot({
+      schemaVersion: PERMISSION_PROFILE_RUN_SNAPSHOT_SCHEMA_VERSION,
+      status: 'ready',
+      reasonCode: 'PROFILE_READY',
+      profileRevision: 'profile-1',
+      policyRevision: 'policy-1',
+      requestedProfile: workspaceProfile,
+      effectiveProfile: workspaceProfile,
+      effectiveScope: {
+        kind: 'run',
+        profileId: 'workspace-coding',
+        filesystemScope: 'workspace-only',
+        processScope: 'none',
+        networkMode: 'off',
+        mcpSkillMode: 'off',
+        approvalPosture: 'bounded-auto',
+        taskTrust: 'trusted-workspace',
+        workspaceId: 'repo',
+        approvalKey,
+      },
+      grantId: null,
+      grantExpiresAt: null,
+      capturedAt: timestamp,
+    });
+    expect(snapshot.effectiveScope?.kind).toBe('run');
+    expect(() => parsePermissionProfileRunSnapshot({ ...snapshot, status: 'blocked', effectiveProfile: workspaceProfile })).toThrow();
+    expect(() => parsePermissionProfileRunSnapshot({ ...snapshot, rawCommand: 'whoami' })).toThrow();
   });
 });

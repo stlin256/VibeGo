@@ -115,6 +115,57 @@ describe('AgentLoop', () => {
         },
         capturedAt: '2026-08-04T00:00:00.000Z',
       },
+      permissionSnapshot: {
+        schemaVersion: 'ready4vibe_permission_profile_run_snapshot_v1',
+        status: 'ready',
+        reasonCode: 'PROFILE_READY',
+        profileRevision: 'profile-1',
+        policyRevision: 'policy-1',
+        requestedProfile: {
+          schemaVersion: 'ready4vibe_permission_profile_v1',
+          profileId: 'workspace-coding',
+          filesystemScope: 'workspace-only',
+          processScope: 'none',
+          networkMode: 'off',
+          mcpSkillMode: 'off',
+          approvalPosture: 'bounded-auto',
+          taskTrust: 'trusted-workspace',
+          workspaceId: 'workspace-1',
+          policyRevision: 'policy-1',
+          profileRevision: 'profile-1',
+          requiresConfirmation: false,
+          updatedAt: '2026-08-04T00:00:00.000Z',
+        },
+        effectiveProfile: {
+          schemaVersion: 'ready4vibe_permission_profile_v1',
+          profileId: 'workspace-coding',
+          filesystemScope: 'workspace-only',
+          processScope: 'none',
+          networkMode: 'off',
+          mcpSkillMode: 'off',
+          approvalPosture: 'bounded-auto',
+          taskTrust: 'trusted-workspace',
+          workspaceId: 'workspace-1',
+          policyRevision: 'policy-1',
+          profileRevision: 'profile-1',
+          requiresConfirmation: false,
+          updatedAt: '2026-08-04T00:00:00.000Z',
+        },
+        effectiveScope: {
+          kind: 'run',
+          profileId: 'workspace-coding',
+          filesystemScope: 'workspace-only',
+          processScope: 'none',
+          networkMode: 'off',
+          mcpSkillMode: 'off',
+          approvalPosture: 'bounded-auto',
+          taskTrust: 'trusted-workspace',
+          workspaceId: 'workspace-1',
+        },
+        grantId: null,
+        grantExpiresAt: null,
+        capturedAt: '2026-08-04T00:00:00.000Z',
+      },
     });
     const events = await eventStore.read('run_normal');
     expect(result).toMatchObject({ runId: 'run_normal', status: 'completed', output: 'hello' });
@@ -127,6 +178,7 @@ describe('AgentLoop', () => {
     expect(provider.requests[0]?.metadata.runId).toBe('run_normal');
     expect(events[0]?.payload).toMatchObject({ modelSnapshot: { providerId: 'fake-model', descriptorRevision: 'fake-rev-1' } });
     expect(events[0]?.payload).toMatchObject({ capabilitySnapshot: { profileRevision: 'profile-1', status: 'ready', effectiveProfile: { profileId: 'preview' } } });
+    expect(events[0]?.payload).toMatchObject({ permissionSnapshot: { profileRevision: 'profile-1', effectiveScope: { kind: 'run' } } });
     expect(events.find((event) => event.type === 'model.requested')?.payload).toMatchObject({
       providerId: 'fake-model',
       requestId: provider.requests[0]?.metadata.requestId,

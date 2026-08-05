@@ -9,6 +9,7 @@ import {
   type GoalRunBindingV1,
   type GoalValidationEvidenceV1,
   type GoalValidationStatusV1,
+  type PermissionProfileRunSnapshot,
   type RunStatus,
   type StoredEvent,
 } from '@ready4vibe/contracts';
@@ -79,7 +80,7 @@ export interface GoalRunWritebackOptions {
   readonly runManager: RunManager;
   readonly goalControl?: GoalControlV1WriteService;
   readonly verifier?: GoalRunVerifier;
-  readonly admitGoverned?: (input: unknown) => Promise<unknown>;
+  readonly admitGoverned?: (input: unknown, options?: { readonly permissionSnapshot?: PermissionProfileRunSnapshot }) => Promise<unknown>;
   readonly clock?: () => Date;
   readonly producer?: string;
 }
@@ -176,7 +177,7 @@ export class GoalRunWritebackService {
   }
 
   /** Create a fresh governed attempt; the old run and tool calls are never replayed. */
-  async retryGoverned(runId: string, input: { agentId: string }): Promise<unknown | 'not-found' | 'not-recoverable' | 'unavailable'> {
+  async retryGoverned(runId: string, input: { agentId: string }, runOptions: { readonly permissionSnapshot?: PermissionProfileRunSnapshot } = {}): Promise<unknown | 'not-found' | 'not-recoverable' | 'unavailable'> {
     if (!RUN_ID.test(runId) || !SAFE_ID.test(input.agentId)) return 'not-recoverable';
     const snapshot = await this.options.runManager.snapshot(runId);
     if (!snapshot) return 'not-found';
@@ -198,7 +199,7 @@ export class GoalRunWritebackService {
       attempt: binding.attempt + 1,
       requestId,
       clientRequestId: `client_${uuidv7()}`,
-    });
+    }, runOptions);
   }
 
   close(): void {

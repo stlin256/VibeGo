@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import { DEFAULT_SCHEDULER_POLICY, type PermissionProfileRunSnapshot } from '@ready4vibe/contracts';
 import type { PermissionProfileApplication } from '@ready4vibe/policy';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
@@ -41,6 +41,30 @@ const permissionApplication: PermissionProfileApplication = {
   approvalPolicy: 'on-request',
   networkAccess: 'restricted',
   dangerFullAccessConfirmed: false,
+};
+
+const permissionSnapshot: PermissionProfileRunSnapshot = {
+  schemaVersion: 'ready4vibe_permission_profile_run_snapshot_v1',
+  status: 'ready',
+  reasonCode: 'PROFILE_READY',
+  profileRevision: 'profile-1',
+  policyRevision: 'policy-1',
+  requestedProfile: permissionProfile,
+  effectiveProfile: permissionProfile,
+  effectiveScope: {
+    kind: 'run',
+    profileId: 'workspace-coding',
+    filesystemScope: 'workspace-only',
+    processScope: 'none',
+    networkMode: 'off',
+    mcpSkillMode: 'off',
+    approvalPosture: 'bounded-auto',
+    taskTrust: 'trusted-workspace',
+    workspaceId: 'workspace-1',
+  },
+  grantId: null,
+  grantExpiresAt: null,
+  capturedAt: '2026-08-05T00:00:00.000Z',
 };
 
 describe('RunManager permission profile seam', () => {
@@ -92,5 +116,31 @@ describe('RunManager permission profile seam', () => {
     await expect(manager.start(config)).rejects.toMatchObject({ code: 'PERMISSION_PROFILE_BLOCKED' });
     expect(eventStore.listRunIds()).toEqual([]);
     expect(model.requests).toHaveLength(0);
+  });
+
+  it('captures an explicit immutable permission snapshot in run.created', async () => {
+    const eventStore = new InMemoryEventStore();
+    const model = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const manager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: model });
+    const started = await manager.start(config, { permissionSnapshot });
+    await vi.waitFor(() => expect(manager.completion(started.runId)).toBeDefined());
+    expect(await manager.snapshot(started.runId)).toMatchObject({ permissionSnapshot: { profileRevision: 'profile-1', effectiveScope: { kind: 'run' } } });
+    expect((await eventStore.read(started.runId))[0]?.payload).toMatchObject({ permissionSnapshot: { profileRevision: 'profile-1' } });
+    const captured = (await eventStore.read(started.runId))[0]?.payload as { permissionSnapshot: { effectiveProfile: { profileRevision: string } } };
+    expect(() => { captured.permissionSnapshot.effectiveProfile.profileRevision = 'changed'; }).toThrow();
+  });
+
+  it('fails before run.created for a blocked explicit permission snapshot', async () => {
+    const eventStore = new InMemoryEventStore();
+    const manager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }) });
+    await expect(manager.start(config, { permissionSnapshot: { ...permissionSnapshot, status: 'blocked', effectiveProfile: null, effectiveScope: null } })).rejects.toMatchObject({ code: 'PERMISSION_PROFILE_BLOCKED' });
+    expect(eventStore.listRunIds()).toEqual([]);
+  });
+
+  it('rejects an inconsistent explicit snapshot before run.created', async () => {
+    const eventStore = new InMemoryEventStore();
+    const manager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }) });
+    await expect(manager.start(config, { permissionSnapshot: { ...permissionSnapshot, profileRevision: 'profile-stale' } })).rejects.toMatchObject({ code: 'PERMISSION_PROFILE_INVALID' });
+    expect(eventStore.listRunIds()).toEqual([]);
   });
 });

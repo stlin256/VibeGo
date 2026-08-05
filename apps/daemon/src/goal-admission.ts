@@ -13,6 +13,7 @@ import {
   type GoalControlProjectionV1,
   type GoalQuotaReservationV1,
   type GoalRunBindingV1,
+  type PermissionProfileRunSnapshot,
   type GoalRevisionToken,
   type RunConfig,
   type SchedulerRequest,
@@ -105,6 +106,12 @@ export interface GoalAdmissionResult {
   readonly schedulerDecisionRef: string;
 }
 
+export interface GoalAdmissionRunOptions {
+  /** Optional permission snapshot captured by the authenticated daemon
+   * application boundary. Goal admission remains the first authority. */
+  readonly permissionSnapshot?: PermissionProfileRunSnapshot;
+}
+
 export type GoalPreflightCheckKey = 'goal' | 'gate' | 'todo' | 'claim' | 'quota' | 'capability' | 'workspace' | 'scheduler' | 'approval' | 'sandbox';
 export type GoalPreflightCheckStatus = 'ready' | 'blocked' | 'waiting' | 'degraded' | 'not_evaluated';
 
@@ -185,7 +192,7 @@ export class GoalAdmissionService {
     });
   }
 
-  async admit(input: unknown): Promise<GoalAdmissionResult> {
+  async admit(input: unknown, runOptions: GoalAdmissionRunOptions = {}): Promise<GoalAdmissionResult> {
     const request = parseGovernedRunRequest(input);
     const now = this.now();
     const runId = stableId('run', request.goalId, request.requestId, request.turnKey);
@@ -228,7 +235,7 @@ export class GoalAdmissionService {
       }
       try {
         this.options.registerBinding?.(existingBinding);
-        await this.options.runManager.start(request.config, { runId: existingBinding.runId, capabilitySnapshot });
+        await this.options.runManager.start(request.config, { runId: existingBinding.runId, capabilitySnapshot, ...(runOptions.permissionSnapshot ? { permissionSnapshot: runOptions.permissionSnapshot } : {}) });
       } catch (error) {
         if (isRunIdConflict(error) && await this.options.runManager.snapshot(existingBinding.runId)) {
           return {
@@ -385,7 +392,7 @@ export class GoalAdmissionService {
 
     try {
       this.options.registerBinding?.(persistedBinding);
-      await this.options.runManager.start(request.config, { runId, capabilitySnapshot });
+      await this.options.runManager.start(request.config, { runId, capabilitySnapshot, ...(runOptions.permissionSnapshot ? { permissionSnapshot: runOptions.permissionSnapshot } : {}) });
     } catch (error) {
       if (isRunIdConflict(error) && await this.options.runManager.snapshot(runId)) {
         return {

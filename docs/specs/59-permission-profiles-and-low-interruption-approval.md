@@ -303,6 +303,50 @@ profile change cannot mutate an already captured runtime.
 提供受认证 settings/confirm/revoke/status API，持久化非 secret intent，grant 只保存在
 daemon 内存或受保护的 bounded state；新 run 捕获 immutable snapshot，旧 run 不变。
 
+#### 59-3 design freeze (2026-08-05)
+
+本阶段的 application boundary 已冻结如下：
+
+- `PermissionProfileSettingsManager` 使用现有 `daemon_settings` 的
+  `permission-profile/v1` key 保存 profile intent、current/previous revision 和
+  更新时间；不保存 bearer token、API key、私钥、环境变量、命令、参数、transcript、
+  workspace 绝对路径或任何 host credential。未知字段、secret-shaped 值、控制字符和
+  绝对路径继续由 contract 与 settings store 双重拒绝。
+- full-host confirmation 与 session grant 只存在 daemon 内存的 bounded store。它们必须
+  绑定当前 AuthGate `sessionId` 与单用户 `userId`，包含 TTL、最大使用次数、policy/profile
+  revision 和 revoke 状态；daemon restart 会使 grant 失效，不把 grant 写进
+  `daemon_settings`。
+- `GET/PATCH /api/v1/settings/permissions` 只读写 non-secret intent；
+  `POST /api/v1/settings/permissions/confirm-full-host` 必须匹配当前 profile revision、
+  trusted task 和认证 session；`POST .../revoke` 只能撤销当前认证 session 的 grant；
+  `GET .../status` 只返回 bounded effective scope、expiry、reason 和 next safe step。
+  未通过 AuthGate session 的 full-host 请求 fail-closed。
+- RunManager 接收一个可选、经过 application service 解析的
+  `PermissionProfileRunSnapshot`。snapshot 在 `run.created` 前捕获并深度冻结；settings、
+  confirmation、grant 或 policy 后续变化不改变已启动 run。没有显式 snapshot 的历史
+  interactive 调用保持原有路径；daemon HTTP 创建 run 时由认证 application boundary
+  绑定 session，再传入 snapshot。
+- governed run 仍先完成 Goal admission、quota、Scheduler、Approval、Sandbox 和
+  Workspace 检查；permission snapshot 只能作为同一次 `RunManager.start` 的附加快照，
+  不能让任何已有事实源失效。普通 interactive run 不经过 Goal quota 静默拦截。
+- full-host 当前没有 host runner 时，confirmation 可以被记录为 bounded intent，但
+  `snapshotForRun` 必须返回 `blocked/CAPABILITY_UNAVAILABLE`，不得 fallback 到外部沙箱或
+  直接主机执行。
+
+本阶段不实现 Web Settings Sheet（归入 59-4），不修改 AgentLoop 核心状态机、Scheduler、
+ApprovalBroker、SandboxResolver、`run_events`/`goal_events` 表结构，也不增加第二套
+scheduler、approval store 或 executor。
+
+#### 59-3 implementation status (2026-08-05)
+
+The frozen boundary is implemented. The daemon settings manager, AuthGate-bound
+confirmation/revoke routes, restart-volatile grant lifecycle and immutable run
+snapshot are covered by focused contract, policy, agent and daemon tests. The
+ordinary `/api/v1/runs` route still rejects flat `runMode=governed` requests;
+only `/api/v1/runs/governed` enters Goal admission. Web Settings Sheet work is
+deliberately reserved for 59-4, and the full-host path remains blocked when the
+host runner is unavailable.
+
 ### 59-4：Web 低打扰体验
 
 在现有 conversation-first Settings Sheet 和 approval card 中加入两个 profile、三种

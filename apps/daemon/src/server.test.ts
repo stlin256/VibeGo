@@ -22,6 +22,7 @@ import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsManager } from './mcp-settings.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { type CapabilityProfilePolicy } from '@ready4vibe/policy';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
@@ -1003,5 +1004,72 @@ describe('daemon health server', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('binds permission confirmation and revoke to the authenticated LAN session', async () => {
+    const authGate = new AuthGate({ mode: 'lan', tlsRequired: false, randomBytes: (() => {
+      let value = 0;
+      return (size: number) => Uint8Array.from({ length: size }, () => (value += 1) % 255);
+    })() });
+    const permissionSettings = new DurablePermissionProfileSettingsManager({
+      settings: new InMemorySettingsStore(),
+      policy: () => ({ ...capabilityPolicy(), hostRunnerHealth: 'ready' }),
+      workspaceExists: (workspaceId) => workspaceId === 'repo' || workspaceId === 'default',
+      defaultWorkspaceId: 'repo',
+      clock: () => new Date('2026-08-05T00:00:00.000Z'),
+    });
+    const server = createDaemonServer({ host: '0.0.0.0', transportMode: 'lan', authGate, permissionProfileSettings: permissionSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}`;
+    const pairingStart = await fetch(`${base}/api/v1/pairing/start`, { method: 'POST' });
+    const pairing = await pairingStart.json() as { code: string };
+    const pairingComplete = await fetch(`${base}/api/v1/pairing/complete`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: pairing.code }) });
+    const session = await pairingComplete.json() as { accessToken: string; sessionId: string };
+    const headers = { authorization: `Bearer ${session.accessToken}`, 'content-type': 'application/json' };
+    const initial = await fetch(`${base}/api/v1/settings/permissions`, { headers });
+    expect(initial.status).toBe(200);
+    const initialBody = await initial.json() as { settings: { profile: Record<string, unknown> }; currentRevision: string };
+    const fullHost = {
+      ...initialBody.settings.profile,
+      profileId: 'full-host', filesystemScope: 'host', processScope: 'host', approvalPosture: 'session-auto', taskTrust: 'trusted-user', workspaceId: undefined, requiresConfirmation: true,
+    };
+    const patched = await fetch(`${base}/api/v1/settings/permissions`, { method: 'PATCH', headers, body: JSON.stringify({ profile: fullHost, expectedRevision: initialBody.currentRevision }) });
+    expect(patched.status).toBe(200);
+    const patchedBody = await patched.json() as { settings: { profile: Record<string, unknown> }; currentRevision: string };
+    const wrongSession = await fetch(`${base}/api/v1/settings/permissions/confirm-full-host`, { method: 'POST', headers, body: JSON.stringify({ schemaVersion: 'ready4vibe_permission_confirmation_request_v1', requestId: 'permission-request-wrong', sessionId: 'other-session', userId: 'local-user', requestedProfile: patchedBody.settings.profile, expectedProfileRevision: patchedBody.currentRevision, acknowledged: true, requestedAt: '2026-08-05T00:00:00.000Z' }) });
+    expect(wrongSession.status).toBe(401);
+    const confirmed = await fetch(`${base}/api/v1/settings/permissions/confirm-full-host`, { method: 'POST', headers, body: JSON.stringify({ schemaVersion: 'ready4vibe_permission_confirmation_request_v1', requestId: 'permission-request-1', sessionId: session.sessionId, userId: 'local-user', requestedProfile: patchedBody.settings.profile, expectedProfileRevision: patchedBody.currentRevision, acknowledged: true, requestedAt: '2026-08-05T00:00:00.000Z' }) });
+    expect(confirmed.status).toBe(200);
+    const confirmedBody = await confirmed.json() as { status: string; grant: { grantId: string } };
+    expect(confirmedBody.status).toBe('ready');
+    expect(JSON.stringify(confirmedBody)).not.toMatch(/api[_-]?key|token|secret|password|[A-Z]:\\/iu);
+    const revoked = await fetch(`${base}/api/v1/settings/permissions/revoke`, { method: 'POST', headers, body: JSON.stringify({ schemaVersion: 'ready4vibe_permission_revoke_request_v1', requestId: 'permission-revoke-1', sessionId: session.sessionId, userId: 'local-user', grantId: confirmedBody.grant.grantId, reason: 'user-requested', requestedAt: '2026-08-05T00:00:00.000Z' }) });
+    expect(revoked.status).toBe(200);
+    expect(await revoked.json()).toMatchObject({ status: 'revoked' });
+  });
+
+  it('captures permission snapshots for new runs while leaving an earlier run immutable', async () => {
+    const eventStore = new InMemoryEventStore();
+    const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, workspaceExists: (workspaceId) => workspaceId === 'repo' });
+    const permissionSettings = new DurablePermissionProfileSettingsManager({ settings: new InMemorySettingsStore(), policy: capabilityPolicy, workspaceExists: (workspaceId) => workspaceId === 'repo', defaultWorkspaceId: 'repo', clock: () => new Date('2026-08-05T00:00:00.000Z') });
+    const server = createDaemonServer({ runManager, permissionProfileSettings: permissionSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}`;
+    const first = await fetch(`${base}/api/v1/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(runConfig('repo')) });
+    expect(first.status).toBe(202);
+    const firstStarted = await first.json() as { runId: string };
+    await vi.waitFor(async () => expect((await runManager.snapshot(firstStarted.runId))?.status).toBe('completed'));
+    const initial = permissionSettings.status();
+    const patched = await fetch(`${base}/api/v1/settings/permissions`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: { ...initial.settings.profile, taskTrust: 'trusted-workspace' }, expectedRevision: initial.currentRevision }) });
+    expect(patched.status).toBe(200);
+    const second = await fetch(`${base}/api/v1/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...runConfig('repo'), clientRequestId: 'client-second' }) });
+    expect(second.status).toBe(202);
+    const secondStarted = await second.json() as { runId: string };
+    await vi.waitFor(async () => expect((await runManager.snapshot(secondStarted.runId))?.status).toBe('completed'));
+    expect(await runManager.snapshot(firstStarted.runId)).toMatchObject({ permissionSnapshot: { profileRevision: 'profile-1' } });
+    expect(await runManager.snapshot(secondStarted.runId)).toMatchObject({ permissionSnapshot: { profileRevision: 'profile-2' } });
   });
 });
