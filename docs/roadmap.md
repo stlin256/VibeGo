@@ -1059,3 +1059,14 @@ This is not a live or release readiness claim.
 The next opt-in `pnpm smoke:transport` fixture will cover LAN/TLS configuration
 and AuthGate negative paths using memory-only deterministic inputs. It will not
 read private keys, open public listeners or simulate Tailscale/SSH/ACME.
+
+#### Spec 60-6 implementation checkpoint (2026-08-05)
+
+`scripts/smoke-transport.mjs` and its four-test fixture are now implemented and
+wired as `pnpm smoke:transport -- --mode both`. The Windows run is healthy and
+proves loopback/LAN resolver defaults, TLS and explicit insecure-LAN opt-in,
+certificate-required readiness, local-only pairing, TLS/Origin/CSRF/query-token
+fail-closed behavior, valid authorization and token expiry. `test:workflow`
+passes 55/55 with the transport fixture included. This is bounded in-memory
+configuration/auth evidence only; certificate lifecycle, public remote access,
+Tailscale/SSH, ACME, cross-platform and release evidence remain partial.

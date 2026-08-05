@@ -971,3 +971,17 @@ certificate-readiness and AuthGate fixture for LAN opt-in, TLS, pairing,
 Origin/CSRF and query-token fail-closed behavior. It will avoid certificate
 files, tokens, public listeners and remote side effects; lifecycle/release
 evidence remains later work.
+
+## Spec 60-6 transport security smoke checkpoint (2026-08-05)
+
+The transport smoke runner is implemented in `scripts/smoke-transport.mjs` and
+is available through `pnpm smoke:transport -- --mode both`. The deterministic
+Windows fixture returned `status=healthy` and covers loopback defaults, LAN
+opt-in/default TLS, explicit insecure-LAN opt-in, certificate-required
+readiness, local-only pairing, TLS/Origin/CSRF/query-token rejection, valid
+authorization and expired-token rejection. Its report is bounded to status
+metadata and does not include tokens, secrets, raw errors or absolute paths.
+
+The focused transport fixture passes 4/4 and the workflow gate passes 55/55.
+This checkpoint does not claim production certificate lifecycle, public
+listeners, Tailscale/SSH, ACME, cross-platform or release readiness.

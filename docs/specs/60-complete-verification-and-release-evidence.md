@@ -355,3 +355,19 @@ open a public listener, contact ACME, or claim Tailscale/SSH support.
 The result is bounded security/configuration evidence only; production remote
 and certificate lifecycle gates remain partial or blocked until real opt-in
 evidence is collected.
+
+#### 60-6 implementation checkpoint (2026-08-05)
+
+The bounded fixture is now implemented as `scripts/smoke-transport.mjs` with a
+four-test redaction/argument fixture and the opt-in command
+`pnpm smoke:transport -- --mode both`. The Windows run returned
+`transport-smoke/v1` with `status=healthy` in 169 ms. It covered loopback
+defaults, LAN opt-in and default TLS, explicit insecure-LAN opt-in,
+certificate-required readiness, local-only pairing, TLS/Origin/CSRF/query-token
+rejection, valid request authorization and expired-token rejection. The report
+contains only bounded status fields and no token, secret, raw error or path.
+
+The focused workflow now passes 55/55 tests, including the four transport
+tests. This closes the memory-only 60-6 fixture boundary; it does not claim
+certificate file lifecycle, a public listener, Tailscale/SSH, ACME, remote
+device coverage or release readiness.
