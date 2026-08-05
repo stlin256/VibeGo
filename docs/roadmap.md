@@ -1003,3 +1003,12 @@ the fixture Todo and consumed exactly one quota unit. Reports retained only
 bounded usage/status metadata. This does not close Spec 58-5/59-5 or the Spec
 60 release bundle: task-specific validation, failure/recovery, transport and
 release evidence remain outstanding.
+### Spec 60-0 prerequisite audit checkpoint (2026-08-05)
+
+The fresh checkout/toolchain/domain audit is recorded in
+[`docs/reports/60-0-prerequisite-audit-2026-08-05.md`](reports/60-0-prerequisite-audit-2026-08-05.md).
+It confirms the existing Spec 58/59 foundations and explicitly keeps model,
+host, remote, certificate, concurrency/recovery and release claims partial or
+blocked until their required runtime evidence exists. The next implementation
+slice is the bounded 60-1/60-2 verification orchestration; no default run,
+Goal admission or permission authority changes in 60-0.

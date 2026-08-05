@@ -787,6 +787,16 @@ and recovery, and a redacted release evidence bundle. It explicitly allows focus
 tests during exploration but does not accept them as a replacement for the final
 full gate. No new runtime behavior is claimed by this note.
 
+### Spec 60-0 prerequisite audit checkpoint (2026-08-05)
+
+The fresh checkout/toolchain/domain matrix is recorded in
+[`docs/reports/60-0-prerequisite-audit-2026-08-05.md`](reports/60-0-prerequisite-audit-2026-08-05.md).
+It is verified only as an audit: existing contract, Goal, permission, Web and
+bounded smoke evidence is preserved, while real provider failure/recovery,
+cross-platform remote/certificate, concurrency and signed release evidence
+remain partial or blocked. No runtime authority or default interactive path was
+changed by this checkpoint.
+
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation

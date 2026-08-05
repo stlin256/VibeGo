@@ -53,6 +53,16 @@
 前置复核未完成时，不得接入 Goal governed admission，不得把默认 interactive run
 改成 governed，也不得将 focused test 结果写成 release evidence。
 
+### 60-0 implementation checkpoint (2026-08-05)
+
+The prerequisite audit is recorded in
+[`docs/reports/60-0-prerequisite-audit-2026-08-05.md`](../reports/60-0-prerequisite-audit-2026-08-05.md).
+It re-checks the clean `main` checkout, toolchain and workspace graph, then
+classifies each verification domain as `verified`, `partial` or `blocked`.
+The audit authorizes only the focused/integration evidence slices that follow;
+it does not promote fixture-only or opt-in smoke results to release evidence,
+change the default interactive run path, or mark Spec 60 implemented.
+
 ## 3. 证据等级与结果语义
 
 每项测试结果必须带有 `evidenceLevel` 和 `claim`：
