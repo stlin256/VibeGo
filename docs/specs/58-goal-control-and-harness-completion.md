@@ -1,11 +1,12 @@
 # Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁
 
-> Current implementation checkpoint (2026-08-05): 58-0 through 58-3 are
-> implemented and merged; 58-4a is implemented on the current branch. The
-> umbrella spec remains Draft until the later Web workflow, real Harness smoke,
-> module closure and release evidence gates are complete.
+> Current implementation checkpoint (2026-08-05): 58-0 through 58-3 and 58-4a
+> are implemented and merged; the minimum 58-5 Harness runner and one
+> user-authorized live provider path are also implemented. The umbrella spec
+> remains Draft until the remaining Web workflow, failure/recovery, module
+> closure and release evidence gates are complete.
 
-- Status: Draft（58-0 已完成；58-1 contract/reducer slice 已实现，58-2 尚未接入默认运行时）
+- Status: Draft（58-0～58-5 的已实现切片已记录；58-2 仍不接入默认 interactive run，58-6/58-7 及完整发布证据后置）
 - Date: 2026-08-05
 - Scope: Goal Control、daemon application service、Web workflow，以及核心 Harness
   的完成度审计和真实运行验收

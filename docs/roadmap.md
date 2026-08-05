@@ -799,14 +799,15 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
 
-## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0、58-1 已完成，58-2 已实现，58-3 已实现，后续验收进行中，Draft）
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0～58-5 已实现切片，58-6/58-7 与完整验收后置，Draft）
 
 详见 [Spec 58](specs/58-goal-control-and-harness-completion.md) 及其
 [58-0 prerequisite audit](reports/58-0-prerequisite-verification-2026-08-05.md)。当前 Goal Control
 已经有严格 contracts、独立 `goal_events`、projection/replay、bounded mutation API、
 显式 governed admission、GoalRunBinding、独立 validation writeback 和 quota
-exactly-once 应用层边界；Goal Web 操作流和真实端到端 Harness 证据仍未完成。
-58-1 的 quota reservation 合同和纯状态机已经实现。
+exactly-once 应用层边界；58-5 已补齐可复现的 interactive/governed Harness
+runner 与一次脱敏 live provider 证据。Goal Web 完整执行/恢复流、失败恢复矩阵、
+模块成熟度闭环和发布证据仍未完成。58-1 的 quota reservation 合同和纯状态机已经实现。
 
 58-0 已在当前 `main` 基线重新核对 checkout、workspace graph、Goal/daemon/Web
 focused gate 和完整 `pnpm verify`。审计结论为：现有基础满足 58-1 的合同切片前置条件，

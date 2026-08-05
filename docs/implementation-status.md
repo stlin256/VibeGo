@@ -11,7 +11,9 @@ The 58-4a implementation is now present: `GoalAdmissionService.preview()` is
 side-effect-free and covered by eligible/blocked/HTTP tests; the Web API and
 context rail expose bounded Goal mutations and an explainable preflight card.
 The focused daemon and Web checks pass. Claim/release token handling, governed
-submit, recovery UI and live provider Harness smoke remain partial by design.
+submit and recovery UI remain partial by design. Spec 58-5 now adds the bounded
+Harness runner plus one user-authorized live provider path; broader failure/
+recovery and release evidence remain open.
 
 **状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
 
