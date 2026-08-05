@@ -496,6 +496,19 @@ path or starts any runtime.
   framework.
 - Add desktop, portrait, phone, foldable and tablet viewport fixtures.
 
+#### R2 profile-card implementation slice (next)
+
+The existing conversation-first Settings Sheet will add a compact capability
+profile card group before workspace/model controls. The cards show the four
+stable profile ids, the daemon-returned `ready|degraded|blocked` status,
+effective capability summary and stable reason/next-step guidance. Selecting
+or resetting a card sends only the complete validated profile intent plus the
+current `profileRevision`; the browser never computes authorization, stores a
+credential, or receives a daemon path. Optimistic conflicts remain visible as
+a bounded error and require a fresh status read. The card layout reuses the
+existing VibeGo primitives and ratio-first CSS so desktop, portrait, phone,
+foldable and tablet fixtures preserve the one-action conversation flow.
+
 ### 52-R3: Existing runtime integration
 
 - Wire the resolver through existing settings, approval, sandbox, scheduler,

@@ -375,7 +375,9 @@ The following work is documented but not fully implemented yet:
   LAN auth coverage. The contracts/daemon focused gate is 74/24/35 tests
   respectively at this slice. It does not change default run creation or
   start any runtime. Profile cards, profile/run snapshot binding and the later
-  Goal/transport/ACME/release gates remain independently planned. The
+  Goal/transport/ACME/release gates remain independently planned. The next R2
+  Web card slice is documented to consume this projection through the existing
+  Settings Sheet without moving authority into the browser. The
   plan defines preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
   profile/run snapshot isolation and Host-first acceptance. Native clients
