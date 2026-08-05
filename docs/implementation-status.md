@@ -1247,7 +1247,7 @@ The fresh audit for the post-Spec-61 checkout is recorded in
 [`docs/reports/62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
 At `07daed3` on `main`, the bounded workflow fixture is 82/82 and the current
 capability slice passes contracts 120/120, model-deepseek 20/20 and daemon
-269/269 focused suites. Spec 58-6 task-specific verifier-registry and Spec 63-10
+272/272 focused suites. Spec 58-6 task-specific verifier-registry and Spec 63-10
 dedicated-reviewer fixtures are included in these current gates. The current full
 `pnpm verify` also passes typecheck, build, all workspace test jobs and both diff checks. The audit still marks Spec 62 as
 documentation-constrained rather than release-ready: real-device,
@@ -1256,8 +1256,8 @@ and complete Spec 60 evidence remain partial or blocked. Spec 61 remains
 partial for provider-owned search/reasoning, production tool/reviewer evidence
 and its documentation handoff. Spec 63-10 has bounded dedicated-reviewer live
 adapter evidence, but it is not run/tool/release evidence. Spec 58-6 has an
-explicit registry boundary; verifier timeout/cancellation and semantic task
-validation remain open. The report is the current prerequisite matrix;
+explicit registry boundary; verifier timeout/cancellation is now bounded and
+semantic task validation remains open. The report is the current prerequisite matrix;
 the 2026-08-05 report remains historical.
 
 ## Verification follow-up: deterministic observability window fixture (2026-08-05)
@@ -1495,18 +1495,19 @@ matching is enforced. Missing, non-ready and user-owned lanes fail closed; a
 mismatch yields bounded `inconclusive` evidence and releases quota. The default
 daemon registers no semantic verifier, so existing interactive and governed
 fail-closed behavior remains unchanged. The contracts suite passes 120 tests;
-the daemon focused registry/writeback run passes 269 tests with typecheck and
-diff checks. A bounded verifier timeout/cancellation slice is the next
-implementation gate; it will fail closed and release reservations without
-changing the default registry or run authorities.
+the daemon focused registry/writeback run passes 272 tests with typecheck and
+diff checks. The bounded verifier timeout/cancellation slice is implemented;
+semantic verifier registration and the broader 58-6 module closure remain
+staged.
 
-### Spec 58-6a verifier timeout/cancellation design checkpoint (2026-08-06)
+### Spec 58-6a verifier timeout/cancellation implementation checkpoint (2026-08-06)
 
-The bounded runtime slice is frozen in [ADR 0051](adr/0051-bounded-goal-verifier-timeout-and-cancellation.md).
-The writeback coordinator will enforce a server-owned 100 ms–30 s deadline
-(10 s default), pass an optional `AbortSignal`, and map timeout, cancellation,
+The bounded runtime slice is implemented under [ADR 0051](adr/0051-bounded-goal-verifier-timeout-and-cancellation.md).
+The writeback coordinator enforces a server-owned 100 ms–30 s deadline
+(10 s default), passes an optional `AbortSignal`, and maps timeout, cancellation,
 rejection or malformed verifier output to `inconclusive` evidence with quota
-release. The default registry remains empty; no AgentLoop, RunManager,
+release. Duplicate terminal notifications reuse existing validation evidence.
+The default registry remains empty; no AgentLoop, RunManager,
 Scheduler, Approval, Sandbox, WorkspaceRegistry or event authority changes are
-included. Focused tests will cover cooperative and non-cooperative verifiers,
-late results and bounded option validation before the implementation commit.
+included. Daemon focused tests cover cooperative and non-cooperative verifiers,
+late results, duplicate terminal notifications and bounded option validation.

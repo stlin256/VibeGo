@@ -44,3 +44,11 @@ unchanged. The timeout does not retry a verifier or replay a tool call.
   decision remains fail-closed even if a verifier ignores the signal.
 - Semantic task validation and production verifier registration remain later
   Spec 58-6 work; this ADR does not claim that run completion proves a Todo.
+
+## Implementation evidence
+
+`GoalRunWritebackService` now enforces the server-owned deadline, passes the
+signal to the verifier, and reuses existing validation evidence when duplicate
+terminal events arrive. The focused daemon suite covers cooperative abort,
+non-cooperative timeout, late-result disposal, option bounds and duplicate
+terminal notification; the default daemon registry remains empty.

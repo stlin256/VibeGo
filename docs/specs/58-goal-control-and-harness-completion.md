@@ -306,11 +306,15 @@ release manifest。
 #### 58-6a：Goal verifier bounded runtime gate
 
 任务特定 verifier 的执行必须有 daemon 控制的超时和 `AbortSignal` 边界，不能让
-失控实现无限期持有 governed quota reservation。默认超时为 10 秒，服务端范围为
+失控实现无限期持有 governed quota reservation。实现默认超时为 10 秒，服务端范围为
 100 ms–30 秒；Web/Goal payload 不能扩大该范围。超时、取消、拒绝或非法结果只能写
 bounded `inconclusive` evidence、释放 reservation，并保持 Todo 未完成；不能重试
-verifier、重放旧 tool call 或改变 interactive run。详细决策见
+verifier、重放旧 tool call 或改变 interactive run。当前实现和决策见
 [ADR 0051](../adr/0051-bounded-goal-verifier-timeout-and-cancellation.md)。
+
+当前验收覆盖 cooperative abort、忽略 signal 的 non-cooperative timeout、late result
+丢弃、超时范围校验，以及同一 run 多个终态通知只调用一次 verifier。该切片不注册
+semantic verifier，也不把 run completed 当作 Todo 证明。
 
 ### 58-7：发布验收
 

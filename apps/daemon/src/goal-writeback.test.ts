@@ -5,7 +5,14 @@ import { DEFAULT_SCHEDULER_POLICY, Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
 import { GoalAdmissionService } from './goal-admission.js';
-import { GoalRunWritebackService, type GoalRunVerifier } from './goal-writeback.js';
+import {
+  GoalRunWritebackService,
+  MAX_GOAL_VERIFIER_TIMEOUT_MS,
+  MIN_GOAL_VERIFIER_TIMEOUT_MS,
+  type GoalRunVerifier,
+  type GoalRunVerifierResult,
+  type GoalRunWritebackOptions,
+} from './goal-writeback.js';
 import { GoalVerifierRegistry } from './goal-verifier-registry.js';
 import { RunManager } from './run-manager.js';
 import { createDaemonServer } from './server.js';
@@ -124,13 +131,19 @@ function makeVerifier(status: 'validated' | 'inconclusive' = 'validated'): GoalR
   };
 }
 
-function makeFixture(model: FakeModelProvider, verifier: GoalRunVerifier = makeVerifier(), registerBinding = true, verifierRegistry?: GoalVerifierRegistry) {
+function makeFixture(
+  model: FakeModelProvider,
+  verifier: GoalRunVerifier = makeVerifier(),
+  registerBinding = true,
+  verifierRegistry?: GoalVerifierRegistry,
+  writebackOptions: Pick<GoalRunWritebackOptions, 'verifierTimeoutMs'> = {},
+) {
   const goalStore = new InMemoryGoalControlEventStore();
   const eventStore = new InMemoryEventStore();
   const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
   const runManager = new RunManager({ eventStore, scheduler, modelProvider: model, workspaceExists: () => true });
   const goalControl = new GoalControlV1WriteService(goalStore, { producer: 'writeback-test', clock: () => at });
-  const writeback = new GoalRunWritebackService({ goalStore, runManager, goalControl, verifier, ...(verifierRegistry ? { verifierRegistry } : {}), clock: () => new Date(at) });
+  const writeback = new GoalRunWritebackService({ goalStore, runManager, goalControl, verifier, ...(verifierRegistry ? { verifierRegistry } : {}), ...writebackOptions, clock: () => new Date(at) });
   const admission = new GoalAdmissionService({
     goalStore,
     runManager,
@@ -360,5 +373,71 @@ describe('GoalRunWritebackService', () => {
     expect(projection.quota.reservations[0]?.status).toBe('released');
     expect(projection.validationEvidence[0]).toMatchObject({ status: 'inconclusive', verifierId: 'verifier_mismatch', verifierRevision: 0 });
     fixture.writeback.close();
+  });
+
+  it('aborts a cooperative verifier at the bounded deadline and releases quota', async () => {
+    let signal: AbortSignal | undefined;
+    const verifier: GoalRunVerifier = {
+      verify: async (_input, providedSignal) => {
+        signal = providedSignal;
+        await new Promise<void>((resolve) => {
+          if (providedSignal?.aborted) {
+            resolve();
+            return;
+          }
+          providedSignal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+        throw new Error('cooperative verifier stopped');
+      },
+    };
+    const fixture = makeFixture(
+      new FakeModelProvider({ events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }),
+      verifier,
+      true,
+      undefined,
+      { verifierTimeoutMs: MIN_GOAL_VERIFIER_TIMEOUT_MS },
+    );
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.released')).toBe(true), { timeout: 2_000 });
+    const projection = new GoalControlProjectionBuilder().build(await fixture.goalStore.read(goalId));
+    expect(signal?.aborted).toBe(true);
+    expect(projection.validationEvidence[0]).toMatchObject({ status: 'inconclusive', verifierId: 'verifier_timeout' });
+    expect(projection.todos[0]?.status).toBe('open');
+    expect(projection.quota.reservations[0]?.status).toBe('released');
+    fixture.writeback.close();
+  });
+
+  it('ignores a late non-cooperative verifier result after timeout', async () => {
+    let resolveVerifier!: (value: GoalRunVerifierResult) => void;
+    const verifier: GoalRunVerifier = {
+      verify: () => new Promise((resolve) => {
+        resolveVerifier = resolve;
+      }),
+    };
+    const fixture = makeFixture(
+      new FakeModelProvider({ events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }),
+      verifier,
+      true,
+      undefined,
+      { verifierTimeoutMs: MIN_GOAL_VERIFIER_TIMEOUT_MS },
+    );
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.released')).toBe(true), { timeout: 2_000 });
+    resolveVerifier({ status: 'validated', verifierId: 'late_verifier', verifierRevision: 1, summary: 'late', refs: {} });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const projection = new GoalControlProjectionBuilder().build(await fixture.goalStore.read(goalId));
+    expect(projection.validationEvidence[0]).toMatchObject({ status: 'inconclusive', verifierId: 'verifier_timeout' });
+    expect(projection.todos[0]?.status).toBe('open');
+    expect(projection.quota.reservations[0]?.status).toBe('released');
+    fixture.writeback.close();
+  });
+
+  it('rejects verifier timeout options outside the server-owned bounds', () => {
+    const model = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    expect(() => makeFixture(model, makeVerifier(), false, undefined, { verifierTimeoutMs: MIN_GOAL_VERIFIER_TIMEOUT_MS - 1 })).toThrow(/between/iu);
+    expect(() => makeFixture(model, makeVerifier(), false, undefined, { verifierTimeoutMs: MAX_GOAL_VERIFIER_TIMEOUT_MS + 1 })).toThrow(/between/iu);
+    expect(() => makeFixture(model, makeVerifier(), false, undefined, { verifierTimeoutMs: 1.5 })).toThrow(/between/iu);
   });
 });

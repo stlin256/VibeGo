@@ -27,6 +27,10 @@ const RUN_ID = /^run_[A-Za-z0-9_-]{8,128}$/u;
 const EVENT_ID = /^evt_[A-Za-z0-9_-]{8,128}$/u;
 const TERMINAL_RUN_TYPES = new Set(['run.completed', 'run.failed', 'run.cancelled', 'run.needs_recovery']);
 const TERMINAL_STATUSES = new Set<RunStatus>(['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery']);
+const GOAL_VERIFIER_TIMEOUT = Symbol('goal-verifier-timeout');
+export const DEFAULT_GOAL_VERIFIER_TIMEOUT_MS = 10_000;
+export const MIN_GOAL_VERIFIER_TIMEOUT_MS = 100;
+export const MAX_GOAL_VERIFIER_TIMEOUT_MS = 30_000;
 
 export interface GoalRunEventDigest {
   readonly id: string;
@@ -63,7 +67,8 @@ export interface GoalRunVerifierResult {
 }
 
 export interface GoalRunVerifier {
-  verify(input: GoalRunVerifierInput): Promise<GoalRunVerifierResult>;
+  /** Implementations should stop external work when the signal is aborted. */
+  verify(input: GoalRunVerifierInput, signal?: AbortSignal): Promise<GoalRunVerifierResult>;
 }
 
 /** Default composition is intentionally fail-closed: model self-report is not proof. */
@@ -89,6 +94,8 @@ export interface GoalRunWritebackOptions {
   readonly admitGoverned?: (input: unknown, options?: { readonly permissionSnapshot?: PermissionProfileRunSnapshot }) => Promise<unknown>;
   readonly clock?: () => Date;
   readonly producer?: string;
+  /** Server-owned verifier deadline; never sourced from Web/Goal payloads. */
+  readonly verifierTimeoutMs?: number;
 }
 
 export interface GoalRunWritebackReconciliationResult {
@@ -115,6 +122,7 @@ export class GoalRunWritebackService {
   private readonly verifierRegistry: GoalVerifierRegistry | undefined;
   private readonly clock: () => Date;
   private readonly producer: string;
+  private readonly verifierTimeoutMs: number;
   private readonly registrations = new Map<string, Registration>();
   private readonly runLocks = new Map<string, Promise<void>>();
 
@@ -128,6 +136,12 @@ export class GoalRunWritebackService {
     this.clock = options.clock ?? (() => new Date());
     this.producer = options.producer ?? 'daemon-goal-writeback';
     if (!SAFE_ID.test(this.producer)) throw new Error('Goal writeback producer is invalid.');
+    this.verifierTimeoutMs = options.verifierTimeoutMs ?? DEFAULT_GOAL_VERIFIER_TIMEOUT_MS;
+    if (!Number.isSafeInteger(this.verifierTimeoutMs)
+      || this.verifierTimeoutMs < MIN_GOAL_VERIFIER_TIMEOUT_MS
+      || this.verifierTimeoutMs > MAX_GOAL_VERIFIER_TIMEOUT_MS) {
+      throw new Error(`Goal verifier timeout must be an integer between ${MIN_GOAL_VERIFIER_TIMEOUT_MS} and ${MAX_GOAL_VERIFIER_TIMEOUT_MS} ms.`);
+    }
   }
 
   /** Subscribe before RunManager.start so run.created/terminal races are observable. */
@@ -225,6 +239,15 @@ export class GoalRunWritebackService {
       await this.writeRecovery(binding, terminal, 'needs_recovery', 'Run requires explicit governed recovery after daemon restart.');
       return;
     }
+    const existingEvidence = await this.findValidation(binding);
+    if (existingEvidence) {
+      if (existingEvidence.status !== 'validated') {
+        await this.releaseReservation(binding, 'terminal-validation-not-validated');
+        return;
+      }
+      await this.finalize(binding, existingEvidence);
+      return;
+    }
 
     let result: GoalRunVerifierResult;
     if (snapshot.status !== 'completed') {
@@ -284,7 +307,11 @@ export class GoalRunWritebackService {
       descriptor = resolution.descriptor;
     }
     try {
-      const candidate = normalizeVerifierResult(await verifier.verify(input), terminal.id, binding.runId);
+      const candidate = normalizeVerifierResult(
+        await this.verifyWithDeadline(verifier, input, terminal.id, binding.runId),
+        terminal.id,
+        binding.runId,
+      );
       if (descriptor && (candidate.verifierId !== descriptor.verifierId || candidate.verifierRevision !== descriptor.verifierRevision)) {
         return {
           status: 'inconclusive',
@@ -303,6 +330,51 @@ export class GoalRunWritebackService {
         summary: 'Validation was inconclusive because the verifier failed.',
         refs: { runId: binding.runId, eventIds: [terminal.id] },
       };
+    }
+  }
+
+  private async verifyWithDeadline(
+    verifier: GoalRunVerifier,
+    input: GoalRunVerifierInput,
+    terminalEventId: string,
+    runId: string,
+  ): Promise<GoalRunVerifierResult> {
+    const controller = new AbortController();
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        reject(GOAL_VERIFIER_TIMEOUT);
+      }, this.verifierTimeoutMs);
+    });
+    try {
+      const result = await Promise.race([
+        Promise.resolve().then(() => verifier.verify(input, controller.signal)),
+        timeout,
+      ]);
+      return result;
+    } catch (error) {
+      if (timedOut || error === GOAL_VERIFIER_TIMEOUT) {
+        return {
+          status: 'inconclusive',
+          verifierId: 'verifier_timeout',
+          verifierRevision: 0,
+          summary: 'Validation timed out; no Todo completion was attempted.',
+          refs: { runId, eventIds: [terminalEventId] },
+        };
+      }
+      return {
+        status: 'inconclusive',
+        verifierId: 'verifier_failure',
+        verifierRevision: 0,
+        summary: 'Validation was inconclusive because the verifier failed.',
+        refs: { runId, eventIds: [terminalEventId] },
+      };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      controller.abort();
     }
   }
 
@@ -338,6 +410,12 @@ export class GoalRunWritebackService {
       return replayed.validationEvidence.find((candidate) => candidate.evidenceId === evidenceId)
         ?? GoalValidationEvidenceV1Schema.parse({ schemaVersion: 'ready4vibe_goal_validation_evidence_v1', ...evidenceDraft, checkedAt: this.now(), evidenceChecksum: hashJson(evidenceDraft) });
     }
+  }
+
+  private async findValidation(binding: GoalRunBindingV1): Promise<GoalValidationEvidenceV1 | undefined> {
+    const evidenceId = stableId('evidence', binding.goalId, binding.bindingId, binding.runId, String(binding.attempt));
+    const projection = this.builder.build(await this.options.goalStore.read(binding.goalId));
+    return projection.validationEvidence.find((candidate) => candidate.evidenceId === evidenceId);
   }
 
   private async finalize(binding: GoalRunBindingV1, evidence: GoalValidationEvidenceV1): Promise<void> {

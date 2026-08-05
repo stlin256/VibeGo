@@ -1259,7 +1259,7 @@ unchanged.
 
 The fresh post-Spec-61 matrix is [`62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
 At `07daed3` the fixed workflow fixture is 82/82; contracts (120/120),
-model-deepseek (20/20), daemon (269/269), the capability probe/run snapshot
+model-deepseek (20/20), daemon (272/272), the capability probe/run snapshot
 slice, task-specific verifier registry and dedicated-reviewer smoke are
 focused-tested. Spec 60's current `pnpm verify` static/unit gate also passes; Spec 62 may correct bounded user-facing
 documentation, but it cannot claim release-ready Goal/full-host/ACME/
@@ -1481,19 +1481,22 @@ focused tests cover strict descriptor/privacy validation, duplicate/stale
 registration, missing/non-ready/user-owned lanes, authoritative task-class
 derivation, bounded verifier input, exact id/revision matching and quota
 release. No semantic verifier is registered by the default daemon; live
-task-specific validation, verifier timeout/cancellation and the broader 58-6
-A–G module closure remain staged. The next bounded gate adds a timeout and
-AbortSignal boundary around verifier execution; a timeout must write only
-bounded inconclusive evidence and release the reservation without changing
-interactive runs or any existing authority.
+task-specific validation and the broader 58-6 A–G module closure remain
+staged. The verifier timeout/cancellation gate is implemented under ADR 0051:
+the daemon enforces a 100 ms–30 s deadline (10 s default), passes an
+`AbortSignal`, ignores late results, and reuses validation evidence for duplicate
+terminal notifications. Timeout/rejection/invalid output writes only bounded
+`inconclusive` evidence and releases quota; interactive runs and all existing
+authorities remain unchanged.
 
-### Spec 58-6a bounded verifier timeout/cancellation design (2026-08-06)
+### Spec 58-6a bounded verifier timeout/cancellation implementation (2026-08-06)
 
-The next code slice is frozen in [ADR 0051](adr/0051-bounded-goal-verifier-timeout-and-cancellation.md).
-`GoalRunWritebackService` will enforce a daemon-owned 100 ms–30 s verifier
-deadline (10 s default), pass an optional `AbortSignal`, and race non-cooperative
+The implementation is complete under [ADR 0051](adr/0051-bounded-goal-verifier-timeout-and-cancellation.md).
+`GoalRunWritebackService` enforces a daemon-owned 100 ms–30 s verifier deadline
+(10 s default), passes an optional `AbortSignal`, and races non-cooperative
 implementations against the deadline. Timeout, cancellation, rejection or
-malformed output will produce bounded `inconclusive` evidence and release the
+malformed output produces bounded `inconclusive` evidence and releases the
 reservation; Todo completion, quota spend, old tool replay and interactive run
-behavior remain unchanged. Tests must cover cooperative abort, non-cooperative
-timeout, late-result disposal and option bounds before implementation.
+behavior remain unchanged. Focused daemon coverage includes cooperative abort,
+non-cooperative timeout, late-result disposal, option bounds and duplicate
+terminal notification idempotency.
