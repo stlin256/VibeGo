@@ -1033,6 +1033,15 @@ exact-key fingerprint mismatch 均有稳定 `unavailable` 映射，不重试、�
 证据见 [`spec63-2-same-as-run-reviewer-2026-08-05.md`](reports/spec63-2-same-as-run-reviewer-2026-08-05.md)；
 ApprovalBroker、Web、dedicated settings、durable events 和 live smoke 仍待后续阶段。
 
+63-3 reviewer settings 已实现：daemon 通过现有认证和 `daemon_settings` 持久化
+只保存 enabled/source/posture、可选 dedicated profile id、bounded limits 和
+revision；默认关闭，启用时自动采用 `advisory-low-risk`，禁用强制 `off`。新增
+`GET/PATCH /api/v1/settings/llm-approval` 与 `POST .../probe`，stale reviewer/
+policy revision、dedicated 缺 profile、secret/path/URL/unknown 字段均 fail-closed。
+当前 probe 只做本地配置校验，不调用 provider、HTTP 或 subprocess。证据见
+[`spec63-3-reviewer-settings-2026-08-05.md`](reports/spec63-3-reviewer-settings-2026-08-05.md)；
+dedicated provider、run snapshot、Broker、Web、durable events 和 live smoke 仍待后续。
+
 ## Spec 58-5 audit checkpoint (2026-08-05)
 
 The repository already contains `smoke:model` for provider-protocol checks, but

@@ -4,6 +4,8 @@ import {
   ApprovalReviewEventSchema,
   ApprovalReviewModelOutputSchema,
   ApprovalReviewRequestSchema,
+  ApprovalReviewSettingsPatchSchema,
+  ApprovalReviewSettingsSchema,
   ApprovalReviewerSnapshotSchema,
   LlmApprovalSettingsProjectionSchema,
   findLlmApprovalPrivacyViolations,
@@ -123,6 +125,25 @@ describe('llm-approval/v1 contracts', () => {
     });
     expect(settings.enabled).toBe(false);
     expect(() => LlmApprovalSettingsProjectionSchema.parse({ ...settings, enabled: false, status: 'ready' })).toThrow();
+  });
+
+  it('keeps durable reviewer intent non-secret and fences invalid enablement', () => {
+    const settings = ApprovalReviewSettingsSchema.parse({
+      schemaVersion: 'llm-approval/v1',
+      enabled: false,
+      reviewerSource: 'same-as-run',
+      dedicatedProfileId: null,
+      posture: 'off',
+      limits,
+      reviewerRevision: 'reviewer-1',
+      policyRevision: 'policy-1',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    });
+    expect(settings.enabled).toBe(false);
+    expect(ApprovalReviewSettingsPatchSchema.parse({ enabled: true, posture: 'advisory-low-risk', expectedRevision: 'reviewer-1' })).toMatchObject({ enabled: true });
+    expect(() => ApprovalReviewSettingsSchema.parse({ ...settings, enabled: true })).toThrow(/posture/iu);
+    expect(() => ApprovalReviewSettingsSchema.parse({ ...settings, reviewerSource: 'dedicated', enabled: true, posture: 'advisory-low-risk' })).toThrow(/profile id/iu);
+    expect(() => ApprovalReviewSettingsPatchSchema.parse({ apiKey: 'sk-' + 'a'.repeat(24) })).toThrow();
   });
 
   it('keeps audit events bounded and separates requested from terminal decisions', () => {

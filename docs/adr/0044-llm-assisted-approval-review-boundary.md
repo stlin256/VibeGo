@@ -76,3 +76,10 @@ metadata only, and maps provider failure, timeout, cancellation, malformed
 output and fingerprint mismatch to `unavailable`. It still does not call the
 ApprovalBroker or change the existing authority order; dedicated settings,
 cache/revoke semantics and Web integration remain later stages.
+
+The 63-3 settings slice persists only non-secret reviewer intent through the
+existing `daemon_settings` boundary and exposes authenticated GET/PATCH/probe
+routes. Revision and policy fencing fail closed; dedicated mode without a
+profile is blocked and configured dedicated intent remains degraded until its
+provider adapter exists. The probe is local validation only, so ordinary runs
+remain independent of reviewer availability.

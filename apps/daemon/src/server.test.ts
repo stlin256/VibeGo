@@ -23,6 +23,7 @@ import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-se
 import { McpSettingsManager } from './mcp-settings.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
+import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { type CapabilityProfilePolicy } from '@ready4vibe/policy';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
@@ -663,6 +664,50 @@ describe('daemon health server', () => {
     expect(success.status).toBe(200);
     expect(successBody).not.toContain('test-secret');
     expect(JSON.parse(successBody)).toMatchObject({ status: 'ready', capabilities: { modelId: 'deepseek-v4-flash' } });
+  });
+
+  it('serves bounded approval-review settings with revision fencing and no provider coupling', async () => {
+    const settings = new InMemorySettingsStore();
+    const manager = new ApprovalReviewSettingsManager({ settings, policyRevision: () => 'policy-1', clock: () => new Date('2026-08-05T00:00:00.000Z') });
+    const server = createDaemonServer({ approvalReviewSettings: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/llm-approval`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    const initialBody = await initial.json() as { reviewerRevision: string; enabled: boolean; status: string };
+    expect(initialBody).toMatchObject({ enabled: false, status: 'disabled' });
+
+    const enabled = await fetch(base, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: true, expectedRevision: initialBody.reviewerRevision }),
+    });
+    expect(enabled.status).toBe(200);
+    const enabledText = await enabled.text();
+    expect(enabledText).not.toMatch(/api[_-]?key|token|secret|https?:\/\//iu);
+    const enabledBody = JSON.parse(enabledText) as { reviewerRevision: string; posture: string; status: string };
+    expect(enabledBody).toMatchObject({ posture: 'advisory-low-risk', status: 'ready' });
+
+    const conflict = await fetch(base, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false, expectedRevision: initialBody.reviewerRevision }),
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ error: { code: 'REVISION_CONFLICT' } });
+
+    const probe = await fetch(`${base}/probe`, { method: 'POST' });
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toMatchObject({ status: 'ready', enabled: true });
+
+    const invalid = await fetch(base, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ apiKey: 'sk-' + 'a'.repeat(24) }),
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.text()).not.toContain('sk-');
   });
 
   it('serves the DeepSeek-specific write-only settings adapter with revision fencing', async () => {

@@ -19,6 +19,7 @@ import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsMan
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { PermissionProfileSettingsError, type PermissionProfileSettingsManager } from './permission-profile-settings.js';
+import { ApprovalReviewSettingsError, type ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { GoalAdmissionError, GoalAdmissionService } from './goal-admission.js';
 import type { GoalRunWritebackService } from './goal-writeback.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
@@ -62,6 +63,7 @@ export interface DaemonServerOptions {
   mcpSettings?: McpSettingsManager;
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
+  approvalReviewSettings?: ApprovalReviewSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   /** Absolute path to a built React/Vite dist directory; omitted in dev. */
@@ -96,6 +98,7 @@ interface ResolvedDaemonServerOptions {
   mcpSettings?: McpSettingsManager;
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
+  approvalReviewSettings?: ApprovalReviewSettingsManager;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   webDistDir?: string;
@@ -161,6 +164,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
     ...(options.capabilityProfileSettings ? { capabilityProfileSettings: options.capabilityProfileSettings } : {}),
     ...(options.permissionProfileSettings ? { permissionProfileSettings: options.permissionProfileSettings } : {}),
+    ...(options.approvalReviewSettings ? { approvalReviewSettings: options.approvalReviewSettings } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
     ...(options.webDistDir ? { webDistDir: options.webDistDir } : {}),
@@ -201,6 +205,12 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
           : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409
             : error.code === 'AUTHENTICATION_REQUIRED' ? 401
               : error.code === 'POLICY_DENIED' ? 403 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      if (error instanceof ApprovalReviewSettingsError) {
+        const status = error.code === 'PERSISTENCE_FAILED' || error.code === 'CORRUPT_SETTINGS' ? 503
+          : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409 : 400;
         writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }
@@ -913,6 +923,46 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/llm-approval') {
+    if (!options.approvalReviewSettings) {
+      writeJson(response, 503, { error: { code: 'APPROVAL_REVIEW_SETTINGS_UNAVAILABLE', message: 'Approval review settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.approvalReviewSettings.status());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or PATCH required' } }, { Allow: 'GET, PATCH' });
+      return;
+    }
+    try {
+      writeJson(response, 200, options.approvalReviewSettings.patch(await readJson(request, options.bodyLimitBytes)));
+    } catch (error) {
+      if (error instanceof ApprovalReviewSettingsError) {
+        const status = error.code === 'PERSISTENCE_FAILED' || error.code === 'CORRUPT_SETTINGS' ? 503
+          : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/llm-approval/probe') {
+    if (!options.approvalReviewSettings) {
+      writeJson(response, 503, { error: { code: 'APPROVAL_REVIEW_SETTINGS_UNAVAILABLE', message: 'Approval review settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    writeJson(response, 200, await options.approvalReviewSettings.probe());
     return;
   }
 

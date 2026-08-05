@@ -21,6 +21,7 @@ import { McpSettingsManager } from './mcp-settings.js';
 import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
+import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalControlV1WriteService, GoalWriteService } from '@ready4vibe/goal-control';
@@ -142,6 +143,10 @@ const permissionProfileSettings = new DurablePermissionProfileSettingsManager({
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   defaultWorkspaceId: workspaceRegistry.status().workspaces.find((workspace) => workspace.isDefault)?.id ?? 'default',
 });
+const approvalReviewSettings = new ApprovalReviewSettingsManager({
+  settings: settingsStore,
+  policyRevision: () => 'daemon-policy-1',
+});
 // R4 is opt-in: until an application service activates a verified snapshot,
 // this manager contributes no runtime and performs no transport side effect.
 const mcpRuntimeBinding = new McpRunBindingManager(workspaceRegistry);
@@ -243,6 +248,7 @@ const server = createDaemonServer({
   mcpSettings,
   capabilityProfileSettings,
   permissionProfileSettings,
+  approvalReviewSettings,
   webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,

@@ -263,9 +263,22 @@ event-authority behavior changes are included in this phase.
 
 ### 63-3: dedicated reviewer settings
 
-Persist only non-secret reviewer intent in `daemon_settings`; add authenticated
-GET/PATCH/status/probe routes using the existing model-provider secret boundary.
-Do not return credentials, endpoint secrets or absolute paths.
+Implemented by `ApprovalReviewSettingsManager` and the authenticated daemon
+routes `GET/PATCH /api/v1/settings/llm-approval` plus
+`POST /api/v1/settings/llm-approval/probe`. Durable state contains only the
+strict non-secret reviewer intent (`enabled`, source, posture, optional
+dedicated profile id, bounded limits and revisions). Migration defaults remain
+off; enabling without a posture selects `advisory-low-risk`, while disabling
+forces `off`. Stale reviewer/policy revisions fail closed until an explicit
+patch refreshes them. Dedicated mode without a profile is blocked and a
+configured dedicated profile is degraded until a provider-backed probe is
+implemented. The current probe is local validation only and performs no
+network, provider or subprocess operation. Responses return the bounded
+projection and never credentials, endpoint secrets, headers, environment
+values or absolute paths. Evidence is recorded in
+[`spec63-3-reviewer-settings-2026-08-05.md`](../reports/spec63-3-reviewer-settings-2026-08-05.md).
+No ApprovalBroker, AgentLoop, RunManager, Scheduler, Sandbox, Workspace or
+event-authority behavior changes are included in this phase.
 
 ### 63-4: ApprovalBroker application integration
 

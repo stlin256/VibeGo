@@ -73,6 +73,50 @@ export const ApprovalReviewLimitsSchema = z.object({
 }).strict();
 export type ApprovalReviewLimits = z.infer<typeof ApprovalReviewLimitsSchema>;
 
+/** Durable non-secret reviewer intent. Credentials and endpoints are absent. */
+export const ApprovalReviewSettingsSchema = z.object({
+  schemaVersion: z.literal(LLM_APPROVAL_SCHEMA_VERSION),
+  enabled: z.boolean(),
+  reviewerSource: ApprovalReviewerSourceSchema,
+  dedicatedProfileId: IdSchema.nullable(),
+  posture: ApprovalReviewPostureSchema,
+  limits: ApprovalReviewLimitsSchema,
+  reviewerRevision: RevisionSchema,
+  policyRevision: RevisionSchema,
+  updatedAt: TimestampSchema,
+}).strict().superRefine((value, context) => {
+  if (!value.enabled && value.posture !== 'off') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['posture'], message: 'disabled reviewer settings must use the off posture' });
+  }
+  if (value.reviewerSource === 'same-as-run' && value.dedicatedProfileId !== null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['dedicatedProfileId'], message: 'same-as-run settings cannot contain a dedicated profile' });
+  }
+  if (value.reviewerSource === 'dedicated' && value.enabled && value.dedicatedProfileId === null) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['dedicatedProfileId'], message: 'dedicated settings require a profile id' });
+  }
+  if (value.enabled && value.posture === 'off') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['posture'], message: 'enabled reviewer settings require an active posture' });
+  }
+  addPrivacyIssues(value, context);
+});
+export type ApprovalReviewSettings = z.infer<typeof ApprovalReviewSettingsSchema>;
+
+export const ApprovalReviewSettingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  reviewerSource: ApprovalReviewerSourceSchema.optional(),
+  dedicatedProfileId: IdSchema.nullable().optional(),
+  posture: ApprovalReviewPostureSchema.optional(),
+  maxLatencyMs: ApprovalReviewLimitsSchema.shape.maxLatencyMs.optional(),
+  maxRequestBytes: ApprovalReviewLimitsSchema.shape.maxRequestBytes.optional(),
+  maxResponseBytes: ApprovalReviewLimitsSchema.shape.maxResponseBytes.optional(),
+  cacheTtlMs: ApprovalReviewLimitsSchema.shape.cacheTtlMs.optional(),
+  expectedRevision: RevisionSchema.optional(),
+}).strict().superRefine((value, context) => {
+  if (Object.keys(value).length === 0) context.addIssue({ code: z.ZodIssueCode.custom, message: 'at least one reviewer setting is required' });
+  addPrivacyIssues(value, context);
+});
+export type ApprovalReviewSettingsPatch = z.infer<typeof ApprovalReviewSettingsPatchSchema>;
+
 const SnapshotIdentitySchema = z.object({
   providerId: IdSchema.nullable(),
   modelId: LabelSchema.nullable(),
@@ -326,6 +370,14 @@ export function parseApprovalReviewModelOutput(value: unknown): ApprovalReviewMo
 
 export function parseLlmApprovalSettingsProjection(value: unknown): LlmApprovalSettingsProjection {
   return LlmApprovalSettingsProjectionSchema.parse(value);
+}
+
+export function parseApprovalReviewSettings(value: unknown): ApprovalReviewSettings {
+  return ApprovalReviewSettingsSchema.parse(value);
+}
+
+export function parseApprovalReviewSettingsPatch(value: unknown): ApprovalReviewSettingsPatch {
+  return ApprovalReviewSettingsPatchSchema.parse(value);
 }
 
 export function parseApprovalReviewEvent(value: unknown): ApprovalReviewEvent {

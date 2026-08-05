@@ -973,6 +973,21 @@ revision/latency/expiry fields outside model control. Evidence is recorded in
 No ApprovalBroker, Web, dedicated settings, durable reviewer event, AgentLoop,
 RunManager, Scheduler, Sandbox, Workspace or event-authority behavior changed.
 
+### Spec 63-3 reviewer settings checkpoint (2026-08-05)
+
+`ApprovalReviewSettingsManager` now persists only non-secret reviewer intent in
+the existing `daemon_settings` store and exposes authenticated
+`GET/PATCH /api/v1/settings/llm-approval` plus a local validation probe. The
+migration default is disabled; explicit enablement chooses bounded
+`advisory-low-risk`, and disablement forces `off`. Optimistic reviewer and
+policy revision checks fail closed. Dedicated mode without a profile is
+blocked; a configured profile remains degraded until a provider-backed probe
+exists. Responses contain only the strict bounded projection and no secret,
+endpoint, header, environment or path data. Evidence is recorded in
+[`spec63-3-reviewer-settings-2026-08-05.md`](reports/spec63-3-reviewer-settings-2026-08-05.md).
+No run, ApprovalBroker, Web control, durable reviewer event, AgentLoop,
+RunManager, Scheduler, Sandbox, Workspace or event-authority behavior changed.
+
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
 The R3 application boundary is implemented under
