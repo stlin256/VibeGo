@@ -680,7 +680,7 @@ same-origin REST、run create/read/cancel/retry/approval，以及带 `Last-Event
 去重、有限重连、取消和终态停止的 SSE。SDK 不读 SQLite/workspace/secret，不复制任何
 执行权威；native UI 仍以后置消费者处理。
 
-## Spec 52：Capability profiles 与 first-run experience（R1 strict contract/resolver 已实现，runtime integration 待实现）
+## Spec 52：Capability profiles 与 first-run experience（R1 已实现，R2/R3a settings projection 进行中）
 
 详见 [Spec 52](specs/52-capability-profiles-and-first-run-experience.md) 及其
 [前置验证报告](reports/52-prerequisite-verification-2026-08-05.md)。本规格把
@@ -695,7 +695,16 @@ Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM
 2026-08-05 完成；ADR 0033 已冻结版本化 Capability Profile contract，strict
 contract 已在 `packages/contracts` 落地，纯 resolver 已在 `packages/policy` 落地，
 下一步才进入 daemon application boundary，
-不改变任何默认权限或 run 创建行为。
+不改变任何默认权限或 run 创建行为。R2/R3a 的首个 application slice 采用现有
+`daemon_settings` 持久化非 secret profile intent，并通过认证的
+`GET/PATCH /api/v1/settings/capability-profile` 返回 resolver 的 effective profile、
+status 与稳定 reason code；expected revision 冲突时 fail-closed，reset 只回到
+`preview` 而不删除历史。该 slice 不接入 `RunManager.start`，不启动 provider/process/
+network，不修改 AgentLoop、Scheduler、Approval、Sandbox、WorkspaceRegistry、
+`run_events` 或 `goal_events`。对应边界见 [ADR 0034](adr/0034-capability-profile-settings-and-resolution-projection.md)。
+
+下一小步是 conversation-first Settings Sheet 的 profile cards/blocked guidance，
+随后才在独立变更中绑定 profile/run snapshot。
 
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。

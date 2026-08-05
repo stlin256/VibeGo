@@ -363,21 +363,20 @@ The following work is documented but not fully implemented yet:
   R3b ACME/OS-store/renewal, signed release artifacts and native
   Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
-  cross-cutting capability-profile and first-run UX gate is now specified; ADR
-  0033 freezes the R1 contract boundary. The strict
+  cross-cutting capability-profile and first-run UX gate is now specified;
+  ADR 0033 freezes the R1 contract boundary and ADR 0034 freezes the durable
+  settings/projection boundary. The strict
   `ready4vibe_capability_profile_v1` contract is implemented in
   `packages/contracts` with 5 focused tests (71 contract tests total).
-  `@ready4vibe/policy` now provides the pure resolver with 7 focused tests
-  (24 policy tests total); daemon integration remains pending. The plan defines
-  preview, workspace-coding, advanced-local and custom profiles,
+  `@ready4vibe/policy` provides the pure resolver with 7 focused tests (24
+  policy tests total). The current R2/R3a slice adds only a versioned,
+  secret-free daemon settings snapshot, optimistic revision checks and an
+  authenticated resolver projection; it does not change default run creation
+  or start any runtime. Profile cards, profile/run snapshot binding and the
+  later Goal/transport/ACME/release gates remain independently planned. The
+  plan defines preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
-  profile/run snapshot isolation and Host-first acceptance. Its release gate
-  additionally covers Goal governed admission, real Tailscale/SSH transport,
-  ACME staging/renewal, a core Harness completeness matrix and a mandatory
-  out-of-band real LLM smoke. The mandatory R0 prerequisite gate passed on
-  2026-08-05; the versioned contract design is now frozen by ADR 0033. The
-  contract-only slice and pure resolver remain below the daemon boundary; no
-  new default capability or run-path behavior is authorized. Native clients
+  profile/run snapshot isolation and Host-first acceptance. Native clients
   remain post-release and do not block the Web/Host release.
 
 These six specs are design/planning gates only. They do not change the

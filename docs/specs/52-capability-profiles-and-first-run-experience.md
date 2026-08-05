@@ -1,7 +1,8 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R1 strict contract and pure resolver implemented (runtime integration
-  pending; no default behavior change)
+- Status: R1 strict contract and pure resolver implemented; R2/R3a durable
+  settings projection and authenticated API in progress (no default run-path
+  behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
   persistence, policy/approval boundaries, transport/certificate adapters,
@@ -501,6 +502,24 @@ path or starts any runtime.
   workspace and RunManager application boundaries.
 - Verify that disabled modes make zero provider/process/network calls.
 - Verify that a changed profile never alters an already running run.
+
+#### R2/R3a application-settings slice (2026-08-05)
+
+The first application-boundary slice persists only the validated,
+secret-free profile intent in the existing `daemon_settings` boundary. The
+daemon exposes a versioned `GET/PATCH /api/v1/settings/capability-profile`
+projection containing the current profile revision and the pure resolver's
+effective profile, status and reason code. The policy evidence is injected by
+the daemon from existing transport, workspace, model, filesystem, sandbox and
+MCP settings; the browser cannot widen it. Updates use an expected revision
+and fail closed on stale or concurrent writes. Resetting the profile returns
+to `preview` without deleting run or Goal history.
+
+This slice deliberately does **not** attach the profile to `RunConfig`, change
+`RunManager.start`, alter the AgentLoop state machine, grant a tool, start a
+process, call a provider, change Scheduler/Approval/Sandbox authority, or
+modify `run_events`/`goal_events`. Profile/run snapshot binding and contextual
+Web cards remain the next independently tested slice.
 
 ### 52-R4: Goal governed admission
 
