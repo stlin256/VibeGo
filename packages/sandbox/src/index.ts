@@ -1,5 +1,7 @@
 import type { SandboxPolicy, TaskTrust } from '@ready4vibe/contracts';
 
+export * from './permission-profile.js';
+
 export type SandboxRuntime = 'docker' | 'podman' | 'vm';
 export type SandboxNetwork = 'restricted' | 'enabled';
 export type SandboxIsolation = 'container' | 'vm';

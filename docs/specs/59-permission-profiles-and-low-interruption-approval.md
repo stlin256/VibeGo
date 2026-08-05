@@ -268,6 +268,36 @@ AgentLoop, Scheduler, ApprovalBroker, SandboxResolver, Web route, run snapshot,
 ToolExecutor、Scheduler 和 approval broker；不修改 AgentLoop 核心循环，不添加第二套
 审批或执行器。
 
+#### 59-2 implementation boundary (2026-08-05)
+
+The first 59-2 slice is an optional application adapter, not a new authority:
+
+- `@ready4vibe/policy` resolves a validated permission profile against the
+  run workspace, trust, policy revision and requested sandbox. It may narrow a
+  request, but it can never widen `RunConfig`, managed policy, capability
+  profile or server-owned approval rules.
+- `@ready4vibe/sandbox` projects the corresponding sandbox request and delegates
+  the final decision to the existing `SandboxResolver`. Missing or unhealthy
+  external sandboxes, missing host confirmation, stale revisions and untrusted
+  host requests fail closed; there is no host fallback.
+- The daemon runtime adapter only narrows an already-created `ToolRuntime` to
+  the captured permission families. It does not create tools, invoke a model,
+  acquire a scheduler lease, approve a request or execute a process.
+- `RunManager` exposes an optional pre-resolved permission binding seam. When
+  present, it validates the effective profile before binding the runtime and
+  fails before `run.created` for blocked/invalid bindings; when absent, the
+  historical interactive path is unchanged. The binding is not persisted until
+  59-3.
+- The adapter is opt-in at this stage. Existing interactive runs without an
+  explicit permission binding retain their historical path; daemon settings,
+  confirmation/revoke application services and the persisted run permission
+  snapshot remain Spec 59-3 work.
+
+The focused acceptance gate covers workspace-only filtering, external-sandbox
+requirements, full-host confirmation/trust checks, network/MCP narrowing,
+session-auto grant scope/revision/expiry checks and the invariant that a
+profile change cannot mutate an already captured runtime.
+
 ### 59-3：Daemon settings 与 snapshot
 
 提供受认证 settings/confirm/revoke/status API，持久化非 secret intent，grant 只保存在

@@ -8,6 +8,8 @@ import {
   AgentMemoryWriteRequestSchema,
   CapabilityProfileRunSnapshotSchema,
   ModelProviderSnapshotSchema,
+  PermissionProfileSchema,
+  type PermissionProfile,
   parseRunConfig,
   type AgentMemoryRecallResult,
   type AgentMemoryWriteRequest,
@@ -21,6 +23,7 @@ import {
   type StoredEvent,
 } from '@ready4vibe/contracts';
 import type { ContextItem } from '@ready4vibe/context';
+import type { PermissionProfileApplication } from '@ready4vibe/policy';
 import { AgentLoop, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ToolRuntime } from '@ready4vibe/agent';
 import type { RunUsageObserver } from '@ready4vibe/observability';
 import { Scheduler } from '@ready4vibe/scheduler';
@@ -29,6 +32,7 @@ import type { AgentMemoryKnowledgeRunSnapshot } from '@ready4vibe/contracts';
 import type { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import type { ModelProviderBinding } from './model-config.js';
 import { knowledgeResultToContextItems } from './memory-knowledge-provider.js';
+import { constrainPermissionToolRuntime } from './permission-profile-runtime.js';
 
 export type RunEventListener = (event: StoredEvent) => void;
 
@@ -59,6 +63,8 @@ export interface RunManagerOptions {
   modelProviderForRun?: (config: RunConfig) => ModelProvider;
   modelBindingForRun?: (config: RunConfig) => ModelProviderBinding;
   capabilityProfileForRun?: (config: RunConfig) => CapabilityProfileRunSnapshot;
+  /** Optional pre-resolved permission binding; settings persistence is 59-3. */
+  permissionProfileForRun?: (config: RunConfig) => PermissionProfileApplication | undefined;
   toolRuntime?: ToolRuntime;
   toolRuntimeForRun?: (config: RunConfig, capabilitySnapshot?: CapabilityProfileRunSnapshot) => ToolRuntime | undefined;
   approvalBroker?: ApprovalBroker;
@@ -80,7 +86,7 @@ export interface RunStartOptions {
 }
 
 export class RunManagerError extends Error {
-  constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID' | 'RUN_ID_CONFLICT', message: string) {
+  constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID' | 'PERMISSION_PROFILE_BLOCKED' | 'PERMISSION_PROFILE_INVALID' | 'RUN_ID_CONFLICT', message: string) {
     super(message);
     this.name = 'RunManagerError';
   }
@@ -94,6 +100,7 @@ export class RunManager {
   private readonly modelProviderForRun: (config: RunConfig) => ModelProvider;
   private readonly modelBindingForRun: ((config: RunConfig) => ModelProviderBinding) | undefined;
   private readonly capabilityProfileForRun: ((config: RunConfig) => CapabilityProfileRunSnapshot) | undefined;
+  private readonly permissionProfileForRun: ((config: RunConfig) => PermissionProfileApplication | undefined) | undefined;
   private readonly toolRuntimeForRun: (config: RunConfig, capabilitySnapshot?: CapabilityProfileRunSnapshot) => ToolRuntime | undefined;
   private readonly workspaceExists: (workspaceId: string) => boolean;
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
@@ -107,6 +114,7 @@ export class RunManager {
     this.modelProviderForRun = options.modelProviderForRun ?? (() => options.modelProvider);
     this.modelBindingForRun = options.modelBindingForRun;
     this.capabilityProfileForRun = options.capabilityProfileForRun;
+    this.permissionProfileForRun = options.permissionProfileForRun;
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
@@ -153,12 +161,27 @@ export class RunManager {
       }
     }
     if (capabilitySnapshot) assertRunConfigWithinCapabilityProfile(config, capabilitySnapshot);
+    let permissionProfile: PermissionProfile | undefined;
+    if (this.permissionProfileForRun) {
+      try {
+        const application = this.permissionProfileForRun(config);
+        if (application !== undefined) {
+          if ((application.status !== 'ready' && application.status !== 'degraded') || application.effectiveProfile === null) {
+            throw new RunManagerError('PERMISSION_PROFILE_BLOCKED', `The permission profile is blocked: ${application.reasonCode}.`);
+          }
+          permissionProfile = PermissionProfileSchema.parse(application.effectiveProfile);
+        }
+      } catch (error) {
+        if (error instanceof RunManagerError) throw error;
+        throw new RunManagerError('PERMISSION_PROFILE_INVALID', 'The permission profile is invalid.');
+      }
+    }
     const capturedModelBinding: { provider: ModelProvider; snapshot?: ModelProviderSnapshot } = this.modelBindingForRun
       ? this.modelBindingForRun(config)
       : { provider: this.modelProviderForRun(config) };
     const controller = new AbortController();
     this.controllers.set(runId, controller);
-    const capturedToolRuntime = this.toolRuntimeForRun(config, capabilitySnapshot);
+    const capturedToolRuntime = constrainPermissionToolRuntime(this.toolRuntimeForRun(config, capabilitySnapshot), permissionProfile);
     const capturedMemory = this.agentMemorySettings?.createRunSnapshot(config.createdBySessionId);
     const capturedKnowledge = this.agentMemoryKnowledgeSettings?.createRunSnapshot();
     const memoryContext = capturedMemory

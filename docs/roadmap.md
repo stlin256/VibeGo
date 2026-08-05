@@ -863,6 +863,19 @@ The 59-1 contract implementation is now complete: 21 contract test files and
 sandbox, approval, daemon settings, Web and full-host execution remain later
 59-2 through 59-5 slices.
 
+The 59-2 execution-plane slice is deliberately opt-in: a policy adapter narrows
+permission profiles, the existing `SandboxResolver` remains authoritative, and
+a daemon runtime wrapper filters only already-authorized tool descriptors. It
+does not add settings/routes or a persisted permission snapshot and cannot
+widen the historical interactive run path; those concerns remain in 59-3.
+The current focused gates cover policy/compiler, SandboxResolver and daemon
+runtime/run-manager wiring; a blocked binding fails before `run.created` and a
+profile change cannot mutate an already captured runtime.
+The latest focused run reports 31 policy tests, 10 sandbox tests and 210 daemon
+tests, with dependency-closure build and selected-package typecheck passing.
+The subsequent full `pnpm verify` passed all workspace build/typecheck/test and
+diff gates as well.
+
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 
 详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程

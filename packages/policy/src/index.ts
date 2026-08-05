@@ -3,6 +3,7 @@ import { ToolRegistry, type ToolDescriptor, type ToolRisk, type ToolSandboxMode 
 
 export * from './compiler.js';
 export * from './capability-profile.js';
+export * from './permission-profile.js';
 
 export type PolicyDecision = 'allow' | 'prompt' | 'forbidden';
 

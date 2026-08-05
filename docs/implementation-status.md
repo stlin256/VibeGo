@@ -623,6 +623,29 @@ legacy factory defaults to workspace-coding with no host, network or MCP/Skill.
 The contracts focused gate passes 21 files / 92 tests. Runtime wiring remains
 deferred to Spec 59-2 onward.
 
+## Spec 59-2 implementation note (2026-08-05)
+
+The execution-plane adapter is being implemented as an opt-in, fail-closed
+slice. Policy resolution narrows a validated permission profile against the
+existing run trust/workspace/revision/sandbox inputs; sandbox projection
+delegates to the existing `SandboxResolver`; and the daemon wrapper filters
+only an already-authorized `ToolRuntime`. No second scheduler, approval store
+or executor is introduced, and no AgentLoop core-loop change is allowed.
+
+This slice intentionally does not add daemon settings, confirmation/revoke
+routes or persisted permission run snapshots; those remain Spec 59-3. Runs
+without an explicit permission binding retain the historical interactive path.
+The current code adds the pure policy/compiler adapter in
+`packages/policy/src/permission-profile.ts`, the SandboxResolver projection in
+`packages/sandbox/src/permission-profile.ts`, and the opt-in RunManager/runtime
+seam in `apps/daemon/src/permission-profile-runtime.ts` and `run-manager.ts`.
+Focused validation passed with `pnpm check:module --
+@ready4vibe/policy @ready4vibe/sandbox @ready4vibe/daemon`: policy 31 tests,
+sandbox 10 tests and daemon 210 tests, together with dependency-closure build
+and selected-package typecheck. The subsequent full `pnpm verify` also passed:
+all workspace build/typecheck/test gates, `diff:check` and `git diff --check`
+completed successfully.
+
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 
 The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).
