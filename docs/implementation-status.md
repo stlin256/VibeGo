@@ -827,6 +827,14 @@ old tools/approvals or introducing a second scheduler. Its output will remain
 bounded and redacted, and will not promote fake-provider evidence to release
 readiness.
 
+#### Spec 60-3/60-7 implementation checkpoint (2026-08-05)
+
+`smoke:recovery` is implemented and passes its Windows both-mode fixture:
+concurrency peak 2, two completed runs, queued/in-flight cancellation and a
+single idempotent `run.needs_recovery` with zero provider calls after recovery.
+The workflow suite now passes 51/51. Real provider, remote, cross-platform and
+release evidence remain partial or blocked by design.
+
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation

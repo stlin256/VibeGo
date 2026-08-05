@@ -1038,3 +1038,10 @@ The next opt-in `pnpm smoke:recovery` fixture will use the existing daemon
 application objects to prove bounded overlap, queue/in-flight cancellation and
 metadata-only restart reconciliation. It will report application evidence
 only; provider, remote, cross-platform and release claims remain separate.
+
+#### Spec 60-3/60-7 implementation checkpoint (2026-08-05)
+
+The `smoke:recovery` runner and four-test fixture are implemented. Windows
+evidence is healthy for peak concurrency 2, two completed runs, both cancellation
+paths and idempotent restart marking with zero post-recovery provider calls;
+workflow fixtures pass 51/51. This is bounded application evidence only.

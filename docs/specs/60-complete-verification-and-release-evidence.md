@@ -108,6 +108,16 @@ cross-platform release evidence. It does not add a scheduler, alter restart
 semantics, resume old approvals, execute tools during recovery, or change Goal
 Control/permission/event authorities.
 
+#### 60-3/60-7 implementation checkpoint (2026-08-05)
+
+`scripts/smoke-recovery.mjs` and its four-test fixture are implemented and
+wired as `pnpm smoke:recovery`. The Windows fixture reports `healthy` for
+concurrency (peak 2, two completed runs, queued and in-flight cancellation) and
+recovery (one recovery event, second reconciliation no-op, zero provider calls
+after recovery). `pnpm test:workflow` now passes 51/51. This remains bounded
+injected-provider evidence and does not close the real-provider, remote,
+cross-platform or release gates.
+
 ## 3. 证据等级与结果语义
 
 每项测试结果必须带有 `evidenceLevel` 和 `claim`：
