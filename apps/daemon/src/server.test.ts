@@ -8,7 +8,7 @@ import { DEFAULT_SCHEDULER_POLICY, type AgentMemoryKnowledgeProvider, type Agent
 import { InMemoryApprovalBroker } from '@ready4vibe/agent';
 import { AuthGate } from '@ready4vibe/auth';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
+import { InMemoryApprovalReviewEventStore, InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
 import { RunManager } from './run-manager.js';
 import { InMemoryModelSettingsManager } from './model-config.js';
@@ -511,6 +511,36 @@ describe('daemon health server', () => {
     const resumedText = await resumed.text();
     const resumedIds = [...resumedText.matchAll(/^id: (\d+)$/gm)].map((match) => Number(match[1]));
     expect(resumedIds.every((id) => id > after)).toBe(true);
+  });
+
+  it('serves the independent bounded approval-review event projection', async () => {
+    const store = new InMemoryApprovalReviewEventStore();
+    await store.append({
+      schemaVersion: 'llm-approval/v1', eventId: 'reviewevt_api_1', idempotencyKey: 'review-api-1',
+      eventType: 'review.requested', reviewId: 'review_api_1', runId: 'run_api_12345678', turnId: 'turn_api_1',
+      correlationId: 'call_api_1', approvalKeyFingerprint: 'a'.repeat(64), reviewerRevision: 'reviewer-1',
+      policyRevision: 'policy-1', decision: null, reasonCode: 'eligible', latencyMs: null, expiresAt: null, at: '2026-08-05T00:00:00.000Z',
+    });
+    await store.append({
+      schemaVersion: 'llm-approval/v1', eventId: 'reviewevt_api_2', idempotencyKey: 'review-api-2',
+      eventType: 'review.unavailable', reviewId: 'review_api_1', runId: 'run_api_12345678', turnId: 'turn_api_1',
+      correlationId: 'call_api_1', approvalKeyFingerprint: 'a'.repeat(64), reviewerRevision: 'reviewer-1',
+      policyRevision: 'policy-1', decision: 'unavailable', reasonCode: 'provider-unavailable', latencyMs: 12, expiresAt: null, at: '2026-08-05T00:00:01.000Z',
+    });
+    const server = createDaemonServer({ approvalReviewEventStore: store });
+    servers.push(server);
+    const port = await listen(server);
+    const page = await fetch(`http://127.0.0.1:${port}/api/v1/runs/run_api_12345678/review-events?limit=1`);
+    expect(page.status).toBe(200);
+    const body = await page.json() as { schemaVersion: string; events: Array<Record<string, unknown>>; nextAfter: number | null; hasMore: boolean };
+    expect(body).toMatchObject({ schemaVersion: 'llm-approval/v1', nextAfter: 1, hasMore: true });
+    expect(body.events).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toMatch(/secret|api[_-]?key|C:\\Users|prompt|transcript/iu);
+    const resumed = await fetch(`http://127.0.0.1:${port}/api/v1/runs/run_api_12345678/review-events?after=1`);
+    expect((await resumed.json() as { events: Array<Record<string, unknown>> }).events[0]).toMatchObject({ eventType: 'review.unavailable' });
+    const invalid = await fetch(`http://127.0.0.1:${port}/api/v1/runs/run_api_12345678/review-events?limit=1001`);
+    expect(invalid.status).toBe(400);
+    store.close();
   });
 
   it('requires explicit confirmation before retrying a recovered run', async () => {

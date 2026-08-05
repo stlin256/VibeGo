@@ -7,7 +7,7 @@ import {
   type ModelEvent,
   DEFAULT_SCHEDULER_POLICY,
 } from '@ready4vibe/contracts';
-import { InMemoryEventStore } from '@ready4vibe/storage';
+import { InMemoryApprovalReviewEventStore, InMemoryEventStore } from '@ready4vibe/storage';
 import { Scheduler } from '@ready4vibe/scheduler';
 import type { ApprovalReviewer } from '@ready4vibe/agent';
 import type { ApprovalReviewBinding } from '@ready4vibe/agent';
@@ -112,12 +112,14 @@ describe('RunManager ApprovalReviewBroker application seam', () => {
     };
     const reviewer = new AllowReviewer();
     const eventStore = new InMemoryEventStore();
+    const reviewEventStore = new InMemoryApprovalReviewEventStore();
     const manager = new RunManager({
       eventStore,
       scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
       modelProvider: provider,
       toolRuntime: runtime,
       approvalReviewForRun: () => binding(reviewer),
+      approvalReviewEventStore: reviewEventStore,
     });
     const started = await manager.start(config);
     await vi.waitFor(() => expect(manager.completion(started.runId)).toBeDefined());
@@ -128,7 +130,12 @@ describe('RunManager ApprovalReviewBroker application seam', () => {
     const events = await eventStore.read(started.runId);
     expect(events.map((event) => event.type)).toContain('approval.required');
     expect(events.map((event) => event.type)).toContain('approval.decided');
+    await vi.waitFor(async () => expect((await reviewEventStore.read(started.runId)).map((event) => event.eventType)).toEqual(['review.requested', 'review.completed']));
+    const projectedEvents = await eventStore.read(started.runId);
+    expect(projectedEvents.map((event) => event.type)).toContain('review.requested');
+    expect(projectedEvents.map((event) => event.type)).toContain('review.completed');
     expect(manager.approvalBroker.pending(started.runId)).toEqual([]);
+    reviewEventStore.close();
   });
 
   it('keeps the old interactive path when the application binding factory fails', async () => {

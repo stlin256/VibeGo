@@ -119,6 +119,8 @@ describe('SameAsRunApprovalReviewer', () => {
     expect(encoded).toContain(input.approvalKeyFingerprint);
     expect(encoded).not.toContain(input.approvalKey);
     expect(encoded).not.toContain('user prompt');
+    expect(JSON.stringify(provider.lastRequest?.messages[0])).toContain('reasonCode must be exactly one of eligible');
+    expect(JSON.stringify(provider.lastRequest?.messages[0])).not.toContain('policy-allow');
   });
 
   it('keeps prompt-injection-shaped tool metadata below the fixed reviewer policy', async () => {

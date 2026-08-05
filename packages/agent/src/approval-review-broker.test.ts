@@ -114,6 +114,63 @@ describe('ApprovalReviewBroker', () => {
     expect(delegate.pending()).toHaveLength(0);
   });
 
+  it('emits one bounded requested/terminal projection and maps reviewer rejection to unavailable', async () => {
+    const delegate = new InMemoryApprovalBroker({ timeoutMs: 30_000 });
+    const events: Array<Record<string, unknown>> = [];
+    const reviewer: ApprovalReviewer = {
+      snapshot: snapshot('advisory-low-risk'),
+      review: async () => { throw new Error('provider body must not escape'); },
+    };
+    const broker = new ApprovalReviewBroker({
+      delegate,
+      bindingForRun: () => ({ reviewer, snapshot: reviewer.snapshot, context }),
+      eventSink: (event) => { events.push(event); },
+    });
+    const pending = broker.waitForDecision(approval());
+    await vi.waitFor(() => expect(events).toHaveLength(2));
+    expect(events.map((event) => event.eventType)).toEqual(['review.requested', 'review.unavailable']);
+    expect(events[0]).toMatchObject({ decision: null, reasonCode: 'eligible' });
+    expect(events[1]).toMatchObject({ decision: 'unavailable', reasonCode: 'provider-unavailable', latencyMs: expect.any(Number) });
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain('provider body');
+    expect(serialized).not.toMatch(/command|prompt|C:\\\\|\/Users\//iu);
+    expect(broker.decide('ap_approval_1', 'deny', 'run_approval_1')).toBe('accepted');
+    await expect(pending).resolves.toBe('deny');
+  });
+
+  it('does not let a durable event sink failure change the deterministic approval result', async () => {
+    const delegate = new InMemoryApprovalBroker({ timeoutMs: 30_000 });
+    const reviewer = new FakeReviewer(snapshot());
+    const broker = new ApprovalReviewBroker({
+      delegate,
+      bindingForRun: () => binding(reviewer),
+      eventSink: () => { throw new Error('storage unavailable'); },
+    });
+    const pending = broker.waitForDecision(approval());
+    await expect(pending).resolves.toBe('allow');
+    expect(delegate.pending()).toHaveLength(0);
+  });
+
+  it('emits a single revoked event when a run is disposed while review is in flight', async () => {
+    const delegate = new InMemoryApprovalBroker({ timeoutMs: 30_000 });
+    const events: Array<Record<string, unknown>> = [];
+    const reviewer: ApprovalReviewer = {
+      snapshot: snapshot(),
+      review: async (_request, signal) => await new Promise<ApprovalReviewDecisionRecord>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }),
+    };
+    const broker = new ApprovalReviewBroker({ delegate, bindingForRun: () => ({ reviewer, snapshot: reviewer.snapshot, context }), eventSink: (event) => { events.push(event); } });
+    const pending = broker.waitForDecision(approval({ approvalId: 'ap_revoked' }));
+    await vi.waitFor(() => expect(events).toHaveLength(1));
+    broker.disposeRun('run_approval_1');
+    await vi.waitFor(() => expect(events).toHaveLength(2));
+    expect(events[1]).toMatchObject({ eventType: 'review.revoked', decision: 'unavailable', reasonCode: 'review-revoked' });
+    expect(events.filter((event) => event.eventType === 'review.revoked')).toHaveLength(1);
+    expect(broker.decide('ap_revoked', 'deny', 'run_approval_1')).toBe('accepted');
+    await expect(pending).resolves.toBe('deny');
+  });
+
   it('keeps advisory allow and reviewer denial on the user approval path', async () => {
     const delegate = new InMemoryApprovalBroker({ timeoutMs: 30_000 });
     const advisory = new FakeReviewer(snapshot('advisory-low-risk'));

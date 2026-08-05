@@ -998,7 +998,7 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
-## Spec 63：LLM 辅助审批与审查（63-5 checkpoint）
+## Spec 63：LLM 辅助审批与审查（63-7 checkpoint）
 
 详见 [Spec 63](specs/63-llm-assisted-approval-and-review.md) 与
 [ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)。该规格为现有
@@ -1021,7 +1021,7 @@ idempotency ledger 与无 provider 的 `NoopApprovalReviewer`。迁移默认仍�
 subprocess 或 prompt。证据见
 [`spec63-1-contracts-noop-2026-08-05.md`](reports/spec63-1-contracts-noop-2026-08-05.md)。
 本阶段不改变 AgentLoop、RunManager 默认启动路径、ApprovalBroker 或事件事实源；
-same-as-run、dedicated settings、Broker 集成和 Web 仍待后续阶段。
+same-as-run、dedicated settings、Broker 集成和 Web 随后在 63-2 至 63-5 分阶段落地。
 
 63-2 same-as-run adapter 已实现：它只消费冻结的 model/reviewer snapshot，
 对 trusted low-risk、restricted network、ready read/workspace-write sandbox
@@ -1031,7 +1031,7 @@ untrusted 和 sandbox 不可用请求在 provider 之前 fail-closed。请求/�
 exact-key fingerprint mismatch 均有稳定 `unavailable` 映射，不重试、不授予
 能力。模型输出不包含运行时 revision/latency/expiry，adapter 负责补齐这些字段。
 证据见 [`spec63-2-same-as-run-reviewer-2026-08-05.md`](reports/spec63-2-same-as-run-reviewer-2026-08-05.md)；
-ApprovalBroker、Web、dedicated settings、durable events 和 live smoke 仍待后续阶段。
+随后由 63-3 至 63-7 补齐 settings、Broker、Web、durable events，live smoke 仍单独门禁。
 
 63-3 reviewer settings 已实现：daemon 通过现有认证和 `daemon_settings` 持久化
 只保存 enabled/source/posture、可选 dedicated profile id、bounded limits 和
@@ -1040,7 +1040,7 @@ revision；默认关闭，启用时自动采用 `advisory-low-risk`，禁用强�
 policy revision、dedicated 缺 profile、secret/path/URL/unknown 字段均 fail-closed。
 当前 probe 只做本地配置校验，不调用 provider、HTTP 或 subprocess。证据见
 [`spec63-3-reviewer-settings-2026-08-05.md`](reports/spec63-3-reviewer-settings-2026-08-05.md)；
-dedicated provider、run snapshot、Broker、Web、durable events 和 live smoke 仍待后续。
+dedicated provider 与 live smoke 仍单独门禁，run snapshot、Broker、Web 和 durable events 已在后续切片落地。
 
 ## Spec 58-5 audit checkpoint (2026-08-05)
 
@@ -1333,3 +1333,22 @@ revision changes, terminal/restart disposal, provider failure,
 timeout/cancellation and no-sandbox fail-closed behavior. It does not change
 AgentLoop, RunManager default start, Scheduler, Approval, Sandbox,
 WorkspaceRegistry or event authority.
+
+### Spec 63-7 durable reviewer event projection checkpoint (2026-08-05)
+
+The independent `approval_review_events` ledger now assigns append sequences,
+enforces event-id/idempotency no-op or conflict semantics under SQLite
+`BEGIN IMMEDIATE`, and survives daemon restart without modifying `run_events`.
+The Broker emits bounded requested/terminal/revoked drafts; a secret-free
+projection is also appended to the existing run timeline for Web explanation,
+and an authenticated cursor endpoint serves the durable projection. Sink,
+provider and storage failures remain fail-closed/degraded and preserve the
+normal ApprovalBroker path. Evidence is recorded in
+[`spec63-7-review-events-2026-08-05.md`](reports/spec63-7-review-events-2026-08-05.md).
+An explicitly authorized, single-request same-as-run DeepSeek smoke is now
+healthy (`allow`/`eligible`) with bounded latency and aggregate usage. The
+first response's unsupported `policy-allow` reason code was diagnosed without
+recording model text; the reviewer system contract now enumerates allowed
+codes and remains fail-closed for unknown values. Redacted evidence is in
+[`spec63-7-live-review-smoke-2026-08-05.md`](reports/spec63-7-live-review-smoke-2026-08-05.md).
+Dedicated-provider live evidence and full release verification remain staged.

@@ -1347,3 +1347,17 @@ scope/revision changes, terminal/restart disposal, provider failure,
 timeout/cancellation and no-sandbox fail-closed behavior. Evidence is recorded
 in `reports/spec63-6-security-failure-concurrency-2026-08-05.md`; no runtime
 authority or default interactive behavior changed by this checkpoint.
+
+### Spec 63-7 durable reviewer event projection checkpoint (2026-08-05)
+
+`ApprovalReviewEventDraftSchema`, the independent in-memory/SQLite
+`approval_review_events` ledger, Broker requested/terminal/revoked emissions,
+and the bounded authenticated review-event read route are implemented. SQLite
+uses `BEGIN IMMEDIATE`, assigns append sequences, and treats repeated event
+ids/idempotency keys as no-op only when content matches. Sink/storage failures
+remain degraded and do not alter deterministic approval. Evidence is recorded
+in `reports/spec63-7-review-events-2026-08-05.md`. An explicitly authorized
+same-as-run DeepSeek smoke is also healthy after an explicit reason-code
+contract correction; the redacted evidence is in
+`reports/spec63-7-live-review-smoke-2026-08-05.md`. Dedicated-provider live
+evidence and full release verification remain staged.

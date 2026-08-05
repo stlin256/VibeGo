@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ApprovalReviewDecisionRecordSchema,
   ApprovalReviewEventSchema,
+  ApprovalReviewEventDraftSchema,
   ApprovalReviewModelOutputSchema,
   ApprovalReviewRequestSchema,
   ApprovalReviewSettingsPatchSchema,
@@ -169,5 +170,8 @@ describe('llm-approval/v1 contracts', () => {
     expect(ApprovalReviewEventSchema.parse(base).eventType).toBe('review.requested');
     expect(() => ApprovalReviewEventSchema.parse({ ...base, decision: 'allow' })).toThrow();
     expect(() => ApprovalReviewEventSchema.parse({ ...base, idempotencyKey: 'https://example.test' })).toThrow(/URL/iu);
+    const { appendSequence: _appendSequence, ...draft } = base;
+    expect(ApprovalReviewEventDraftSchema.parse(draft)).toMatchObject({ eventId: 'event-1' });
+    expect(() => ApprovalReviewEventDraftSchema.parse(base)).toThrow();
   });
 });

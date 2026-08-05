@@ -5,7 +5,7 @@ import { AuthGate } from '@ready4vibe/auth';
 import { buildCertificateReadiness, inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { SqliteEventStore, SqliteGoalControlV1EventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
+import { SqliteApprovalReviewEventStore, SqliteEventStore, SqliteGoalControlV1EventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
@@ -55,6 +55,7 @@ const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
 const goalControlV1EventStore = new SqliteGoalControlV1EventStore(join(dataDir, 'events.sqlite'));
 const observabilityLedger = new SqliteObservabilityLedger(join(dataDir, 'events.sqlite'));
+const approvalReviewEventStore = new SqliteApprovalReviewEventStore(join(dataDir, 'events.sqlite'));
 const observabilityUsageObserver = new RunUsageObserver({
   adapter: new ProviderUsageLifecycleAdapter({ writer: observabilityLedger }),
 });
@@ -65,6 +66,7 @@ try {
   settingsStore = new SqliteSettingsStore(join(dataDir, 'events.sqlite'));
 } catch (error) {
   await observabilityLedger.close();
+  approvalReviewEventStore.close();
   goalEventStore.close();
   goalControlV1EventStore.close();
   eventStore.close();
@@ -78,6 +80,7 @@ try {
   });
 } catch (error) {
   await observabilityLedger.close();
+  approvalReviewEventStore.close();
   settingsStore.close();
   goalEventStore.close();
   goalControlV1EventStore.close();
@@ -107,6 +110,7 @@ try {
 } catch (error) {
   if (agentMemorySettings) await agentMemorySettings.close().catch(() => undefined);
   await observabilityLedger.close();
+  approvalReviewEventStore.close();
   settingsStore.close();
   goalEventStore.close();
   goalControlV1EventStore.close();
@@ -169,6 +173,7 @@ const runManager = new RunManager({
   },
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   approvalReviewForRun: (input) => createApprovalReviewBinding(approvalReviewSettings, input),
+  approvalReviewEventStore,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   observabilityUsageObserver,
@@ -224,6 +229,7 @@ try {
   await agentMemorySettings.close();
   await agentMemoryKnowledgeSettings.close();
   await observabilityLedger.close();
+  approvalReviewEventStore.close();
   settingsStore.close();
   goalEventStore.close();
   eventStore.close();
@@ -251,6 +257,7 @@ const server = createDaemonServer({
   capabilityProfileSettings,
   permissionProfileSettings,
   approvalReviewSettings,
+  approvalReviewEventStore,
   webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,
@@ -272,6 +279,7 @@ const shutdown = (): void => {
       await agentMemorySettings.close();
       await agentMemoryKnowledgeSettings.close();
       await observabilityLedger.close();
+      approvalReviewEventStore.close();
       settingsStore.close();
       goalEventStore.close();
       goalControlV1EventStore.close();

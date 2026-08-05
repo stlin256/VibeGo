@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import { parseRunConfig, type StoredEvent } from '@ready4vibe/contracts';
+import { parseRunConfig, type ApprovalReviewEventStore, type StoredEvent } from '@ready4vibe/contracts';
 import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type DeploymentReadiness, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateReadiness, CertificateStatus } from '@ready4vibe/certificates';
@@ -64,6 +64,7 @@ export interface DaemonServerOptions {
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
   approvalReviewSettings?: ApprovalReviewSettingsManager;
+  approvalReviewEventStore?: ApprovalReviewEventStore;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   /** Absolute path to a built React/Vite dist directory; omitted in dev. */
@@ -99,6 +100,7 @@ interface ResolvedDaemonServerOptions {
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
   approvalReviewSettings?: ApprovalReviewSettingsManager;
+  approvalReviewEventStore?: ApprovalReviewEventStore;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
   webDistDir?: string;
@@ -165,6 +167,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.capabilityProfileSettings ? { capabilityProfileSettings: options.capabilityProfileSettings } : {}),
     ...(options.permissionProfileSettings ? { permissionProfileSettings: options.permissionProfileSettings } : {}),
     ...(options.approvalReviewSettings ? { approvalReviewSettings: options.approvalReviewSettings } : {}),
+    ...(options.approvalReviewEventStore ? { approvalReviewEventStore: options.approvalReviewEventStore } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
     ...(options.webDistDir ? { webDistDir: options.webDistDir } : {}),
@@ -1284,6 +1287,29 @@ async function handleRequest(
     return;
   }
 
+  const reviewEventsMatch = /^\/api\/v1\/runs\/([^/]+)\/review-events$/u.exec(pathname);
+  if (reviewEventsMatch) {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.approvalReviewEventStore) {
+      writeJson(response, 503, { error: { code: 'APPROVAL_REVIEW_EVENTS_UNAVAILABLE', message: 'Approval review events are unavailable.' } });
+      return;
+    }
+    const runId = decodeRunId(reviewEventsMatch[1]!);
+    const after = parseCursor(url.searchParams.get('after'));
+    const limit = parseReviewEventLimit(url.searchParams.get('limit'));
+    try {
+      const events = await options.approvalReviewEventStore.read(runId, after, limit);
+      const nextAfter = events.length === limit ? events.at(-1)?.appendSequence ?? after : null;
+      writeJson(response, 200, { schemaVersion: 'llm-approval/v1', runId, afterSequence: after, nextAfter, hasMore: events.length === limit, events });
+    } catch {
+      writeJson(response, 503, { error: { code: 'APPROVAL_REVIEW_EVENTS_READ_FAILED', message: 'Approval review events are unavailable.' } });
+    }
+    return;
+  }
+
   const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel|retry|governed-retry))?$/.exec(pathname);
   if (!runMatch) {
     writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
@@ -1594,6 +1620,15 @@ function parseCursor(value: string | string[] | null): number {
   if (raw === undefined || raw.trim() === '') return 0;
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new RequestError(400, 'INVALID_CURSOR', 'Invalid event cursor.');
+  return parsed;
+}
+
+function parseReviewEventLimit(value: string | null): number {
+  if (value === null || value.trim() === '') return 100;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 1_000) {
+    throw new RequestError(400, 'INVALID_REVIEW_EVENT_LIMIT', 'Review event limit must be between 1 and 1000.');
+  }
   return parsed;
 }
 

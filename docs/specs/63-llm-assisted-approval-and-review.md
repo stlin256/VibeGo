@@ -1,7 +1,8 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: 63-6 implemented (security, failure and concurrency evidence;
-  durable reviewer events and live smoke remain staged)
+- Status: 63-7 event projection and explicitly authorized same-as-run live
+  smoke implemented; dedicated provider integration and full release evidence
+  remain staged
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -343,10 +344,24 @@ Evidence is recorded in
 
 ### 63-7: explicitly authorized live reviewer smoke
 
-Run a bounded, cost-limited smoke with either the current provider or a
-dedicated reviewer. Reports may contain only provider/model identifiers,
-decision/reason codes, latency and aggregate usage. Live evidence is separate
-from unit fixtures and is not part of default `pnpm verify`.
+The independent `approval_review_events` projection and bounded run timeline
+projection are implemented. `ApprovalReviewBroker` emits only normalized
+requested/terminal/revoked drafts; SQLite assigns `appendSequence` and
+enforces event-id/idempotency no-op or conflict semantics without touching
+`run_events`. The authenticated
+`GET /api/v1/runs/:runId/review-events` route is cursor- and limit-bounded.
+Sink/storage failure is degraded and cannot replace deterministic approval.
+Evidence is recorded in
+[`spec63-7-review-events-2026-08-05.md`](../reports/spec63-7-review-events-2026-08-05.md).
+
+An explicitly authorized, bounded, cost-limited same-as-run live smoke is
+complete. The redacted result and the schema-mismatch diagnosis that preceded
+the prompt correction are recorded in
+[`spec63-7-live-review-smoke-2026-08-05.md`](../reports/spec63-7-live-review-smoke-2026-08-05.md).
+Reports contain only provider/model identifiers, decision/reason codes,
+latency, aggregate usage and bounded response-shape diagnostics. Live evidence
+is separate from unit fixtures and is not part of default `pnpm verify`.
+Dedicated-provider live evidence and full release verification remain staged.
 
 ## 11. Acceptance matrix
 

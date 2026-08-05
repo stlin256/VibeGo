@@ -1,6 +1,10 @@
 import {
+  ApprovalReviewDecisionRecordSchema,
+  ApprovalReviewEventDraftSchema,
   ApprovalReviewRequestSchema,
   type ApprovalGoalSummary,
+  type ApprovalReviewDecisionRecord,
+  type ApprovalReviewEventDraft,
   type ApprovalPermissionSummary,
   type ApprovalReviewRequest,
   type ApprovalReviewerSnapshot,
@@ -125,6 +129,8 @@ export interface ApprovalReviewBrokerOptions {
   readonly delegate: ApprovalBroker;
   readonly bindingForRun: (runId: string) => ApprovalReviewBinding | undefined;
   readonly now?: () => number;
+  /** Optional bounded audit projection; sink failures never affect a run. */
+  readonly eventSink?: (event: ApprovalReviewEventDraft) => void | Promise<void>;
 }
 
 interface ReviewCacheEntry {
@@ -135,9 +141,13 @@ interface ReviewCacheEntry {
 
 interface ReviewInFlightEntry {
   readonly runId: string;
+  readonly cacheKey: string;
+  readonly request: ApprovalReviewRequest;
+  readonly snapshot: ApprovalReviewerSnapshot;
   readonly promise: Promise<Awaited<ReturnType<ApprovalReviewer['review']>>>;
   readonly controller: AbortController;
   waiters: number;
+  revoked: boolean;
 }
 
 interface ReviewHandle {
@@ -156,6 +166,7 @@ export class ApprovalReviewBroker implements ApprovalBroker {
   private readonly delegate: ApprovalBroker;
   private readonly bindingForRun: (runId: string) => ApprovalReviewBinding | undefined;
   private readonly now: () => number;
+  private readonly eventSink: ((event: ApprovalReviewEventDraft) => void | Promise<void>) | undefined;
   private readonly cache = new Map<string, ReviewCacheEntry>();
   private readonly inFlight = new Map<string, ReviewInFlightEntry>();
 
@@ -163,6 +174,7 @@ export class ApprovalReviewBroker implements ApprovalBroker {
     this.delegate = options.delegate;
     this.bindingForRun = options.bindingForRun;
     this.now = options.now ?? Date.now;
+    this.eventSink = options.eventSink;
     this.timeoutMs = options.delegate.timeoutMs;
   }
 
@@ -222,9 +234,33 @@ export class ApprovalReviewBroker implements ApprovalBroker {
     for (const [key, entry] of this.cache) if (entry.runId === runId) this.cache.delete(key);
     for (const [key, entry] of this.inFlight) {
       if (entry.runId !== runId) continue;
+      if (!entry.revoked) {
+        entry.revoked = true;
+        this.emitTerminalEvent(entry.cacheKey, entry.request, unavailableDecision(entry.request, entry.snapshot, this.now(), 'review-revoked'), 'review.revoked');
+      }
       entry.controller.abort();
       this.inFlight.delete(key);
     }
+  }
+
+  private emitRequestedEvent(cacheKey: string, request: ApprovalReviewRequest): void {
+    const sink = this.eventSink;
+    if (!sink) return;
+    const event = reviewEvent(cacheKey, request, null, this.now(), 'review.requested');
+    void Promise.resolve().then(() => sink(event)).catch(() => undefined);
+  }
+
+  private emitTerminalEvent(
+    cacheKey: string,
+    request: ApprovalReviewRequest,
+    decision: ApprovalReviewDecisionRecord,
+    eventType?: 'review.completed' | 'review.unavailable' | 'review.revoked',
+  ): void {
+    const sink = this.eventSink;
+    if (!sink) return;
+    const resolvedType = eventType ?? (decision.decision === 'unavailable' ? 'review.unavailable' : 'review.completed');
+    const event = reviewEvent(cacheKey, request, decision, this.now(), resolvedType);
+    void Promise.resolve().then(() => sink(event)).catch(() => undefined);
   }
 
   private reviewOnce(
@@ -259,8 +295,11 @@ export class ApprovalReviewBroker implements ApprovalBroker {
     // identical request in the same run does not cancel another caller's
     // shared review. The delegate still observes the caller's signal.
     const controller = new AbortController();
+    this.emitRequestedEvent(cacheKey, request);
     const promise = binding.reviewer.review(request, controller.signal)
+      .catch(() => unavailableDecision(request, binding.snapshot, this.now(), 'provider-unavailable'))
       .then((decision) => {
+        if (!entry.revoked) this.emitTerminalEvent(cacheKey, request, decision);
         const ttl = binding.snapshot.limits.cacheTtlMs;
         const deadline = Date.parse(request.deadlineAt);
         const expiresAt = Math.min(
@@ -275,7 +314,7 @@ export class ApprovalReviewBroker implements ApprovalBroker {
         const current = this.inFlight.get(cacheKey);
         if (current?.promise === promise) this.inFlight.delete(cacheKey);
       });
-    const entry: ReviewInFlightEntry = { runId, promise, controller, waiters: 1 };
+    const entry: ReviewInFlightEntry = { runId, cacheKey, request, snapshot: binding.snapshot, promise, controller, waiters: 1, revoked: false };
     this.inFlight.set(cacheKey, entry);
     let released = false;
     return {
@@ -288,6 +327,56 @@ export class ApprovalReviewBroker implements ApprovalBroker {
       },
     };
   }
+}
+
+function unavailableDecision(
+  request: ApprovalReviewRequest,
+  snapshot: ApprovalReviewerSnapshot,
+  now: number,
+  reasonCode: 'provider-unavailable' | 'review-revoked',
+): ApprovalReviewDecisionRecord {
+  return ApprovalReviewDecisionRecordSchema.parse({
+    schemaVersion: 'llm-approval/v1',
+    reviewId: request.reviewId,
+    decision: 'unavailable',
+    reasonCode,
+    explanation: reasonCode === 'review-revoked' ? 'The reviewer was revoked with the run.' : 'The reviewer provider failed before returning a decision.',
+    reviewerRevision: snapshot.reviewerRevision,
+    policyRevision: request.policyRevision,
+    latencyMs: 0,
+    expiresAt: null,
+    approvalKeyFingerprint: request.approvalKeyFingerprint,
+    reviewedAt: new Date(now).toISOString(),
+  });
+}
+
+function reviewEvent(
+  cacheKey: string,
+  request: ApprovalReviewRequest,
+  decision: ApprovalReviewDecisionRecord | null,
+  now: number,
+  eventType: ApprovalReviewEventDraft['eventType'],
+): ApprovalReviewEventDraft {
+  const reasonCode = decision?.reasonCode ?? 'eligible';
+  const eventId = `reviewevt_${fingerprintApprovalReview({ cacheKey, eventType, reviewId: request.reviewId, approvalKeyFingerprint: request.approvalKeyFingerprint, decision: decision?.decision ?? null, reasonCode }).slice(0, 48)}`;
+  return ApprovalReviewEventDraftSchema.parse({
+    schemaVersion: 'llm-approval/v1',
+    eventId,
+    idempotencyKey: `review:${cacheKey}:${eventType}`,
+    eventType,
+    reviewId: request.reviewId,
+    runId: request.runId,
+    turnId: request.turnId,
+    correlationId: request.correlationId,
+    approvalKeyFingerprint: request.approvalKeyFingerprint,
+    reviewerRevision: request.reviewerRevision,
+    policyRevision: request.policyRevision,
+    decision: decision?.decision ?? null,
+    reasonCode,
+    latencyMs: decision?.latencyMs ?? null,
+    expiresAt: decision?.expiresAt ?? null,
+    at: new Date(now).toISOString(),
+  });
 }
 
 function shouldAutoResolve(

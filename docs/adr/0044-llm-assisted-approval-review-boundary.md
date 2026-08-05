@@ -1,6 +1,7 @@
 # ADR 0044: LLM-assisted approval review boundary
 
-- Status: Accepted for staged implementation (63-6 security/failure/concurrency evidence complete; durable events/live smoke pending)
+- Status: Accepted for staged implementation (63-7 durable event projection and
+  same-as-run live smoke complete; dedicated provider/release evidence staged)
 - Date: 2026-08-05
 - Related: [Spec 63](../specs/63-llm-assisted-approval-and-review.md),
   [ADR 0003](0003-lan-access-and-codex-like-approval.md),
@@ -130,3 +131,20 @@ terminal/restart disposal and fail-closed timeout/cancellation/provider-error
 behavior. No new scheduler, grant store, event table or AgentLoop state
 transition was introduced by this checkpoint. Evidence is recorded in
 `docs/reports/spec63-6-security-failure-concurrency-2026-08-05.md`.
+
+## 63-7 durable reviewer-event projection checkpoint
+
+Reviewer drafts now flow through an independent `approval_review_events`
+ledger. SQLite owns its global append sequence, event-id/idempotency conflict
+checks and atomic batches under `BEGIN IMMEDIATE`; the existing `run_events`
+table remains untouched as an execution stream. The application emits a
+secret-free run projection for the conversation timeline and exposes a
+bounded authenticated read route, while storage/sink failure remains
+best-effort and cannot alter ApprovalBroker decisions. Disposal records a
+bounded `review.revoked` event and prevents stale in-flight completion from
+being replayed. An explicitly authorized same-as-run smoke is also complete;
+its redacted result and the strict reason-code prompt fix are recorded in
+`docs/reports/spec63-7-live-review-smoke-2026-08-05.md`. Dedicated provider
+live evidence remains opt-in and staged. Neither smoke nor storage fixtures
+changes the existing authority chain. Evidence is recorded in
+`docs/reports/spec63-7-review-events-2026-08-05.md`.

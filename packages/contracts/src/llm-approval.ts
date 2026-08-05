@@ -289,11 +289,10 @@ export type LlmApprovalSettingsProjection = z.infer<typeof LlmApprovalSettingsPr
 export const ApprovalReviewEventTypeSchema = z.enum(['review.requested', 'review.completed', 'review.unavailable', 'review.revoked']);
 export type ApprovalReviewEventType = z.infer<typeof ApprovalReviewEventTypeSchema>;
 
-export const ApprovalReviewEventSchema = z.object({
+const ApprovalReviewEventFieldsSchema = z.object({
   schemaVersion: z.literal(LLM_APPROVAL_SCHEMA_VERSION),
   eventId: IdSchema,
   idempotencyKey: IdSchema,
-  appendSequence: z.number().int().positive().max(10_000_000),
   eventType: ApprovalReviewEventTypeSchema,
   reviewId: IdSchema,
   runId: IdSchema,
@@ -307,7 +306,13 @@ export const ApprovalReviewEventSchema = z.object({
   latencyMs: z.number().int().nonnegative().max(120_000).nullable(),
   expiresAt: TimestampSchema.nullable(),
   at: TimestampSchema,
-}).strict().superRefine((value, context) => {
+}).strict();
+
+function validateApprovalReviewEvent(value: {
+  readonly eventType: ApprovalReviewEventType;
+  readonly decision: ApprovalReviewDecision | null;
+  readonly expiresAt: string | null;
+}, context: z.RefinementCtx): void {
   if (value.eventType === 'review.requested' && value.decision !== null) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['decision'], message: 'requested events cannot contain a decision' });
   }
@@ -318,8 +323,27 @@ export const ApprovalReviewEventSchema = z.object({
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['expiresAt'], message: 'allow events require an expiry' });
   }
   addPrivacyIssues(value, context);
-});
+}
+
+export const ApprovalReviewEventDraftSchema = ApprovalReviewEventFieldsSchema.superRefine(validateApprovalReviewEvent);
+export const ApprovalReviewEventSchema = ApprovalReviewEventFieldsSchema.extend({
+  appendSequence: z.number().int().positive().max(10_000_000),
+}).superRefine(validateApprovalReviewEvent);
 export type ApprovalReviewEvent = z.infer<typeof ApprovalReviewEventSchema>;
+
+/**
+ * Application/storage input for a reviewer event. `appendSequence` is owned
+ * by the independent reviewer-event ledger and is never supplied by callers.
+ */
+export type ApprovalReviewEventDraft = z.infer<typeof ApprovalReviewEventDraftSchema>;
+
+/** Durable reviewer-event port; implementations must not touch `run_events`. */
+export interface ApprovalReviewEventStore {
+  append(input: ApprovalReviewEventDraft): Promise<ApprovalReviewEvent>;
+  appendBatch(inputs: readonly ApprovalReviewEventDraft[]): Promise<readonly ApprovalReviewEvent[]>;
+  read(runId: string, afterSequence?: number, limit?: number): Promise<readonly ApprovalReviewEvent[]>;
+  close(): void;
+}
 
 export function findLlmApprovalPrivacyViolations(value: unknown, path: readonly string[] = []): string[] {
   const violations: string[] = [];

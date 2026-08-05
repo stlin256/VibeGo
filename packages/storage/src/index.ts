@@ -238,3 +238,4 @@ export * from './restore-preflight.js';
 export * from './restore-staging.js';
 export * from './restore-apply.js';
 export * from './settings.js';
+export * from './approval-review.js';

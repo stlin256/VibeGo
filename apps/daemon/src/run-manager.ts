@@ -19,6 +19,8 @@ import {
   type CapabilityProfileRunSnapshot,
   type DeepSeekRunSnapshot,
   type ApprovalReviewerSnapshot,
+  type ApprovalReviewEventDraft,
+  type ApprovalReviewEventStore,
   type PermissionProfileRunSnapshot,
   type EventStore,
   type ModelProvider,
@@ -80,6 +82,8 @@ export interface RunManagerOptions {
   /** Optional application-owned reviewer binding factory. It is called once
    * per run after model/permission snapshots are frozen. */
   approvalReviewForRun?: ApprovalReviewBindingFactory;
+  /** Independent durable reviewer-event projection; never replaces run_events. */
+  approvalReviewEventStore?: ApprovalReviewEventStore;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
   workspaceExists?: (workspaceId: string) => boolean;
@@ -120,6 +124,7 @@ export class RunManager {
   private readonly agentMemoryKnowledgeSettings: AgentMemoryKnowledgeSettingsManager | undefined;
   private readonly observabilityUsageObserver: RunUsageObserver | undefined;
   private readonly approvalReviewForRun: ApprovalReviewBindingFactory | undefined;
+  private readonly approvalReviewEventStore: ApprovalReviewEventStore | undefined;
   private readonly approvalReviewBindings = new Map<string, ApprovalReviewBinding>();
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
@@ -131,6 +136,7 @@ export class RunManager {
     this.capabilityProfileForRun = options.capabilityProfileForRun;
     this.permissionProfileForRun = options.permissionProfileForRun;
     this.approvalReviewForRun = options.approvalReviewForRun;
+    this.approvalReviewEventStore = options.approvalReviewEventStore;
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
@@ -145,7 +151,11 @@ export class RunManager {
     });
     const delegateApprovalBroker = options.approvalBroker ?? new InMemoryApprovalBroker();
     this.approvalBroker = this.approvalReviewForRun
-      ? new ApprovalReviewBroker({ delegate: delegateApprovalBroker, bindingForRun: (runId) => this.approvalReviewBindings.get(runId) })
+      ? new ApprovalReviewBroker({
+        delegate: delegateApprovalBroker,
+        bindingForRun: (runId) => this.approvalReviewBindings.get(runId),
+        eventSink: (event) => this.recordApprovalReviewEvent(event),
+      })
       : delegateApprovalBroker;
     this.agentLoop = new AgentLoop({
       eventStore: this.eventStore,
@@ -420,8 +430,45 @@ export class RunManager {
     return this.eventStore.read(runId, afterSeq);
   }
 
+  readApprovalReviewEvents(runId: string, afterSequence = 0, limit = 100) {
+    return this.approvalReviewEventStore?.read(runId, afterSequence, limit) ?? Promise.resolve([]);
+  }
+
   completion(runId: string): AgentRunResult | undefined {
     return this.completions.get(runId);
+  }
+
+  private async recordApprovalReviewEvent(event: ApprovalReviewEventDraft): Promise<void> {
+    // Durable reviewer projection is best effort and never changes the run's
+    // approval result. The run event projection keeps the current Web timeline
+    // useful while the independent store remains the audit source.
+    try {
+      await this.approvalReviewEventStore?.append(event);
+    } catch {
+      // Reviewer/audit persistence is degraded; deterministic approval wins.
+    }
+    try {
+      await this.eventStore.append({
+        runId: event.runId,
+        type: event.eventType,
+        source: 'policy',
+        correlationId: event.correlationId,
+        payload: {
+          eventId: event.eventId,
+          idempotencyKey: event.idempotencyKey,
+          reviewId: event.reviewId,
+          approvalKeyFingerprint: event.approvalKeyFingerprint,
+          reviewerRevision: event.reviewerRevision,
+          policyRevision: event.policyRevision,
+          decision: event.decision,
+          reasonCode: event.reasonCode,
+          latencyMs: event.latencyMs,
+          expiresAt: event.expiresAt,
+        },
+      });
+    } catch {
+      // Event projection failures must not replace the original approval path.
+    }
   }
 
   private async recallMemory(

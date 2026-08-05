@@ -190,7 +190,7 @@ export class SameAsRunApprovalReviewer implements ApprovalReviewer {
       policyRevision: request.policyRevision,
       reviewerRevision: request.reviewerRevision,
     };
-    const systemContent = 'Return one strict JSON object matching llm-approval/v1. Review only the bounded safety metadata. Never widen deterministic policy; never request or infer secrets, paths, commands, transcripts or tool output.';
+    const systemContent = 'Return exactly one strict JSON object matching llm-approval/v1 with only these keys: schemaVersion, reviewId, decision, reasonCode, explanation, approvalKeyFingerprint. decision must be allow, ask-user, deny, or unavailable. reasonCode must be exactly one of eligible, reviewer-disabled, ineligible-risk, ineligible-trust, ineligible-sandbox, policy-denied, policy-ask, provider-unavailable, dedicated-profile-missing, timeout, cancelled, request-too-large, response-too-large, malformed-response, schema-mismatch, fingerprint-mismatch, revision-stale, budget-exhausted, review-revoked, invalid-request; use eligible for an eligible allow or ask-user result, policy-denied for deny, and provider-unavailable for unavailable. Copy reviewId and approvalKeyFingerprint exactly from the bounded metadata. Never widen deterministic policy; never request or infer secrets, paths, commands, transcripts or tool output.';
     return {
       model: this.modelSnapshot.model,
       messages: [
