@@ -438,6 +438,25 @@ health, timeout/5xx and cost evidence remain an explicit opt-in live gate. The
 dedicated profile API is authenticated and returns only bounded status
 projections.
 
+### 63-10: dedicated reviewer live smoke boundary
+
+The next explicit gate adds `pnpm smoke:dedicated-reviewer`. It constructs a
+fresh in-memory `DedicatedReviewerProfilesManager`, accepts the credential only
+through a process environment reference, resolves the exact profile id, and
+invokes `DedicatedApprovalReviewer` with the returned provider and immutable
+snapshot. The runner must use the existing bounded approval request contract,
+one request, a fixed timeout and no tools, shell, filesystem, MCP/Skill,
+daemon listener or event store. It must distinguish `blocked` (missing
+authorization/credential), `failed` (provider/contract/timeout) and `healthy`
+review outcomes.
+
+The report may contain only provider/model/profile labels, bounded decision and
+reason code, latency and aggregate usage. It must not contain the API key,
+secret environment name, endpoint, prompt, raw model response, headers,
+approval arguments, paths or full snapshots. Fixture tests remain offline and
+the live command is explicit opt-in; a successful dedicated request is adapter
+evidence, not a claim of release capacity or public deployment readiness.
+
 ## 12. Definition of Done
 
 Spec 63 may be marked `Implemented` only when all of the following are true:

@@ -1453,6 +1453,16 @@ recorded in `reports/spec63-9-dedicated-profile-resolver-2026-08-06.md`.
 This closes the local resolver boundary only; no dedicated live provider smoke
 or upstream health claim is made.
 
+### Spec 63-10 dedicated reviewer live smoke design checkpoint (2026-08-06)
+
+The next implementation is the isolated `smoke:dedicated-reviewer` adapter
+gate described in the Spec 63-10 boundary. It will resolve one explicit
+daemon-owned profile with a process-only secret and call
+`DedicatedApprovalReviewer` without creating a run, event, tool or listener.
+Reports will be bounded and redacted; fixture and live evidence remain
+separate. No runtime authority or default interactive behavior changes in this
+checkpoint.
+
 ### Spec 58-6 task-specific Goal verifier registry implementation checkpoint (2026-08-06)
 
 The implementation slice is now specified under [ADR 0050](adr/0050-task-specific-goal-verifier-registry.md).

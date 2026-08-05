@@ -1437,6 +1437,19 @@ no secret, raw provider data or absolute path. Focused evidence is recorded in
 This closes local profile resolution only; dedicated live smoke, upstream
 health and release evidence remain staged.
 
+### Spec 63-10 dedicated reviewer live smoke design freeze (2026-08-06)
+
+The next bounded gate is an explicit `smoke:dedicated-reviewer` runner. It will
+exercise an in-memory daemon-owned profile manager, a process-only secret
+reference, exact profile resolution and the existing
+`DedicatedApprovalReviewer` for one bounded request. Offline fixtures will
+cover missing authorization/credential, resolver/profile mismatch, provider
+failure, timeout, malformed response and secret/path-free reports. The runner
+will not start a daemon listener, create runs/events, execute tools or change
+ApprovalBroker/AgentLoop authorities; live execution remains opt-in and
+reports only bounded provider/model/profile, decision, reason, latency and
+usage metadata.
+
 ### Spec 58-6 task-specific Goal verifier registry design freeze (2026-08-06)
 
 The next Spec 58-6 implementation slice adds a strict daemon-owned
