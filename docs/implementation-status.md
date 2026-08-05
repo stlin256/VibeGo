@@ -369,10 +369,11 @@ The following work is documented but not fully implemented yet:
   profile/run snapshot isolation and Host-first acceptance. Its release gate
   additionally covers Goal governed admission, real Tailscale/SSH transport,
   ACME staging/renewal, a core Harness completeness matrix and a mandatory
-  out-of-band real LLM smoke. This is planning only; no profile resolver, new
-  default capability or run-path behavior has been implemented by this
-  documentation change. Native clients remain post-release and do not block
-  the Web/Host release.
+  out-of-band real LLM smoke. The mandatory R0 prerequisite gate passed on
+  2026-08-05; only the versioned contract and pure resolver are authorized
+  next. No profile resolver, new default capability or run-path behavior has
+  been implemented by this documentation change. Native clients remain
+  post-release and do not block the Web/Host release.
 
 These six specs are design/planning gates only. They do not change the
 current statement that untrusted network/model/MCP/Skill/shell side effects
