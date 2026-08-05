@@ -231,6 +231,108 @@ describe('ApiClient', () => {
     expect(calls.map((call) => JSON.stringify(call.init?.body ?? '')).join('')).not.toMatch(/api[_-]?key|private[_-]?key|C:\\Users/iu);
   });
 
+  it('uses daemon-owned permission settings and injects session identity only inside confirm/revoke requests', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const profile = {
+      schemaVersion: 'ready4vibe_permission_profile_v1',
+      profileId: 'full-host',
+      filesystemScope: 'host',
+      processScope: 'host',
+      networkMode: 'off',
+      mcpSkillMode: 'off',
+      approvalPosture: 'session-auto',
+      taskTrust: 'trusted-user',
+      policyRevision: 'policy-1',
+      profileRevision: 'profile-1',
+      requiresConfirmation: true,
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    } as const;
+    const permissionStatus = {
+      schemaVersion: 'ready4vibe_permission_status_v1',
+      status: 'ready',
+      reasonCode: 'PROFILE_READY',
+      currentRevision: 'profile-1',
+      requestedProfile: profile,
+      effectiveProfile: profile,
+      effectiveScope: {
+        kind: 'run', profileId: 'full-host', filesystemScope: 'host', processScope: 'host',
+        networkMode: 'off', mcpSkillMode: 'off', approvalPosture: 'session-auto', taskTrust: 'trusted-user',
+        confirmationRef: 'confirmation-1',
+      },
+      grant: {
+        schemaVersion: 'ready4vibe_permission_session_grant_v1', grantId: 'grant-1', sessionId: 'session', userId: 'local-user',
+        scope: { kind: 'session', profileId: 'full-host', filesystemScope: 'host', processScope: 'host', networkMode: 'off', mcpSkillMode: 'off', approvalPosture: 'session-auto', taskTrust: 'trusted-user', confirmationRef: 'confirmation-1' },
+        policyRevision: 'policy-1', profileRevision: 'profile-1', issuedAt: '2026-08-05T00:00:00.000Z', expiresAt: '2026-08-05T01:00:00.000Z',
+        maxUses: 2, usedUses: 0, status: 'active', revokedAt: null, auditRef: 'audit-1',
+      },
+      grantExpiresAt: '2026-08-05T01:00:00.000Z',
+      evaluatedAt: '2026-08-05T00:00:00.000Z',
+      nextStep: 'continue',
+    } as const;
+    const settingsStatus = {
+      schemaVersion: 'ready4vibe_permission_profile_settings_status_v1',
+      settings: { schemaVersion: 'ready4vibe_permission_profile_settings_v1', profile, currentRevision: 'profile-1', previousRevision: null, updatedAt: '2026-08-05T00:00:00.000Z' },
+      resolution: { schemaVersion: 'ready4vibe_permission_profile_resolution_v1', status: 'ready', reasonCode: 'PROFILE_READY', requestedProfile: profile, effectiveProfile: profile, policyRevision: 'policy-1', evaluatedAt: '2026-08-05T00:00:00.000Z', nextStep: 'continue' },
+      currentRevision: 'profile-1', previousRevision: null,
+    } as const;
+    const revokeResult = {
+      schemaVersion: 'ready4vibe_permission_revoke_result_v1', requestId: 'gevt_revoke', grantId: 'grant-1', status: 'revoked',
+      currentRevision: 'profile-1', revokedAt: '2026-08-05T00:30:00.000Z', auditRef: 'audit-1',
+    } as const;
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      if (input.endsWith('/pairing/complete')) return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 2_000 });
+      if (input.endsWith('/permissions/revoke')) return response(revokeResult);
+      if (input.endsWith('/permissions/status') || input.endsWith('/confirm-full-host')) return response(permissionStatus);
+      return response(settingsStatus);
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    await client.completePairing('PAIR');
+    await client.permissionSettings();
+    await client.patchPermissionSettings({ profile, expectedRevision: 'profile-1' });
+    const status = await client.permissionStatus();
+    const confirmed = await client.confirmFullHost({ requestedProfile: profile, expectedProfileRevision: 'profile-1' });
+    await client.revokePermission({ grantId: 'grant-1', expectedRevision: 'profile-1', reason: 'user-requested' });
+
+    expect(calls.map((call) => call.input)).toEqual([
+      'http://daemon/api/v1/pairing/complete',
+      'http://daemon/api/v1/settings/permissions',
+      'http://daemon/api/v1/settings/permissions',
+      'http://daemon/api/v1/settings/permissions/status',
+      'http://daemon/api/v1/settings/permissions/confirm-full-host',
+      'http://daemon/api/v1/settings/permissions/revoke',
+    ]);
+    for (const call of calls.slice(1)) expect(call.init?.headers).toMatchObject({ Authorization: 'Bearer access', 'X-CSRF-Token': 'csrf' });
+    expect(calls[1]?.init?.method).toBe('GET');
+    expect(calls[2]?.init?.method).toBe('PATCH');
+    expect(calls[2]?.init?.body).toBe(JSON.stringify({ profile, expectedRevision: 'profile-1' }));
+    const confirmation = JSON.parse(String(calls[4]?.init?.body));
+    expect(confirmation).toMatchObject({ schemaVersion: 'ready4vibe_permission_confirmation_request_v1', sessionId: 'session', userId: 'local-user', requestedProfile: profile, expectedProfileRevision: 'profile-1', acknowledged: true });
+    expect(confirmation.requestId).toMatch(/^gevt_/u);
+    expect(confirmation.requestedAt).toMatch(/T/u);
+    const revoke = JSON.parse(String(calls[5]?.init?.body));
+    expect(revoke).toMatchObject({ schemaVersion: 'ready4vibe_permission_revoke_request_v1', sessionId: 'session', userId: 'local-user', grantId: 'grant-1', expectedRevision: 'profile-1', reason: 'user-requested' });
+    expect(revoke.requestId).toMatch(/^gevt_/u);
+    expect(JSON.stringify(status)).not.toContain('sessionId');
+    expect(JSON.stringify(status)).not.toContain('userId');
+    expect(JSON.stringify(confirmed)).not.toContain('sessionId');
+    expect(JSON.stringify(confirmed)).not.toContain('userId');
+    expect(calls.map((call) => call.input).join('')).not.toMatch(/access|csrf|session/iu);
+  });
+
+  it('fails closed before a network call when full-host confirmation or revoke lacks a paired session', async () => {
+    const calls: string[] = [];
+    const client = new ApiClient('', async (input) => { calls.push(input); return response({}); });
+    const profile = {
+      schemaVersion: 'ready4vibe_permission_profile_v1', profileId: 'full-host', filesystemScope: 'host', processScope: 'host',
+      networkMode: 'off', mcpSkillMode: 'off', approvalPosture: 'session-auto', taskTrust: 'trusted-user',
+      policyRevision: 'policy-1', profileRevision: 'profile-1', requiresConfirmation: true, updatedAt: '2026-08-05T00:00:00.000Z',
+    } as const;
+    await expect(client.confirmFullHost({ requestedProfile: profile, expectedProfileRevision: 'profile-1' })).rejects.toEqual(new ApiError(401, 'AUTH_REQUIRED', 'Authentication required.'));
+    await expect(client.revokePermission({ expectedRevision: 'profile-1', reason: 'user-requested' })).rejects.toEqual(new ApiError(401, 'AUTH_REQUIRED', 'Authentication required.'));
+    expect(calls).toEqual([]);
+  });
+
   it('uses the explicit model probe endpoint without accepting browser credentials', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

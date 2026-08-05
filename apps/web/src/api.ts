@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, CapabilityProfile as CapabilityProfileContract, CapabilityProfileRunSnapshot, PermissionProfileRunSnapshot, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, ApprovalPosture as ApprovalPostureContract, CapabilityProfile as CapabilityProfileContract, CapabilityProfileRunSnapshot, PermissionConfirmationRequest, PermissionProfile as PermissionProfileContract, PermissionProfileId as PermissionProfileIdContract, PermissionProfileRunSnapshot as PermissionProfileRunSnapshotContract, PermissionProfileSettingsPatch, PermissionProfileSettingsStatus as PermissionProfileSettingsStatusContract, PermissionRevokeReason as PermissionRevokeReasonContract, PermissionRevokeRequest, PermissionRevokeResult as PermissionRevokeResultContract, PermissionSessionGrant, PermissionStatus as PermissionStatusContract, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -235,6 +235,38 @@ export type CapabilityProfile = CapabilityProfileContract;
 export type CapabilityProfileSettingsStatus = CapabilityProfileSettingsStatusContract;
 export type CapabilityProfileSettingsPatchInput = CapabilityProfileSettingsPatch;
 
+export type PermissionProfileSettingsStatus = PermissionProfileSettingsStatusContract;
+export type PermissionProfileSettingsPatchInput = PermissionProfileSettingsPatch;
+export type PermissionProfile = PermissionProfileContract;
+export type PermissionProfileRunSnapshot = PermissionProfileRunSnapshotContract;
+export type PermissionProfileIntent = PermissionProfile;
+export type PermissionProfileId = PermissionProfileIdContract;
+export type PermissionApprovalPosture = ApprovalPostureContract;
+
+/**
+ * Browser-safe permission status. The daemon's internal grant projection is
+ * intentionally narrowed at the API boundary so session/user identities do
+ * not reach React state, local storage, URLs or transcript rendering.
+ */
+export type SafePermissionSessionGrant = Omit<PermissionSessionGrant, 'sessionId' | 'userId'>;
+export type PermissionStatus = Omit<PermissionStatusContract, 'grant'> & { grant: SafePermissionSessionGrant | null };
+
+/** Confirmation input deliberately excludes session identity and bearer data. */
+export type PermissionConfirmationInput = Pick<PermissionConfirmationRequest, 'requestedProfile' | 'expectedProfileRevision'> & {
+  /** Optional idempotency key; generated internally when omitted. */
+  readonly requestId?: string;
+};
+
+/** Revoke input deliberately excludes session identity and bearer data. */
+export interface PermissionRevokeInput {
+  readonly grantId?: string | undefined;
+  readonly expectedRevision?: string | undefined;
+  readonly reason: PermissionRevokeReasonContract;
+  /** Optional idempotency key; generated internally when omitted. */
+  readonly requestId?: string | undefined;
+}
+export type PermissionRevokeResult = PermissionRevokeResultContract;
+
 export type UsageSummary = ObservabilityUsageSummary;
 export type UsageTimeseries = ObservabilityTimeseries;
 export type RunUsage = ObservabilityRunUsage;
@@ -467,6 +499,57 @@ export class ApiClient {
     return this.request<CapabilityProfileSettingsStatus>('/api/v1/settings/capability-profile/reset', { method: 'POST', body: JSON.stringify(expectedRevision ? { expectedRevision } : {}) });
   }
 
+  async permissionSettings(): Promise<PermissionProfileSettingsStatus> {
+    return this.request<PermissionProfileSettingsStatus>('/api/v1/settings/permissions', { method: 'GET' });
+  }
+
+  async patchPermissionSettings(input: PermissionProfileSettingsPatchInput): Promise<PermissionProfileSettingsStatus> {
+    return this.request<PermissionProfileSettingsStatus>('/api/v1/settings/permissions', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async permissionStatus(): Promise<PermissionStatus> {
+    const result = await this.request<PermissionStatusContract>('/api/v1/settings/permissions/status', { method: 'GET' });
+    return redactPermissionStatus(result);
+  }
+
+  async confirmFullHost(input: PermissionConfirmationInput): Promise<PermissionStatus> {
+    const session = this.requireSession();
+    const requestedAt = new Date().toISOString();
+    const request: PermissionConfirmationRequest = {
+      schemaVersion: 'ready4vibe_permission_confirmation_request_v1',
+      requestId: input.requestId ?? clientEventId(),
+      sessionId: session.sessionId,
+      userId: 'local-user',
+      requestedProfile: input.requestedProfile,
+      expectedProfileRevision: input.expectedProfileRevision,
+      acknowledged: true,
+      requestedAt,
+    };
+    const result = await this.request<PermissionStatusContract>('/api/v1/settings/permissions/confirm-full-host', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    return redactPermissionStatus(result);
+  }
+
+  async revokePermission(input: PermissionRevokeInput): Promise<PermissionRevokeResult> {
+    const session = this.requireSession();
+    const request: PermissionRevokeRequest = {
+      schemaVersion: 'ready4vibe_permission_revoke_request_v1',
+      requestId: input.requestId ?? clientEventId(),
+      sessionId: session.sessionId,
+      userId: 'local-user',
+      ...(input.grantId === undefined ? {} : { grantId: input.grantId }),
+      ...(input.expectedRevision === undefined ? {} : { expectedRevision: input.expectedRevision }),
+      reason: input.reason,
+      requestedAt: new Date().toISOString(),
+    };
+    return this.request<PermissionRevokeResult>('/api/v1/settings/permissions/revoke', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
   async agentMemorySettings(): Promise<AgentMemorySettingsStatus> {
     return this.request<AgentMemorySettingsStatus>('/api/v1/settings/agent-memory', { method: 'GET' });
   }
@@ -622,6 +705,11 @@ export class ApiClient {
     }
   }
 
+  private requireSession(): PairingResult {
+    if (!this.session) throw new ApiError(401, 'AUTH_REQUIRED', 'Authentication required.');
+    return this.session;
+  }
+
   private async request<T>(path: string, init: RequestInit, authenticated = true): Promise<T> {
     const initialHeaders: Record<string, string> = { Accept: 'application/json' };
     if (init.headers instanceof Headers) init.headers.forEach((value, key) => { initialHeaders[key] = value; });
@@ -653,6 +741,12 @@ export class ApiClient {
       return new ApiError(response.status, 'HTTP_ERROR');
     }
   }
+}
+
+function redactPermissionStatus(value: PermissionStatusContract): PermissionStatus {
+  if (!value.grant) return value;
+  const { sessionId: _sessionId, userId: _userId, ...safeGrant } = value.grant;
+  return { ...value, grant: safeGrant };
 }
 
 export function parseSseFrame(frame: string): StoredEvent | undefined {
