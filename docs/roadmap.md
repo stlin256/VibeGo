@@ -1323,3 +1323,13 @@ bounded `reviewed/asked/denied/review-unavailable` 标签；“allow once”仍�
 现有 `/approve`，session grant 引导到 Permission settings，UI 不伪造第二套
 授权。新增键盘/屏幕阅读器与 phone/foldable/tablet/portrait desktop 的
 focused fixtures；durable reviewer events 和 live smoke 仍待 63-6/63-7。
+
+### Spec 63-6 evidence scope (2026-08-05)
+
+The focused evidence slice covers prompt-injection-shaped metadata,
+secret/path/raw-output redaction, fingerprint and stale-revision handling,
+duplicate and same-run concurrent review, cache invalidation across scope and
+revision changes, terminal/restart disposal, provider failure,
+timeout/cancellation and no-sandbox fail-closed behavior. It does not change
+AgentLoop, RunManager default start, Scheduler, Approval, Sandbox,
+WorkspaceRegistry or event authority.

@@ -1,7 +1,7 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: 63-5 implemented (authenticated reviewer Settings UI and bounded
-  approval explanation; durable reviewer events and live smoke remain staged)
+- Status: 63-6 implemented (security, failure and concurrency evidence;
+  durable reviewer events and live smoke remain staged)
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -329,10 +329,17 @@ desktop widths. Focused Web evidence is recorded in
 
 ### 63-6: security, failure and concurrency evidence
 
-Cover prompt injection, secret/path/raw-output redaction, fingerprint mismatch,
-stale revision, duplicate review, concurrent identical requests, revoke,
-restart, provider failure, timeout, cancellation and no-sandbox fail-closed
-behavior.
+Implemented by extending the existing adapter and broker fixtures without
+changing AgentLoop, RunManager default start behavior or event authority. It
+covers prompt-injection-shaped tool metadata, secret/path/raw-output
+redaction, fingerprint mismatch, stale revisions, duplicate and concurrent
+same-run review, cache invalidation across policy/scope/trust/reviewer
+revisions, run disposal/restart cancellation, provider failure, timeout,
+cancellation and no-sandbox fail-closed behavior. Each fixture asserts that
+the original deterministic approval path remains authoritative and that a
+reviewer failure never replays a tool call or creates a foreign-session grant.
+Evidence is recorded in
+[`spec63-6-security-failure-concurrency-2026-08-05.md`](../reports/spec63-6-security-failure-concurrency-2026-08-05.md).
 
 ### 63-7: explicitly authorized live reviewer smoke
 

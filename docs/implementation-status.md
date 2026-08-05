@@ -1337,3 +1337,13 @@ authenticated `/approve` path, and session grants are not fabricated. Focused
 evidence is recorded in
 `reports/spec63-5-web-approval-review-2026-08-05.md`. Durable reviewer events,
 live smoke and full Spec 63 release evidence remain pending.
+
+### Spec 63-6 security/failure/concurrency evidence checkpoint (2026-08-05)
+
+The focused adapter/broker fixtures are complete: prompt
+injection and privacy redaction, exact-key/fingerprint and stale revision
+handling, duplicate and same-run concurrent review, cache invalidation across
+scope/revision changes, terminal/restart disposal, provider failure,
+timeout/cancellation and no-sandbox fail-closed behavior. Evidence is recorded
+in `reports/spec63-6-security-failure-concurrency-2026-08-05.md`; no runtime
+authority or default interactive behavior changed by this checkpoint.

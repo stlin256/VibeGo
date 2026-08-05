@@ -1,6 +1,6 @@
 # ADR 0044: LLM-assisted approval review boundary
 
-- Status: Accepted for staged implementation (63-5 Web/settings explanation complete; events/live smoke pending)
+- Status: Accepted for staged implementation (63-6 security/failure/concurrency evidence complete; durable events/live smoke pending)
 - Date: 2026-08-05
 - Related: [Spec 63](../specs/63-llm-assisted-approval-and-review.md),
   [ADR 0003](0003-lan-access-and-codex-like-approval.md),
@@ -119,3 +119,14 @@ cards and the run event timeline use bounded labels (`reviewed`, `asked`,
 credentials or raw model output. Responsive and accessibility fixtures cover
 the existing ratio-first shell; durable reviewer event storage and live smoke
 remain later phases.
+
+## 63-6 security and concurrency evidence checkpoint
+
+The completed evidence slice is test-only; no fixture demonstrated a concrete
+boundary defect. Adapter tests must keep prompt-injection-shaped metadata,
+secrets, paths and raw output out of provider inputs; broker tests must prove
+exact-key isolation, bounded cache invalidation on scope/revision changes,
+terminal/restart disposal and fail-closed timeout/cancellation/provider-error
+behavior. No new scheduler, grant store, event table or AgentLoop state
+transition was introduced by this checkpoint. Evidence is recorded in
+`docs/reports/spec63-6-security-failure-concurrency-2026-08-05.md`.

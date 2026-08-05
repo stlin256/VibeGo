@@ -160,6 +160,49 @@ describe('ApprovalReviewBroker', () => {
     expect(reviewer.requests).toHaveLength(2);
   });
 
+  it('invalidates the bounded cache when scope or time changes', async () => {
+    let now = Date.now();
+    const delegate = new InMemoryApprovalBroker({ timeoutMs: 30_000 });
+    const reviewer = new FakeReviewer(snapshot('bounded-auto-low-risk', 100));
+    let current = binding(reviewer);
+    const broker = new ApprovalReviewBroker({ delegate, bindingForRun: () => current, now: () => now });
+
+    const first = broker.waitForDecision(approval());
+    await expect(first).resolves.toBe('allow');
+    expect(reviewer.requests).toHaveLength(1);
+
+    current = { ...current, context: { ...current.context, workspaceId: 'workspace-2' } };
+    const changedScope = broker.waitForDecision(approval({ approvalId: 'ap_scope_changed' }));
+    await expect(changedScope).resolves.toBe('allow');
+    expect(reviewer.requests).toHaveLength(2);
+
+    now += 101;
+    const expired = broker.waitForDecision(approval({ approvalId: 'ap_ttl_expired' }));
+    await expect(expired).resolves.toBe('allow');
+    expect(reviewer.requests).toHaveLength(3);
+  });
+
+  it('disposes in-flight review state on terminal/restart cleanup without replaying a tool call', async () => {
+    const delegate = new InMemoryApprovalBroker({ timeoutMs: 30_000 });
+    let aborted = false;
+    const reviewer: ApprovalReviewer = {
+      snapshot: snapshot('bounded-auto-low-risk', 10_000),
+      review: async (request, signal) => await new Promise<ApprovalReviewDecisionRecord>((resolve, reject) => {
+        signal.addEventListener('abort', () => { aborted = true; reject(new Error('review aborted')); }, { once: true });
+        void request;
+      }),
+    };
+    const reviewBinding: ApprovalReviewBinding = { reviewer, snapshot: reviewer.snapshot, context };
+    const broker = new ApprovalReviewBroker({ delegate, bindingForRun: () => reviewBinding });
+    const pending = broker.waitForDecision(approval({ approvalId: 'ap_dispose' }));
+    await vi.waitFor(() => expect(delegate.pending()).toHaveLength(1));
+    broker.disposeRun('run_approval_1');
+    expect(aborted).toBe(true);
+    expect(broker.decide('ap_dispose', 'deny', 'run_approval_1')).toBe('accepted');
+    await expect(pending).resolves.toBe('deny');
+    expect(delegate.pending()).toHaveLength(0);
+  });
+
   it('does not leak request contents into the normalized contract', () => {
     const normalized = buildApprovalReviewRequest(approval(), context);
     const serialized = JSON.stringify(normalized);
