@@ -22,8 +22,9 @@ import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
-import { GoalWriteService } from '@ready4vibe/goal-control';
+import { GoalControlV1WriteService, GoalWriteService } from '@ready4vibe/goal-control';
 import { GoalAdmissionService } from './goal-admission.js';
+import { GoalRunWritebackService } from './goal-writeback.js';
 import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
 
 const transport = resolveDaemonTransport();
@@ -55,6 +56,7 @@ const observabilityUsageObserver = new RunUsageObserver({
   adapter: new ProviderUsageLifecycleAdapter({ writer: observabilityLedger }),
 });
 const goalWriteService = new GoalWriteService(goalEventStore, { producer: 'daemon-goal-api' });
+const goalControlV1WriteService = new GoalControlV1WriteService(goalControlV1EventStore, { producer: 'daemon-goal-control' });
 let settingsStore: SqliteSettingsStore;
 try {
   settingsStore = new SqliteSettingsStore(join(dataDir, 'events.sqlite'));
@@ -151,12 +153,24 @@ const runManager = new RunManager({
   observabilityUsageObserver,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
-const goalAdmissionService = new GoalAdmissionService({
+let goalAdmissionService!: GoalAdmissionService;
+const goalRunWriteback = new GoalRunWritebackService({
+  goalStore: goalControlV1EventStore,
+  runManager,
+  goalControl: goalControlV1WriteService,
+  admitGoverned: (input) => goalAdmissionService.admit(input),
+});
+goalAdmissionService = new GoalAdmissionService({
   goalStore: goalControlV1EventStore,
   runManager,
   capabilitySnapshotForRun: (config) => capabilityProfileSettings.snapshotForRun(config.workspaceId),
   workspace: { exists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined },
   scheduler: runManager.scheduler,
+  goalControl: goalControlV1WriteService,
+  registerBinding: (binding) => { goalRunWriteback.registerBinding(binding); },
+  // Governed delivery spends one bounded unit only after terminal validation;
+  // interactive / ordinary run creation never passes through this policy.
+  quotaPolicy: { enabled: true, units: 1, reservationTtlMs: 30 * 60 * 1_000 },
   approval: ({ config }) => ({
     ready: config.taskTrust !== 'untrusted-content' || config.approval !== 'never',
     revision: 'approval-1',
@@ -182,6 +196,7 @@ const goalAdmissionService = new GoalAdmissionService({
 });
 try {
   await runManager.recoverAfterRestart();
+  await goalRunWriteback.reconcile();
   await agentMemorySettings.start();
 } catch (error) {
   await mcpRuntimeBinding.close();
@@ -216,6 +231,7 @@ const server = createDaemonServer({
   goalEventStore,
   goalWriteService,
   goalAdmissionService,
+  goalRunWriteback,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 
@@ -227,6 +243,7 @@ server.listen(port, host, () => {
 const shutdown = (): void => {
   server.close(() => {
     void (async () => {
+      goalRunWriteback.close();
       await mcpRuntimeBinding.close();
       await agentMemorySettings.close();
       await agentMemoryKnowledgeSettings.close();

@@ -396,9 +396,10 @@ Implementation evidence for the current slice includes the explicit governed
 HTTP route, request-id idempotency, run-id/capability snapshot injection,
 read-only scheduler inspection, and the SQLite v0/v1 mixed-table compatibility
 fixture described above. The default `/api/v1/runs` route rejects a governed
-envelope and ordinary interactive runs remain unchanged. This is still not a
-claim of 58-3 validation writeback, quota reservation/consume, reconciliation,
-or real governed LLM smoke.
+envelope and ordinary interactive runs remain unchanged. The subsequent 58-3
+implementation now supplies the opt-in production quota reservation,
+terminal-writeback and recovery coordinator; this section intentionally does
+not fold those application concerns back into the 58-2 admission contract.
 
 The service is exposed as an injectable daemon port for focused tests. The
 default HTTP route is unchanged; an explicit governed route may be wired by a

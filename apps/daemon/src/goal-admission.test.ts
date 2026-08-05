@@ -169,6 +169,59 @@ async function seed(store: InMemoryGoalControlEventStore, options: Parameters<ty
 }
 
 describe('GoalAdmissionService', () => {
+  it('reserves quota before governed run start and leaves spend untouched until writeback', async () => {
+    const fixture = serviceFixture({ quotaPolicy: { enabled: true, units: 1 } });
+    const expectedRevision = await seed(fixture.goalStore);
+    const result = await fixture.service.admit(input(expectedRevision));
+    expect(result.reservation).toMatchObject({ status: 'reserved', bindingId: result.binding.bindingId, units: 1 });
+    const goalEvents = await fixture.goalStore.read(goalId);
+    expect(goalEvents.map((event) => event.eventType)).toEqual([
+      'goal.created', 'todo.added', 'todo.claimed', 'admission.recorded', 'binding.created', 'quota.reserved',
+    ]);
+    expect(result.reservation?.status).toBe('reserved');
+    await vi.waitFor(() => expect(fixture.runManager.completion(result.runId)).toBeDefined());
+    const projection = (await fixture.goalStore.read(goalId)).at(-1);
+    expect(projection?.eventType).toBe('quota.reserved');
+  });
+
+  it('keeps concurrent duplicate governed admission idempotent without releasing the winner reservation', async () => {
+    const fixture = serviceFixture({ quotaPolicy: { enabled: true } });
+    const expectedRevision = await seed(fixture.goalStore);
+    const [first, second] = await Promise.all([
+      fixture.service.admit(input(expectedRevision)),
+      fixture.service.admit(input(expectedRevision)),
+    ]);
+    expect(second.runId).toBe(first.runId);
+    expect((await fixture.goalStore.read(goalId)).filter((event) => event.eventType === 'quota.reserved')).toHaveLength(1);
+    expect((await fixture.goalStore.read(goalId)).filter((event) => event.eventType === 'quota.released')).toHaveLength(0);
+    await vi.waitFor(() => expect(fixture.runManager.completion(first.runId)).toBeDefined());
+    expect(fixture.model.requests).toHaveLength(1);
+  });
+
+  it('releases a governed reservation when RunManager cannot start the bound run', async () => {
+    const goalStore = new InMemoryGoalControlEventStore();
+    const eventStore = new InMemoryEventStore();
+    const model = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
+    const runManager = new RunManager({ eventStore, scheduler, modelProvider: model, workspaceExists: () => false });
+    const service = new GoalAdmissionService({
+      goalStore,
+      runManager,
+      scheduler,
+      capabilitySnapshotForRun: () => snapshot(),
+      workspace: { exists: () => true },
+      approval: () => ({ ready: true, revision: 'approval-1' }),
+      sandbox: () => ({ ready: true, revision: 'sandbox-1' }),
+      quotaPolicy: { enabled: true },
+      clock: () => new Date(at),
+    });
+    const expectedRevision = await seed(goalStore);
+    await expect(service.admit(input(expectedRevision))).rejects.toMatchObject({ code: 'RUN_START_FAILED' });
+    expect((await goalStore.read(goalId)).map((event) => event.eventType)).toEqual([
+      'goal.created', 'todo.added', 'todo.claimed', 'admission.recorded', 'binding.created', 'quota.reserved', 'quota.released',
+    ]);
+  });
+
   it('runs only after Goal/capability/readiness preflight and persists a binding before run.created', async () => {
     const calls: string[] = [];
     const fixture = serviceFixture({

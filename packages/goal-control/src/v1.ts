@@ -85,6 +85,20 @@ function isV1Event(event: GoalControlReplayEvent): event is StoredGoalControlEve
 }
 
 /**
+ * Detect the durable completion half of the terminal writeback pair during
+ * an idempotent retry.  The projection only exposes the final Todo status, so
+ * replay must inspect the bounded v1 event payload to ensure that the same
+ * evidence, rather than an unrelated completion, was used.
+ */
+function hasCompletedTodo(events: readonly GoalControlReplayEvent[], todoId: string, evidenceId: string): boolean {
+  return events.some((event) => {
+    if (!isV1Event(event) || event.eventType !== 'todo.completed') return false;
+    const parsed = todoCompletedPayload.safeParse(event.payload);
+    return parsed.success && parsed.data.todoId === todoId && parsed.data.evidenceId === evidenceId;
+  });
+}
+
+/**
  * In-memory v1 store used by pure reducer and application-service fixtures.
  * Legacy v0 events can be seeded explicitly for forward-replay tests; no
  * migration or raw-event ingestion is performed implicitly.
@@ -396,6 +410,9 @@ export interface GoalControlV1MutationResult {
 const eventIdSchema = z.string().regex(/^gevt_[A-Za-z0-9_-]{8,128}$/u);
 const revisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const requestSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u);
+const todoIdSchema = z.string().regex(/^todo_[A-Za-z0-9_-]{8,128}$/u);
+const evidenceIdSchema = z.string().regex(/^evidence_[A-Za-z0-9_-]{8,128}$/u);
+const reservationIdSchema = z.string().regex(/^reservation_[A-Za-z0-9_-]{8,128}$/u);
 const bindingDraftSchema = GoalRunBindingV1Schema.omit({ schemaVersion: true });
 const admissionDraftSchema = GoalAdmissionDecisionV1Schema.omit({ schemaVersion: true });
 const reservationDraftSchema = GoalQuotaReservationV1Schema.omit({ schemaVersion: true, status: true, createdAt: true, updatedAt: true });
@@ -445,6 +462,17 @@ export const RecordGoalHandoffV1InputSchema = z.object({
   handoff: handoffDraftSchema,
 }).strict();
 export type RecordGoalHandoffV1Input = z.infer<typeof RecordGoalHandoffV1InputSchema>;
+
+export const CompleteTodoAndConsumeQuotaV1InputSchema = z.object({
+  todoEventId: eventIdSchema,
+  quotaEventId: eventIdSchema,
+  expectedRevision: revisionSchema,
+  todoId: todoIdSchema,
+  evidenceId: evidenceIdSchema,
+  reservationId: reservationIdSchema,
+  reason: z.string().min(1).max(500).regex(/^[^\u0000-\u001F\u007F\r\n]*$/u).optional(),
+}).strict();
+export type CompleteTodoAndConsumeQuotaV1Input = z.infer<typeof CompleteTodoAndConsumeQuotaV1InputSchema>;
 
 export class GoalControlV1WriteService {
   private readonly producer: string;
@@ -558,6 +586,54 @@ export class GoalControlV1WriteService {
       const completedAt = this.now();
       const candidate = this.event(input.eventId, goalId, 'todo.completed', { todoId: input.todoId, evidenceId: input.evidenceId }, { todoId: input.todoId, evidenceId: input.evidenceId, completedAt }, input.expectedRevision);
       return this.appendWithRevision(projection, input.expectedRevision, candidate);
+    });
+  }
+
+  /**
+   * Atomically completes a validated Todo and consumes its reservation under
+   * one Goal lock. This is the only application-safe path for the terminal
+   * writeback pair; callers must not issue the two transitions independently.
+   */
+  async completeTodoAndConsumeQuota(goalId: string, input: unknown): Promise<GoalControlV1MutationResult> {
+    const parsed = CompleteTodoAndConsumeQuotaV1InputSchema.parse(input);
+    return this.withGoalLock(goalId, async () => {
+      const events = await this.store.read(goalId);
+      const projection = await this.requireGoal(goalId);
+      const todo = projection.todos.find((candidate) => candidate.todoId === parsed.todoId);
+      const evidence = projection.validationEvidence.find((candidate) => candidate.evidenceId === parsed.evidenceId);
+      const reservation = projection.quota.reservations.find((candidate) => candidate.reservationId === parsed.reservationId);
+      if (!todo) throw new GoalControlV1TransitionError('todo was not found');
+      if (!evidence || evidence.status !== 'validated') throw new GoalControlV1TransitionError('todo completion requires validated evidence');
+      if (evidence.todoId !== undefined && evidence.todoId !== parsed.todoId) throw new GoalControlV1TransitionError('validation evidence does not match todo');
+      if (!reservation) throw new GoalControlV1TransitionError('quota reservation was not found');
+      if (reservation.status !== 'reserved') {
+        if (reservation.status === 'consumed' && todo.status === 'done' && hasCompletedTodo(events, parsed.todoId, parsed.evidenceId)) return this.result(goalId, projection.lastEventId ?? parsed.quotaEventId);
+        throw new GoalControlV1TransitionError('only a reserved quota may be consumed');
+      }
+      if (reservation.todoId !== undefined && reservation.todoId !== parsed.todoId) throw new GoalControlV1TransitionError('quota reservation does not match todo');
+      if (reservation.bindingId !== evidence.bindingId || reservation.attempt !== evidence.attempt) throw new GoalControlV1TransitionError('validation evidence does not match quota reservation');
+      const binding = projection.bindings.find((candidate) => candidate.bindingId === reservation.bindingId);
+      if (!binding || binding.goalId !== goalId || binding.mode !== 'governed' || binding.attempt !== reservation.attempt) {
+        throw new GoalControlV1TransitionError('quota reservation binding is invalid');
+      }
+      if (todo.status === 'done') throw new GoalControlV1TransitionError('todo is already complete without a matching consumed reservation');
+      if (projection.controlRevision !== parsed.expectedRevision) throw new GoalControlV1RevisionError(parsed.expectedRevision, projection.controlRevision);
+
+      const now = this.now();
+      const completed = this.event(parsed.todoEventId, goalId, 'todo.completed', { todoId: parsed.todoId, evidenceId: parsed.evidenceId }, {
+        todoId: parsed.todoId,
+        evidenceId: parsed.evidenceId,
+        completedAt: now,
+      }, parsed.expectedRevision);
+      const consumedReservation = GoalQuotaReservationV1Schema.parse({
+        ...reservation,
+        status: 'consumed',
+        updatedAt: now,
+        ...(parsed.reason ? { reason: parsed.reason } : {}),
+      });
+      const consumed = this.event(parsed.quotaEventId, goalId, 'quota.consumed', { reservationId: reservation.reservationId, bindingId: reservation.bindingId }, { reservation: consumedReservation }, parsed.expectedRevision + 1);
+      await this.store.appendBatch([completed, consumed]);
+      return this.result(goalId, parsed.quotaEventId);
     });
   }
 

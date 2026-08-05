@@ -103,6 +103,70 @@ describe('Goal Control v1 mixed replay', () => {
 });
 
 describe('Goal Control v1 write service', () => {
+  it('atomically completes the Todo and consumes quota after validated evidence', async () => {
+    const { service, store } = seededService();
+    const binding = await service.createBinding(goalId, { eventId: 'gevt_00000003', expectedRevision: 2, binding: bindingDraft() });
+    const reservation = await service.reserveQuota(goalId, {
+      eventId: 'gevt_00000004',
+      expectedRevision: binding.controlRevision,
+      requestId: 'request_reservation',
+      reservation: {
+        reservationId: 'reservation_12345678',
+        bindingId: 'binding_12345678',
+        goalId,
+        todoId,
+        attempt: 1,
+        turnKey: 'turn_goal_1',
+        units: 1,
+        expiresAt: '2026-08-05T01:00:00.000Z',
+      },
+    });
+    const validation = await service.recordValidation(goalId, {
+      eventId: 'gevt_00000005',
+      expectedRevision: reservation.controlRevision,
+      evidence: {
+        evidenceId: 'evidence_12345678',
+        goalId,
+        todoId,
+        bindingId: 'binding_12345678',
+        runId: 'run_12345678',
+        attempt: 1,
+        verifierId: 'verifier_fixture',
+        verifierRevision: 1,
+        status: 'validated',
+        summary: 'Fixture verifier passed.',
+        refs: { runId: 'run_12345678' },
+      },
+    });
+
+    const finalized = await service.completeTodoAndConsumeQuota(goalId, {
+      todoEventId: 'gevt_00000006',
+      quotaEventId: 'gevt_00000007',
+      expectedRevision: validation.controlRevision,
+      todoId,
+      evidenceId: 'evidence_12345678',
+      reservationId: 'reservation_12345678',
+    });
+    expect(finalized.projection.todos[0]).toMatchObject({ todoId, status: 'done' });
+    expect(finalized.projection.quota.reservations[0]).toMatchObject({ status: 'consumed' });
+    expect(finalized.projection.quota.totalSpent).toBe(1);
+    expect((await store.read(goalId)).map((event) => event.eventType)).toEqual([
+      'goal.created', 'todo.added', 'binding.created', 'quota.reserved', 'validation.recorded', 'todo.completed', 'quota.consumed',
+    ]);
+
+    const replayed = await service.completeTodoAndConsumeQuota(goalId, {
+      todoEventId: 'gevt_00000006',
+      quotaEventId: 'gevt_00000007',
+      expectedRevision: finalized.controlRevision,
+      todoId,
+      evidenceId: 'evidence_12345678',
+      reservationId: 'reservation_12345678',
+    });
+    expect(replayed.controlRevision).toBe(finalized.controlRevision);
+    expect((await store.read(goalId)).filter((event) => event.eventType === 'todo.completed')).toHaveLength(1);
+    expect((await store.read(goalId)).filter((event) => event.eventType === 'quota.consumed')).toHaveLength(1);
+  });
+
   it('supports binding, admission, quota reservation, validation and exactly-once consume', async () => {
     const { service } = seededService();
     const binding = await service.createBinding(goalId, { eventId: 'gevt_00000003', expectedRevision: 2, binding: bindingDraft() });
