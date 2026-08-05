@@ -7,7 +7,7 @@ and records evidence strength separately from release claims.
 ## Gate decision
 
 **62-0 audit: complete; Spec 62 release-documentation gate: constrained.** The
-matrix is current for commit `bd305be`, but it does not authorize claims that
+matrix is current for commit `6f05ad7`, but it does not authorize claims that
 remain `partial`, `blocked`, or `not-run`. README changes may correct bounded
 status, setup and safety guidance; they must not call the project release-ready
 until Spec 60 and the required runtime/device/release gates are complete.
@@ -16,7 +16,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 
 | Check | Evidence |
 | --- | --- |
-| Branch / commit | `main` / `bd305be` (`origin/main`); clean worktree at audit start |
+| Branch / commit | `main` / `6f05ad7` (`origin/main`); clean worktree at audit start |
 | Remote | `origin` points to the public VibeGo repository |
 | Package manager | `pnpm@11.9.0` from `package.json` |
 | Node | bundled validation runtime `v24.14.0` |
@@ -35,7 +35,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | E2 | Focused package/application tests and typechecks recorded in the implementation status; only affected current slices were rerun |
 | E3 | Explicitly authorized DeepSeek text/governed/cancel/context-limit reports from the preceding live commit; no broad capacity or provider-failure claim |
 | E4 | Existing model, permission, recovery, transport, MCP, container, certificate and performance fixtures; they prove bounded application behavior only |
-| E5 | Current full static/unit `pnpm verify` at `bd305be`; does not cover live/remote/device/release gates |
+| E5 | Current full static/unit `pnpm verify` at `6f05ad7`; does not cover live/remote/device/release gates |
 | E6 | Required physical devices, public ACME/TLS, Tailscale/SSH, clean-host install, signing/SBOM/attestation and production host-runner evidence |
 | E7 | Spec 63-10 dedicated-reviewer offline fixture and separately authorized redacted DeepSeek adapter smoke; no run/tool/event or release-capacity claim |
 | E8 | Spec 58-6 task-specific verifier registry, bounded runtime contract, timeout/cancellation and per-run snapshot tests; registry is empty in the default daemon and semantic task validation remains open |
