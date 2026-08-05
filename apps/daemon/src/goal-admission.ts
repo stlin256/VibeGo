@@ -27,6 +27,7 @@ import type { Scheduler, SchedulerInspection } from '@ready4vibe/scheduler';
 import type { RunManager } from './run-manager.js';
 
 export const GOAL_ADMISSION_APPLICATION_SCHEMA_VERSION = 'ready4vibe_goal_admission_application_v1' as const;
+export const GOAL_PREFLIGHT_SCHEMA_VERSION = 'ready4vibe_goal_preflight_v1' as const;
 
 const GOAL_ID = /^goal_[A-Za-z0-9_-]{8,128}$/u;
 const TODO_ID = /^todo_[A-Za-z0-9_-]{8,128}$/u;
@@ -102,6 +103,29 @@ export interface GoalAdmissionResult {
   readonly binding: GoalRunBindingV1;
   readonly reservation?: GoalQuotaReservationV1;
   readonly schedulerDecisionRef: string;
+}
+
+export type GoalPreflightCheckKey = 'goal' | 'gate' | 'todo' | 'claim' | 'quota' | 'capability' | 'workspace' | 'scheduler' | 'approval' | 'sandbox';
+export type GoalPreflightCheckStatus = 'ready' | 'blocked' | 'waiting' | 'degraded' | 'not_evaluated';
+
+export interface GoalPreflightCheck {
+  readonly key: GoalPreflightCheckKey;
+  readonly status: GoalPreflightCheckStatus;
+  readonly reason: string;
+  readonly revision?: GoalRevisionToken;
+  readonly reference?: string;
+}
+
+export interface GoalPreflightResult {
+  readonly schemaVersion: typeof GOAL_PREFLIGHT_SCHEMA_VERSION;
+  readonly runId: string;
+  readonly goalId: string;
+  readonly todoId?: string;
+  readonly requestId: string;
+  readonly controlRevision: number;
+  readonly projectionChecksum: string;
+  readonly decision: GoalAdmissionDecisionV1;
+  readonly checks: readonly GoalPreflightCheck[];
 }
 
 export type GoalAdmissionErrorCode =
@@ -395,6 +419,153 @@ export class GoalAdmissionService {
     };
   }
 
+  /**
+   * Evaluate the same server-owned readiness authorities as governed admission
+   * without writing Goal Control state or starting a run. A later call to
+   * admit() must repeat the checks; this result is informational and can go
+   * stale immediately after it is returned.
+   */
+  async preview(input: unknown): Promise<GoalPreflightResult> {
+    const request = parseGovernedRunRequest(input);
+    const now = this.now();
+    const runId = stableId('run', request.goalId, request.requestId, request.turnKey);
+    const events = await this.options.goalStore.read(request.goalId);
+    if (events.length === 0) throw new GoalAdmissionError('GOAL_NOT_FOUND', 'The requested Goal was not found.');
+
+    let projection: GoalControlProjectionV1;
+    try {
+      projection = GoalControlProjectionV1Schema.parse(this.builder.build(events));
+    } catch (error) {
+      throw new GoalAdmissionError('PROJECTION_UNAVAILABLE', 'The Goal projection could not be replayed.', undefined, { cause: error });
+    }
+    if (!projection.goal) throw new GoalAdmissionError('GOAL_NOT_FOUND', 'The requested Goal was not found.');
+
+    const checks: GoalPreflightCheck[] = [];
+    const finish = (decision: GoalAdmissionDecisionV1): GoalPreflightResult => preflightResult({
+      runId,
+      goalId: request.goalId,
+      ...(decision.todoId ? { todoId: decision.todoId } : {}),
+      requestId: request.requestId,
+      controlRevision: projection.controlRevision,
+      projectionChecksum: projection.sourceChecksum,
+      decision,
+      checks,
+    });
+    const fail = (key: GoalPreflightCheckKey, error: GoalAdmissionError): GoalPreflightResult => {
+      checks.push({ key, status: preflightStatus(error.decision?.status ?? 'blocked'), reason: boundedReason(error.message) });
+      return finish(error.decision ?? this.fail(projection, request, 'PROJECTION_UNAVAILABLE', error.message, 'retry', 'blocked').decision!);
+    };
+
+    const goal = projection.goal;
+    if (goal.status === 'paused') return fail('goal', this.fail(projection, request, 'GOAL_PAUSED', 'The Goal is paused.', 'none', 'blocked'));
+    if (goal.status === 'blocked') return fail('goal', this.fail(projection, request, 'GOAL_BLOCKED', 'The Goal is blocked.', 'none', 'blocked'));
+    if (goal.status === 'completed' || goal.status === 'archived') return fail('goal', this.fail(projection, request, 'TODO_NOT_ELIGIBLE', 'The Goal is not active.', 'none', 'waiting'));
+    checks.push({ key: 'goal', status: 'ready', reason: 'The Goal is active.', revision: projection.controlRevision });
+
+    const blockingGate = projection.gates.find((gate) => gate.blocking && gate.status === 'open');
+    if (blockingGate) return fail('gate', this.fail(projection, request, 'GATE_OPEN', 'A blocking Goal gate is open.', 'resolve_gate', 'blocked'));
+    checks.push({ key: 'gate', status: 'ready', reason: 'No blocking Gate is open.' });
+
+    if (request.remainingDeliveryQuota !== undefined && request.remainingDeliveryQuota <= 0) {
+      return fail('quota', this.fail(projection, request, 'QUOTA_EXHAUSTED', 'Delivery quota is exhausted.', 'retry', 'throttled'));
+    }
+    if (projection.quota.spentTurnKeys.includes(request.turnKey)) {
+      return fail('quota', this.fail(projection, request, 'QUOTA_EXHAUSTED', 'This turn key has already been spent.', 'retry', 'throttled'));
+    }
+    if (projection.quota.reservations.some((reservation) => reservation.turnKey === request.turnKey && reservation.status === 'reserved')) {
+      return fail('quota', this.fail(projection, request, 'QUOTA_RESERVED', 'This turn key already has an active quota reservation.', 'retry', 'waiting'));
+    }
+    checks.push({ key: 'quota', status: 'ready', reason: this.options.quotaPolicy?.enabled ? 'Quota is available for a new governed admission.' : 'No governed delivery quota policy is enabled.' });
+
+    let todo: GoalControlProjectionV1['todos'][number];
+    try {
+      todo = this.selectTodo(projection, request, now);
+    } catch (error) {
+      if (error instanceof GoalAdmissionError) return fail('todo', error);
+      throw error;
+    }
+    checks.push({ key: 'todo', status: 'ready', reason: `Todo ${todo.todoId} is due and eligible.`, reference: todo.todoId });
+    try {
+      this.assertClaim(todo, request.agentId, now, projection, request);
+    } catch (error) {
+      if (error instanceof GoalAdmissionError) return fail('claim', error);
+      throw error;
+    }
+    checks.push({ key: 'claim', status: 'ready', reason: 'The Todo has an active claim for this agent.', reference: todo.todoId });
+
+    let capabilitySnapshot: CapabilityProfileRunSnapshot;
+    try {
+      capabilitySnapshot = CapabilityProfileRunSnapshotSchema.parse(this.options.capabilitySnapshotForRun(request.config));
+    } catch (error) {
+      return fail('capability', this.fail(projection, request, 'CAPABILITY_MISMATCH', 'The capability snapshot is invalid.', 'retry', 'blocked', undefined, error));
+    }
+    const effective = capabilitySnapshot.effectiveProfile;
+    if (capabilitySnapshot.status === 'blocked' || !effective || effective.modelMode === 'off') {
+      return fail('capability', this.fail(projection, request, 'CAPABILITY_MISMATCH', 'The capability profile cannot run this Goal.', 'retry', 'blocked'));
+    }
+    if (effective.workspaceId && effective.workspaceId !== request.config.workspaceId) {
+      return fail('capability', this.fail(projection, request, 'CAPABILITY_MISMATCH', 'The capability profile is bound to another workspace.', 'retry', 'blocked'));
+    }
+    const capabilities = this.options.capabilitiesForSnapshot?.(capabilitySnapshot, request.config) ?? defaultCapabilities(capabilitySnapshot);
+    const writeScopes = this.options.writeScopesForSnapshot?.(capabilitySnapshot, request.config) ?? defaultWriteScopes(capabilitySnapshot, request.config);
+    const decision = shouldRun({
+      projection: toLegacyProjection(projection),
+      now,
+      agentId: request.agentId,
+      capabilities,
+      writeScopes,
+      ...(request.remainingDeliveryQuota === undefined ? {} : { remainingDeliveryQuota: request.remainingDeliveryQuota }),
+      turnKey: request.turnKey,
+    });
+    if (decision.status !== 'eligible' || decision.todoId !== todo.todoId) {
+      return fail('capability', this.fail(projection, request, 'CAPABILITY_MISMATCH', decision.reason, 'retry', 'blocked'));
+    }
+    checks.push({ key: 'capability', status: 'ready', reason: 'Capability requirements are satisfied.', revision: capabilitySnapshot.profileRevision });
+
+    const schedulerRequest = this.options.schedulerRequestForRun?.(runId, request.config, capabilitySnapshot)
+      ?? defaultSchedulerRequest(runId, request.config, capabilitySnapshot);
+    const schedulerDecision = this.options.scheduler.inspect(schedulerRequest);
+    if (schedulerDecision.status !== 'ready') {
+      const status = schedulerDecision.status === 'waiting' ? 'waiting' : 'blocked';
+      return fail('scheduler', this.fail(projection, request, 'SCHEDULER_UNAVAILABLE', schedulerReason(schedulerDecision), status === 'waiting' ? 'wait_scheduler' : 'retry', status, schedulerDecision.decisionRef));
+    }
+    checks.push({ key: 'scheduler', status: 'ready', reason: 'The Scheduler can accept the requested resources.', reference: schedulerDecision.decisionRef });
+
+    if (!this.options.workspace.exists(request.config.workspaceId)) {
+      return fail('workspace', this.fail(projection, request, 'WORKSPACE_UNAVAILABLE', 'The selected workspace is unavailable.', 'retry', 'blocked'));
+    }
+    checks.push({ key: 'workspace', status: 'ready', reason: 'The selected workspace is available.', reference: request.config.workspaceId });
+
+    const readinessInput = { runId, config: request.config, capabilitySnapshot } satisfies GoalAdmissionReadinessInput;
+    const approval = await (this.options.approval?.(readinessInput) ?? defaultApprovalReadiness(readinessInput));
+    if (!approval.ready) {
+      return fail('approval', this.fail(projection, request, 'APPROVAL_REQUIRED', approval.reason ?? 'Approval readiness is unavailable.', 'retry', 'blocked'));
+    }
+    checks.push({ key: 'approval', status: 'ready', reason: 'Approval policy is ready for this run.', revision: approval.revision });
+
+    const sandbox = await (this.options.sandbox?.(readinessInput) ?? defaultSandboxReadiness(readinessInput));
+    if (!sandbox.ready) {
+      return fail('sandbox', this.fail(projection, request, 'SANDBOX_UNAVAILABLE', sandbox.reason ?? 'Sandbox readiness is unavailable.', 'retry', 'blocked'));
+    }
+    checks.push({ key: 'sandbox', status: 'ready', reason: 'Sandbox readiness is satisfied.', revision: sandbox.revision });
+
+    return finish(GoalAdmissionDecisionV1Schema.parse({
+      schemaVersion: 'ready4vibe_goal_admission_v1',
+      admissionId: stableId('admission', request.goalId, request.requestId, request.turnKey),
+      goalId: request.goalId,
+      todoId: todo.todoId,
+      status: 'eligible',
+      reasonCode: 'ELIGIBLE',
+      reason: `Todo ${todo.todoId} passed governed preflight.`,
+      projectionChecksum: projection.sourceChecksum,
+      controlRevision: projection.controlRevision,
+      schedulerDecisionRef: schedulerDecision.decisionRef,
+      nextStep: 'create_run',
+      createdAt: now,
+      requestId: request.requestId,
+    }));
+  }
+
   private readCapabilitySnapshot(request: GovernedRunRequest): CapabilityProfileRunSnapshot {
     try {
       return CapabilityProfileRunSnapshotSchema.parse(this.options.capabilitySnapshotForRun(request.config));
@@ -535,6 +706,7 @@ export class GoalAdmissionService {
 export function parseGovernedRunRequest(input: unknown): GovernedRunRequest {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new GoalAdmissionError('INVALID_REQUEST', 'A governed run request object is required.');
   const raw = input as Record<string, unknown>;
+  rejectSecretShapedKeys(raw);
   if (raw.runMode !== 'governed') throw new GoalAdmissionError('INVALID_REQUEST', 'Only an explicit runMode=governed request may enter Goal admission.');
   const metadata = GovernedMetadataSchema.parse({
     runMode: raw.runMode,
@@ -551,6 +723,20 @@ export function parseGovernedRunRequest(input: unknown): GovernedRunRequest {
   const { runMode: _runMode, goalId: _goalId, todoId: _todoId, expectedControlRevision: _revision, agentId: _agentId, turnKey: _turnKey, attempt: _attempt, requestId: _requestId, remainingDeliveryQuota: _quota, expiresAt: _expiresAt, ...configInput } = raw;
   const config = RunConfigSchema.parse(configInput);
   return { ...metadata, config };
+}
+
+function rejectSecretShapedKeys(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const child of value) rejectSecretShapedKeys(child);
+    return;
+  }
+  if (typeof value !== 'object' || value === null) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (/api[_-]?key|access[_-]?token|refresh[_-]?token|csrf|private[_-]?key|password|credential|secret|environment|env(?:ironment)?[_-]?vars?/iu.test(key)) {
+      throw new GoalAdmissionError('INVALID_REQUEST', 'Governed requests cannot contain secret-shaped fields.');
+    }
+    rejectSecretShapedKeys(child);
+  }
 }
 
 function toLegacyProjection(projection: GoalControlProjectionV1) {
@@ -666,4 +852,34 @@ function errorCodeForReason(reason: GoalAdmissionReasonCodeV1): GoalAdmissionErr
     case 'PROJECTION_UNAVAILABLE': return 'PROJECTION_UNAVAILABLE';
     default: return 'TODO_NOT_ELIGIBLE';
   }
+}
+
+const PREFLIGHT_CHECK_ORDER: readonly GoalPreflightCheckKey[] = [
+  'goal', 'gate', 'todo', 'claim', 'quota', 'capability', 'workspace', 'scheduler', 'approval', 'sandbox',
+];
+
+function preflightResult(input: Omit<GoalPreflightResult, 'schemaVersion' | 'checks'> & { checks: readonly GoalPreflightCheck[] }): GoalPreflightResult {
+  const known = new Map(input.checks.map((check) => [check.key, check]));
+  const checks = PREFLIGHT_CHECK_ORDER.map((key) => known.get(key) ?? {
+    key,
+    status: 'not_evaluated' as const,
+    reason: 'Not evaluated because an earlier preflight check blocked the request.',
+  });
+  return {
+    schemaVersion: GOAL_PREFLIGHT_SCHEMA_VERSION,
+    runId: input.runId,
+    goalId: input.goalId,
+    ...(input.todoId ? { todoId: input.todoId } : {}),
+    requestId: input.requestId,
+    controlRevision: input.controlRevision,
+    projectionChecksum: input.projectionChecksum,
+    decision: input.decision,
+    checks,
+  };
+}
+
+function preflightStatus(status: GoalAdmissionDecisionV1['status']): GoalPreflightCheckStatus {
+  if (status === 'eligible') return 'ready';
+  if (status === 'waiting' || status === 'throttled') return 'waiting';
+  return status === 'degraded' ? 'degraded' : 'blocked';
 }

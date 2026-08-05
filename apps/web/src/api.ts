@@ -266,6 +266,55 @@ export interface GoalProjectionListResponse {
   readonly goals: readonly SafeGoalProjection[];
 }
 
+export interface GoalMutationResponse {
+  readonly schemaVersion: string;
+  readonly eventId: string;
+  readonly controlRevision: number;
+  readonly projection: SafeGoalProjection;
+}
+
+export type GoalPreflightCheckKey = 'goal' | 'gate' | 'todo' | 'claim' | 'quota' | 'capability' | 'workspace' | 'scheduler' | 'approval' | 'sandbox';
+export type GoalPreflightCheckStatus = 'ready' | 'blocked' | 'waiting' | 'degraded' | 'not_evaluated';
+
+export interface GoalPreflightCheck {
+  readonly key: GoalPreflightCheckKey;
+  readonly status: GoalPreflightCheckStatus;
+  readonly reason: string;
+  readonly revision?: string | number;
+  readonly reference?: string;
+}
+
+export interface GoalPreflightResult {
+  readonly schemaVersion: 'ready4vibe_goal_preflight_v1';
+  readonly runId: string;
+  readonly goalId: string;
+  readonly todoId?: string;
+  readonly requestId: string;
+  readonly controlRevision: number;
+  readonly projectionChecksum: string;
+  readonly decision: {
+    readonly status: 'eligible' | 'blocked' | 'waiting' | 'throttled' | 'degraded';
+    readonly reasonCode: string;
+    readonly reason: string;
+    readonly nextStep: string;
+    readonly schedulerDecisionRef?: string;
+  };
+  readonly checks: readonly GoalPreflightCheck[];
+}
+
+export interface GovernedPreflightInput extends RunConfigInput {
+  readonly runMode: 'governed';
+  readonly goalId: string;
+  readonly todoId?: string;
+  readonly expectedControlRevision: number;
+  readonly agentId: string;
+  readonly turnKey: string;
+  readonly attempt?: number;
+  readonly requestId: string;
+  readonly remainingDeliveryQuota?: number;
+  readonly expiresAt?: string;
+}
+
 export interface PairingResult {
   accessToken: string;
   csrfToken: string;
@@ -306,6 +355,48 @@ export class ApiClient {
 
   async listGoals(): Promise<GoalProjectionListResponse> {
     return this.request<GoalProjectionListResponse>('/api/v1/goals', { method: 'GET' });
+  }
+
+  async createGoal(input: { title: string; objective: string; workspaceId?: string }): Promise<GoalMutationResponse> {
+    return this.request<GoalMutationResponse>('/api/v1/goals', {
+      method: 'POST',
+      body: JSON.stringify({ eventId: clientEventId(), ...input }),
+    });
+  }
+
+  async addGoalTodo(goalId: string, input: { expectedRevision: number; title: string; priority?: number; taskClass?: 'advancement' | 'monitor' | 'user_gate' | 'user_action' | 'blocker' }): Promise<GoalMutationResponse> {
+    return this.request<GoalMutationResponse>(`/api/v1/goals/${encodeURIComponent(goalId)}/todos`, {
+      method: 'POST',
+      body: JSON.stringify({ eventId: clientEventId(), ...input }),
+    });
+  }
+
+  async openGoalGate(goalId: string, input: { expectedRevision: number; question: string; kind?: 'user_decision' | 'owner_review' | 'external_evidence' | 'health'; blocking?: boolean }): Promise<GoalMutationResponse> {
+    return this.request<GoalMutationResponse>(`/api/v1/goals/${encodeURIComponent(goalId)}/gates`, {
+      method: 'POST',
+      body: JSON.stringify({ eventId: clientEventId(), kind: 'user_decision', blocking: true, ...input }),
+    });
+  }
+
+  async resolveGoalGate(goalId: string, gateId: string, input: { expectedRevision: number; status: 'approved' | 'rejected' | 'deferred' | 'expired' }): Promise<GoalMutationResponse> {
+    return this.request<GoalMutationResponse>(`/api/v1/goals/${encodeURIComponent(goalId)}/gates/${encodeURIComponent(gateId)}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ eventId: clientEventId(), resolvedBy: 'user', ...input }),
+    });
+  }
+
+  async attachGoalEvidence(goalId: string, input: { expectedRevision: number; summary: string; status?: 'observed' | 'validated' | 'failed' | 'stale'; kind?: 'validation' | 'artifact' | 'run' | 'blocker' | 'decision' }): Promise<GoalMutationResponse> {
+    return this.request<GoalMutationResponse>(`/api/v1/goals/${encodeURIComponent(goalId)}/evidence`, {
+      method: 'POST',
+      body: JSON.stringify({ eventId: clientEventId(), kind: 'decision', status: 'observed', refs: {}, ...input }),
+    });
+  }
+
+  async preflightGoal(goalId: string, input: Omit<GovernedPreflightInput, 'goalId'>): Promise<GoalPreflightResult> {
+    return this.request<GoalPreflightResult>(`/api/v1/goals/${encodeURIComponent(goalId)}/preflight`, {
+      method: 'POST',
+      body: JSON.stringify({ ...input, goalId }),
+    });
   }
 
   async usageSummary(range: '24h' | '7d' | '30d' = '24h'): Promise<UsageSummary> {
@@ -586,4 +677,9 @@ export function parseSseFrame(frame: string): StoredEvent | undefined {
 
 function isTerminalEvent(type: string): boolean {
   return type === 'run.completed' || type === 'run.failed' || type === 'run.cancelled' || type === 'run.needs_recovery';
+}
+
+function clientEventId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `gevt_${uuid.replaceAll('-', '')}`;
 }

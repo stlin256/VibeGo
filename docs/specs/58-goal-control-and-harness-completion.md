@@ -1,5 +1,10 @@
 # Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁
 
+> Current implementation checkpoint (2026-08-05): 58-0 through 58-3 are
+> implemented and merged; 58-4a is implemented on the current branch. The
+> umbrella spec remains Draft until the later Web workflow, real Harness smoke,
+> module closure and release evidence gates are complete.
+
 - Status: Draft（58-0 已完成；58-1 contract/reducer slice 已实现，58-2 尚未接入默认运行时）
 - Date: 2026-08-05
 - Scope: Goal Control、daemon application service、Web workflow，以及核心 Harness
@@ -407,3 +412,67 @@ composition root without changing the semantics of ordinary interactive
 requests. Production composition must use the existing Scheduler,
 WorkspaceRegistry, ApprovalBroker, Sandbox settings and capability snapshot
 authority rather than duplicating their state.
+
+## Spec 58-4a design freeze: authenticated Goal mutation and read-only preflight
+
+This implementation slice is the first Web workflow increment. It connects the
+conversation-first Web shell to the already protected Goal mutation API and
+adds an explicit, non-mutating governed preflight endpoint.
+
+### In scope
+
+- Web API client methods for Goal creation, Todo creation, Gate open/resolve and
+  bounded evidence attachment. Every request uses the existing daemon pairing,
+  Bearer, CSRF and Origin boundary, a fresh client event id and the projection
+  revision supplied by the server response.
+- A Goal editor surface that lets the user select a Goal, create a Todo or
+  blocking Gate, resolve an open Gate, and attach bounded evidence. The UI
+  refreshes the projection after every successful mutation and presents stale
+  revision/conflict errors as actionable inline status instead of silently
+  dropping them.
+- `POST /api/v1/goals/:goalId/preflight`, a read-only application-service call
+  that evaluates Goal, Todo, Gate, quota, capability, workspace, Scheduler,
+  Approval and Sandbox checks for an explicit governed request. It returns
+  bounded check records, the projection checksum/revision and the existing
+  admission decision shape. It never appends a Goal event, reserves quota,
+  creates a binding, starts a run, invokes a model, or launches a tool.
+- A Web preflight card that explains each check and exposes the next safe step.
+  The card is advisory only; the governed run route remains the sole place that
+  can persist admission/binding state and start a run.
+
+### Explicitly deferred
+
+Todo claim/release token UX, governed run submission from the composer,
+terminal validation/writeback status, recovery/retry controls, responsive device
+evidence, and real-provider Harness smoke remain later 58-4/58-5 slices. This
+slice must not add a second scheduler, change the default interactive route, or
+persist claim tokens, credentials, paths, transcripts or raw tool output in the
+browser.
+
+### Acceptance evidence
+
+- Daemon tests prove preflight is side-effect free for both eligible and blocked
+  requests and that no `run.created` or quota event is produced.
+- Web/API tests prove mutation bodies contain only bounded DTOs, include CSRF
+  headers after pairing, refresh on success, and render stale/conflict errors
+  without leaking secret-shaped values.
+- Focused commands are `pnpm check:module -- @ready4vibe/daemon`,
+  `pnpm check:web`, and `pnpm diff:check`; the full `pnpm verify` gate remains
+  required before merge.
+
+## Spec 58-4a implementation note (2026-08-05)
+
+The daemon now exposes `POST /api/v1/goals/:goalId/preflight` through
+`GoalAdmissionService.preview()`. The response is a bounded
+`ready4vibe_goal_preflight_v1` projection with ten ordered checks and the
+existing admission decision shape. Both eligible and blocked fixtures prove
+that preview does not append `goal_events`, create `run_events`, reserve quota,
+create a binding, call the model or start a run. Governed request parsing also
+rejects secret-shaped keys before configuration parsing.
+
+The Web API client now covers Goal create, Todo add, Gate open/resolve, bounded
+Evidence attachment and preflight. The context rail offers these mutations and
+an explainable preflight card only when authenticated callbacks are present;
+successful mutations refresh the projection and stale/conflict errors stay
+inline. Claim/release, governed submit, recovery UI and live provider smoke are
+intentionally still deferred.

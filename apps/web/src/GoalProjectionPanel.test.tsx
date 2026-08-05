@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { GoalProjectionListResponse, SafeGoalProjection } from './api.js';
+import type { GoalPreflightResult, GoalProjectionListResponse, SafeGoalProjection } from './api.js';
 import { GoalProjectionPanel } from './GoalProjectionPanel.js';
 
 const at = '2026-08-03T00:00:00.000Z';
@@ -42,6 +42,22 @@ function projection(todoCount = 1): GoalProjectionListResponse {
 }
 
 describe('GoalProjectionPanel', () => {
+  it('renders authenticated Goal mutation controls when supplied', () => {
+    const result: GoalPreflightResult = {
+      schemaVersion: 'ready4vibe_goal_preflight_v1',
+      runId: 'run_12345678', goalId: 'goal_12345678', todoId: 'todo_00000000', requestId: 'request_12345678',
+      controlRevision: 2, projectionChecksum: 'b'.repeat(64),
+      decision: { status: 'blocked', reasonCode: 'GATE_OPEN', reason: 'A blocking Goal gate is open.', nextStep: 'resolve_gate' },
+      checks: [{ key: 'gate', status: 'blocked', reason: 'A blocking Goal gate is open.' }],
+    };
+    const empty = renderToStaticMarkup(<GoalProjectionPanel projection={{ schemaVersion: 'ready4vibe_goal_api_v0', goals: [] }} onCreateGoal={() => undefined} onRefresh={() => undefined} />);
+    expect(empty).toContain('Create goal');
+    const ready = renderToStaticMarkup(<GoalProjectionPanel projection={projection()} onAddTodo={() => undefined} onOpenGate={() => undefined} onAttachEvidence={() => undefined} onResolveGate={() => undefined} onPreflight={async () => result} onRefresh={() => undefined} />);
+    expect(ready).toContain('Manage Goal');
+    expect(ready).toContain('Preview governed run');
+    expect(ready).toContain('Approve');
+  });
+
   it('renders loading, unavailable and empty states without write controls', () => {
     const loading = renderToStaticMarkup(<GoalProjectionPanel loading onRefresh={() => undefined} />);
     expect(loading).toContain('data-state="loading"');
