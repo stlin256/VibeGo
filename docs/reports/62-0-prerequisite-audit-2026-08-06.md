@@ -7,7 +7,7 @@ and records evidence strength separately from release claims.
 ## Gate decision
 
 **62-0 audit: complete; Spec 62 release-documentation gate: constrained.** The
-matrix is current for commit `1129b45`, but it does not authorize claims that
+matrix is current for commit `11c2b33`, but it does not authorize claims that
 remain `partial`, `blocked`, or `not-run`. README changes may correct bounded
 status, setup and safety guidance; they must not call the project release-ready
 until Spec 60 and the required runtime/device/release gates are complete.
@@ -16,14 +16,14 @@ until Spec 60 and the required runtime/device/release gates are complete.
 
 | Check | Evidence |
 | --- | --- |
-| Branch / commit | `main` / `1129b45` (`origin/main`); clean worktree at audit start |
+| Branch / commit | `main` / `11c2b33` (`origin/main`); clean worktree at audit start |
 | Remote | `origin` points to the public VibeGo repository |
 | Package manager | `pnpm@11.9.0` from `package.json` |
 | Node | bundled validation runtime `v24.14.0` |
 | Workspace graph | `pnpm-workspace.yaml`: `apps/*` and `packages/*`, 22 projects |
 | Lockfile | `pnpm-lock.yaml` present; not changed by this audit |
 | Workflow fixture | `pnpm test:workflow`: **78/78 passed** |
-| Focused current slice | Agent 47/47 tests, typecheck/build; daemon resolver 6/6, typecheck |
+| Focused current slice | contracts 112/112, model-deepseek 20/20, daemon 247/247; affected typecheck/build gates pass |
 | Full release gate | not rerun at this commit; previous `pnpm verify` evidence is historical |
 | Secret boundary | no provider key, private key, cookie, full environment, or user workspace was read or written |
 
@@ -120,7 +120,7 @@ gate cannot honestly be claimed from this checkout.
 | ACME/public/Tailscale/SSH | 55/60-6 | staging-only certificate and explicit remote adapter smoke |
 | Real device/accessibility matrix | 56/62-6 | desktop/portrait/phone/fold/tri-fold/tablet plus screen reader review |
 | Install/upgrade/sign/SBOM/provenance | 53/57/60-8 | clean-machine artifact workflow and rollback evidence |
-| DeepSeek reasoning/search/reviewer production paths | 61/63 | capability-backed fixtures and separately authorized live evidence |
+| DeepSeek reasoning/search/reviewer production paths | 61/63 | capability-backed fixtures, provider/tool/reviewer wiring and separately authorized live evidence |
 
 ## Safety conclusion
 

@@ -1231,8 +1231,9 @@ Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.
 
 The fresh audit for the post-Spec-61 checkout is recorded in
 [`docs/reports/62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `1129b45` on `main`, the bounded workflow fixture is 78/78 and the affected
-Agent/daemon dedicated-reviewer gates pass. The audit still marks Spec 62 as
+At `11c2b33` on `main`, the bounded workflow fixture is 78/78; the current
+capability slice passes contracts 112/112, model-deepseek 20/20 and daemon
+247/247 focused suites. The audit still marks Spec 62 as
 documentation-constrained rather than release-ready: real-device,
 public-certificate, Tailscale/SSH, installer/signing/SBOM, cross-platform host
 and complete Spec 60 evidence remain partial or blocked. Spec 61 remains

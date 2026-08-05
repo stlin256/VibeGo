@@ -1245,8 +1245,9 @@ unchanged.
 ### Spec 62-0 current prerequisite audit (2026-08-06)
 
 The fresh post-Spec-61 matrix is [`62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `1129b45` the fixed workflow fixture is 78/78 and the dedicated-reviewer
-injection seam is focused-tested. Spec 62 may correct bounded user-facing
+At `11c2b33` the fixed workflow fixture is 78/78; the capability probe/run
+snapshot slice and dedicated-reviewer injection seam are focused-tested. Spec
+62 may correct bounded user-facing
 documentation, but it cannot claim release-ready Goal/full-host/ACME/
 Tailscale/SSH/real-device/signed-release support while the matrix remains
 partial or blocked. The earlier 2026-08-05 audit remains historical.
