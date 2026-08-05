@@ -1,6 +1,6 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R0 prerequisite verification complete (docs-only; no runtime
+- Status: R1 contract design frozen (implementation pending; no runtime
   behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
@@ -186,6 +186,35 @@ The contract must not contain an API key, private key, raw environment map,
 absolute workspace path or complete tool arguments. A resolved run snapshot adds
 the provider, workspace and sandbox revisions required by existing RunManager
 and event contracts, without changing their authority.
+
+#### 3.3.1 R1 contract freeze
+
+ADR 0033 freezes the first contract slice as `capability-profile/v1`. The
+request contains only bounded intent and revision metadata:
+
+```text
+schemaVersion
+profileId
+transportMode
+workspaceId?
+modelMode
+filesystemMode
+shellMode
+networkMode
+mcpSkillMode
+approvalMode
+sandboxRef?
+policyRevision
+requiresAcknowledgement
+updatedAt
+```
+
+`workspaceId`, `sandboxRef` and `policyRevision` are opaque bounded ids; they
+are not paths, image names, credentials or arbitrary JSON. Each enum is
+strictly allowlisted, every object is `.strict()`, and shared privacy guards
+reject secret-shaped values, environment maps, control characters and absolute
+paths. The contract is metadata-only: it does not resolve a workspace, probe a
+provider, start a process, or grant an approval.
 
 ### 3.4 Core Harness closure contract
 
@@ -443,6 +472,9 @@ On restart:
   workspace state, policy revision and runtime health.
 - Test monotonic tightening: a client request can only reduce authority.
 - Test profile snapshot isolation and stale revision fail-closed behavior.
+
+The contract-only commit precedes the resolver commit. Both remain below the
+daemon application boundary and are independently mergeable.
 
 ### 52-R2: Onboarding and capability status UI
 

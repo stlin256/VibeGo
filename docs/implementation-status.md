@@ -363,17 +363,18 @@ The following work is documented but not fully implemented yet:
   client SDK remain planned. Development can still use the separate Vite
   server; native Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
-  cross-cutting capability-profile and first-run UX gate is now specified. It
+  cross-cutting capability-profile and first-run UX gate is now specified; ADR
+  0033 freezes the R1 contract boundary. It
   defines preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
   profile/run snapshot isolation and Host-first acceptance. Its release gate
   additionally covers Goal governed admission, real Tailscale/SSH transport,
   ACME staging/renewal, a core Harness completeness matrix and a mandatory
   out-of-band real LLM smoke. The mandatory R0 prerequisite gate passed on
-  2026-08-05; only the versioned contract and pure resolver are authorized
-  next. No profile resolver, new default capability or run-path behavior has
-  been implemented by this documentation change. Native clients remain
-  post-release and do not block the Web/Host release.
+  2026-08-05; the versioned contract design is now frozen by ADR 0033. The
+  contract-only slice and pure resolver remain below the daemon boundary; no
+  new default capability or run-path behavior is authorized. Native clients
+  remain post-release and do not block the Web/Host release.
 
 These six specs are design/planning gates only. They do not change the
 current statement that untrusted network/model/MCP/Skill/shell side effects
