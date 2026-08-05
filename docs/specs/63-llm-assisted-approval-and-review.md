@@ -1,6 +1,7 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: Draft (planning specification; no runtime behavior changes)
+- Status: 63-1 implemented (contracts and default-disabled Noop reviewer;
+  provider/runtime integration remains staged)
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -215,15 +216,30 @@ from settings, events, logs, Web state and evidence bundles.
 
 ### 63-0: prerequisite and authority audit
 
-Reconfirm Spec 48/59 approval boundaries, model snapshot contracts, event
-privacy rules and the current default interactive path. Record the matrix before
-runtime changes.
+Completed as a bounded authority audit in
+[`spec63-0-prerequisite-audit-2026-08-05.md`](../reports/spec63-0-prerequisite-audit-2026-08-05.md).
+Spec 48/59 approval boundaries, immutable model snapshots, event privacy and
+the default interactive path were rechecked. The audit confirms that the
+reviewer has no capability authority and that `run_events`, `goal_events`,
+AgentLoop, RunManager, Scheduler, Approval, Sandbox and Workspace remain the
+sole authorities in scope. No provider, route, event table or runtime behavior
+was changed by 63-0.
 
 ### 63-1: contracts and Noop reviewer
 
-Add strict `llm-approval/v1` contracts, `NoopApprovalReviewer`, canonical
-fingerprints and redaction tests. `enabled=false` must make zero provider,
-HTTP, subprocess or prompt calls.
+Implemented in `packages/contracts/src/llm-approval.ts` and
+`packages/agent/src/approval-review.ts`. The strict `llm-approval/v1`
+contracts cover snapshots, bounded reviewer requests/decisions, settings
+projection and audit projections. They reject unknown fields, secret-shaped
+fields/values, environment/headers/raw content, arbitrary URLs, absolute paths
+and unbounded text. Canonical JSON/SHA-256 fingerprints and an in-memory
+event/idempotency ledger fail closed on payload conflicts. The migration
+default is `enabled=false`, `status=disabled`, `posture=off`; the
+`NoopApprovalReviewer` performs no provider, HTTP, subprocess or prompt call
+and returns bounded `unavailable` decisions. Focused evidence is recorded in
+[`spec63-1-contracts-noop-2026-08-05.md`](../reports/spec63-1-contracts-noop-2026-08-05.md).
+No ApprovalBroker, AgentLoop, RunManager, Scheduler, Sandbox, Workspace or
+event-authority behavior changes are included in this phase.
 
 ### 63-2: same-as-run reviewer adapter
 

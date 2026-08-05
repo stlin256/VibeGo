@@ -998,7 +998,7 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
-## Spec 63：LLM 辅助审批与审查（Draft）
+## Spec 63：LLM 辅助审批与审查（63-1 checkpoint）
 
 详见 [Spec 63](specs/63-llm-assisted-approval-and-review.md) 与
 [ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)。该规格为现有
@@ -1008,8 +1008,20 @@ model。LLM 只能对 deterministic policy 已判定 eligible 的精确 approval
 建议，不能批准 full-host、提权、网络、secret、破坏性 Git/filesystem、unknown tool
 或不可信内容的 host 执行；超时、不可用、格式错误和指纹不匹配继续走现有 ask/deny
 fail-closed 路径。63-0 至 63-7 覆盖 contract/Noop、same-as-run、dedicated settings、
-ApprovalBroker 集成、Web 状态、失败与并发证据及显式 live smoke；本阶段只有规划文档，
-不改变 AgentLoop、RunManager 默认启动路径或事件事实源。
+ApprovalBroker 集成、Web 状态、失败与并发证据及显式 live smoke。
+
+63-0 authority audit 已记录于
+[`spec63-0-prerequisite-audit-2026-08-05.md`](reports/spec63-0-prerequisite-audit-2026-08-05.md)。63-1 已实现：
+`llm-approval/v1` strict contracts 覆盖 reviewer snapshot、bounded
+request/decision、settings projection 和 audit projection；privacy 校验拒绝
+secret/API key/token、environment/header/raw content、任意 URL、绝对路径和超长文本。
+`@ready4vibe/agent` 提供 canonical SHA-256 fingerprint、冲突安全的内存
+idempotency ledger 与无 provider 的 `NoopApprovalReviewer`。迁移默认仍为
+`enabled=false`、`status=disabled`、`posture=off`，Noop 不调用 provider、HTTP、
+subprocess 或 prompt。证据见
+[`spec63-1-contracts-noop-2026-08-05.md`](reports/spec63-1-contracts-noop-2026-08-05.md)。
+本阶段不改变 AgentLoop、RunManager 默认启动路径、ApprovalBroker 或事件事实源；
+same-as-run、dedicated settings、Broker 集成和 Web 仍待后续阶段。
 
 ## Spec 58-5 audit checkpoint (2026-08-05)
 

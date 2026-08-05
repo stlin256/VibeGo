@@ -1,6 +1,6 @@
 # ADR 0044: LLM-assisted approval review boundary
 
-- Status: Proposed
+- Status: Accepted for staged implementation (63-1 complete; runtime slices pending)
 - Date: 2026-08-05
 - Related: [Spec 63](../specs/63-llm-assisted-approval-and-review.md),
   [ADR 0003](0003-lan-access-and-codex-like-approval.md),
@@ -59,3 +59,13 @@ a second scheduler/approval authority.
   Web status controls are required.
 - Real reviewer behavior must be opt-in evidence and must never be confused
   with deterministic unit or workflow tests.
+
+## 63-1 implementation checkpoint
+
+The first slice now ships strict `llm-approval/v1` contracts and a
+provider-free `NoopApprovalReviewer`. The default snapshot is disabled and
+returns only a bounded `unavailable` decision; no provider, HTTP, subprocess,
+prompt, ApprovalBroker, AgentLoop or event-authority path is invoked. Canonical
+fingerprints and an in-memory idempotency ledger reject changed payloads for a
+reused event or idempotency key. Same-as-run provider calls, dedicated settings
+and ApprovalBroker intersection remain explicitly staged for 63-2 onward.

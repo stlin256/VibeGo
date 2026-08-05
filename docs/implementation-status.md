@@ -925,7 +925,7 @@ user-facing README/Quickstart/release wording is updated. The former
 `62-0-prerequisite-audit-2026-08-05.md` historical audit; it is not a fresh
 release gate for the new Spec 61 and must be refreshed after DeepSeek evidence.
 
-## Spec 63 planning note (2026-08-05)
+## Spec 63 planning and 63-1 implementation checkpoint (2026-08-05)
 
 `docs/specs/63-llm-assisted-approval-and-review.md` and
 `docs/adr/0044-llm-assisted-approval-review-boundary.md` define the proposed
@@ -936,11 +936,25 @@ the daemon-owned secret-reference boundary. The reviewer is advisory only and
 may confirm an exact, deterministic low-risk approval key; it cannot widen
 policy, permission, Goal, Scheduler, Sandbox, Workspace or network scope.
 
-No runtime code, settings route, Web control, provider call or event schema has
-been changed by Spec 63 yet. Timeout, provider failure, malformed output,
-prompt-injection-shaped content and fingerprint mismatch are specified to stay
-on the existing safe `ask`/`deny` path. Implementation is staged as 63-0 through
-63-7 and must preserve the default interactive run path and existing event
+The 63-0 authority audit is recorded in
+[`spec63-0-prerequisite-audit-2026-08-05.md`](reports/spec63-0-prerequisite-audit-2026-08-05.md).
+The 63-1 contract/Noop slice is implemented. `packages/contracts` now exports
+strict `llm-approval/v1` schemas for reviewer snapshots, bounded requests and
+decisions, settings projection and audit projection. Secret-shaped fields and
+values, environment/header/raw content, arbitrary URLs, absolute paths,
+control characters, oversized text and unknown fields are rejected. The agent
+package adds canonical SHA-256 fingerprints, an in-memory event/idempotency
+ledger that fails closed on changed payloads, and a provider-free
+`NoopApprovalReviewer`. Its migration snapshot is `enabled=false`,
+`status=disabled`, `posture=off`; review returns bounded `unavailable` without
+provider, HTTP, subprocess or prompt work. Focused evidence is recorded in
+[`spec63-1-contracts-noop-2026-08-05.md`](reports/spec63-1-contracts-noop-2026-08-05.md).
+
+No settings route, Web control, provider call, ApprovalBroker integration or
+event-authority behavior changed. Timeout, provider failure, malformed output,
+prompt-injection-shaped content and fingerprint mismatch remain specified to
+stay on the existing safe `ask`/`deny` path. Implementation is staged as 63-0
+through 63-7 and must preserve the default interactive run path and existing
 authorities until the corresponding focused tests and evidence are complete.
 
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)

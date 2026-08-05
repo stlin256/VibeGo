@@ -24,6 +24,7 @@ import { Scheduler, SchedulerCancelledError } from '@ready4vibe/scheduler';
 import { ApprovalBrokerError, type ApprovalBroker, type ApprovalDetails, type ApprovalRequest, type ApprovalResolution } from './approval.js';
 
 export * from './approval.js';
+export * from './approval-review.js';
 
 export interface AgentRunRequest {
   config: RunConfig;
