@@ -1,6 +1,6 @@
 # Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁
 
-- Status: Draft（规划规格；尚未接入默认运行时）
+- Status: Draft（58-0 prerequisite audit 已完成；58-1 尚未接入默认运行时）
 - Date: 2026-08-05
 - Scope: Goal Control、daemon application service、Web workflow，以及核心 Harness
   的完成度审计和真实运行验收
@@ -38,6 +38,12 @@
 ```
 
 ## 2. 强制前置复核门禁
+
+58-0 的当前 checkout 复核已记录在
+[prerequisite verification report](../reports/58-0-prerequisite-verification-2026-08-05.md)。
+报告只确认现有 contracts、replay、SQLite、bounded mutation/read-only API
+和既有 Harness 边界；它没有把 governed admission、quota reservation、validation
+writeback 或真实 E2E smoke 标记为完成。
 
 在实现本规格任何 runtime 代码前，必须重新核实此前所有相关 Spec 是否真的已经完成，
 不能依据旧的 `implementation-status.md`、旧测试数量或其他 Agent 报告直接判定完成。
@@ -164,12 +170,17 @@ conflict。
 
 ## 6. 实现阶段
 
-### 58-0：全量前置复核（必须先完成）
+### 58-0：全量前置复核（已完成文档门禁）
 
-- 生成当前 checkout 的 prerequisite matrix；
-- 识别每个核心模块的 A–G level 和 design-only/fake-only 行；
-- 重跑受影响 focused gates 和一次完整 `pnpm verify`；
-- 记录未完成项、环境前提和不纳入本阶段的 optional capability。
+- 已生成当前 checkout 的 prerequisite matrix，见审计报告；
+- 已识别每个核心模块的 A–G level、partial 和 design/fake-only 行；
+- 已重跑 Goal/daemon/Web 受影响 focused gate 和一次完整 `pnpm verify`；
+- 已记录未完成项、环境前提和不纳入本阶段的 optional capability。
+
+58-0 通过后，后续代码实现仍必须先更新本规格、roadmap 和
+`implementation-status.md`，再按 `58-1 → 58-7` 独立提交。任何 runtime 改动
+必须继续保持交互式无绑定 run、`run_events`、`goal_events`、AgentLoop、RunManager、
+Scheduler、Approval、Sandbox 和 WorkspaceRegistry 的现有权威边界。
 
 ### 58-1：Goal domain completion
 

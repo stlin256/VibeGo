@@ -101,6 +101,14 @@ state，也不能绕过 daemon 的 auth、approval 或 sandbox。
 
 ## 后续动作
 
+Spec 58-0 的当前 checkout prerequisite audit 已完成并记录在
+[58-0 verification report](../reports/58-0-prerequisite-verification-2026-08-05.md)。
+该复核确认现有 Phase 0/1 storage、projection/replay、bounded mutation 和只读
+API 仍满足本 ADR 的边界，同时确认 governed admission、binding v1、quota
+reservation、validation writeback 和真实 Harness evidence 尚未实现。后续实现必须
+继续保持无绑定 interactive run 的原有行为，并在独立提交中逐步引入合同和应用层
+组合；本 ADR 的 LoopX 不 vendor、独立 `goal_events` 和单一执行事实源决策不变。
+
 Phase 0 已按 [Spec 34](../specs/34-goal-control-plane-loopx-integration.md) 完成
 contract schema、projection/reducer、幂等/冲突测试、claim revision 门禁和隐私陷阱；
 Phase 1 的独立 SQLite `goal_events` adapter、daemon 可选 store wiring 以及受保护的
