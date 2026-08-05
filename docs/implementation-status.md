@@ -847,10 +847,11 @@ thinking modes, advisory reviewer and explicit provider-owned search) behind
 VibeGo's existing ModelProvider, ContextManager, Approval, Sandbox, Scheduler,
 Goal and event authorities. It does not copy upstream code, add Python/srt, or
 claim that the existing generic OpenAI-compatible adapter is already a complete
-DeepSeek integration. `61-1` contract/capability and `61-2` protocol
-adapter/streaming work are complete; `61-3` daemon/AgentLoop/context integration
-is in progress through the existing `modelBindingForRun` seam. Web settings, real
-smoke and failure evidence remain staged under 61-4 through 61-7.
+DeepSeek integration. `61-1` contract/capability, `61-2` protocol
+adapter/streaming and `61-3` daemon/AgentLoop/context integration checkpoints
+are complete through the existing `modelBindingForRun` seam. The capability
+adapter checkpoint for 61-4 is also complete; application wiring, Web settings,
+real smoke and release evidence remain staged under 61-4 through 61-7.
 
 ### Spec 61-1 contract checkpoint (2026-08-05)
 
@@ -877,7 +878,7 @@ typecheck/build passing; the existing `model-openai` package remains 19/19. No
 daemon route, AgentLoop branch, run/goal event or default provider binding changed;
 61-3 owns the application snapshot integration.
 
-### Spec 61-3 application binding checkpoint (implementation in progress, 2026-08-05)
+### Spec 61-3 application binding checkpoint (complete, 2026-08-05)
 
 The integration slice adds an opt-in DeepSeek binding to the existing daemon
 model settings path. `READY4VIBE_MODEL_PROVIDER=deepseek` is the only
@@ -898,6 +899,21 @@ budgeting, multi-tool aggregation, approval and scheduler boundaries continue
 to execute through their original authorities. Probe, reviewer/search
 capabilities, Web settings and live DeepSeek evidence remain staged for 61-4
 through 61-7.
+
+### Spec 61-4 capability-gated reviewer/search checkpoint (adapter complete, 2026-08-05)
+
+The adapter slice adds a pure thinking-mode capability gate, a bounded
+`DeepSeekReviewProvider` that can only return an
+advisory decision for an exact low-risk approval key, and a provider-owned
+search response mapper that emits bounded `retrieval`/`untrusted` context
+items. Reviewer calls will use a sanitized request and a runtime-only key;
+search will require an explicit Responses capability probe, enabled network and
+approval. Ineligible operations, malformed output, timeout, cancellation and
+unknown capabilities will fail closed without replaying a tool call. The
+adapter checkpoint passes 13/13 focused tests and model-deepseek
+typecheck/build. It does not wire a second scheduler, alter ApprovalBroker
+authority, or add a DeepSeek branch to AgentLoop; application wiring, Web
+settings and live provider evidence remain later phases.
 
 ## Spec 62 planning note (2026-08-05)
 

@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2 已完成；61-3 integration 实施中；本文件不把规划写成已完成能力）
+- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint 已完成；61-4 application wiring、61-5/61-6/61-7 后置；本文件不把规划写成已完成能力）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -378,7 +378,7 @@ translator、稳定 tool-call ID、usage/finish/error 映射、取消和 partial
 no-replay；`packages/model-deepseek` focused tests 7/7、typecheck/build 通过，
 `model-openai` 回归 19/19，仍未接入 daemon/AgentLoop。
 
-### 61-3：AgentLoop/tool/context integration
+### 61-3：AgentLoop/tool/context integration（checkpoint complete）
 
 将 provider snapshot 接入现有 daemon application service；保持 AgentLoop 核心状态机、
 Scheduler、Approval、Sandbox、WorkspaceRegistry 和 event authorities 不变。完成多调用
@@ -387,13 +387,22 @@ turn、ContextManager 回填、tool-call ledger、recovery no-replay 和 immutab
 必须一次性捕获运行时 provider、generic `ModelProviderSnapshot` 和 secret-free
 `DeepSeekRunSnapshot`，并由 AgentLoop 在 `run.created` 保存；设置切换只影响新 run，
 interactive 默认 provider、Goal admission、Scheduler、Approval、Sandbox、Workspace
-和 `run_events`/`goal_events` 权威保持不变。
+和 `run_events`/`goal_events` 权威保持不变。该 checkpoint 已通过 contracts、
+adapter、AgentLoop 和 daemon model/run focused gates；不宣称已完成 Web、probe
+或真实 provider evidence。
 
 ### 61-4：Thinking、reviewer 与 provider-owned search
 
-按 capability gating 实现 thinking modes、advisory reviewer 和可选 server-side search；
-所有低打扰路径必须经过既有 permission/approval/security gates，补齐 degraded/fail-closed
-测试。
+先实现独立 `packages/model-deepseek` capability adapter 与 fixture：thinking
+`high/max` 只有在 ready capability snapshot 明确声明 reasoning 时才允许；
+`DeepSeekReviewProvider` 只接收严格、bounded、fingerprint 化的低风险请求，
+返回 advisory `allow`/`ask`/`deny`/`unavailable`，并把 timeout、取消、4xx/5xx、
+malformed JSON 和 fingerprint mismatch 映射为 fail-closed unavailable；它不
+能放宽 deterministic policy。provider-owned search 只接受显式 Responses
+capability、network-enabled 和 approval-ready gate，解析为 bounded
+`source='retrieval'`、`trust='untrusted'` context item；不保存 raw page 或
+完整 provider response。该阶段不改 AgentLoop 核心状态机、ApprovalBroker、
+Scheduler、Sandbox、Goal 或 Web 设置，后续由 61-5/63 负责应用/UI wiring。
 
 ### 61-5：Web 设置与 onboarding
 

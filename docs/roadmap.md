@@ -969,17 +969,24 @@ Approval、Sandbox、Goal、Scheduler、Workspace 和事件事实源。61-0 至 
 [上游 harness 调研](research/upstream-harness-implementations.md) 与
 [ADR 0045](adr/0045-deepseek-provider-clean-room-boundary.md)，当前进入 61-1
 contract/capability 实施，仍只记录为 Draft。61-1 checkpoint 已完成 strict
-`deepseek-provider/v1` Zod contracts 与 8/8 focused tests；它不发起网络请求、不改变
+`deepseek-provider/v1` Zod contracts 与 9/9 focused tests；它不发起网络请求、不改变
 AgentLoop 或默认 run，61-2 显式协议 streaming adapter 已完成；该 adapter 只接受
 complete endpoint、运行时 credential 和冻结 config snapshot，首个可见 delta 后不透明重试，
-三种 profile 与 7/7 focused tests 已验证，当前进入 61-3 的 daemon/AgentLoop/context
+三种 profile 与 7/7 focused tests 已验证，61-3 的 daemon/AgentLoop/context
 snapshot integration：仅当 `READY4VIBE_MODEL_PROVIDER=deepseek` 时通过已有
 `modelBindingForRun` seam 捕获 `DeepSeekProvider`、generic snapshot 与 secret-free
 `DeepSeekRunSnapshot`，并在 `run.created` 中保留一次性快照；默认 interactive run
 路径和后续设置隔离保持不变。该应用 checkpoint 已通过 contracts 9/9、adapter
 7/7、AgentLoop 19/19、daemon model/run 26/26 focused tests 与相关 typecheck；
-Probe、reviewer/search、Web 设置和真实 DeepSeek evidence 仍按 61-4 至 61-7
-后置，不宣称本 checkpoint 已完成完整 provider 发布。
+Probe、Web 设置和真实 DeepSeek evidence 仍按 61-4 至 61-7 后置，不宣称本
+checkpoint 已完成完整 provider 发布。
+
+61-4 capability-gated adapter 已完成：thinking 只在 capability snapshot
+明确声明时允许 high/max，reviewer 只返回 exact-key 的 advisory/ask/deny/
+unavailable，provider-owned search 只在 Responses probe、network 与 approval
+均 ready 时映射为 bounded `retrieval`/`untrusted` ContextItem；model-deepseek
+focused gate 为 13/13。该 adapter slice 不改 AgentLoop 核心循环、ApprovalBroker、
+Scheduler、Sandbox、Goal 或 Web 设置，后续仍需 application/UI wiring 与 live evidence。
 
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 

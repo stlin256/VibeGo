@@ -1,6 +1,7 @@
 import {
   DeepSeekConfigSchema,
   type DeepSeekConfig,
+  type DeepSeekCapabilitySnapshot,
   type DeepSeekEndpointProfile,
   type ModelEvent,
   type ModelProvider,
@@ -11,6 +12,8 @@ export type FetchImplementation = (input: string, init?: RequestInit) => Promise
 
 export interface DeepSeekProviderOptions {
   readonly config: DeepSeekConfig;
+  /** Required for high/max thinking; unprobed capabilities fail closed. */
+  readonly capability?: DeepSeekCapabilitySnapshot;
   /** Runtime-only credential. It is never included in events, errors or snapshots. */
   readonly apiKey: string;
   readonly fetchImpl?: FetchImplementation;
@@ -32,6 +35,10 @@ export class DeepSeekProvider implements ModelProvider {
   constructor(options: DeepSeekProviderOptions) {
     this.config = DeepSeekConfigSchema.parse(options.config);
     if (typeof options.apiKey !== 'string' || options.apiKey.length === 0) throw new Error('DeepSeek runtime credential is required');
+    if ((this.config.thinkingMode === 'high' || this.config.thinkingMode === 'max')
+      && (!options.capability || options.capability.status !== 'ready' || !options.capability.reasoning)) {
+      throw new Error('DEEPSEEK_THINKING_UNSUPPORTED');
+    }
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
     this.capabilities = {
@@ -422,3 +429,5 @@ function parseRetryAfter(value: string | null): number | undefined {
   if (!Number.isFinite(seconds) || seconds < 0) return undefined;
   return Math.min(30_000, Math.trunc(seconds * 1_000));
 }
+
+export * from './capabilities.js';
