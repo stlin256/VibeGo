@@ -158,6 +158,12 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
 
+  packages/model-deepseek:
+    dependencies:
+      '@ready4vibe/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/model-openai:
     dependencies:
       '@ready4vibe/contracts':

@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1 已完成；61-2 protocol adapter 实施中；本文件不把规划写成已完成能力）
+- Status: Draft（61-0/61-1/61-2 已完成；61-3 integration 待实施；本文件不把规划写成已完成能力）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -372,7 +372,11 @@ checkpoint 不改变 AgentLoop、RunManager、Web、run_events/goal_events 或�
 补齐 Anthropic profile 的显式边界、usage、tool-call aggregation、timeout、cancel、
 retry/replay 和 error mapping。当前实现范围是独立 `packages/model-deepseek`：请求只接受
 已校验的 complete endpoint 和运行时 credential，SSE 仅输出 canonical `ModelEvent`，
-并在首个可见 delta 后禁止透明重试；不改 AgentLoop 或默认 provider binding。
+并在首个可见 delta 后禁止透明重试；不改 AgentLoop 或默认 provider binding。当前
+checkpoint 已完成三种 profile 的请求/header 组装、Chat/Responses/Anthropic SSE
+translator、稳定 tool-call ID、usage/finish/error 映射、取消和 partial-stream
+no-replay；`packages/model-deepseek` focused tests 7/7、typecheck/build 通过，
+`model-openai` 回归 19/19，仍未接入 daemon/AgentLoop。
 
 ### 61-3：AgentLoop/tool/context integration
 

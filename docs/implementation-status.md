@@ -847,9 +847,10 @@ thinking modes, advisory reviewer and explicit provider-owned search) behind
 VibeGo's existing ModelProvider, ContextManager, Approval, Sandbox, Scheduler,
 Goal and event authorities. It does not copy upstream code, add Python/srt, or
 claim that the existing generic OpenAI-compatible adapter is already a complete
-DeepSeek integration. `61-1` contract/capability work is complete and `61-2`
-protocol adapter/streaming is the current implementation slice; Web settings, real
-smoke and failure evidence remain staged under 61-3 through 61-7.
+DeepSeek integration. `61-1` contract/capability and `61-2` protocol
+adapter/streaming work are complete; `61-3` daemon/AgentLoop/context integration
+is the current implementation slice. Web settings, real smoke and failure evidence
+remain staged under 61-4 through 61-7.
 
 ### Spec 61-1 contract checkpoint (2026-08-05)
 
@@ -862,18 +863,19 @@ secret-shaped values, absolute paths, profile/path mismatches and provider-owned
 search on a non-Responses profile. `deepseek-provider.test.ts` passes 8/8 and the
 contracts package typecheck passes. This is contract-only: no provider request,
 Web setting, AgentLoop branch, run event, Goal admission or default run behavior
-changed; 61-2 owns protocol streaming next.
+changed; the completed 61-2 protocol checkpoint is recorded below.
 
-### Spec 61-2 protocol adapter checkpoint (in progress, 2026-08-05)
+### Spec 61-2 protocol adapter checkpoint (2026-08-05)
 
-The next slice is isolated in `packages/model-deepseek`; it will translate the
-three explicit endpoint profiles into canonical `ModelEvent` values using
-bounded SSE parsing, stable tool-call IDs, usage/finish mapping, cancellation and
-stable DeepSeek error codes. The adapter receives credentials only at runtime,
-never persists them, and will not add a DeepSeek branch to AgentLoop or change the
-existing OpenAI-compatible provider. Tests are written first for text/tool/usage/
-finish, malformed frames, HTTP/retry mapping, cancellation and partial-stream
-no-replay before the package is committed.
+`packages/model-deepseek` now owns the explicit Chat Completions, Responses and
+Anthropic Messages translators. It sends only complete validated endpoints,
+uses runtime-only credentials, maps bounded text/tool/usage/finish events and
+stable DeepSeek errors, and suppresses private reasoning payloads. It defers a
+terminal event until later usage frames are observed and never transparently
+replays a partial stream. Focused adapter evidence is 7/7 tests with package
+typecheck/build passing; the existing `model-openai` package remains 19/19. No
+daemon route, AgentLoop branch, run/goal event or default provider binding changed;
+61-3 owns the application snapshot integration.
 
 ## Spec 62 planning note (2026-08-05)
 
