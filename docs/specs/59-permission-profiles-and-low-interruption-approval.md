@@ -213,8 +213,54 @@ continuation 和 capability settings；记录哪些现有字段可兼容，哪�
 
 ### 59-1：Permission/Approval contracts
 
+The 59-1 contract boundary is frozen as follows:
+
+- `permission-profile/v1` is a strict, secret-free intent/resolution model. It
+  separates workspace-only and host scopes, process/sandbox scope, network and
+  MCP/Skill capabilities, task trust, approval posture, policy/capability/
+  sandbox revisions, and immutable timestamps. `full-host` is never a default
+  and requires an explicit confirmation at the application boundary.
+- `bounded-auto`, `session-auto`, `explicit`, and `none` are enum values
+  only; the contract does not grant execution authority. `session-auto` is
+  valid only for a host-capable profile and remains bounded by scope, TTL, usage
+  count and policy revision.
+- Session grants contain only opaque IDs, bounded scope metadata, revisions,
+  expiry/usage/revocation state and an audit reference. They never contain a
+  bearer token, credential, path, command, environment, transcript or raw tool
+  argument.
+- Confirmation and revoke requests are explicit, idempotency-friendly DTOs;
+  status projections expose effective scope, bounded reason codes and the next
+  safe step without returning host paths or secrets. Unknown fields, absolute
+  paths, control text and secret-shaped strings fail closed.
+- The pure contract package exposes a safe `workspace-coding` default factory
+  for legacy settings migration. It does not silently accept malformed or
+  unsafe legacy values; application code must record the migration and persist
+  the resulting non-secret revision through the later 59-3 settings slice.
+
+Acceptance evidence for this slice is contract-only: strict Zod parsing,
+cross-field safety invariants, safe-default migration fixtures and focused
+contract tests. No AgentLoop, Scheduler, ApprovalBroker, SandboxResolver,
+daemon route, Web setting or run snapshot is changed by 59-1.
+
+
 新增 versioned permission profile、approval posture、session grant、confirmation、
 revoke/status DTO；拒绝 secret/path/未知字段；为旧 profile 提供安全默认迁移。
+
+### 59-1 implementation note (2026-08-05)
+
+The pure contracts slice is implemented in
+`packages/contracts/src/permission-profile.ts` and exported from the contracts
+barrel. It provides strict schemas and parsers for permission profile intent and
+resolution, settings projections, exact approval keys, bounded session grants,
+full-host confirmation, revoke requests/results and status projections. Cross
+field checks enforce trusted explicit host confirmation, sandbox references,
+exact-key bounded-auto, expiry/usage/revoke invariants and no effective profile
+on blocked/revoked/expired status. `createSafeDefaultPermissionProfile()`
+is the only legacy migration target and never enables host, network or MCP/Skill.
+
+The focused contracts gate passes with 21 test files and 92 tests. No daemon,
+AgentLoop, Scheduler, ApprovalBroker, SandboxResolver, Web route, run snapshot,
+`run_events` or `goal_events` behavior changes in 59-1.
 
 ### 59-2：Policy/Sandbox application wiring
 

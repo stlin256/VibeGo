@@ -212,3 +212,4 @@ export * from './release-publishing.js';
 export * from './host-recovery.js';
 export * from './capability-profile.js';
 export * from './capability-profile-settings.js';
+export * from './permission-profile.js';

@@ -611,6 +611,18 @@ fallback for untrusted content or an unhealthy external sandbox, and never widen
 network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
 No runtime behavior is claimed by this planning note.
 
+## Spec 59-1 implementation note (2026-08-05)
+
+`packages/contracts/src/permission-profile.ts` now exports strict
+permission-profile intent/resolution, settings, exact approval-key, session
+grant, confirmation, revoke and status contracts. The schema rejects unknown,
+secret-shaped, control-text and absolute-path values and enforces trusted
+explicit full-host confirmation, sandbox references, bounded-auto exact keys,
+grant expiry/usage/revocation and fail-closed effective projections. The safe
+legacy factory defaults to workspace-coding with no host, network or MCP/Skill.
+The contracts focused gate passes 21 files / 92 tests. Runtime wiring remains
+deferred to Spec 59-2 onward.
+
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 
 The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).

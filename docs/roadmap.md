@@ -849,6 +849,20 @@ full-host 不是默认权限，不自动开启网络，不接受 untrusted conte
 quota、Scheduler、Approval、Sandbox 或 managed policy。Spec 59 将按
 `59-0 → 59-5` 独立提交推进，并在实现完成前保持当前 run 行为不变。
 
+## Spec 59-1 implementation checkpoint: permission and approval contracts
+
+The existing Spec 59 is now entering its first implementation slice. The
+59-0 review confirms that Spec 52 capability profiles, the policy compiler,
+sandbox runtime and approval continuation remain separate authorities. The
+59-1 slice adds only strict, versioned permission-profile, approval-posture,
+session-grant, confirmation, revoke and status contracts; it does not wire a
+new runtime, settings route, Web control, host process or full-host fallback.
+
+The 59-1 contract implementation is now complete: 21 contract test files and
+92 tests pass. The implementation remains pure and secret-free; policy,
+sandbox, approval, daemon settings, Web and full-host execution remain later
+59-2 through 59-5 slices.
+
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 
 详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程
