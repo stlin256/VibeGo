@@ -1196,3 +1196,24 @@ window filter is behaving as specified; the fixture now uses a bounded time
 relative to the test clock. Daemon focused tests (222/222) and the full gate
 pass. This is a test-only correction and does not change retention, event
 schemas, or runtime authorities.
+
+## Spec 61-5 next slice: DeepSeek settings and onboarding (2026-08-05)
+
+Implement the provider-specific settings boundary before any live-provider
+evidence: strict non-secret profile persistence, write-only daemon credential
+handling, explicit complete-endpoint probe, capability-gated thinking/search
+status, revision-safe PATCH semantics, and a compact responsive Web card. The
+existing generic model settings API remains unchanged for compatibility. Focused
+contracts/daemon/Web tests are the gate; real DeepSeek requests remain opt-in
+and belong to Spec 61-6. No AgentLoop, Scheduler, Approval, Sandbox, Goal or
+event-authority changes are permitted in this slice.
+
+### Spec 61-5 implementation checkpoint (2026-08-05)
+
+The first DeepSeek settings slice is implemented and focused-gated. It adds a
+strict secret-free profile/status contract, daemon-owned write-only key input,
+explicit complete-endpoint probe, revision fencing, capability-gated thinking
+and search, and a responsive Web card. The existing generic model settings
+surface and all run/Goal/permission authorities remain unchanged. Contracts,
+adapter, daemon, and Web focused tests plus typechecks pass; live provider
+requests and reviewer/ApprovalBroker integration remain deferred to 61-6/63.

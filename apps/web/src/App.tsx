@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalMutationResponse, GoalPreflightResult, GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
 import { ContextRail, ConversationHeader, ConversationShell, PermissionProfileCard, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, WorkspaceRail } from './components/vibego/index.js';
@@ -44,6 +44,12 @@ export interface AppProps {
   onConfigureModel?: (input: ModelSettingsInput) => Promise<void> | void;
   onClearModelSettings?: () => Promise<void> | void;
   onProbeModel?: (endpoint: string) => Promise<void> | void;
+  deepSeekSettings?: DeepSeekSettingsStatus;
+  deepSeekSettingsUnavailable?: boolean;
+  deepSeekProbe?: DeepSeekProbeResult;
+  onConfigureDeepSeek?: (input: DeepSeekSettingsInput) => Promise<void> | void;
+  onClearDeepSeekSettings?: () => Promise<void> | void;
+  onProbeDeepSeek?: () => Promise<void> | void;
   agentMemorySettings?: AgentMemorySettingsStatus;
   agentMemorySettingsUnavailable?: boolean;
   onPatchAgentMemorySettings?: (input: AgentMemorySettingsPatchInput) => Promise<void> | void;
@@ -92,7 +98,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const t = createTranslator(locale);
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
@@ -100,6 +106,15 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [modelApiKey, setModelApiKey] = useState('');
   const [modelProbeEndpoint, setModelProbeEndpoint] = useState('https://api.deepseek.com/models');
   const [modelProbeBusy, setModelProbeBusy] = useState(false);
+  const [deepSeekEndpointProfile, setDeepSeekEndpointProfile] = useState<DeepSeekSettingsInput['endpointProfile']>('openai-chat-completions');
+  const [deepSeekEndpoint, setDeepSeekEndpoint] = useState('https://api.deepseek.com/v1/chat/completions');
+  const [deepSeekModel, setDeepSeekModel] = useState('deepseek-v4-flash');
+  const [deepSeekApiKey, setDeepSeekApiKey] = useState('');
+  const [deepSeekThinking, setDeepSeekThinking] = useState<DeepSeekSettingsInput['thinkingMode']>('auto');
+  const [deepSeekToolCalling, setDeepSeekToolCalling] = useState<DeepSeekSettingsInput['toolCalling']>('enabled');
+  const [deepSeekSearch, setDeepSeekSearch] = useState<DeepSeekSettingsInput['webSearch']>('off');
+  const [deepSeekReviewer, setDeepSeekReviewer] = useState<DeepSeekSettingsInput['reviewer']>('off');
+  const [deepSeekBusy, setDeepSeekBusy] = useState(false);
   const [capabilityProfileId, setCapabilityProfileId] = useState<CapabilityProfile['profileId']>('preview');
   const [capabilityAcknowledged, setCapabilityAcknowledged] = useState(false);
   const [capabilityBusy, setCapabilityBusy] = useState(false);
@@ -160,6 +175,17 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelProbeEndpoint(`${modelSettings.baseUrl.replace(/\/$/u, '')}/models`);
   }, [modelSettings?.baseUrl]);
+  useEffect(() => {
+    const settings = deepSeekSettings?.profile;
+    if (!settings) return;
+    setDeepSeekEndpointProfile(settings.endpointProfile);
+    setDeepSeekEndpoint(settings.endpoint);
+    setDeepSeekModel(settings.model);
+    setDeepSeekThinking(settings.thinkingMode);
+    setDeepSeekToolCalling(settings.toolCalling);
+    setDeepSeekSearch(settings.webSearch);
+    setDeepSeekReviewer(settings.reviewer);
+  }, [deepSeekSettings?.profile]);
   useEffect(() => {
     const selected = capabilityProfileSettings?.settings.profile;
     if (!selected) return;
@@ -268,6 +294,24 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setCapabilityBusy(true);
     try { await onResetCapabilityProfileSettings(capabilityProfileSettings.currentRevision); }
     finally { setCapabilityBusy(false); }
+  };
+  const submitDeepSeekSettings = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!onConfigureDeepSeek || !deepSeekApiKey.trim()) return;
+    setDeepSeekBusy(true);
+    try {
+      await onConfigureDeepSeek({ endpointProfile: deepSeekEndpointProfile, endpoint: deepSeekEndpoint, model: deepSeekModel, apiKey: deepSeekApiKey, thinkingMode: deepSeekThinking, toolCalling: deepSeekToolCalling, webSearch: deepSeekSearch, reviewer: deepSeekReviewer, ...(deepSeekSettings?.profile?.profileRevision ? { expectedRevision: deepSeekSettings.profile.profileRevision } : {}) });
+      setDeepSeekApiKey('');
+      updateProfile({ model: { provider: 'deepseek', name: deepSeekModel } });
+    } catch { /* parent renders safe error */ }
+    finally { setDeepSeekBusy(false); }
+  };
+  const probeDeepSeekSettings = async (): Promise<void> => {
+    if (!onProbeDeepSeek) return;
+    setDeepSeekBusy(true);
+    try { await onProbeDeepSeek(); }
+    catch { /* parent renders safe error */ }
+    finally { setDeepSeekBusy(false); }
   };
   const buildPermissionProfile = (): PermissionProfile | undefined => {
     const current = permissionSettings?.settings.profile;
@@ -551,6 +595,19 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                         </form>
                       </>}
                     </div>
+                  </SettingsSection>
+                  <SettingsSection id="deepseek-settings" eyebrow="DEEPSEEK" title="DeepSeek provider" description="Configure the first-class DeepSeek adapter without editing files." status={deepSeekSettingsUnavailable ? 'unavailable' : deepSeekSettings?.credentialState === 'required' ? 'degraded' : deepSeekSettings?.configured ? 'ready' : 'idle'} statusLabel={deepSeekSettingsUnavailable ? 'Unavailable' : deepSeekSettings?.credentialState === 'required' ? 'Credential required' : deepSeekSettings?.configured ? 'Ready' : 'Not configured'}>
+                    {deepSeekSettingsUnavailable ? <p className="muted">DeepSeek settings are unavailable; the existing provider surface remains unchanged.</p> : <form className="model-setup" onSubmit={(event) => { void submitDeepSeekSettings(event); }}>
+                      <p className="muted">The API key is sent once to the daemon and is never returned or stored in browser state. Changes apply only to new runs.</p>
+                      <label>Endpoint profile<select value={deepSeekEndpointProfile} disabled={deepSeekBusy} onChange={(event) => { const profileValue = event.target.value as DeepSeekSettingsInput['endpointProfile']; setDeepSeekEndpointProfile(profileValue); setDeepSeekEndpoint(profileValue === 'openai-responses' ? 'https://api.deepseek.com/v1/responses' : profileValue === 'anthropic-messages' ? 'https://api.deepseek.com/anthropic/v1/messages' : 'https://api.deepseek.com/v1/chat/completions'); }}><option value="openai-chat-completions">OpenAI Chat Completions</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages">Anthropic Messages</option></select></label>
+                      <label>Complete endpoint<input type="url" value={deepSeekEndpoint} disabled={deepSeekBusy} onChange={(event) => setDeepSeekEndpoint(event.target.value)} placeholder="https://api.deepseek.com/v1/chat/completions" autoComplete="url" /></label>
+                      <label>Model<input value={deepSeekModel} disabled={deepSeekBusy} onChange={(event) => setDeepSeekModel(event.target.value)} placeholder="deepseek-v4-flash" autoComplete="off" /></label>
+                      <label>API key (write-only)<input type="password" value={deepSeekApiKey} disabled={deepSeekBusy} onChange={(event) => setDeepSeekApiKey(event.target.value)} placeholder="Paste once; never displayed" autoComplete="new-password" /></label>
+                      <div className="settings-run-fields"><label>Thinking<select value={deepSeekThinking} disabled={deepSeekBusy} onChange={(event) => setDeepSeekThinking(event.target.value as DeepSeekSettingsInput['thinkingMode'])}><option value="off">Off</option><option value="auto">Auto</option><option value="high">High (probe required)</option><option value="max">Max (probe required)</option></select></label><label>Tool calling<select value={deepSeekToolCalling} disabled={deepSeekBusy} onChange={(event) => setDeepSeekToolCalling(event.target.value as DeepSeekSettingsInput['toolCalling'])}><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></label><label>Web search<select value={deepSeekSearch} disabled={deepSeekBusy || deepSeekEndpointProfile !== 'openai-responses'} onChange={(event) => setDeepSeekSearch(event.target.value as DeepSeekSettingsInput['webSearch'])}><option value="off">Off</option><option value="provider-owned">Provider-owned (Approval + network)</option></select></label><label>Reviewer<select value={deepSeekReviewer} disabled={deepSeekBusy} onChange={(event) => setDeepSeekReviewer(event.target.value as DeepSeekSettingsInput['reviewer'])}><option value="off">Off</option><option value="advisory">Advisory</option></select></label></div>
+                      <div className="inline-actions"><button type="submit" disabled={deepSeekBusy || !deepSeekApiKey.trim()}>Save DeepSeek</button><button type="button" disabled={deepSeekBusy || !onProbeDeepSeek || !deepSeekSettings?.configured} onClick={() => { void probeDeepSeekSettings(); }}>Probe</button>{deepSeekSettings?.configured && <button className="cancel-button" type="button" disabled={deepSeekBusy} onClick={() => { void (async () => { await onClearDeepSeekSettings?.(); setDeepSeekApiKey(''); })(); }}>Clear</button>}</div>
+                      {(deepSeekProbe || deepSeekSettings?.lastProbe) && <p className="muted">Probe: {(deepSeekProbe ?? deepSeekSettings?.lastProbe)?.status} · {(deepSeekProbe ?? deepSeekSettings?.lastProbe)?.errorCode ?? `latency ${(deepSeekProbe ?? deepSeekSettings?.lastProbe)?.latencyMs ?? 'n/a'} ms`}</p>}
+                      {deepSeekSettings?.capability && <p className="muted">Capability: {deepSeekSettings.capability.status} · streaming {String(deepSeekSettings.capability.streaming)} · tools {String(deepSeekSettings.capability.toolCalls)} · reasoning {String(deepSeekSettings.capability.reasoning)} · revision {deepSeekSettings.capability.descriptorRevision}</p>}
+                    </form>}
                   </SettingsSection>
                   <SettingsSection id="run-defaults" eyebrow="RUN DEFAULTS" title="Safety and limits" description="Conservative defaults apply to new runs only." status="idle" statusLabel="Local draft">
                     <div className="settings-run-fields">

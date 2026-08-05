@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint 已完成；61-4 application wiring、61-5/61-6/61-7 后置；本文件不把规划写成已完成能力）
+- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint 与 61-5 首个 application/Web settings slice 已完成；61-6/61-7 仍后置；本文件不把规划写成已完成能力）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -408,6 +408,32 @@ Scheduler、Sandbox、Goal 或 Web 设置，后续由 61-5/63 负责应用/UI wi
 
 把 DeepSeek endpoint/model/thinking/tool/search/reviewer/probe/smoke 配置接入现有 Web
 Settings；key 仍 write-only/daemon-owned，运行中显示 snapshot，移动端保持可操作。
+
+本阶段的第一步采用独立的 `/api/v1/settings/deepseek` adapter，不改变既有
+`/api/v1/settings/model` 的 OpenAI-compatible 输入 contract。daemon 只持久化
+`deepseek/profile` 下的非 secret metadata；API key 只在 PATCH/POST 请求中接收，
+保留在 daemon 进程内并在重启后回到 `credential-required`。GET、probe、run snapshot、
+日志和事件都不得回显 key、Authorization、完整请求或绝对路径。配置写入使用严格的
+versioned Zod contract 与 optimistic `expectedRevision`，配置变更只影响后续 run。
+
+Probe 必须使用用户提供的完整 endpoint/profile，不在 adapter 内拼接隐藏路径；它是显式
+用户动作，返回 bounded capability/status/error metadata。`high`/`max` thinking 仅在
+ready capability 明确声明 reasoning 时可保存；provider-owned search 仍需 Responses
+profile、network-enabled 和既有 Approval gate，reviewer 只保留 advisory 开关，不直接
+接入 ApprovalBroker（该接入属于 Spec 63）。本阶段不新增 scheduler、权限 authority、
+Goal admission 或 AgentLoop 分支。
+
+61-5 的首个验收 slice 包括：contracts/manager/server/web focused tests、重启后的
+非 secret settings 恢复、stale revision fail-closed、probe degraded 状态和现有
+interactive run/provider 回归。真实 DeepSeek 消耗、reviewer/ApprovalBroker wiring
+和 provider-owned live search 继续留在 61-6/Spec 63。
+
+当前 checkpoint 已实现上述首个 slice：`DeepSeekSettingsProfile`/status contract、
+daemon `InMemoryModelSettingsManager` 的 DeepSeek adapter、`GET/PATCH/DELETE
+/api/v1/settings/deepseek` 与显式 `POST .../probe`、以及 Web Settings card。probe
+只 POST 到用户提供的完整 endpoint，不自动补 `/models`；未声明 capability 时
+`high`/`max` thinking 和 provider-owned search fail-closed。当前仅有 fixture
+evidence，未宣称真实 DeepSeek/live search 或 Spec 63 reviewer authority 已完成。
 
 ### 61-6：真实 provider 与 Harness evidence
 

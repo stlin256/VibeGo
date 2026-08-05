@@ -212,6 +212,24 @@ describe('ApiClient', () => {
     expect(calls[2]?.init?.method).toBe('DELETE');
   });
 
+  it('uses the DeepSeek-specific settings boundary without storing the key in client state', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = {
+      schemaVersion: 'ready4vibe_deepseek_settings_status_v1', configured: true, providerId: 'deepseek', source: 'web-memory', credentialState: 'available',
+      profile: { schemaVersion: 'ready4vibe_deepseek_settings_profile_v1', providerId: 'deepseek', endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off', timeoutMs: 30_000, maxRetries: 2, maxOutputTokens: 4_096, profileRevision: 'deepseek-settings-1', updatedAt: '2026-08-05T00:00:00.000Z' }, capability: null, lastProbe: null,
+    } as const;
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+    await client.deepSeekSettings();
+    await client.probeDeepSeek();
+    await client.clearDeepSeekSettings();
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/deepseek', '/api/v1/settings/deepseek', '/api/v1/settings/deepseek/probe', '/api/v1/settings/deepseek']);
+    expect(calls[0]?.init?.method).toBe('PATCH');
+    expect(calls[0]?.init?.body).toContain('test-secret');
+    expect(JSON.stringify(calls.slice(1))).not.toContain('test-secret');
+    expect(JSON.stringify(status)).not.toContain('test-secret');
+  });
+
   it('uses the authenticated capability-profile settings projection with revision fencing', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const status = {

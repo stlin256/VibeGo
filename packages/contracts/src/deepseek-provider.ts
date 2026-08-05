@@ -28,6 +28,8 @@ export const DEEPSEEK_SEARCH_ITEM_SCHEMA_VERSION = 'deepseek-provider-search-ite
 export const DEEPSEEK_SEARCH_SCHEMA_VERSION = 'deepseek-provider-search/v1' as const;
 export const DEEPSEEK_RETRY_SCHEMA_VERSION = 'deepseek-provider-retry/v1' as const;
 export const DEEPSEEK_RUN_SCHEMA_VERSION = 'deepseek-provider-run/v1' as const;
+export const DEEPSEEK_SETTINGS_PROFILE_SCHEMA_VERSION = 'ready4vibe_deepseek_settings_profile_v1' as const;
+export const DEEPSEEK_SETTINGS_STATUS_SCHEMA_VERSION = 'ready4vibe_deepseek_settings_status_v1' as const;
 
 export const DeepSeekEndpointProfileSchema = z.enum([
   'openai-chat-completions',
@@ -253,6 +255,56 @@ export const DeepSeekRetryPlanSchema = z.object({
 }).strict();
 export type DeepSeekRetryPlan = z.infer<typeof DeepSeekRetryPlanSchema>;
 
+/**
+ * Restart-safe DeepSeek metadata. Runtime credentials intentionally have no
+ * representable field in this contract; the daemon accepts them only through
+ * a write-only settings command and keeps them process-scoped.
+ */
+export const DeepSeekSettingsProfileSchema = z.object({
+  schemaVersion: z.literal(DEEPSEEK_SETTINGS_PROFILE_SCHEMA_VERSION),
+  providerId: z.literal('deepseek'),
+  endpointProfile: DeepSeekEndpointProfileSchema,
+  endpoint,
+  model,
+  thinkingMode: DeepSeekThinkingModeSchema,
+  toolCalling: DeepSeekToolCallingModeSchema,
+  webSearch: DeepSeekWebSearchModeSchema,
+  reviewer: DeepSeekReviewerModeSchema,
+  timeoutMs: z.number().int().positive().max(120_000),
+  maxRetries: z.number().int().nonnegative().max(5),
+  contextLimit: unknownOrPositiveInt.optional(),
+  maxOutputTokens: z.number().int().positive().max(1_000_000),
+  profileRevision: revision,
+  updatedAt: timestamp,
+}).strict().superRefine((value, context) => {
+  if (!endpointMatchesProfile(value.endpoint, value.endpointProfile)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['endpoint'], message: 'endpoint path does not match endpointProfile' });
+  }
+  if (value.webSearch === 'provider-owned' && value.endpointProfile !== 'openai-responses') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['webSearch'], message: 'provider-owned search requires the Responses endpoint profile' });
+  }
+  addPrivacyIssues(value, context);
+});
+export type DeepSeekSettingsProfile = z.infer<typeof DeepSeekSettingsProfileSchema>;
+
+export const DeepSeekSettingsSourceSchema = z.enum(['environment', 'web-memory', 'durable-profile', 'unconfigured']);
+export type DeepSeekSettingsSource = z.infer<typeof DeepSeekSettingsSourceSchema>;
+export const DeepSeekCredentialStateSchema = z.enum(['available', 'required', 'none']);
+export type DeepSeekCredentialState = z.infer<typeof DeepSeekCredentialStateSchema>;
+
+/** Secret-free response returned by the daemon settings API. */
+export const DeepSeekSettingsStatusSchema = z.object({
+  schemaVersion: z.literal(DEEPSEEK_SETTINGS_STATUS_SCHEMA_VERSION),
+  configured: z.boolean(),
+  providerId: z.union([z.literal('deepseek'), z.literal('unconfigured')]),
+  source: DeepSeekSettingsSourceSchema,
+  credentialState: DeepSeekCredentialStateSchema,
+  profile: DeepSeekSettingsProfileSchema.nullable(),
+  capability: DeepSeekCapabilitySnapshotSchema.nullable(),
+  lastProbe: DeepSeekProbeResultSchema.nullable(),
+}).strict().superRefine((value, context) => addPrivacyIssues(value, context));
+export type DeepSeekSettingsStatus = z.infer<typeof DeepSeekSettingsStatusSchema>;
+
 export function findDeepSeekPrivacyViolations(value: unknown, path: readonly string[] = []): string[] {
   const violations: string[] = [];
   if (typeof value === 'string') {
@@ -267,7 +319,10 @@ export function findDeepSeekPrivacyViolations(value: unknown, path: readonly str
   if (typeof value !== 'object' || value === null) return violations;
   for (const [key, child] of Object.entries(value)) {
     const nextPath = [...path, key];
-    if (SECRET_KEY.test(key) && key !== 'authRef') violations.push(`secret-shaped field is not allowed at ${nextPath.join('.')}`);
+    // These are bounded status/config metadata, not credentials. They are
+    // explicitly enumerated because the generic key scanner is intentionally
+    // conservative for arbitrary payloads.
+    if (SECRET_KEY.test(key) && key !== 'authRef' && key !== 'credentialState') violations.push(`secret-shaped field is not allowed at ${nextPath.join('.')}`);
     violations.push(...findDeepSeekPrivacyViolations(child, nextPath));
   }
   return violations;

@@ -79,6 +79,16 @@ describe('web console shell', () => {
     expect(html).not.toMatch(/api[_-]?key\s*[:=]/iu);
   });
 
+  it('renders the first-class DeepSeek settings card without exposing the key or raw response', () => {
+    const html = renderToStaticMarkup(<App deepSeekSettings={{ schemaVersion: 'ready4vibe_deepseek_settings_status_v1', configured: true, providerId: 'deepseek', source: 'web-memory', credentialState: 'available', profile: { schemaVersion: 'ready4vibe_deepseek_settings_profile_v1', providerId: 'deepseek', endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off', timeoutMs: 30_000, maxRetries: 2, maxOutputTokens: 4_096, profileRevision: 'deepseek-settings-1', updatedAt: '2026-08-05T00:00:00.000Z' }, capability: null, lastProbe: { schemaVersion: 'deepseek-provider-probe/v1', status: 'ready', checkedAt: '2026-08-05T00:00:00.000Z', latencyMs: 42, errorCode: null, capabilities: null } }} onConfigureDeepSeek={() => undefined} onProbeDeepSeek={() => undefined} />);
+    expect(html).toContain('DeepSeek provider');
+    expect(html).toContain('Save DeepSeek');
+    expect(html).toContain('Paste once; never displayed');
+    expect(html).not.toContain('test-secret');
+    expect(html).not.toContain('Authorization');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders the functional agent-memory settings card without secrets or paths', () => {
     const html = renderToStaticMarkup(<App agentMemorySettings={{ schemaVersion: 'ready4vibe_agent_memory_settings_status_v0', settings: { schemaVersion: 'ready4vibe_agent_memory_settings_v1', enabled: false, mode: 'off', teamId: 'vibego', agentId: 'vibego-local-agent', userId: 'local-user', upstreamRepo: 'https://github.com/TencentCloud/TencentDB-Agent-Memory', upstreamRef: 'feat/server_team', autoUpdate: true, updateIntervalMinutes: 60, fallbackToDirectProvider: true }, status: { schemaVersion: 'ready4vibe_agent_memory_status_v0', enabled: false, mode: 'off', available: false, degraded: false, revision: null, previousRevision: null, lastHealthAt: null, lastUpdateAt: null, updateState: 'disabled', lastErrorCode: null, capabilities: [] }, currentRevision: null, previousRevision: null }} agentMemoryOperations={{ schemaVersion: 'ready4vibe_agent_memory_operations_v1', currentRevision: null, previousRevision: null, healthLatencyMs: 3, recall: { hits: 2, misses: 1, lastAt: null }, writeQueue: { pending: 0, inFlight: false, accepted: 2, failed: 0, lastAttemptAt: null, lastErrorCode: null }, updates: [] }} onPatchAgentMemorySettings={() => undefined} onProbeAgentMemory={() => undefined} onUpdateAgentMemory={() => undefined} onRollbackAgentMemory={() => undefined} />);
     expect(html).toContain('AGENT MEMORY');

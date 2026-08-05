@@ -1165,3 +1165,32 @@ requested `24h` window. The production projection correctly excludes records
 outside the requested range; the fixture now generates its timestamp one hour
 before the test clock. Focused daemon (222/222) and full verification gates
 pass. No production aggregation, event schema, or retention policy changed.
+
+## Spec 61-5 DeepSeek settings boundary (implementation start, 2026-08-05)
+
+The next code slice is the daemon-owned DeepSeek settings adapter and its
+conversation-first Web card. It keeps the existing generic model settings API
+backward compatible by adding a provider-specific `/api/v1/settings/deepseek`
+surface. Durable state is limited to strict non-secret endpoint/profile/model/
+capability metadata; a submitted API key is write-only, process-scoped and is
+never returned by GET/probe/status, stored in browser state, or placed in run
+events. Probe uses the complete user-supplied endpoint and does not infer hidden
+paths. This slice will not change AgentLoop, Scheduler, ApprovalBroker, Sandbox,
+Goal Control, or the `run_events`/`goal_events` authorities.
+
+### Spec 61-5 implementation checkpoint (2026-08-05)
+
+Implemented the first settings/onboarding slice. The daemon now exposes a
+provider-specific DeepSeek settings surface while preserving the generic model
+API, restores only non-secret metadata after restart, fences writes with an
+expected revision, and keeps the submitted key process-scoped/write-only.
+Probe performs one explicit bounded POST to the complete configured endpoint;
+it never guesses a route or returns the response body. High/max thinking and
+provider-owned search remain capability-gated and fail closed.
+
+Focused gates passed: contracts DeepSeek suite 10/10; model-deepseek
+probe/protocol/capability suites 16/16; daemon model/server suites 229/229;
+Web API/App suites 106/106; contracts, model-deepseek, daemon and Web
+typechecks passed; `git diff --check` passed. This is fixture/application
+evidence only. Real DeepSeek smoke, live search, reviewer-to-ApprovalBroker
+wiring and Spec 61-7 documentation audit remain open.

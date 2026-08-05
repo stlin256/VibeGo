@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, ApprovalPosture as ApprovalPostureContract, CapabilityProfile as CapabilityProfileContract, CapabilityProfileRunSnapshot, PermissionConfirmationRequest, PermissionProfile as PermissionProfileContract, PermissionProfileId as PermissionProfileIdContract, PermissionProfileRunSnapshot as PermissionProfileRunSnapshotContract, PermissionProfileSettingsPatch, PermissionProfileSettingsStatus as PermissionProfileSettingsStatusContract, PermissionRevokeReason as PermissionRevokeReasonContract, PermissionRevokeRequest, PermissionRevokeResult as PermissionRevokeResultContract, PermissionSessionGrant, PermissionStatus as PermissionStatusContract, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, ApprovalPosture as ApprovalPostureContract, CapabilityProfile as CapabilityProfileContract, CapabilityProfileRunSnapshot, DeepSeekSettingsStatus as DeepSeekSettingsStatusContract, PermissionConfirmationRequest, PermissionProfile as PermissionProfileContract, PermissionProfileId as PermissionProfileIdContract, PermissionProfileRunSnapshot as PermissionProfileRunSnapshotContract, PermissionProfileSettingsPatch, PermissionProfileSettingsStatus as PermissionProfileSettingsStatusContract, PermissionRevokeReason as PermissionRevokeReasonContract, PermissionRevokeRequest, PermissionRevokeResult as PermissionRevokeResultContract, PermissionSessionGrant, PermissionStatus as PermissionStatusContract, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -265,6 +265,26 @@ export interface PermissionRevokeInput {
   /** Optional idempotency key; generated internally when omitted. */
   readonly requestId?: string | undefined;
 }
+
+export type DeepSeekSettingsStatus = DeepSeekSettingsStatusContract;
+
+export interface DeepSeekSettingsInput {
+  endpointProfile: 'openai-chat-completions' | 'openai-responses' | 'anthropic-messages';
+  endpoint: string;
+  model: string;
+  apiKey: string;
+  thinkingMode: 'off' | 'auto' | 'high' | 'max';
+  toolCalling: 'disabled' | 'enabled';
+  webSearch: 'off' | 'provider-owned';
+  reviewer: 'off' | 'advisory';
+  timeoutMs?: number;
+  maxRetries?: number;
+  contextLimit?: number | 'unknown';
+  maxOutputTokens?: number;
+  expectedRevision?: string;
+}
+
+export type DeepSeekProbeResult = Extract<DeepSeekSettingsStatus['lastProbe'], object>;
 export type PermissionRevokeResult = PermissionRevokeResultContract;
 
 export type UsageSummary = ObservabilityUsageSummary;
@@ -485,6 +505,22 @@ export class ApiClient {
 
   async probeModel(endpoint: string, timeoutMs = 5_000): Promise<ModelProbeResult> {
     return this.request<ModelProbeResult>('/api/v1/settings/model/probe', { method: 'POST', body: JSON.stringify({ endpoint, timeoutMs }) });
+  }
+
+  async deepSeekSettings(): Promise<DeepSeekSettingsStatus> {
+    return this.request<DeepSeekSettingsStatus>('/api/v1/settings/deepseek', { method: 'GET' });
+  }
+
+  async configureDeepSeek(input: DeepSeekSettingsInput): Promise<DeepSeekSettingsStatus> {
+    return this.request<DeepSeekSettingsStatus>('/api/v1/settings/deepseek', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async clearDeepSeekSettings(): Promise<DeepSeekSettingsStatus> {
+    return this.request<DeepSeekSettingsStatus>('/api/v1/settings/deepseek', { method: 'DELETE' });
+  }
+
+  async probeDeepSeek(timeoutMs = 5_000): Promise<DeepSeekProbeResult> {
+    return this.request<DeepSeekProbeResult>('/api/v1/settings/deepseek/probe', { method: 'POST', body: JSON.stringify({ timeoutMs }) });
   }
 
   async capabilityProfileSettings(): Promise<CapabilityProfileSettingsStatus> {

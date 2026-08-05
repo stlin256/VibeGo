@@ -431,3 +431,4 @@ function parseRetryAfter(value: string | null): number | undefined {
 }
 
 export * from './capabilities.js';
+export * from './probe.js';

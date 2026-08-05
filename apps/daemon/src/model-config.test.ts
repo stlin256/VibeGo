@@ -167,4 +167,55 @@ describe('daemon model configuration', () => {
     expect(manager.clear().credentialState).toBe('none');
     expect(settings.get('model', 'profile')).toBeUndefined();
   });
+
+  it('configures DeepSeek through a separate secret-free settings boundary', () => {
+    const settings = new InMemorySettingsStore();
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings);
+    const status = manager.configureDeepSeek({
+      endpointProfile: 'openai-chat-completions',
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      model: 'deepseek-v4-flash',
+      apiKey: 'test-secret',
+      thinkingMode: 'auto',
+      toolCalling: 'enabled',
+      webSearch: 'off',
+      reviewer: 'off',
+    });
+    expect(status).toMatchObject({ schemaVersion: 'ready4vibe_deepseek_settings_status_v1', configured: true, providerId: 'deepseek', credentialState: 'available', profile: { endpointProfile: 'openai-chat-completions', model: 'deepseek-v4-flash' } });
+    expect(JSON.stringify(status)).not.toContain('test-secret');
+    expect(JSON.stringify(settings.get('deepseek', 'profile'))).not.toContain('test-secret');
+    expect(manager.provider.id).toBe('deepseek');
+    expect(manager.bindRun({ provider: 'deepseek', name: 'deepseek-v4-flash' }).deepSeekSnapshot).toMatchObject({ providerId: 'deepseek', model: 'deepseek-v4-flash' });
+  });
+
+  it('restores DeepSeek metadata as credential-required and fails closed on stale revisions', () => {
+    const settings = new InMemorySettingsStore();
+    const first = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings);
+    const configured = first.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+    expect(() => first.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'replacement', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off', expectedRevision: 'deepseek-settings-0' })).toThrowError(new ModelSettingsError('REVISION_CONFLICT', 'DeepSeek settings changed; refresh before saving again.'));
+    const restarted = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings);
+    expect(restarted.deepSeekStatus()).toMatchObject({ configured: false, providerId: 'deepseek', source: 'durable-profile', credentialState: 'required', profile: { profileRevision: configured.profile?.profileRevision } });
+    expect(restarted.provider.id).toBe('unconfigured');
+  });
+
+  it('probes only on explicit request and keeps the provider snapshot unchanged', async () => {
+    let calls = 0;
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async (input, init) => {
+      calls += 1;
+      expect(input).toBe('https://api.deepseek.com/v1/chat/completions');
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 });
+    });
+    manager.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+    const provider = manager.provider.snapshot();
+    await expect(manager.probeDeepSeek()).resolves.toMatchObject({ status: 'ready', capabilities: { providerId: 'deepseek', model: 'deepseek-v4-flash' } });
+    expect(manager.provider.snapshot()).toBe(provider);
+    expect(calls).toBe(1);
+  });
+
+  it('fails closed when provider-owned search is enabled without a ready search capability', () => {
+    const manager = new InMemoryModelSettingsManager({});
+    expect(() => manager.configureDeepSeek({ endpointProfile: 'openai-responses', endpoint: 'https://api.deepseek.com/v1/responses', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'provider-owned', reviewer: 'off' })).toThrowError(new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare provider-owned web search support before it can be enabled.'));
+    expect(manager.provider.id).toBe('unconfigured');
+  });
 });

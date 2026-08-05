@@ -9,7 +9,7 @@ import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutatio
 import { buildAuditResponse, buildPricingResponse, buildRunUsage, buildUsageSummary, buildUsageTimeseries, verifyAuditChain } from '@ready4vibe/observability';
 import type { ObservabilityLedger } from '@ready4vibe/storage';
 import type { PricingCatalog } from '@ready4vibe/observability';
-import { ModelSettingsError, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
+import { ModelSettingsError, type DeepSeekSettingsInput, type DeepSeekSettingsManager, type ModelSettingsInput, type ModelSettingsManager } from './model-config.js';
 import { RunManager, RunManagerError } from './run-manager.js';
 import { SandboxSettingsError, type SandboxSettingsInput, type SandboxSettingsManager } from './sandbox-settings.js';
 import { ToolSettingsError, type ToolSettingsManager } from './tool-settings.js';
@@ -48,6 +48,7 @@ export interface DaemonServerOptions {
   certificateReadiness?: CertificateReadiness;
   deploymentReadiness?: DeploymentReadiness;
   modelSettings?: ModelSettingsManager;
+  deepSeekSettings?: DeepSeekSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
@@ -81,6 +82,7 @@ interface ResolvedDaemonServerOptions {
   certificateReadiness?: CertificateReadiness;
   deploymentReadiness?: DeploymentReadiness;
   modelSettings?: ModelSettingsManager;
+  deepSeekSettings?: DeepSeekSettingsManager;
   toolSettings?: ToolSettingsManager;
   gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
@@ -145,6 +147,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.certificateReadiness ? { certificateReadiness: options.certificateReadiness } : {}),
     ...(options.deploymentReadiness ? { deploymentReadiness: options.deploymentReadiness } : {}),
     ...(options.modelSettings ? { modelSettings: options.modelSettings } : {}),
+    ...(options.deepSeekSettings ? { deepSeekSettings: options.deepSeekSettings } : {}),
     ...(options.toolSettings ? { toolSettings: options.toolSettings } : {}),
     ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
@@ -740,6 +743,59 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/deepseek') {
+    if (!options.deepSeekSettings) {
+      writeJson(response, 503, { error: { code: 'DEEPSEEK_SETTINGS_UNAVAILABLE', message: 'DeepSeek settings are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.deepSeekSettings.deepSeekStatus());
+      return;
+    }
+    if (request.method === 'DELETE') {
+      writeJson(response, 200, options.deepSeekSettings.clearDeepSeek());
+      return;
+    }
+    if (request.method !== 'PATCH') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET, PATCH, or DELETE required' } }, { Allow: 'GET, PATCH, DELETE' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isDeepSeekSettingsInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Complete endpoint, profile, model, and write-only API key are required.' } });
+      return;
+    }
+    try {
+      writeJson(response, 200, options.deepSeekSettings.configureDeepSeek(input));
+    } catch (error) {
+      if (error instanceof ModelSettingsError) {
+        const status = error.code === 'REVISION_CONFLICT' ? 409 : error.code === 'PERSISTENCE_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/settings/deepseek/probe') {
+    if (!options.deepSeekSettings) {
+      writeJson(response, 503, { error: { code: 'DEEPSEEK_SETTINGS_UNAVAILABLE', message: 'DeepSeek settings are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isDeepSeekProbeInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Probe options are invalid.' } });
+      return;
+    }
+    writeJson(response, 200, await options.deepSeekSettings.probeDeepSeek(input));
     return;
   }
 
@@ -1605,6 +1661,32 @@ function readJson(request: IncomingMessage, limitBytes: number): Promise<unknown
 
 function isValidationError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'issues' in error;
+}
+
+function isDeepSeekSettingsInput(value: unknown): value is DeepSeekSettingsInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const allowed = new Set(['endpointProfile', 'endpoint', 'model', 'apiKey', 'thinkingMode', 'toolCalling', 'webSearch', 'reviewer', 'timeoutMs', 'maxRetries', 'contextLimit', 'maxOutputTokens', 'expectedRevision']);
+  if (!Object.keys(record).every((key) => allowed.has(key))) return false;
+  if (record.endpointProfile !== 'openai-chat-completions' && record.endpointProfile !== 'openai-responses' && record.endpointProfile !== 'anthropic-messages') return false;
+  if (typeof record.endpoint !== 'string' || typeof record.model !== 'string' || typeof record.apiKey !== 'string') return false;
+  if (record.thinkingMode !== 'off' && record.thinkingMode !== 'auto' && record.thinkingMode !== 'high' && record.thinkingMode !== 'max') return false;
+  if (record.toolCalling !== 'disabled' && record.toolCalling !== 'enabled') return false;
+  if (record.webSearch !== 'off' && record.webSearch !== 'provider-owned') return false;
+  if (record.reviewer !== 'off' && record.reviewer !== 'advisory') return false;
+  if (record.timeoutMs !== undefined && (typeof record.timeoutMs !== 'number' || !Number.isSafeInteger(record.timeoutMs))) return false;
+  if (record.maxRetries !== undefined && (typeof record.maxRetries !== 'number' || !Number.isSafeInteger(record.maxRetries))) return false;
+  if (record.contextLimit !== undefined && record.contextLimit !== 'unknown' && (typeof record.contextLimit !== 'number' || !Number.isSafeInteger(record.contextLimit))) return false;
+  if (record.maxOutputTokens !== undefined && (typeof record.maxOutputTokens !== 'number' || !Number.isSafeInteger(record.maxOutputTokens))) return false;
+  if (record.expectedRevision !== undefined && typeof record.expectedRevision !== 'string') return false;
+  return true;
+}
+
+function isDeepSeekProbeInput(value: unknown): value is { timeoutMs?: number } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (!Object.keys(record).every((key) => key === 'timeoutMs')) return false;
+  return record.timeoutMs === undefined || (typeof record.timeoutMs === 'number' && Number.isSafeInteger(record.timeoutMs) && record.timeoutMs >= 50 && record.timeoutMs <= 30_000);
 }
 
 function bindAuthenticatedSession(value: unknown, sessionId: string | undefined): unknown {

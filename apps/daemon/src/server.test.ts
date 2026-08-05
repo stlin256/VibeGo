@@ -665,6 +665,44 @@ describe('daemon health server', () => {
     expect(JSON.parse(successBody)).toMatchObject({ status: 'ready', capabilities: { modelId: 'deepseek-v4-flash' } });
   });
 
+  it('serves the DeepSeek-specific write-only settings adapter with revision fencing', async () => {
+    const modelSettings = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async (input, init) => {
+      expect(input).toBe('https://api.deepseek.com/v1/chat/completions');
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 });
+    });
+    const server = createDaemonServer({ deepSeekSettings: modelSettings });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/deepseek`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({ configured: false, providerId: 'unconfigured', credentialState: 'none' });
+    const configured = await fetch(base, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' }),
+    });
+    const configuredBody = await configured.text();
+    expect(configured.status).toBe(200);
+    expect(configuredBody).not.toContain('test-secret');
+    const configuredJson = JSON.parse(configuredBody) as { profile: { profileRevision: string } };
+    const conflict = await fetch(base, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'replacement', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off', expectedRevision: 'stale-revision' }),
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({ error: { code: 'REVISION_CONFLICT', message: 'DeepSeek settings changed; refresh before saving again.' } });
+    const probe = await fetch(`${base}/probe`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ timeoutMs: 5_000 }) });
+    expect(probe.status).toBe(200);
+    expect(await probe.json()).toMatchObject({ status: 'ready', capabilities: { providerId: 'deepseek' } });
+    expect(configuredJson.profile.profileRevision).toBe('deepseek-settings-1');
+    const cleared = await fetch(base, { method: 'DELETE' });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ configured: false, providerId: 'unconfigured', credentialState: 'none' });
+  });
+
   it('rejects a run whose provider selection does not match the captured daemon binding', async () => {
     const modelSettings = new InMemoryModelSettingsManager({});
     modelSettings.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });

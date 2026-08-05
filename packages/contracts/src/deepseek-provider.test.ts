@@ -8,6 +8,8 @@ import {
   DeepSeekReviewRequestSchema,
   DeepSeekRunSnapshotSchema,
   DeepSeekSearchItemSchema,
+  DeepSeekSettingsProfileSchema,
+  DeepSeekSettingsStatusSchema,
   findDeepSeekPrivacyViolations,
 } from './deepseek-provider.js';
 
@@ -195,6 +197,39 @@ describe('DeepSeek provider/v1 contracts', () => {
       capabilityRevision: 'probe-1',
       capturedAt: '2026-08-05T10:00:00.000Z',
       apiKey: 'sk-' + 'a'.repeat(32),
+    })).toThrow();
+  });
+
+  it('keeps the Web settings profile/status strict and secret-free', () => {
+    const profile = DeepSeekSettingsProfileSchema.parse({
+      schemaVersion: 'ready4vibe_deepseek_settings_profile_v1',
+      providerId: 'deepseek',
+      endpointProfile: 'openai-chat-completions',
+      endpoint: baseConfig.endpoint,
+      model: baseConfig.model,
+      thinkingMode: 'auto',
+      toolCalling: 'enabled',
+      webSearch: 'off',
+      reviewer: 'off',
+      timeoutMs: 30_000,
+      maxRetries: 2,
+      maxOutputTokens: 4_096,
+      profileRevision: 'deepseek-settings-1',
+      updatedAt: '2026-08-05T10:00:00.000Z',
+    });
+    expect(DeepSeekSettingsStatusSchema.parse({
+      schemaVersion: 'ready4vibe_deepseek_settings_status_v1',
+      configured: true,
+      providerId: 'deepseek',
+      source: 'web-memory',
+      credentialState: 'available',
+      profile,
+      capability: null,
+      lastProbe: null,
+    }).profile?.profileRevision).toBe('deepseek-settings-1');
+    expect(() => DeepSeekSettingsProfileSchema.parse({ ...profile, apiKey: 'sk-' + 'a'.repeat(32) })).toThrow();
+    expect(() => DeepSeekSettingsStatusSchema.parse({
+      schemaVersion: 'ready4vibe_deepseek_settings_status_v1', configured: false, providerId: 'deepseek', source: 'durable-profile', credentialState: 'required', profile, capability: null, lastProbe: null, extra: true,
     })).toThrow();
   });
 });

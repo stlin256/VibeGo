@@ -232,6 +232,7 @@ const server = createDaemonServer({
   certificateReadiness,
   deploymentReadiness,
   modelSettings,
+  deepSeekSettings: modelSettings,
   toolSettings,
   gitSettings,
   sandboxSettings,
