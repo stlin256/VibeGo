@@ -363,6 +363,19 @@ latency, aggregate usage and bounded response-shape diagnostics. Live evidence
 is separate from unit fixtures and is not part of default `pnpm verify`.
 Dedicated-provider live evidence and full release verification remain staged.
 
+### 63-10 implementation checkpoint (2026-08-06)
+
+`scripts/smoke-dedicated-reviewer.mjs` and the `smoke:dedicated-reviewer`
+package command now implement the bounded dedicated gate. The runner builds an
+in-memory `DedicatedReviewerProfilesManager`, configures one profile with a
+process-only credential, resolves that exact profile, and invokes
+`DedicatedApprovalReviewer` with the returned snapshot. It never starts a
+daemon/listener, creates a run/event, or enables a tool. The four offline
+fixtures cover explicit authorization/secret handling, healthy bounded output,
+provider/malformed/resolver failures and secret-shaped input. The fixture
+report is `dedicated-reviewer-smoke/v1`; live provider execution remains a
+separate opt-in and is not implied by the offline pass.
+
 ### 63-8: dedicated provider injection seam
 
 The dedicated source must use an explicitly injected provider binding resolved

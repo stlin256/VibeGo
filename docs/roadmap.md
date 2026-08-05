@@ -1450,6 +1450,12 @@ ApprovalBroker/AgentLoop authorities; live execution remains opt-in and
 reports only bounded provider/model/profile, decision, reason, latency and
 usage metadata.
 
+The bounded implementation is complete: `smoke:dedicated-reviewer` resolves an
+explicit profile through the daemon manager and exercises the dedicated adapter
+without a run or event. Its offline fixture passes 4/4 and keeps secret,
+endpoint, prompt, raw response and path data out of the report. A user-
+authorized live request is still required for dedicated-provider evidence.
+
 ### Spec 58-6 task-specific Goal verifier registry design freeze (2026-08-06)
 
 The next Spec 58-6 implementation slice adds a strict daemon-owned

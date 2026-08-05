@@ -1463,6 +1463,16 @@ Reports will be bounded and redacted; fixture and live evidence remain
 separate. No runtime authority or default interactive behavior changes in this
 checkpoint.
 
+### Spec 63-10 dedicated reviewer smoke implementation checkpoint (2026-08-06)
+
+The isolated `smoke:dedicated-reviewer` runner and four offline fixtures are
+implemented. It configures an in-memory daemon-owned profile with a process-only
+credential, resolves the exact profile and invokes `DedicatedApprovalReviewer`
+without creating a run, event, listener or tool runtime. Reports contain only
+bounded provider/model/profile, decision/reason, latency and usage metadata;
+fixture failures remain explicit `blocked`/`failed`. The focused script passes
+4/4; no dedicated live provider result is claimed yet.
+
 ### Spec 58-6 task-specific Goal verifier registry implementation checkpoint (2026-08-06)
 
 The implementation slice is now specified under [ADR 0050](adr/0050-task-specific-goal-verifier-registry.md).
