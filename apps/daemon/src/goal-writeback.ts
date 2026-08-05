@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import {
   GoalEvidenceRefsSchema,
+  GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION,
+  GOAL_VERIFIER_INPUT_SCHEMA_VERSION,
+  GOAL_VERIFIER_RESULT_SCHEMA_VERSION,
+  GoalVerifierInputV1Schema,
+  GoalVerifierResultV1Schema,
   GoalValidationEvidenceV1Schema,
   GoalRunBindingV1Schema,
   type GoalControlProjectionV1,
@@ -9,7 +14,8 @@ import {
   type GoalRunBindingV1,
   type TodoTaskClass,
   type GoalValidationEvidenceV1,
-  type GoalValidationStatusV1,
+  type GoalVerifierInputV1,
+  type GoalVerifierResultV1,
   type PermissionProfileRunSnapshot,
   type RunStatus,
   type StoredEvent,
@@ -39,32 +45,10 @@ export interface GoalRunEventDigest {
   readonly at: string;
 }
 
-export interface GoalRunVerifierInput {
-  readonly binding: GoalRunBindingV1;
-  /** Derived only from the authoritative Goal projection; null means no Todo lane. */
-  readonly taskClass: TodoTaskClass | null;
-  readonly run: {
-    readonly runId: string;
-    readonly status: RunStatus;
-    readonly lastEventSeq: number;
-    readonly outputBytes: number;
-  };
-  readonly terminal: GoalRunEventDigest;
-  /** Digests deliberately omit payloads, prompts, tool output and paths. */
-  readonly events: readonly GoalRunEventDigest[];
-}
-
-export interface GoalRunVerifierResult {
-  readonly status: GoalValidationStatusV1;
-  readonly verifierId: string;
-  readonly verifierRevision: number;
-  readonly summary: string;
-  readonly refs: {
-    readonly runId?: string;
-    readonly eventIds?: readonly string[];
-    readonly artifactIds?: readonly string[];
-  };
-}
+/** Application aliases keep the verifier port versioned at compile time. */
+export type GoalRunVerifierInput = GoalVerifierInputV1;
+/** Implementations may omit the envelope; writeback canonicalizes it. */
+export type GoalRunVerifierResult = Omit<GoalVerifierResultV1, 'schemaVersion'>;
 
 export interface GoalRunVerifier {
   /** Implementations should stop external work when the signal is aborted. */
@@ -298,13 +282,25 @@ export class GoalRunWritebackService {
       };
     }
     const taskClass = projection.todos.find((todo) => todo.todoId === binding.todoId)?.taskClass ?? null;
-    const input: GoalRunVerifierInput = {
-      binding,
-      taskClass,
-      run: { runId: snapshot.runId, status: snapshot.status, lastEventSeq: snapshot.lastEventSeq, outputBytes: Buffer.byteLength(snapshot.output, 'utf8') },
-      terminal,
-      events: events.map(digestEvent),
-    };
+    let input: GoalRunVerifierInput;
+    try {
+      input = GoalVerifierInputV1Schema.parse({
+        schemaVersion: GOAL_VERIFIER_INPUT_SCHEMA_VERSION,
+        binding,
+        taskClass,
+        run: { runId: snapshot.runId, status: snapshot.status, lastEventSeq: snapshot.lastEventSeq, outputBytes: Buffer.byteLength(snapshot.output, 'utf8') },
+        terminal: { schemaVersion: GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION, ...terminal },
+        events: events.map((event) => ({ schemaVersion: GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION, ...digestEvent(event) })),
+      });
+    } catch {
+      return {
+        status: 'inconclusive',
+        verifierId: 'verifier_input_invalid',
+        verifierRevision: 0,
+        summary: 'Validation was inconclusive because bounded verifier input was invalid.',
+        refs: { runId: binding.runId, eventIds: [terminal.id] },
+      };
+    }
     let verifier = this.verifier;
     let descriptor: { readonly verifierId: string; readonly verifierRevision: number } | undefined;
     if (this.verifierRegistry) {
@@ -549,15 +545,27 @@ function digestEvent(event: StoredEvent): GoalRunEventDigest {
 }
 
 function normalizeVerifierResult(value: GoalRunVerifierResult, terminalEventId: string, runId: string): GoalRunVerifierResult {
-  const status = value.status === 'validated' || value.status === 'failed' || value.status === 'inconclusive' || value.status === 'stale' ? value.status : 'inconclusive';
-  const verifierId = typeof value.verifierId === 'string' && SAFE_ID.test(value.verifierId) ? value.verifierId : 'verifier_invalid';
-  const verifierRevision = Number.isSafeInteger(value.verifierRevision) && value.verifierRevision >= 0 ? value.verifierRevision : 0;
+  let parsed: ReturnType<typeof GoalVerifierResultV1Schema.parse>;
+  try {
+    const candidate = typeof value === 'object' && value !== null && 'schemaVersion' in value
+      ? value
+      : { ...value, schemaVersion: GOAL_VERIFIER_RESULT_SCHEMA_VERSION };
+    parsed = GoalVerifierResultV1Schema.parse(candidate);
+  } catch {
+    return {
+      status: 'inconclusive',
+      verifierId: 'verifier_invalid',
+      verifierRevision: 0,
+      summary: 'Validation was inconclusive because the verifier returned an invalid result.',
+      refs: { runId, eventIds: EVENT_ID.test(terminalEventId) ? [terminalEventId] : [] },
+    };
+  }
   return {
-    status,
-    verifierId,
-    verifierRevision,
-    summary: boundedSummary(typeof value.summary === 'string' ? value.summary : 'Verifier returned no bounded summary.'),
-    refs: safeRefs(value.refs, runId, terminalEventId),
+    status: parsed.status,
+    verifierId: parsed.verifierId,
+    verifierRevision: parsed.verifierRevision,
+    summary: boundedSummary(parsed.summary),
+    refs: safeRefs(parsed.refs, runId, terminalEventId),
   };
 }
 

@@ -1258,8 +1258,8 @@ unchanged.
 ### Spec 62-0 current prerequisite audit (2026-08-06)
 
 The fresh post-Spec-61 matrix is [`62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `bd305be` the fixed workflow fixture is 82/82; contracts (120/120),
-model-deepseek (20/20), daemon (273/273), the capability probe/run snapshot
+At `bd305be` the fixed workflow fixture is 82/82; contracts (124/124),
+model-deepseek (20/20), daemon (275/275), the capability probe/run snapshot
 slice, task-specific verifier registry and dedicated-reviewer smoke are
 focused-tested. Spec 60's current `pnpm verify` static/unit gate also passes; Spec 62 may correct bounded user-facing
 documentation, but it cannot claim release-ready Goal/full-host/ACME/
@@ -1511,3 +1511,25 @@ writeback, and never re-resolves a mutable registry for an in-flight run.
 Revision replacement affects only later runs; capture failure remains
 fail-closed. Focused tests update a registry after capture and prove that the
 original verifier identity/revision is used exactly once.
+
+### Spec 58-6c bounded Goal verifier runtime contract (2026-08-06)
+
+The next bounded slice hardens the verifier application port with strict,
+versioned `GoalVerifierInputV1`, event-digest and result contracts. The
+writeback boundary will enforce server-owned event/output bounds and reject
+unknown, secret-shaped or absolute-path data before invoking a selected
+verifier; malformed results remain bounded `inconclusive` with quota release.
+This is not semantic proof and does not register a verifier in the default
+daemon. Interactive runs, Goal/run event authorities and all existing execution
+authorities remain unchanged. The design is frozen in
+[ADR 0053](adr/0053-goal-verifier-bounded-runtime-contract.md).
+
+#### Spec 58-6c implementation checkpoint (2026-08-06)
+
+The versioned input/event-digest/result contracts and writeback enforcement are
+implemented. Contracts focused tests pass 124/124 and the daemon focused suite
+passes 275/275; oversized event input and privacy-invalid result fixtures fail
+closed before Todo/quota finalization. Evidence is recorded in
+[`spec58-6c-verifier-runtime-contract-2026-08-06.md`](reports/spec58-6c-verifier-runtime-contract-2026-08-06.md).
+No semantic verifier is registered by default and no existing execution/event
+authority changed.

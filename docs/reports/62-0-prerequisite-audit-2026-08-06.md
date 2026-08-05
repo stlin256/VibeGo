@@ -23,7 +23,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | Workspace graph | `pnpm-workspace.yaml`: `apps/*` and `packages/*`, 22 projects |
 | Lockfile | `pnpm-lock.yaml` present; not changed by this audit |
 | Workflow fixture | `pnpm test:workflow`: **82/82 passed** |
-| Focused current slice | contracts 120/120, model-deepseek 20/20, daemon 273/273; Spec 58-6 verifier-registry/timeout/snapshot and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
+| Focused current slice | contracts 124/124, model-deepseek 20/20, daemon 275/275; Spec 58-6 verifier-registry/runtime-contract/timeout/snapshot and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
 | Full static/unit gate | `pnpm verify` at `bd305be`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
 | Secret boundary | no provider key, private key, cookie, full environment, or user workspace was read or written |
 
@@ -38,7 +38,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | E5 | Current full static/unit `pnpm verify` at `bd305be`; does not cover live/remote/device/release gates |
 | E6 | Required physical devices, public ACME/TLS, Tailscale/SSH, clean-host install, signing/SBOM/attestation and production host-runner evidence |
 | E7 | Spec 63-10 dedicated-reviewer offline fixture and separately authorized redacted DeepSeek adapter smoke; no run/tool/event or release-capacity claim |
-| E8 | Spec 58-6 task-specific verifier registry, bounded timeout/cancellation and per-run snapshot tests; registry is empty in the default daemon and semantic task validation remains open |
+| E8 | Spec 58-6 task-specific verifier registry, bounded runtime contract, timeout/cancellation and per-run snapshot tests; registry is empty in the default daemon and semantic task validation remains open |
 
 ## Spec 01–61 matrix
 

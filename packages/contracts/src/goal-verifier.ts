@@ -1,8 +1,19 @@
 import { z } from 'zod';
+import { GoalEvidenceRefsSchema, TodoTaskClassSchema } from './goal.js';
+import { GoalRunBindingV1Schema, GoalValidationStatusV1Schema } from './goal-control-v1.js';
 
 export const GOAL_VERIFIER_DESCRIPTOR_SCHEMA_VERSION = 'ready4vibe_goal_verifier_descriptor_v1' as const;
+export const GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION = 'ready4vibe_goal_verifier_event_digest_v1' as const;
+export const GOAL_VERIFIER_INPUT_SCHEMA_VERSION = 'ready4vibe_goal_verifier_input_v1' as const;
+export const GOAL_VERIFIER_RESULT_SCHEMA_VERSION = 'ready4vibe_goal_verifier_result_v1' as const;
+
+/** Server-owned limits; Web/Goal payloads cannot enlarge verifier input. */
+export const GOAL_VERIFIER_MAX_EVENT_DIGESTS = 512;
+export const GOAL_VERIFIER_MAX_EVENT_SEQ = 1_000_000;
+export const GOAL_VERIFIER_MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 
 const CONTROL_TEXT = /^[^\u0000-\u001F\u007F\r\n]*$/u;
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const VERIFIER_ID = /^verifier_[A-Za-z0-9_-]{1,120}$/u;
 const WINDOWS_ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\)/u;
 const POSIX_ABSOLUTE = /^\/(?!\/)/u;
@@ -12,6 +23,24 @@ const SECRET_KEY = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-
 const VerifierIdSchema = z.string().min(10).max(128).regex(VERIFIER_ID).regex(CONTROL_TEXT);
 const RevisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const TimestampSchema = z.string().datetime({ offset: true }).max(64);
+const NonNegativeRevisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const RunIdSchema = z.string().regex(/^run_[A-Za-z0-9_-]{8,128}$/u);
+const EventIdSchema = z.string().regex(/^evt_[A-Za-z0-9_-]{8,128}$/u);
+const EventTypeSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u).regex(CONTROL_TEXT);
+const VerifierRunStatusSchema = z.enum([
+  'created',
+  'queued',
+  'planning',
+  'executing',
+  'waiting-approval',
+  'cancelling',
+  'completed',
+  'failed',
+  'cancelled',
+  'timed-out',
+  'needs-recovery',
+]);
+const BoundedSummarySchema = z.string().min(1).max(2_000).regex(CONTROL_TEXT);
 
 /** Only these Todo classes can ever select an automatic verifier. */
 export const GoalVerifierTaskClassSchema = z.enum(['advancement', 'monitor', 'blocker']);
@@ -48,6 +77,57 @@ export const GoalVerifierDescriptorV1Schema = GoalVerifierDescriptorObjectSchema
 });
 export type GoalVerifierDescriptorV1 = z.infer<typeof GoalVerifierDescriptorV1Schema>;
 
+export const GoalVerifierEventDigestV1Schema = z.object({
+  schemaVersion: z.literal(GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION),
+  id: EventIdSchema,
+  seq: z.number().int().positive().max(GOAL_VERIFIER_MAX_EVENT_SEQ),
+  type: EventTypeSchema,
+  at: TimestampSchema,
+}).strict().superRefine((value, context) => {
+  for (const violation of findGoalVerifierPrivacyViolations(value)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: violation });
+  }
+});
+export type GoalVerifierEventDigestV1 = z.infer<typeof GoalVerifierEventDigestV1Schema>;
+
+const GoalVerifierRunMetadataV1Schema = z.object({
+  runId: RunIdSchema,
+  status: VerifierRunStatusSchema,
+  lastEventSeq: z.number().int().nonnegative().max(GOAL_VERIFIER_MAX_EVENT_SEQ),
+  outputBytes: z.number().int().nonnegative().max(GOAL_VERIFIER_MAX_OUTPUT_BYTES),
+}).strict();
+
+export const GoalVerifierInputV1Schema = z.object({
+  schemaVersion: z.literal(GOAL_VERIFIER_INPUT_SCHEMA_VERSION),
+  binding: GoalRunBindingV1Schema,
+  taskClass: TodoTaskClassSchema.nullable(),
+  run: GoalVerifierRunMetadataV1Schema,
+  terminal: GoalVerifierEventDigestV1Schema,
+  events: z.array(GoalVerifierEventDigestV1Schema).max(GOAL_VERIFIER_MAX_EVENT_DIGESTS),
+}).strict().superRefine((value, context) => {
+  if (value.binding.runId !== value.run.runId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['run', 'runId'], message: 'verifier run id must match its binding' });
+  }
+  for (const violation of findGoalVerifierPrivacyViolations(value)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: violation });
+  }
+});
+export type GoalVerifierInputV1 = z.infer<typeof GoalVerifierInputV1Schema>;
+
+export const GoalVerifierResultV1Schema = z.object({
+  schemaVersion: z.literal(GOAL_VERIFIER_RESULT_SCHEMA_VERSION),
+  status: GoalValidationStatusV1Schema,
+  verifierId: z.string().min(1).max(128).regex(SAFE_ID).regex(CONTROL_TEXT),
+  verifierRevision: NonNegativeRevisionSchema,
+  summary: BoundedSummarySchema,
+  refs: GoalEvidenceRefsSchema,
+}).strict().superRefine((value, context) => {
+  for (const violation of findGoalVerifierPrivacyViolations(value)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: violation });
+  }
+});
+export type GoalVerifierResultV1 = z.infer<typeof GoalVerifierResultV1Schema>;
+
 /** Stable resolution states used by the daemon registry. */
 export const GoalVerifierResolutionStatusV1Schema = z.enum(['ready', 'missing', 'blocked', 'stale', 'conflict']);
 export type GoalVerifierResolutionStatusV1 = z.infer<typeof GoalVerifierResolutionStatusV1Schema>;
@@ -74,4 +154,12 @@ export function findGoalVerifierPrivacyViolations(value: unknown, path: readonly
 
 export function parseGoalVerifierDescriptorV1(input: unknown): GoalVerifierDescriptorV1 {
   return GoalVerifierDescriptorV1Schema.parse(input);
+}
+
+export function parseGoalVerifierInputV1(input: unknown): GoalVerifierInputV1 {
+  return GoalVerifierInputV1Schema.parse(input);
+}
+
+export function parseGoalVerifierResultV1(input: unknown): GoalVerifierResultV1 {
+  return GoalVerifierResultV1Schema.parse(input);
 }

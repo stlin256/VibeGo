@@ -620,3 +620,36 @@ unchanged.
 
 Focused evidence for this checkpoint is recorded in
 [`spec58-6-task-verifier-registry-2026-08-06.md`](../reports/spec58-6-task-verifier-registry-2026-08-06.md).
+
+## Spec 58-6c: Goal verifier bounded runtime contract
+
+The verifier port is now backed by strict versioned contracts rather than an
+unchecked TypeScript shape. `GoalVerifierInputV1` contains only the frozen Goal
+binding, authoritative automatic task class, bounded run metadata, one terminal
+event digest and a server-limited list of run-event digests. Event count, event
+id/type/timestamp, sequence and output-byte limits are enforced before a
+selected verifier runs. The input and result reject unknown fields,
+secret-shaped values and absolute paths; malformed or oversized values fail
+closed instead of being truncated.
+
+`GoalRunWritebackService` parses the bounded input and verifier result at the
+application boundary. Parse failure records bounded `inconclusive` evidence,
+releases any reservation and cannot complete a Todo or spend quota. This slice
+does not register a semantic verifier in the default daemon and does not claim
+that a completed run is semantic proof. It leaves the AgentLoop, RunManager,
+Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events` and `goal_events`
+authorities unchanged. Real task-specific semantic validation and the remaining
+58-6 A-G module closure are still staged.
+
+### Spec 58-6c implementation checkpoint (2026-08-06)
+
+The bounded contract slice is implemented under
+[ADR 0053](../adr/0053-goal-verifier-bounded-runtime-contract.md). Contracts
+now cover versioned input, event digests and results with server-owned event
+and output limits, strict unknown-field/privacy/path checks and binding/run
+identity matching. Daemon writeback parses input before verifier invocation and
+canonicalizes/parses results; invalid data becomes `inconclusive` and releases
+quota. Focused evidence is recorded in
+[`spec58-6c-verifier-runtime-contract-2026-08-06.md`](../reports/spec58-6c-verifier-runtime-contract-2026-08-06.md).
+The default daemon remains without a semantic verifier, and real semantic
+validation plus broader A-G closure remain staged.

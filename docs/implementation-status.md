@@ -1246,8 +1246,9 @@ Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.
 The fresh audit for the post-Spec-61 checkout is recorded in
 [`docs/reports/62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
 At `bd305be` on `main`, the bounded workflow fixture is 82/82 and the current
-capability slice passes contracts 120/120, model-deepseek 20/20 and daemon
-273/273 focused suites. Spec 58-6 task-specific verifier-registry and Spec 63-10
+capability slice passes contracts 124/124, model-deepseek 20/20 and daemon
+275/275 focused suites. Spec 58-6 task-specific verifier-registry/runtime
+contract and Spec 63-10
 dedicated-reviewer fixtures are included in these current gates. The current full
 `pnpm verify` also passes typecheck, build, all workspace test jobs and both diff checks. The audit still marks Spec 62 as
 documentation-constrained rather than release-ready: real-device,
@@ -1494,9 +1495,10 @@ bounded task class and run/event digests, and exact verifier id/revision
 matching is enforced. Missing, non-ready and user-owned lanes fail closed; a
 mismatch yields bounded `inconclusive` evidence and releases quota. The default
 daemon registers no semantic verifier, so existing interactive and governed
-fail-closed behavior remains unchanged. The contracts suite passes 120 tests;
-the daemon focused registry/writeback run passes 272 tests with typecheck and
-diff checks. The bounded verifier timeout/cancellation slice is implemented;
+fail-closed behavior remains unchanged. The historical registry checkpoint
+passed 120 contract tests and 272 daemon tests; the current bounded verifier
+runtime contract raises those focused totals to 124 and 275. The bounded
+verifier timeout/cancellation slice is implemented;
 semantic verifier registration and the broader 58-6 module closure remain
 staged.
 
@@ -1521,3 +1523,32 @@ immutable through terminal writeback. A registry update affects only later
 runs; missing/stale capture remains fail-closed and duplicate terminal
 notifications reuse existing evidence. The daemon focused writeback suite is
 273 tests; no runtime authority changes are included.
+
+### Spec 58-6c bounded Goal verifier runtime contract design checkpoint (2026-08-06)
+
+The next bounded slice is frozen under
+[ADR 0053](adr/0053-goal-verifier-bounded-runtime-contract.md). It will add
+strict versioned verifier input/event-digest/result schemas with server-owned
+event and output bounds, then parse both sides at the daemon writeback
+boundary. Unknown, secret-shaped, absolute-path, malformed and oversized data
+must fail closed to bounded `inconclusive` evidence and release reservation;
+the default daemon remains empty of semantic verifiers. This slice is contract
+hardening, not semantic proof, and does not alter interactive runs, AgentLoop,
+RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events` or
+`goal_events`.
+
+#### Spec 58-6c implementation checkpoint (2026-08-06)
+
+The bounded verifier runtime contract is implemented under
+[ADR 0053](adr/0053-goal-verifier-bounded-runtime-contract.md). Versioned
+input/event-digest/result schemas enforce server-owned event/output bounds,
+binding/run identity matching and strict privacy/path/unknown-field checks;
+writeback parses before invocation and canonicalizes verifier results. Contracts
+focused tests pass 124/124 and daemon focused tests pass 275/275. Oversized
+input and privacy-invalid result fixtures remain fail-closed with reservation
+release. Evidence is recorded in
+[`spec58-6c-verifier-runtime-contract-2026-08-06.md`](reports/spec58-6c-verifier-runtime-contract-2026-08-06.md).
+The default daemon still registers no semantic verifier, and no interactive,
+AgentLoop, RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry,
+`run_events` or `goal_events` authority changed; real semantic validation and
+broader A–G closure remain staged.
