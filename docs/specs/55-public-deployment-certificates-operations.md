@@ -203,7 +203,10 @@ rotation follows `prepare -> pre-probe -> switch -> post-probe`; post-switch
 failure attempts exactly one switch back to the previous revision and retains
 the old current/previous material when rollback cannot be proven healthy.
 Candidate cleanup is best-effort but bounded and cleanup failure is observable
-as a blocked result. This slice is a lifecycle fixture boundary, not a claim of
+as a blocked result. If an atomic switch or rollback outcome is not proven, the
+opaque revision remains protected as `candidateRevision` or `currentRevision`;
+the controller never deletes material that may still serve traffic. This slice
+is a lifecycle fixture boundary, not a claim of
 ACME issuance, public HTTPS readiness, Tailscale/SSH support or release
 readiness.
 
@@ -214,6 +217,8 @@ implemented. The controller serializes rotations, validates bounded opaque
 revision IDs, keeps candidate material out of projections, preserves
 current/previous on preparation or probe failure, and performs one bounded
 post-switch rollback. Stale expected-current revisions and missing previous
-revisions fail closed. The `@ready4vibe/certificates` package passes 16/16
-tests, typecheck and build. No daemon/API/ACME/OS-store integration is enabled
-by this checkpoint.
+revisions fail closed. The `@ready4vibe/certificates` package passes 17/17
+tests, typecheck and build. If a switch outcome is unknown, the candidate
+revision remains protected for explicit recovery; only a proven rollback
+allows detached-candidate cleanup. No daemon/API/ACME/OS-store integration is
+enabled by this checkpoint.

@@ -1095,10 +1095,11 @@ public HTTPS or release readiness.
 ### Spec 55c certificate rotation controller implementation checkpoint (2026-08-05)
 
 `CertificateRotationController` is implemented in
-`packages/certificates/src/lifecycle.ts` with eight focused tests. The
-`@ready4vibe/certificates` package passes 16/16 tests, typecheck and build.
+`packages/certificates/src/lifecycle.ts` with nine focused tests. The
+`@ready4vibe/certificates` package passes 17/17 tests, typecheck and build.
 The slice proves candidate preparation/probe failure, successful
 current-to-previous rotation, post-switch rollback, rollback failure,
 serialized concurrency, stale revision and privacy-safe unsafe-ID rejection.
 It does not enable ACME, OS certificate stores, public listeners or daemon/run
-integration.
+integration. A failed atomic-switch outcome retains the opaque candidate for
+explicit recovery instead of deleting material that may still serve TLS.

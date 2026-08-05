@@ -1015,5 +1015,7 @@ ACME/DNS credentials and raw adapter errors stay out of state and reports.
 atomic switch, post-switch health and one bounded rollback; stale revisions,
 missing previous material and unsafe IDs fail closed. The projection contains
 only opaque revisions, status, operation, timestamp and stable error code. The
-package passes 16/16 tests, typecheck and build. No ACME/DNS, OS-store,
-listener, daemon API or run-authority integration is enabled.
+package passes 17/17 tests, typecheck and build. A failed atomic-switch
+outcome retains the opaque candidate for explicit recovery rather than
+discarding material that may still serve TLS. No ACME/DNS, OS-store, listener,
+daemon API or run-authority integration is enabled.

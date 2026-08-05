@@ -403,8 +403,8 @@ renewal, OS-store integration and public readiness remain separate gates.
 #### 60-6 certificate lifecycle implementation checkpoint (2026-08-05)
 
 The injected `CertificateRotationController` is implemented in
-`packages/certificates/src/lifecycle.ts` with eight focused tests. The package
-gate passes 16/16 tests, typecheck and build. Evidence covers successful
+`packages/certificates/src/lifecycle.ts` with nine focused tests. The package
+gate passes 17/17 tests, typecheck and build. Evidence covers successful
 candidate rotation, prepare/probe failure with cleanup, post-switch health
 failure with rollback, rollback failure fail-closed state, stale revision,
 explicit rollback, serialized concurrent rotations and unsafe revision privacy.
@@ -412,3 +412,9 @@ Only opaque revision/status/error metadata is projected; no certificate bytes,
 private key, path or raw adapter error is retained. This closes the bounded
 lifecycle fixture boundary only; ACME, public listener, OS-store, Tailscale/SSH
 and release gates remain partial or blocked.
+
+The controller also keeps an opaque candidate protected when a switch or
+rollback result is not proven; cleanup is performed only for material that is
+known to be detached. This prevents a failed health check from deleting a
+revision that may still be serving TLS. The additional safety regression test
+keeps a failed atomic-switch revision protected rather than discarding it.

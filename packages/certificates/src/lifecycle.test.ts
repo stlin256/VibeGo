@@ -98,7 +98,18 @@ describe('CertificateRotationController', () => {
     const projection = await controller.rotate(candidate('r2'));
 
     expect(projection).toMatchObject({ status: 'blocked', currentRevision: 'r2', previousRevision: 'r1', candidateRevision: null, lastErrorCode: 'CERTIFICATE_ROTATION_ROLLBACK_FAILED' });
-    expect(fixture.calls).toEqual(['prepare:r2', 'probe:candidate:r2', 'switch:r2', 'probe:active:r2', 'switch:r1', 'discard:r2']);
+    expect(fixture.calls).toEqual(['prepare:r2', 'probe:candidate:r2', 'switch:r2', 'probe:active:r2', 'switch:r1']);
+  });
+
+  it('retains an opaque candidate when the atomic switch outcome is not proven', async () => {
+    const fixture = adapterFixture();
+    fixture.switchFailures.add('r2');
+    const controller = new CertificateRotationController(fixture.adapter, { currentRevision: 'r1' });
+
+    const projection = await controller.rotate(candidate('r2'));
+
+    expect(projection).toMatchObject({ status: 'blocked', currentRevision: 'r1', previousRevision: null, candidateRevision: 'r2', lastErrorCode: 'CERTIFICATE_ROTATION_SWITCH_FAILED' });
+    expect(fixture.calls).toEqual(['prepare:r2', 'probe:candidate:r2', 'switch:r2']);
   });
 
   it('rejects stale expected-current revisions without touching the adapter', async () => {

@@ -127,6 +127,7 @@ export class CertificateRotationController {
         await this.adapter.probe(revision, 'active', options.signal ?? new AbortController().signal);
       } catch (error) {
         const postProbeCode = isAborted(error, options.signal) ? 'CERTIFICATE_ROTATION_ABORTED' : 'CERTIFICATE_ROTATION_POST_PROBE_FAILED';
+        let rolledBack = false;
         if (oldCurrent) {
           try {
             this.throwIfAborted(options.signal);
@@ -134,6 +135,7 @@ export class CertificateRotationController {
             await this.adapter.probe(oldCurrent, 'rollback', options.signal ?? new AbortController().signal);
             this.currentRevision = oldCurrent;
             this.previousRevision = oldPrevious;
+            rolledBack = true;
             this.status = postProbeCode === 'CERTIFICATE_ROTATION_ABORTED' ? 'blocked' : 'degraded';
             this.lastErrorCode = postProbeCode;
           } catch {
@@ -144,7 +146,7 @@ export class CertificateRotationController {
           this.status = 'blocked';
           this.lastErrorCode = postProbeCode;
         }
-        await this.discardCandidate(revision);
+        if (rolledBack) await this.discardCandidate(revision);
         return this.finish();
       }
       this.status = 'ready';
@@ -162,6 +164,15 @@ export class CertificateRotationController {
           : phase === 'candidate-probe'
             ? 'CERTIFICATE_ROTATION_PROBE_FAILED'
             : 'CERTIFICATE_ROTATION_SWITCH_FAILED';
+      if (phase === 'switch') {
+        // An atomic adapter must not report a switch failure as detached
+        // material: the outcome may be unknown, so retain the revision for
+        // explicit recovery instead of deleting a possibly active keypair.
+        this.candidateRevision = revision;
+        this.operation = 'idle';
+        this.touch();
+        return this.projection();
+      }
       await this.discardCandidate(revision);
       return this.finish();
     }
@@ -193,11 +204,12 @@ export class CertificateRotationController {
   private async discardCandidate(revision: string): Promise<void> {
     try {
       await this.adapter.discard(revision, new AbortController().signal);
+      this.candidateRevision = null;
     } catch {
       this.status = 'blocked';
       this.lastErrorCode = 'CERTIFICATE_ROTATION_CLEANUP_FAILED';
+      this.candidateRevision = revision;
     }
-    this.candidateRevision = null;
   }
 
   private finish(): CertificateRotationProjection {
