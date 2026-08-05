@@ -844,6 +844,13 @@ permission explanations, reproducible Quickstart, truthful maturity labels and
 link/command/privacy/user-review checks. It does not change runtime behavior or
 turn screenshots/marketing copy into implementation evidence.
 
+Spec 61 now has an explicit `61-0` prerequisite gate: before any user-facing
+documentation edit, the main thread must re-verify Spec 01–60, source/tests,
+Spec 60 evidence and the current checkout. Required Web release phases may not
+remain `partial`, `blocked` or `not-run`; unresolved implementation gaps must
+return to their owning Spec. This gate is documentation-only and does not claim
+that Spec 61 or the release is complete.
+
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
 The R3 application boundary is implemented under

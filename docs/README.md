@@ -60,6 +60,6 @@
 - [Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁](specs/58-goal-control-and-harness-completion.md)：把 Goal 从 contracts/replay/mutation 基础推进到 governed admission、验证写回、quota exactly-once、恢复和真实 LLM Harness 证据，并为其他 design-only/fake-only 核心模块定义统一完成标准。
 - [Spec 59：Permission Profiles、低打扰自动审批与 Full-host 模式](specs/59-permission-profiles-and-low-interruption-approval.md)：定义 workspace-coding、显式 full-host、bounded-auto/session-auto 审批姿态、可信任务边界、session grant、撤销和跨平台真实验收。
 - [Spec 60：完整测试、真实运行与发布证据主线程验收](specs/60-complete-verification-and-release-evidence.md)：规定重新核实全部既有 Spec、分模块 focused gate、全仓 verify、真实 LLM、Goal governed run、权限/远程/证书、并发恢复和 release evidence 的最终验收顺序。
-- [Spec 61：用户可见文档质量、README 与开箱即用说明](specs/61-user-facing-documentation-quality.md)：规定英文优先 README、中文同步、品牌横幅、Web 配置向导、权限/安全边界、Quickstart、状态真实性和文档质量门禁。
+- [Spec 61：用户可见文档质量、README 与开箱即用说明](specs/61-user-facing-documentation-quality.md)：规定先复核 Spec 01–60，再完成英文优先 README、中文同步、品牌横幅、Web 配置向导、权限/安全边界、Quickstart、状态真实性和文档质量门禁。
 - [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)：Node SEA、GitHub Releases/Attestations、Sigstore、Let's Encrypt、SQLite、WCAG、Playwright、Ollama 和 LM Studio 的公开资料与 clean-room 设计判断。
 - [TencentDB 融合实施提示词](prompts/39-tencentdb-agent-memory-implementation.md)：可直接交给另一位开发者或 Agent，按 Contract → MemoryCore → Web Settings → Supervisor → Proxy/Knowledge 顺序实施，并保留 dirty worktree。

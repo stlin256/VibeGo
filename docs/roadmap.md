@@ -962,7 +962,9 @@ workspace/full-host 安全、远程/证书、并发/恢复和 release evidence �
 详见 [Spec 61](specs/61-user-facing-documentation-quality.md)。该规格指导英文优先的
 README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/故障排查和贡献文档
 统一状态与品牌表达，要求配置以 Web onboarding/settings 为主路径、命令可复现、能力
-声明不夸大、中文同步，并通过链接、命令、隐私和真实用户审阅门禁。截图不是硬性验收物；
+声明不夸大、中文同步，并通过链接、命令、隐私和真实用户审阅门禁。执行前必须先通过
+`61-0`，重新复核 Spec 01–60 和 Spec 60 evidence；任何必需 `partial/blocked/not-run`
+项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
 ## Spec 58-5 audit checkpoint (2026-08-05)
