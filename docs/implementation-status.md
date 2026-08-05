@@ -857,6 +857,24 @@ user-facing README/Quickstart/release wording is updated. The former
 `62-0-prerequisite-audit-2026-08-05.md` historical audit; it is not a fresh
 release gate for the new Spec 61 and must be refreshed after DeepSeek evidence.
 
+## Spec 63 planning note (2026-08-05)
+
+`docs/specs/63-llm-assisted-approval-and-review.md` and
+`docs/adr/0044-llm-assisted-approval-review-boundary.md` define the proposed
+LLM-assisted approval boundary. The migration default is `enabled=false`; when
+explicitly enabled, `same-as-run` uses the immutable provider/model snapshot of
+the current run, while `dedicated` selects an existing provider profile through
+the daemon-owned secret-reference boundary. The reviewer is advisory only and
+may confirm an exact, deterministic low-risk approval key; it cannot widen
+policy, permission, Goal, Scheduler, Sandbox, Workspace or network scope.
+
+No runtime code, settings route, Web control, provider call or event schema has
+been changed by Spec 63 yet. Timeout, provider failure, malformed output,
+prompt-injection-shaped content and fingerprint mismatch are specified to stay
+on the existing safe `ask`/`deny` path. Implementation is staged as 63-0 through
+63-7 and must preserve the default interactive run path and existing event
+authorities until the corresponding focused tests and evidence are complete.
+
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
 The R3 application boundary is implemented under

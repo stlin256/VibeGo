@@ -977,6 +977,19 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
+## Spec 63：LLM 辅助审批与审查（Draft）
+
+详见 [Spec 63](specs/63-llm-assisted-approval-and-review.md) 与
+[ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)。该规格为现有
+ApprovalBroker 增加可选的、低风险范围内的 LLM advisory reviewer：迁移默认关闭，
+用户启用后默认使用当前 run 已冻结的模型/provider snapshot，也可选择独立 reviewer
+model。LLM 只能对 deterministic policy 已判定 eligible 的精确 approval key 提供
+建议，不能批准 full-host、提权、网络、secret、破坏性 Git/filesystem、unknown tool
+或不可信内容的 host 执行；超时、不可用、格式错误和指纹不匹配继续走现有 ask/deny
+fail-closed 路径。63-0 至 63-7 覆盖 contract/Noop、same-as-run、dedicated settings、
+ApprovalBroker 集成、Web 状态、失败与并发证据及显式 live smoke；本阶段只有规划文档，
+不改变 AgentLoop、RunManager 默认启动路径或事件事实源。
+
 ## Spec 58-5 audit checkpoint (2026-08-05)
 
 The repository already contains `smoke:model` for provider-protocol checks, but

@@ -62,5 +62,6 @@
 - [Spec 60：完整测试、真实运行与发布证据主线程验收](specs/60-complete-verification-and-release-evidence.md)：规定重新核实全部既有 Spec、分模块 focused gate、全仓 verify、真实 LLM、Goal governed run、权限/远程/证书、并发恢复和 release evidence 的最终验收顺序。
 - [Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop](specs/61-deepseek-first-class-provider-integration.md)：吸收 MinimumAgentLoop 的两层循环、多工具调用、thinking、advisory reviewer 和 provider-owned search 思路，但保留 VibeGo 的 ModelProvider、Approval、Sandbox、Goal、Scheduler 和事件事实源。
 - [Spec 62：用户可见文档质量、README 与开箱即用说明](specs/62-user-facing-documentation-quality.md)：规定先复核 Spec 01–61，再完成英文优先 README、中文同步、品牌横幅、Web 配置向导、权限/安全边界、Quickstart、状态真实性和文档质量门禁。
+- [Spec 63：LLM 辅助审批与审查](specs/63-llm-assisted-approval-and-review.md) 与 [ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)：定义可选、受限的 LLM reviewer；默认关闭，启用后默认复用当前 run 的冻结模型，也支持单独 reviewer model，但 deterministic policy、Approval、Sandbox、Scheduler、Goal 和 Workspace 始终拥有最终权威。
 - [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)：Node SEA、GitHub Releases/Attestations、Sigstore、Let's Encrypt、SQLite、WCAG、Playwright、Ollama 和 LM Studio 的公开资料与 clean-room 设计判断。
 - [TencentDB 融合实施提示词](prompts/39-tencentdb-agent-memory-implementation.md)：可直接交给另一位开发者或 Agent，按 Contract → MemoryCore → Web Settings → Supervisor → Proxy/Knowledge 顺序实施，并保留 dirty worktree。
