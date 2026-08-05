@@ -220,6 +220,14 @@ Scheduler、Approval、Sandbox 和 WorkspaceRegistry 的现有权威边界。
 - `run_events` 与 `goal_events` 不做跨表假事务，使用 binding、attempt、eventId
   和可重放 reconciliation 保证 crash/retry 安全。
 
+本切片的 SQLite 组合约束：v0 `SqliteGoalEventStore` 与 v1
+`SqliteGoalControlV1EventStore` 可以安全地打开同一 `goal_events` 表。v0
+projection/read API 只消费 `ready4vibe_goal_event_v0` 行，因而不会把 v1
+admission/binding 事件误交给 v0 reducer；v0 的可见 cursor 也只统计 v0 行。
+一旦某个 Goal 已有 v1 行，v0 writer 拒绝继续追加 legacy event，避免破坏
+“legacy events precede additive v1 events”的 replay 顺序。v1 reader 仍负责
+混合 replay；`run_events` 不受影响。
+
 ### 58-3：终态验证、写回与恢复
 
 - Run 终态后异步调用独立 verifier，写回不阻塞 run 终态；
@@ -335,3 +343,50 @@ settings/profile/provider/memory/sandbox 切换不改变已启动 run snapshot�
   -> 58-6 module closure
   -> 58-7 release evidence
 ```
+
+## 10. Spec 58-2 design freeze (implementation slice)
+
+This slice adds one daemon application boundary, `GoalAdmissionService`. It
+accepts only an explicit `runMode: governed` envelope. A request without that
+field continues to use the existing interactive `RunManager.start` path and
+is not inspected by Goal Control.
+
+The governed preflight order is intentionally observable and fail-closed:
+
+1. Parse the governed envelope and the existing `RunConfig`.
+2. Replay the Goal projection and verify the requested control revision,
+   active blocking gates, selected Todo, claim owner/lease, and turn/quota
+   identity. A missing, expired, or foreign claim is not silently acquired.
+3. Resolve the server-owned capability run snapshot and reject blocked or
+   narrowed requests that cannot satisfy the Todo requirements.
+4. Ask the existing Workspace, Scheduler, Approval, and Sandbox readiness
+   ports for a read-only decision. These checks do not enqueue, acquire a
+   lease, grant approval, start a process, or mutate a second scheduler.
+5. Persist an eligible admission decision and a versioned `GoalRunBinding`
+   before calling `RunManager.start` with the same immutable run id and
+   capability snapshot.
+
+No preflight failure may call the model provider or create `run.created`.
+The binding records only bounded ids, revision tokens, timestamps and safe
+references. `run_events` and `goal_events` remain independent; if the process
+fails between binding persistence and `RunManager.start`, reconciliation is a
+later Spec 58-3 responsibility and must never replay an old tool call.
+
+The application service does not reserve or spend delivery quota in this
+slice. It only rejects an already-spent turn key or an exhausted caller quota;
+reservation/consume/release exactly-once behavior remains the 58-3 boundary.
+
+Implementation evidence for the current slice includes the explicit governed
+HTTP route, request-id idempotency, run-id/capability snapshot injection,
+read-only scheduler inspection, and the SQLite v0/v1 mixed-table compatibility
+fixture described above. The default `/api/v1/runs` route rejects a governed
+envelope and ordinary interactive runs remain unchanged. This is still not a
+claim of 58-3 validation writeback, quota reservation/consume, reconciliation,
+or real governed LLM smoke.
+
+The service is exposed as an injectable daemon port for focused tests. The
+default HTTP route is unchanged; an explicit governed route may be wired by a
+composition root without changing the semantics of ordinary interactive
+requests. Production composition must use the existing Scheduler,
+WorkspaceRegistry, ApprovalBroker, Sandbox settings and capability snapshot
+authority rather than duplicating their state.

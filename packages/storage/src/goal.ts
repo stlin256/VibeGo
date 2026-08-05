@@ -4,11 +4,25 @@ import type { NewGoalEvent, StoredGoalEvent } from '@ready4vibe/contracts';
 import { parseNewGoalEvent, parseStoredGoalEvent } from '@ready4vibe/contracts';
 
 export class SqliteGoalEventStoreError extends Error {
-  readonly code = 'GOAL_EVENT_STORAGE_ERROR';
+  readonly code: string = 'GOAL_EVENT_STORAGE_ERROR';
 
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'SqliteGoalEventStoreError';
+  }
+}
+
+/**
+ * Legacy v0 writes are rejected once additive v1 rows exist for the Goal.
+ * Mixed replay requires legacy rows to precede v1 rows; silently appending a
+ * v0 event after admission/binding would make the v1 projection fail closed.
+ */
+export class SqliteGoalEventOrderError extends SqliteGoalEventStoreError {
+  override readonly code = 'GOAL_EVENT_V1_APPEND_ORDER';
+
+  constructor(readonly goalId: string) {
+    super('Legacy Goal events cannot be appended after Goal Control v1 events exist.');
+    this.name = 'SqliteGoalEventOrderError';
   }
 }
 
@@ -104,7 +118,11 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
     const fingerprint = fingerprintGoalEvent(parsed);
     return this.transaction(() => {
       const existing = this.findByEventId(parsed.eventId);
-      if (existing) return this.resolveExisting(parsed, fingerprint, existing) as StoredGoalEvent<TPayload>;
+      if (existing) {
+        if (!existing.stored) throw new SqliteGoalEventConflictError(parsed.eventId);
+        return this.resolveExisting(parsed, fingerprint, { fingerprint: existing.fingerprint, stored: existing.stored }) as StoredGoalEvent<TPayload>;
+      }
+      this.ensureLegacyAppendAllowed(parsed.goalId);
       const stored = this.toStored(parsed, this.nextSequence(parsed.goalId));
       this.insert(stored, fingerprint);
       return stored as StoredGoalEvent<TPayload>;
@@ -126,6 +144,7 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
         const fingerprint = fingerprintGoalEvent(event);
         const existingRow = this.findByEventId(event.eventId);
         const plannedEntry = planned.get(event.eventId);
+        if (existingRow && !existingRow.stored) throw new SqliteGoalEventConflictError(event.eventId);
         const existing = existingRow?.stored ?? plannedEntry?.stored;
         if (existing) {
           const existingFingerprint = existingRow?.fingerprint ?? plannedEntry?.fingerprint;
@@ -137,6 +156,7 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
         planned.set(event.eventId, { fingerprint, stored });
         result.push(stored);
       }
+      if (planned.size > 0) this.ensureLegacyAppendAllowed(goalId);
       for (const entry of planned.values()) this.insert(entry.stored, entry.fingerprint);
       return result as StoredGoalEvent<TPayload>[];
     });
@@ -149,7 +169,7 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
       SELECT goal_id, append_sequence, event_id, fingerprint, schema_version, event_type,
              recorded_at, producer, privacy, projection_version, refs_json, payload_json
       FROM goal_events
-      WHERE goal_id = ? AND append_sequence > ?
+      WHERE goal_id = ? AND schema_version = 'ready4vibe_goal_event_v0' AND append_sequence > ?
       ORDER BY append_sequence ASC
     `).all(goalId, afterSequence) as unknown as GoalEventRow[];
     return rows.map((row) => this.fromRow<TPayload>(row));
@@ -157,13 +177,14 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
 
   listGoalIds(): readonly string[] {
     this.ensureOpen();
-    const rows = this.database.prepare('SELECT goal_id FROM goal_events GROUP BY goal_id ORDER BY MIN(append_sequence) ASC, goal_id ASC').all() as unknown as Array<{ goal_id: string }>;
+    const rows = this.database.prepare("SELECT goal_id FROM goal_events WHERE schema_version = 'ready4vibe_goal_event_v0' GROUP BY goal_id ORDER BY MIN(append_sequence) ASC, goal_id ASC").all() as unknown as Array<{ goal_id: string }>;
     return Object.freeze(rows.map((row) => row.goal_id));
   }
 
   lastSequence(goalId: string): number {
     this.ensureOpen();
-    return this.nextSequence(goalId) - 1;
+    const row = this.database.prepare("SELECT COALESCE(MAX(append_sequence), 0) AS last_sequence FROM goal_events WHERE goal_id = ? AND schema_version = 'ready4vibe_goal_event_v0'").get(goalId) as unknown as { last_sequence: number };
+    return row.last_sequence;
   }
 
   close(): void {
@@ -188,14 +209,17 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
     }
   }
 
-  private findByEventId(eventId: string): { fingerprint: string; stored: StoredGoalEvent } | undefined {
+  private findByEventId(eventId: string): { fingerprint: string; stored?: StoredGoalEvent } | undefined {
     const row = this.database.prepare(`
       SELECT goal_id, append_sequence, event_id, fingerprint, schema_version, event_type,
              recorded_at, producer, privacy, projection_version, refs_json, payload_json
       FROM goal_events WHERE event_id = ?
     `).get(eventId) as unknown as GoalEventRow | undefined;
     if (!row) return undefined;
-    return { fingerprint: row.fingerprint, stored: this.fromRow(row) };
+    return {
+      fingerprint: row.fingerprint,
+      ...(row.schema_version === 'ready4vibe_goal_event_v0' ? { stored: this.fromRow(row) } : {}),
+    };
   }
 
   private resolveExisting(event: NewGoalEvent, fingerprint: string, existing: { fingerprint: string; stored: StoredGoalEvent }): StoredGoalEvent {
@@ -277,5 +301,14 @@ export class SqliteGoalEventStore implements GoalEventStoreLike {
     if (!columns.some((column) => column.name === 'control_revision')) {
       this.database.exec('ALTER TABLE goal_events ADD COLUMN control_revision INTEGER NOT NULL DEFAULT 0');
     }
+  }
+
+  private ensureLegacyAppendAllowed(goalId: string): void {
+    if (this.hasV1Event(goalId)) throw new SqliteGoalEventOrderError(goalId);
+  }
+
+  private hasV1Event(goalId: string): boolean {
+    const row = this.database.prepare("SELECT 1 AS present FROM goal_events WHERE goal_id = ? AND schema_version = 'ready4vibe_goal_event_v1' LIMIT 1").get(goalId) as unknown as { present?: number } | undefined;
+    return row?.present === 1;
   }
 }

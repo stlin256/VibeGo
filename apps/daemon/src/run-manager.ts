@@ -70,8 +70,17 @@ export interface RunManagerOptions {
   observabilityUsageObserver?: RunUsageObserver;
 }
 
+/** Optional application-owned snapshot seam. Interactive callers keep the
+ * one-argument start behavior; governed admission supplies a prevalidated id
+ * and capability snapshot so settings cannot change between preflight and the
+ * authoritative run-created event. */
+export interface RunStartOptions {
+  readonly runId?: string;
+  readonly capabilitySnapshot?: CapabilityProfileRunSnapshot;
+}
+
 export class RunManagerError extends Error {
-  constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID', message: string) {
+  constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID' | 'RUN_ID_CONFLICT', message: string) {
     super(message);
     this.name = 'RunManagerError';
   }
@@ -120,12 +129,20 @@ export class RunManager {
     });
   }
 
-  async start(input: unknown): Promise<{ runId: string; status: 'queued' }> {
+  async start(input: unknown, options: RunStartOptions = {}): Promise<{ runId: string; status: 'queued' }> {
     const config = parseRunConfig(input);
     if (!this.workspaceExists(config.workspaceId)) throw new RunManagerError('WORKSPACE_NOT_FOUND', 'Workspace was not found.');
-    const runId = `run_${uuidv7()}`;
+    const runId = options.runId ?? `run_${uuidv7()}`;
+    if (!/^run_[A-Za-z0-9_-]{8,128}$/u.test(runId)) throw new RunManagerError('RUN_ID_CONFLICT', 'The run id is invalid.');
+    if (this.eventStore.lastSeq(runId) > 0 || this.controllers.has(runId)) throw new RunManagerError('RUN_ID_CONFLICT', 'The run id is already in use.');
     let capabilitySnapshot: CapabilityProfileRunSnapshot | undefined;
-    if (this.capabilityProfileForRun) {
+    if (options.capabilitySnapshot) {
+      try {
+        capabilitySnapshot = CapabilityProfileRunSnapshotSchema.parse(options.capabilitySnapshot);
+      } catch {
+        throw new RunManagerError('CAPABILITY_PROFILE_INVALID', 'The capability profile snapshot is invalid.');
+      }
+    } else if (this.capabilityProfileForRun) {
       try {
         capabilitySnapshot = CapabilityProfileRunSnapshotSchema.parse(this.capabilityProfileForRun(config));
       } catch {

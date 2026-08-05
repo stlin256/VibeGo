@@ -38,8 +38,20 @@ describe('Goal Control v1 contracts', () => {
   it('validates a complete binding and rejects missing revision snapshots', () => {
     expect(GoalRunBindingV1Schema.parse(binding())).toMatchObject({ mode: 'governed', attempt: 1 });
     expect(GoalRunBindingSchema.parse(binding())).toMatchObject({ schemaVersion: 'ready4vibe_goal_binding_v1' });
+    expect(GoalRunBindingV1Schema.parse({ ...binding(), policyRevision: 'daemon-policy-1', capabilityProfileRevision: 'profile-2', approvalPolicyRevision: 'approval-1', sandboxSnapshotRevision: 'sandbox-3' })).toMatchObject({ policyRevision: 'daemon-policy-1' });
     const { policyRevision: _policyRevision, ...missing } = binding();
     expect(() => GoalRunBindingV1Schema.parse(missing)).toThrow();
+  });
+
+  it('accepts stable claim failure reason codes without accepting unknown codes', () => {
+    const base = {
+      schemaVersion: 'ready4vibe_goal_admission_v1' as const,
+      admissionId: 'admission_12345678', goalId, status: 'blocked' as const,
+      reason: 'A claim is required.', projectionChecksum: 'a'.repeat(64), controlRevision: 2,
+      nextStep: 'claim_todo' as const, createdAt: at, requestId: 'request_12345678',
+    };
+    expect(GoalAdmissionDecisionV1Schema.parse({ ...base, reasonCode: 'TODO_CLAIM_REQUIRED' }).reasonCode).toBe('TODO_CLAIM_REQUIRED');
+    expect(() => GoalAdmissionDecisionV1Schema.parse({ ...base, reasonCode: 'unknown' })).toThrow();
   });
 
   it('rejects secrets, environment values and absolute paths in v1 events', () => {

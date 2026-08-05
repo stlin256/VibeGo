@@ -18,6 +18,7 @@ import { AgentMemorySettingsError, type AgentMemorySettingsManager } from './age
 import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import { GoalAdmissionError, GoalAdmissionService } from './goal-admission.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 import { serveStaticWeb } from './static-web.js';
 
@@ -51,6 +52,7 @@ export interface DaemonServerOptions {
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
   goalWriteService?: GoalWriteService;
+  goalAdmissionService?: GoalAdmissionService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
@@ -81,6 +83,7 @@ interface ResolvedDaemonServerOptions {
   workspaceRegistry?: WorkspaceRegistry;
   goalEventStore?: GoalProjectionStore;
   goalWriteService?: GoalWriteService;
+  goalAdmissionService?: GoalAdmissionService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
@@ -142,6 +145,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
     ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
     ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
+    ...(options.goalAdmissionService ? { goalAdmissionService: options.goalAdmissionService } : {}),
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
@@ -987,6 +991,10 @@ async function handleRequest(
       return;
     }
     const input = await readJson(request, options.bodyLimitBytes);
+    if (isGovernedEnvelope(input)) {
+      writeJson(response, 400, { error: { code: 'GOVERNED_ROUTE_REQUIRED', message: 'Use the explicit /api/v1/runs/governed route for Goal admission.' } });
+      return;
+    }
     try {
       const started = await options.runManager.start(input);
       writeJson(response, 202, started);
@@ -1001,6 +1009,34 @@ async function handleRequest(
       }
       if (error instanceof RunManagerError) {
         writeJson(response, 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/runs/governed') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalAdmissionService) {
+      writeJson(response, 503, { error: { code: 'GOAL_ADMISSION_UNAVAILABLE', message: 'Governed Goal admission is unavailable.' } });
+      return;
+    }
+    try {
+      const started = await options.goalAdmissionService.admit(await readJson(request, options.bodyLimitBytes));
+      writeJson(response, 202, started);
+    } catch (error) {
+      if (error instanceof GoalAdmissionError) {
+        const status = error.code === 'SCHEDULER_UNAVAILABLE' || error.code === 'WORKSPACE_UNAVAILABLE' || error.code === 'SANDBOX_UNAVAILABLE' || error.code === 'PROJECTION_UNAVAILABLE' ? 503
+          : error.code === 'STALE_REVISION' || error.code === 'BINDING_CONFLICT' || error.code === 'RUN_ID_CONFLICT' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message, ...(error.decision ? { decision: error.decision } : {}) } });
+        return;
+      }
+      if (isValidationError(error)) {
+        writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Governed run request validation failed.' } });
         return;
       }
       throw error;
@@ -1403,6 +1439,10 @@ function readJson(request: IncomingMessage, limitBytes: number): Promise<unknown
 
 function isValidationError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'issues' in error;
+}
+
+function isGovernedEnvelope(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && 'runMode' in value && value.runMode === 'governed';
 }
 
 function safeGoalMutation(result: GoalMutationResult): Record<string, unknown> {

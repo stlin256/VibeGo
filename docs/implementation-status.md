@@ -598,6 +598,37 @@ fallback for untrusted content or an unhealthy external sandbox, and never widen
 network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
 No runtime behavior is claimed by this planning note.
 
+## Spec 58-2 governed admission implementation note (2026-08-05)
+
+The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).
+Implementation is intentionally limited to the daemon `GoalAdmissionService`,
+its injectable readiness ports, and the run-manager start snapshot seam. The
+service accepts only an explicit `runMode: governed` envelope, validates a
+replayed Goal projection/claim/quota identity, resolves the existing
+capability snapshot, checks the authoritative Workspace/Scheduler/Approval/
+Sandbox readiness ports, writes an eligible admission plus binding, and only
+then calls `RunManager.start`. It does not acquire a Scheduler lease, execute a
+model/tool/process, spend quota, or alter the default interactive route.
+
+The implementation is now present on the `codex/spec58-2-governed-admission`
+branch. `GoalAdmissionService` accepts only an explicit governed envelope,
+performs Goal/capability/Workspace/Scheduler/Approval/Sandbox preflight, writes
+an admission and binding, and then calls `RunManager.start` with a frozen run id
+and capability snapshot. The explicit `/api/v1/runs/governed` route is covered;
+the default `/api/v1/runs` route rejects governed envelopes and interactive runs
+remain on the existing path. Focused daemon tests prove preflight failures do
+not call the provider or create `run.created`, and that request-id retries are
+idempotent.
+
+The SQLite composition now has a mixed-table compatibility fixture: v0 reads
+filter additive v1 rows and keep a v0-only cursor, while legacy writes fail
+closed after a v1 row exists so the v1 reducer's replay-order invariant cannot
+be violated. The v1 adapter remains the only reader for admission/binding
+projection. Focused validation currently passes with 83 contracts tests, 7
+scheduler tests and 191 daemon tests. This note does not claim 58-3 validation
+writeback, quota reservation/consume, crash reconciliation or real governed
+LLM smoke.
+
 ## Spec 60 planning note (2026-08-05)
 
 `docs/specs/60-complete-verification-and-release-evidence.md` is the Draft master

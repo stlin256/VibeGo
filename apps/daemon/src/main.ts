@@ -5,7 +5,7 @@ import { AuthGate } from '@ready4vibe/auth';
 import { buildCertificateReadiness, inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
-import { SqliteEventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
+import { SqliteEventStore, SqliteGoalControlV1EventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
@@ -23,6 +23,7 @@ import { DurableCapabilityProfileSettingsManager } from './capability-profile-se
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalWriteService } from '@ready4vibe/goal-control';
+import { GoalAdmissionService } from './goal-admission.js';
 import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
 
 const transport = resolveDaemonTransport();
@@ -48,6 +49,7 @@ const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));
 const goalEventStore = new SqliteGoalEventStore(join(dataDir, 'events.sqlite'));
+const goalControlV1EventStore = new SqliteGoalControlV1EventStore(join(dataDir, 'events.sqlite'));
 const observabilityLedger = new SqliteObservabilityLedger(join(dataDir, 'events.sqlite'));
 const observabilityUsageObserver = new RunUsageObserver({
   adapter: new ProviderUsageLifecycleAdapter({ writer: observabilityLedger }),
@@ -59,6 +61,7 @@ try {
 } catch (error) {
   await observabilityLedger.close();
   goalEventStore.close();
+  goalControlV1EventStore.close();
   eventStore.close();
   throw error;
 }
@@ -72,6 +75,7 @@ try {
   await observabilityLedger.close();
   settingsStore.close();
   goalEventStore.close();
+  goalControlV1EventStore.close();
   eventStore.close();
   throw error;
 }
@@ -100,6 +104,7 @@ try {
   await observabilityLedger.close();
   settingsStore.close();
   goalEventStore.close();
+  goalControlV1EventStore.close();
   eventStore.close();
   throw error;
 }
@@ -146,6 +151,35 @@ const runManager = new RunManager({
   observabilityUsageObserver,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
+const goalAdmissionService = new GoalAdmissionService({
+  goalStore: goalControlV1EventStore,
+  runManager,
+  capabilitySnapshotForRun: (config) => capabilityProfileSettings.snapshotForRun(config.workspaceId),
+  workspace: { exists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined },
+  scheduler: runManager.scheduler,
+  approval: ({ config }) => ({
+    ready: config.taskTrust !== 'untrusted-content' || config.approval !== 'never',
+    revision: 'approval-1',
+    ...(config.taskTrust === 'untrusted-content' && config.approval === 'never' ? { reason: 'Untrusted content cannot use approval=never.' } : {}),
+  }),
+  sandbox: ({ config }) => {
+    const status = sandboxSettings.status();
+    if (config.taskTrust === 'untrusted-content' && config.sandbox.mode !== 'external-sandbox') {
+      return { ready: false, revision: 'sandbox-1', reason: 'Untrusted content requires an external sandbox.' };
+    }
+    if (config.sandbox.mode === 'external-sandbox') {
+      const providerReady = status.enabled && status.healthy && status.provider === config.sandbox.provider;
+      const networkReady = config.sandbox.network === 'restricted' || status.network === 'enabled';
+      return {
+        ready: providerReady && networkReady,
+        revision: 'sandbox-1',
+        ...(!providerReady || !networkReady ? { reason: 'The configured external sandbox is not ready for this run.' } : {}),
+      };
+    }
+    if (config.sandbox.mode === 'danger-full-access') return { ready: false, revision: 'sandbox-1', reason: 'Full-host execution is not enabled by this governed profile.' };
+    return { ready: true, revision: 'sandbox-1' };
+  },
+});
 try {
   await runManager.recoverAfterRestart();
   await agentMemorySettings.start();
@@ -181,6 +215,7 @@ const server = createDaemonServer({
   webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,
+  goalAdmissionService,
   ...(tlsCredentials ? { tls: tlsCredentials } : {}),
 });
 
@@ -198,6 +233,7 @@ const shutdown = (): void => {
       await observabilityLedger.close();
       settingsStore.close();
       goalEventStore.close();
+      goalControlV1EventStore.close();
       eventStore.close();
     })().catch(() => {
       // Shutdown is best effort; the HTTP server has already stopped accepting work.
