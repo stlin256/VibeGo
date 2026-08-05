@@ -57,3 +57,12 @@ must not become a second policy or execution engine.
   the secret/path boundary and makes revisions non-deterministic.
 - Letting a profile select `allow everything`: rejected; Approval, Sandbox and
   Scheduler remain independent fail-closed authorities.
+
+## Implementation evidence (2026-08-05)
+
+`packages/contracts/src/capability-profile.ts` implements the strict
+`ready4vibe_capability_profile_v1` schema and parser. The contract tests cover
+all four profile ids, unknown fields, secret/path/environment rejection,
+timestamp and acknowledgement rules, and external-sandbox references. No
+daemon or runtime package imports this contract yet; resolver and application
+integration remain later slices.

@@ -364,8 +364,11 @@ The following work is documented but not fully implemented yet:
   server; native Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
   cross-cutting capability-profile and first-run UX gate is now specified; ADR
-  0033 freezes the R1 contract boundary. It
-  defines preview, workspace-coding, advanced-local and custom profiles,
+  0033 freezes the R1 contract boundary. The strict
+  `ready4vibe_capability_profile_v1` contract is implemented in
+  `packages/contracts` with 5 focused tests (71 contract tests total). The
+  pure resolver and daemon integration remain pending. The plan defines
+  preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
   profile/run snapshot isolation and Host-first acceptance. Its release gate
   additionally covers Goal governed admission, real Tailscale/SSH transport,
