@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEEPSEEK_CAPABILITY_DESCRIPTOR_SCHEMA_VERSION,
   DEEPSEEK_PROVIDER_SCHEMA_VERSION,
+  DeepSeekCapabilityDescriptorSchema,
   DeepSeekCapabilitySnapshotSchema,
   DeepSeekConfigSchema,
   DeepSeekErrorCodeSchema,
@@ -91,6 +93,26 @@ describe('DeepSeek provider/v1 contracts', () => {
     }).contextLimit).toBe('unknown');
     expect(() => DeepSeekCapabilitySnapshotSchema.parse({ ...baseCapabilities, status: 'degraded', degradedReason: null })).toThrow();
     expect(() => DeepSeekCapabilitySnapshotSchema.parse({ ...baseCapabilities, status: 'ready', degradedReason: 'not ready' })).toThrow();
+  });
+
+  it('accepts only an explicit, bounded capability descriptor', () => {
+    const descriptor = DeepSeekCapabilityDescriptorSchema.parse({
+      schemaVersion: DEEPSEEK_CAPABILITY_DESCRIPTOR_SCHEMA_VERSION,
+      toolCalls: true,
+      reasoning: true,
+      webSearch: true,
+      contextLimit: 100_000,
+      outputLimit: 4_096,
+    });
+    expect(descriptor.reasoning).toBe(true);
+    expect(() => DeepSeekCapabilityDescriptorSchema.parse({
+      ...descriptor,
+      apiKey: 'sk-' + 'a'.repeat(32),
+    })).toThrow();
+    expect(() => DeepSeekCapabilityDescriptorSchema.parse({
+      ...descriptor,
+      extra: true,
+    })).toThrow();
   });
 
   it('validates probe status and stable errors without raw provider data', () => {

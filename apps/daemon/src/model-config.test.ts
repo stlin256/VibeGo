@@ -213,6 +213,39 @@ describe('daemon model configuration', () => {
     expect(calls).toBe(1);
   });
 
+  it('propagates an explicit ready capability into the immutable run snapshot', async () => {
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'ok' } }],
+      capabilities: {
+        schemaVersion: 'deepseek-provider-capabilities/v1',
+        reasoning: true,
+        toolCalls: true,
+        contextLimit: 100_000,
+        outputLimit: 4_096,
+      },
+    })));
+    manager.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+    await expect(manager.probeDeepSeek()).resolves.toMatchObject({ capabilities: { reasoning: true, toolCalls: true, descriptorRevision: 'deepseek-settings-1' } });
+    const binding = manager.bindRun({ provider: 'deepseek', name: 'deepseek-v4-flash' });
+    expect(binding.snapshot).toMatchObject({ capabilities: { streaming: true, toolCalls: true, reasoning: true, structuredOutput: false } });
+    expect(binding.deepSeekSnapshot).toMatchObject({ capabilityRevision: 'deepseek-settings-1', thinkingMode: 'auto' });
+    expect(JSON.stringify(binding.snapshot)).not.toContain('test-secret');
+    expect(JSON.stringify(binding.deepSeekSnapshot)).not.toContain('test-secret');
+  });
+
+  it('keeps matching capabilities when enabling high thinking after a probe and clears them on endpoint changes', async () => {
+    const manager = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), async () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'ok' } }],
+      capabilities: { schemaVersion: 'deepseek-provider-capabilities/v1', reasoning: true },
+    })));
+    const configured = manager.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+    await manager.probeDeepSeek();
+    manager.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'replacement-secret', thinkingMode: 'high', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off', ...(configured.profile?.profileRevision ? { expectedRevision: configured.profile.profileRevision } : {}) });
+    expect(manager.deepSeekStatus()).toMatchObject({ capability: { reasoning: true }, lastProbe: { status: 'ready' } });
+    expect(manager.bindRun({ provider: 'deepseek', name: 'deepseek-v4-flash' }).snapshot.capabilities.reasoning).toBe(true);
+    expect(() => manager.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://other.test/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'third-secret', thinkingMode: 'high', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' })).toThrowError(new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare reasoning support before high or max thinking can be enabled.'));
+  });
+
   it('fails closed when provider-owned search is enabled without a ready search capability', () => {
     const manager = new InMemoryModelSettingsManager({});
     expect(() => manager.configureDeepSeek({ endpointProfile: 'openai-responses', endpoint: 'https://api.deepseek.com/v1/responses', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'provider-owned', reviewer: 'off' })).toThrowError(new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare provider-owned web search support before it can be enabled.'));

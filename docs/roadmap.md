@@ -988,6 +988,17 @@ unavailable，provider-owned search 只在 Responses probe、network 与 approva
 focused gate 为 13/13。该 adapter slice 不改 AgentLoop 核心循环、ApprovalBroker、
 Scheduler、Sandbox、Goal 或 Web 设置，后续仍需 application/UI wiring 与 live evidence。
 
+### Spec 61-7 capability probe and run snapshot slice (complete, 2026-08-06)
+
+The bounded capability boundary is implemented under [ADR 0047](adr/0047-deepseek-capability-probe-and-run-snapshot.md):
+only an explicit versioned descriptor from the configured endpoint may enable
+reasoning or provider-owned search; malformed descriptors fail closed; and the
+existing run provider snapshot carries the ready capability revision and safe
+booleans. Missing capability metadata remains conservative. Focused evidence is
+recorded in [`spec61-7-capability-snapshot-2026-08-06.md`](reports/spec61-7-capability-snapshot-2026-08-06.md).
+This does not claim live DeepSeek support and does not change AgentLoop,
+Scheduler, Approval, Sandbox, WorkspaceRegistry or event authority.
+
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 
 详见 [Spec 62](specs/62-user-facing-documentation-quality.md)。该规格指导英文优先的

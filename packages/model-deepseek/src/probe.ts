@@ -1,7 +1,9 @@
 import {
+  DeepSeekCapabilityDescriptorSchema,
   DeepSeekConfigSchema,
   DeepSeekProbeResultSchema,
   type DeepSeekCapabilitySnapshot,
+  type DeepSeekCapabilityDescriptor,
   type DeepSeekConfig,
   type DeepSeekErrorCode,
   type DeepSeekProbeResult,
@@ -64,6 +66,12 @@ export async function probeDeepSeek(options: DeepSeekProbeOptions): Promise<Deep
     let payload: unknown;
     try { payload = JSON.parse(raw) as unknown; } catch { return failure(checkedAt, elapsedMs(startedAt), 'DEEPSEEK_PROTOCOL_UNSUPPORTED'); }
     if (!looksLikeResponse(config.endpointProfile, payload)) return failure(checkedAt, elapsedMs(startedAt), 'DEEPSEEK_PROTOCOL_UNSUPPORTED');
+    const descriptor = readCapabilityDescriptor(payload);
+    if (descriptor === 'invalid') return failure(checkedAt, elapsedMs(startedAt), 'DEEPSEEK_PROTOCOL_UNSUPPORTED');
+    const declared = descriptor === undefined ? undefined : descriptor;
+    if (declared?.webSearch === true && config.endpointProfile !== 'openai-responses') {
+      return failure(checkedAt, elapsedMs(startedAt), 'DEEPSEEK_PROTOCOL_UNSUPPORTED');
+    }
 
     const capability: DeepSeekCapabilitySnapshot = {
       schemaVersion: 'deepseek-provider-capability/v1',
@@ -75,14 +83,14 @@ export async function probeDeepSeek(options: DeepSeekProbeOptions): Promise<Deep
       status: 'ready',
       // The probe validates the selected protocol and bounded response. It
       // deliberately does not infer reasoning/search support from a prompt.
-      streaming: true,
-      toolCalls: false,
-      structuredOutput: false,
-      reasoning: false,
-      usage: hasUsage(payload),
-      webSearch: false,
-      contextLimit: config.contextLimit ?? 'unknown',
-      outputLimit: config.maxOutputTokens,
+      streaming: declared?.streaming ?? true,
+      toolCalls: declared?.toolCalls ?? false,
+      structuredOutput: declared?.structuredOutput ?? false,
+      reasoning: declared?.reasoning ?? false,
+      usage: declared?.usage ?? hasUsage(payload),
+      webSearch: declared?.webSearch ?? false,
+      contextLimit: declared?.contextLimit ?? config.contextLimit ?? 'unknown',
+      outputLimit: declared?.outputLimit ?? config.maxOutputTokens,
       degradedReason: null,
     };
     return DeepSeekProbeResultSchema.parse({
@@ -126,6 +134,13 @@ function looksLikeResponse(profile: DeepSeekConfig['endpointProfile'], value: un
 
 function hasUsage(value: unknown): boolean {
   return typeof value === 'object' && value !== null && !Array.isArray(value) && 'usage' in value;
+}
+
+function readCapabilityDescriptor(value: unknown): DeepSeekCapabilityDescriptor | 'invalid' | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(value, 'capabilities')) return undefined;
+  const parsed = DeepSeekCapabilityDescriptorSchema.safeParse((value as Record<string, unknown>).capabilities);
+  return parsed.success ? parsed.data : 'invalid';
 }
 
 function failure(checkedAt: string, latencyMs: number | null, errorCode: DeepSeekErrorCode): DeepSeekProbeResult {

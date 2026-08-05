@@ -1,4 +1,5 @@
 import {
+  DeepSeekCapabilitySnapshotSchema,
   DeepSeekConfigSchema,
   type DeepSeekConfig,
   type DeepSeekCapabilitySnapshot,
@@ -35,9 +36,19 @@ export class DeepSeekProvider implements ModelProvider {
   constructor(options: DeepSeekProviderOptions) {
     this.config = DeepSeekConfigSchema.parse(options.config);
     if (typeof options.apiKey !== 'string' || options.apiKey.length === 0) throw new Error('DeepSeek runtime credential is required');
+    const capability = options.capability ? DeepSeekCapabilitySnapshotSchema.safeParse(options.capability) : undefined;
+    const matchingReadyCapability = capability?.success
+      && capability.data.status === 'ready'
+      && capability.data.providerId === this.config.providerId
+      && capability.data.endpointProfile === this.config.endpointProfile
+      && capability.data.model === this.config.model;
     if ((this.config.thinkingMode === 'high' || this.config.thinkingMode === 'max')
-      && (!options.capability || options.capability.status !== 'ready' || !options.capability.reasoning)) {
+      && (!matchingReadyCapability || !capability?.data.reasoning)) {
       throw new Error('DEEPSEEK_THINKING_UNSUPPORTED');
+    }
+    if (this.config.webSearch === 'provider-owned'
+      && (!matchingReadyCapability || !capability?.data.webSearch)) {
+      throw new Error('DEEPSEEK_SEARCH_DEGRADED');
     }
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));

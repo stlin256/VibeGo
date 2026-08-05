@@ -21,6 +21,7 @@ const unknownOrPositiveInt = z.union([z.literal('unknown'), z.number().int().pos
 const unknownOrBoolean = z.union([z.literal('unknown'), z.boolean()]);
 
 export const DEEPSEEK_PROVIDER_SCHEMA_VERSION = 'deepseek-provider/v1' as const;
+export const DEEPSEEK_CAPABILITY_DESCRIPTOR_SCHEMA_VERSION = 'deepseek-provider-capabilities/v1' as const;
 export const DEEPSEEK_CAPABILITY_SCHEMA_VERSION = 'deepseek-provider-capability/v1' as const;
 export const DEEPSEEK_PROBE_SCHEMA_VERSION = 'deepseek-provider-probe/v1' as const;
 export const DEEPSEEK_REVIEW_SCHEMA_VERSION = 'deepseek-provider-review/v1' as const;
@@ -109,6 +110,24 @@ export const DeepSeekConfigSchema = z.object({
   addPrivacyIssues(value, context);
 });
 export type DeepSeekConfig = z.infer<typeof DeepSeekConfigSchema>;
+
+/**
+ * Optional provider-declared metadata accepted by the explicit probe. It is
+ * intentionally separate from the VibeGo capability snapshot so arbitrary
+ * response fields cannot be mistaken for capabilities.
+ */
+export const DeepSeekCapabilityDescriptorSchema = z.object({
+  schemaVersion: z.literal(DEEPSEEK_CAPABILITY_DESCRIPTOR_SCHEMA_VERSION),
+  streaming: z.boolean().optional(),
+  toolCalls: z.boolean().optional(),
+  structuredOutput: z.boolean().optional(),
+  reasoning: z.boolean().optional(),
+  usage: z.boolean().optional(),
+  webSearch: z.boolean().optional(),
+  contextLimit: unknownOrPositiveInt.optional(),
+  outputLimit: unknownOrPositiveInt.optional(),
+}).strict().superRefine((value, context) => addPrivacyIssues(value, context));
+export type DeepSeekCapabilityDescriptor = z.infer<typeof DeepSeekCapabilityDescriptorSchema>;
 
 /** Secret-free provider/config snapshot captured once for an in-flight run. */
 export const DeepSeekRunSnapshotSchema = z.object({

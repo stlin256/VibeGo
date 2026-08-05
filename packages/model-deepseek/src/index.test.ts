@@ -124,6 +124,24 @@ describe('DeepSeekProvider', () => {
         endpoint: 'https://api.deepseek.com/v1/responses',
         webSearch: 'provider-owned',
       },
+      capability: {
+        schemaVersion: 'deepseek-provider-capability/v1',
+        providerId: 'deepseek',
+        endpointProfile: 'openai-responses',
+        model: 'deepseek-v4-flash',
+        descriptorRevision: 'probe-1',
+        capturedAt: '2026-08-05T10:00:00.000Z',
+        status: 'ready',
+        streaming: true,
+        toolCalls: true,
+        structuredOutput: false,
+        reasoning: false,
+        usage: true,
+        webSearch: true,
+        contextLimit: 100_000,
+        outputLimit: 4_096,
+        degradedReason: null,
+      },
       apiKey: 'runtime-secret',
       fetchImpl: async (input, init) => {
         calls.push({ input, ...(init === undefined ? {} : { init }) });
@@ -154,6 +172,18 @@ describe('DeepSeekProvider', () => {
     const anthropicHeaders = calls[1]?.init?.headers as Record<string, string>;
     expect(anthropicHeaders['x-api-key']).toBe('runtime-secret');
     expect(anthropicHeaders.Authorization).toBeUndefined();
+  });
+
+  it('fails closed when provider-owned search has no ready capability snapshot', () => {
+    expect(() => new DeepSeekProvider({
+      config: {
+        ...config,
+        endpointProfile: 'openai-responses',
+        endpoint: 'https://api.deepseek.com/v1/responses',
+        webSearch: 'provider-owned',
+      },
+      apiKey: 'runtime-secret',
+    })).toThrow('DEEPSEEK_SEARCH_DEGRADED');
   });
 
   it('does not emit a retry or replay after a visible partial stream', async () => {

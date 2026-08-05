@@ -915,6 +915,19 @@ typecheck/build. It does not wire a second scheduler, alter ApprovalBroker
 authority, or add a DeepSeek branch to AgentLoop; application wiring, Web
 settings and live provider evidence remain later phases.
 
+### Spec 61-7 capability probe and run snapshot checkpoint (complete, 2026-08-06)
+
+The explicit, versioned capability descriptor and fail-closed provider boundary
+are implemented under [ADR 0047](adr/0047-deepseek-capability-probe-and-run-snapshot.md).
+Missing metadata remains conservative; malformed metadata is rejected; optional
+reasoning/search configuration requires a matching ready capability; and
+`bindRun` propagates the safe capability revision/booleans into the existing
+immutable provider snapshots. Evidence is recorded in
+[`spec61-7-capability-snapshot-2026-08-06.md`](reports/spec61-7-capability-snapshot-2026-08-06.md).
+The slice does not alter AgentLoop, Scheduler, Approval, Sandbox,
+WorkspaceRegistry or event authorities; live provider support and release
+evidence remain separate gates.
+
 ## Spec 62 planning note (2026-08-05)
 
 The former `docs/specs/61-user-facing-documentation-quality.md` has been moved

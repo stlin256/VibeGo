@@ -209,17 +209,18 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
       revision: `deepseek-settings-${nextRevision}`,
       updatedAt: this.clock().toISOString(),
     });
+    const matchingCapability = matchingDeepSeekCapability(this.deepSeekCapability, config, this.deepSeekConfig?.endpoint);
     if ((config.thinkingMode === 'high' || config.thinkingMode === 'max')
-      && (!this.deepSeekCapability || this.deepSeekCapability.status !== 'ready' || !this.deepSeekCapability.reasoning)) {
+      && (!matchingCapability || !matchingCapability.reasoning)) {
       throw new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare reasoning support before high or max thinking can be enabled.');
     }
     if (config.webSearch === 'provider-owned'
-      && (!this.deepSeekCapability || this.deepSeekCapability.status !== 'ready' || !this.deepSeekCapability.webSearch)) {
+      && (!matchingCapability || !matchingCapability.webSearch)) {
       throw new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare provider-owned web search support before it can be enabled.');
     }
     let nextProvider: DeepSeekProvider;
     try {
-      nextProvider = new DeepSeekProvider({ config, apiKey: normalized.apiKey, ...(this.deepSeekCapability ? { capability: this.deepSeekCapability } : {}) });
+      nextProvider = new DeepSeekProvider({ config, apiKey: normalized.apiKey, ...(matchingCapability ? { capability: matchingCapability } : {}) });
     } catch (error) {
       if (error instanceof Error && error.message === 'DEEPSEEK_THINKING_UNSUPPORTED') {
         throw new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare reasoning support before high or max thinking can be enabled.');
@@ -234,8 +235,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     this.deepSeekProfile = profile;
     this.deepSeekEnvironment = { provider: nextProvider, config, apiKey: normalized.apiKey };
     this.deepSeekApiKey = normalized.apiKey;
-    this.deepSeekCapability = undefined;
-    this.deepSeekLastProbe = undefined;
+    this.deepSeekCapability = matchingCapability;
+    if (!matchingCapability) this.deepSeekLastProbe = undefined;
     this.deepSeekRevision = nextRevision;
     this.currentApiKey = normalized.apiKey;
     this.currentModelName = config.model;
@@ -409,6 +410,14 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     try {
       const capturedAt = this.clock().toISOString();
       const config = DeepSeekConfigSchema.parse({ ...environment.config, model: modelName });
+      const capability = matchingDeepSeekCapability(this.deepSeekCapability, config, environment.config.endpoint);
+      if ((config.thinkingMode === 'high' || config.thinkingMode === 'max')
+        && (!capability || !capability.reasoning)) {
+        throw new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare reasoning support before high or max thinking can be used.');
+      }
+      if (config.webSearch === 'provider-owned' && (!capability || !capability.webSearch)) {
+        throw new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare provider-owned web search support before it can be used.');
+      }
       const provider = this.provider.snapshot();
       const snapshot = ModelProviderSnapshotSchema.parse({
         schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
@@ -418,13 +427,15 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
         descriptorRevision: config.revision,
         endpointPolicy: { kind: 'explicit-url', baseUrl: config.endpoint },
         capabilities: {
-          streaming: provider.capabilities.streaming,
-          toolCalls: provider.capabilities.toolCalls,
-          structuredOutput: provider.capabilities.structuredOutput,
-          reasoning: false,
+          streaming: capability ? provider.capabilities.streaming && capability.streaming : provider.capabilities.streaming,
+          toolCalls: capability ? provider.capabilities.toolCalls && capability.toolCalls : provider.capabilities.toolCalls,
+          structuredOutput: capability ? provider.capabilities.structuredOutput && capability.structuredOutput : provider.capabilities.structuredOutput,
+          reasoning: capability?.reasoning ?? false,
           promptCaching: false,
           audioInput: false,
           audioOutput: false,
+          ...(capability && typeof capability.contextLimit === 'number' ? { maxContextTokens: capability.contextLimit } : {}),
+          ...(capability && typeof capability.outputLimit === 'number' ? { maxOutputTokens: capability.outputLimit } : {}),
         },
         ...(config.authRef ? { authRef: config.authRef } : {}),
         capturedAt,
@@ -440,7 +451,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
         webSearch: config.webSearch,
         reviewer: config.reviewer,
         configRevision: config.revision,
-        capabilityRevision: `${DEEPSEEK_CAPABILITY_SCHEMA_VERSION.replace('/v1', '')}-unprobed`,
+        capabilityRevision: capability?.descriptorRevision ?? `${DEEPSEEK_CAPABILITY_SCHEMA_VERSION.replace('/v1', '')}-unprobed`,
         capturedAt,
       });
       return { provider, snapshot, deepSeekSnapshot };
@@ -637,6 +648,17 @@ function statusFromDeepSeekConfig(config: DeepSeekConfig, source: ModelSettingsS
     source,
     credentialState: credentialAvailable ? 'available' : 'required',
   };
+}
+
+function matchingDeepSeekCapability(
+  capability: DeepSeekCapabilitySnapshot | undefined,
+  config: DeepSeekConfig,
+  previousEndpoint?: string,
+): DeepSeekCapabilitySnapshot | undefined {
+  if (!capability || capability.status !== 'ready') return undefined;
+  if (previousEndpoint !== undefined && previousEndpoint !== config.endpoint) return undefined;
+  if (capability.providerId !== 'deepseek' || capability.endpointProfile !== config.endpointProfile || capability.model !== config.model) return undefined;
+  return capability;
 }
 
 function profileFromDeepSeekConfig(config: DeepSeekConfig, profileRevision: string, updatedAt: string): DeepSeekSettingsProfile {

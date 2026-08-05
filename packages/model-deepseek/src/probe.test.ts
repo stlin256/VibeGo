@@ -39,6 +39,54 @@ describe('DeepSeek explicit endpoint probe', () => {
     expect(JSON.stringify(calls[0]?.init?.body)).not.toContain('runtime-secret');
   });
 
+  it('uses only an explicit versioned capability descriptor and remains conservative otherwise', async () => {
+    const result = await probeDeepSeek({
+      config: { ...config, endpointProfile: 'openai-responses', endpoint: 'https://provider.test/v1/responses' },
+      apiKey: 'runtime-secret',
+      fetchImpl: async () => new Response(JSON.stringify({
+        output: [],
+        capabilities: {
+          schemaVersion: 'deepseek-provider-capabilities/v1',
+          reasoning: true,
+          toolCalls: true,
+          webSearch: true,
+          contextLimit: 100_000,
+          outputLimit: 4_096,
+        },
+      }), { status: 200 }),
+    });
+    expect(result).toMatchObject({ status: 'ready', capabilities: { reasoning: true, toolCalls: true, webSearch: true, contextLimit: 100_000 } });
+
+    const conservative = await probeDeepSeek({
+      config,
+      apiKey: 'runtime-secret',
+      fetchImpl: async () => new Response(JSON.stringify({ choices: [] }), { status: 200 }),
+    });
+    expect(conservative).toMatchObject({ status: 'ready', capabilities: { reasoning: false, toolCalls: false, webSearch: false, contextLimit: 'unknown' } });
+  });
+
+  it('fails closed when an endpoint advertises malformed capability metadata', async () => {
+    await expect(probeDeepSeek({
+      config: { ...config, endpointProfile: 'openai-responses', endpoint: 'https://provider.test/v1/responses' },
+      apiKey: 'runtime-secret',
+      fetchImpl: async () => new Response(JSON.stringify({
+        output: [],
+        capabilities: { schemaVersion: 'deepseek-provider-capabilities/v1', reasoning: 'yes' },
+      }), { status: 200 }),
+    })).resolves.toMatchObject({ status: 'blocked', errorCode: 'DEEPSEEK_PROTOCOL_UNSUPPORTED', capabilities: null });
+  });
+
+  it('rejects a search capability descriptor on a non-Responses profile', async () => {
+    await expect(probeDeepSeek({
+      config,
+      apiKey: 'runtime-secret',
+      fetchImpl: async () => new Response(JSON.stringify({
+        choices: [],
+        capabilities: { schemaVersion: 'deepseek-provider-capabilities/v1', webSearch: true },
+      }), { status: 200 }),
+    })).resolves.toMatchObject({ status: 'blocked', errorCode: 'DEEPSEEK_PROTOCOL_UNSUPPORTED', capabilities: null });
+  });
+
   it('returns bounded credential and protocol errors without throwing provider data', async () => {
     await expect(probeDeepSeek({ config })).resolves.toMatchObject({ status: 'blocked', errorCode: 'DEEPSEEK_CREDENTIAL_REQUIRED', capabilities: null });
     await expect(probeDeepSeek({ config, apiKey: 'runtime-secret', fetchImpl: async () => new Response('{not-json', { status: 200 }) })).resolves.toMatchObject({ status: 'blocked', errorCode: 'DEEPSEEK_PROTOCOL_UNSUPPORTED' });

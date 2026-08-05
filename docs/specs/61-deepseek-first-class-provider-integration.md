@@ -513,6 +513,20 @@ adapter smoke 晋级为 daemon/harness readiness。
 Implemented。Spec 62 的 `62-0` 必须重新复核 Spec 01–61，不能使用旧的 Spec 61 audit
 报告替代。
 
+#### 61-7 capability probe and run snapshot closure (2026-08-06)
+
+The bounded capability slice is implemented before the final documentation
+handoff. A probe may accept only an explicit, strict
+`deepseek-provider-capabilities/v1` descriptor from the configured endpoint;
+missing metadata stays conservative and malformed metadata fails closed.
+High/max thinking and provider-owned search are rejected unless a matching
+ready capability snapshot is supplied. `bindRun` carries the capability
+revision and safe booleans into the existing generic provider snapshot while
+retaining the secret-free `DeepSeekRunSnapshot`; settings changes affect only
+new runs. This does not claim live provider support or alter AgentLoop,
+Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events` or
+`goal_events`.
+
 ## 13. Definition of Done
 
 Spec 61 只有在以下条件全部满足后才能标记 `Implemented`：
