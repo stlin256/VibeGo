@@ -680,7 +680,7 @@ same-origin REST、run create/read/cancel/retry/approval，以及带 `Last-Event
 去重、有限重连、取消和终态停止的 SSE。SDK 不读 SQLite/workspace/secret，不复制任何
 执行权威；native UI 仍以后置消费者处理。
 
-## Spec 52：Capability profiles 与 first-run experience（R1 已实现，R2/R3a settings projection 进行中）
+## Spec 52：Capability profiles 与 first-run experience（R1/R2/R3 已实现，R4-R7 后置）
 
 详见 [Spec 52](specs/52-capability-profiles-and-first-run-experience.md) 及其
 [前置验证报告](reports/52-prerequisite-verification-2026-08-05.md)。本规格把
@@ -694,8 +694,8 @@ Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM
 原生客户端是后置消费者，不阻塞 Web/Host 发布。R0 前置验证门禁已于
 2026-08-05 完成；ADR 0033 已冻结版本化 Capability Profile contract，strict
 contract 已在 `packages/contracts` 落地，纯 resolver 已在 `packages/policy` 落地，
-下一步才进入 daemon application boundary，
-不改变任何默认权限或 run 创建行为。R2/R3a 的首个 application slice 采用现有
+R3 已进入 daemon application boundary，但仍保持能力默认关闭和现有事实源。
+R2/R3a 的首个 application slice 采用现有
 `daemon_settings` 持久化非 secret profile intent，并通过认证的
 `GET/PATCH /api/v1/settings/capability-profile` 返回 resolver 的 effective profile、
 status 与稳定 reason code；expected revision 冲突时 fail-closed，reset 只回到
@@ -712,7 +712,23 @@ run 创建或事件事实源。R2 profile cards/blocked guidance 已实现：Web
 内存中保存 projection，四个 profile cards、Advanced Local acknowledgement、
 effective/reason/revision guidance 和 reset/conflict handling 均复用现有 Settings
 Sheet；Web focused gate 为 96 tests。浏览器不决定权限、不存储 credentials/path，
-daemon resolver 仍是唯一权威。随后才在独立变更中绑定 profile/run snapshot。
+daemon resolver 仍是唯一权威；R3 在独立变更中绑定 profile/run snapshot。
+
+52-R3 run-snapshot implementation is recorded in
+[ADR 0035](adr/0035-capability-profile-run-snapshot.md). Each new run now
+captures one resolver decision at the daemon application boundary, rejects
+blocked/config-incompatible profiles before provider/tool/sandbox work, and
+preserves the existing unbound interactive path when the optional manager is
+absent. The snapshot is metadata-only and is replayed from the existing
+`run.created` event; settings changes affect later runs only. The main daemon
+narrows filesystem, shell and MCP descriptors to the effective profile. No
+Goal admission, AgentLoop state-machine, Scheduler, Approval, Sandbox,
+WorkspaceRegistry or event-authority replacement is part of this slice.
+
+The R3 focused additions cover the strict snapshot contract, AgentLoop
+metadata, descriptor narrowing and daemon RunManager/server behavior. The
+affected package gates pass with contracts 78, AgentLoop 21, daemon 180 and
+Web 96 tests, plus typecheck/build coverage.
 
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。

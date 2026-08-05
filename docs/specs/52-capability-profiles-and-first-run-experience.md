@@ -1,8 +1,8 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R1 strict contract/resolver and R2/R3a durable settings projection
-  with authenticated API implemented (profile cards and run snapshot binding
-  remain pending; no default run-path behavior change)
+- Status: R1 strict contract/resolver, R2/R3a durable settings projection and
+  R3 run snapshot binding implemented (Goal admission and release gates remain
+  pending)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
   persistence, policy/approval boundaries, transport/certificate adapters,
@@ -514,7 +514,8 @@ settings/reset routes, `apps/web/src/main.tsx` refreshes the projection after
 health/pairing and keeps mutations in memory, and `apps/web/src/App.tsx` adds
 the four cards plus Advanced Local acknowledgement and bounded effective-mode
 guidance. The Web focused suite has 96 tests. This remains an intent/status
-surface: profile/run snapshot binding is still a separate R3 slice.
+surface: the daemon remains the only resolver authority and the R3 run
+snapshot is consumed only by the daemon application boundary.
 
 ### 52-R3: Existing runtime integration
 
@@ -522,6 +523,39 @@ surface: profile/run snapshot binding is still a separate R3 slice.
   workspace and RunManager application boundaries.
 - Verify that disabled modes make zero provider/process/network calls.
 - Verify that a changed profile never alters an already running run.
+
+#### 52-R3 run-snapshot implementation update (2026-08-05)
+
+The R3 slice is intentionally limited to an application-service snapshot
+boundary. The following contract is implemented:
+
+1. `CapabilityProfileRunSnapshot` is a strict, versioned, secret-free value
+   containing the requested profile, the daemon resolver's effective profile
+   (or a bounded blocked result), profile revision, policy revision, resolver
+   status/reason and capture time. It contains ids only; it never contains a
+   workspace path, credential, environment map, raw tool arguments or provider
+   response.
+2. `RunManager` captures this value exactly once for a newly created run from
+   the daemon-owned settings manager. The snapshot is immutable for the run
+   and is included in the existing `run.created` metadata projection. Existing
+   `run_events` remains the event authority; no second event stream is added.
+3. A blocked profile fails closed before model/provider, tool, shell, MCP,
+   network or sandbox work starts. A degraded profile may proceed only with
+   the resolver's effective narrowed profile; it never triggers an implicit
+   host fallback. The existing unbound interactive run remains usable when no
+   capability-profile manager is injected (tests and compatibility callers).
+4. Snapshot capture is an application boundary only. It does not change the
+   AgentLoop state machine, RunManager's scheduler lease, Approval broker,
+   Sandbox resolver, WorkspaceRegistry or Goal admission. A settings update
+   after capture affects only later runs.
+5. Recovery creates a new run and therefore a new snapshot; it never restores
+   an old provider/tool call or silently reuses a prior capability decision.
+
+The implementation is covered by focused tests for ready/degraded/blocked
+profiles, zero side effects on blocked capture, snapshot isolation across
+settings changes, event privacy, compatibility without the manager and
+recovery snapshot freshness. The implementation status and roadmap must be
+updated in the same commit as the code and tests.
 
 #### R2/R3a application-settings slice (2026-08-05, implemented)
 
@@ -535,18 +569,39 @@ MCP settings; the browser cannot widen it. Updates use an expected revision
 and fail closed on stale or concurrent writes. Resetting the profile returns
 to `preview` without deleting run or Goal history.
 
-This slice deliberately does **not** attach the profile to `RunConfig`, change
-`RunManager.start`, alter the AgentLoop state machine, grant a tool, start a
-process, call a provider, change Scheduler/Approval/Sandbox authority, or
-modify `run_events`/`goal_events`. Profile/run snapshot binding and contextual
-Web cards remain the next independently tested slice.
+This settings slice deliberately does **not** put the profile into
+`RunConfig`, grant a tool, start a process, call a provider, change
+Scheduler/Approval/Sandbox authority, or modify `run_events`/`goal_events`.
+The separate R3 snapshot binding now captures the resolver result at
+`RunManager` creation time; the AgentLoop state machine and event authority
+remain unchanged.
 
 The implementation is covered by strict contracts in
 `packages/contracts/src/capability-profile-settings.ts`, the durable daemon
 manager in `apps/daemon/src/capability-profile-settings.ts`, and authenticated
 server fixtures for restart, stale revision, reset, privacy and LAN auth. The
 focused contract suite has 74 tests and the daemon focused settings/API suite
-has 35 tests at this gate.
+has 35 tests at the R2/R3a gate. The R3 addition is covered by the new run
+snapshot contract, AgentLoop metadata, runtime constraint, RunManager and
+server fixtures described below.
+
+#### 52-R3 implementation evidence (2026-08-05)
+
+`packages/contracts/src/capability-profile-run.ts` adds the strict
+`ready4vibe_capability_profile_run_snapshot_v1` contract with privacy,
+revision and ready/degraded/blocked consistency checks. The daemon settings
+manager exposes `snapshotForRun(workspaceId)` and fails closed on stale,
+blocked or mismatched workspace intent. `RunManager` captures the snapshot
+before model binding or runtime selection, rejects blocked/config-incompatible
+runs, and passes the immutable metadata through the existing `run.created`
+event to `RunSnapshot`. The main daemon narrows filesystem, shell and MCP
+runtime descriptors to the captured effective profile; unknown descriptors do
+not receive implicit access. Recovery calls normal `start`, so it receives a
+fresh snapshot. Focused contract, AgentLoop, daemon runtime and RunManager
+tests cover the boundary. The affected package gates pass with contracts 78,
+AgentLoop 21, daemon 180 and Web 96 tests, plus typecheck/build coverage. No
+Goal admission, second scheduler, new approval broker, sandbox authority or
+event stream was added.
 
 ### 52-R4: Goal governed admission
 

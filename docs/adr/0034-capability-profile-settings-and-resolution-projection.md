@@ -36,9 +36,11 @@ must not become an authorization engine or persist secrets.
    `degraded`/`blocked` projection and zero new provider/process/network work.
    No route starts a runtime or mutates Scheduler, Approval, Sandbox,
    WorkspaceRegistry, AgentLoop, `run_events` or `goal_events`.
-5. Run snapshot binding is intentionally deferred to the next independently
-   tested slice. Until then, the existing unbound interactive run path is
-   byte-for-byte behaviorally unchanged.
+5. Run snapshot binding is implemented as a separate, independently tested
+   R3 application slice under [ADR 0035](0035-capability-profile-run-snapshot.md).
+   The settings record remains independent of `RunConfig`; an unbound caller
+   that does not inject the optional profile provider keeps the historical
+   interactive behavior.
 
 ## Consequences
 
@@ -75,7 +77,9 @@ uses `profile-N` optimistic revisions and exposes only bounded status metadata.
 workspace, model, filesystem, sandbox and MCP managers. Contract, manager and
 server fixtures cover strict privacy, restart, stale/concurrent updates,
 resolver narrowing, reset history and the existing LAN authentication gate.
-No default run or execution authority was changed.
+No Goal admission or execution authority was replaced. The later R3 slice
+captures a bounded resolver snapshot for new daemon runs without changing the
+AgentLoop state machine or existing event authority.
 
 The R2 Web card now consumes this status DTO through the existing
 conversation-first Settings Sheet. It is a presentation and intent-editing
