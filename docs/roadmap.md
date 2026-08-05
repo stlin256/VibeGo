@@ -970,7 +970,8 @@ Approval、Sandbox、Goal、Scheduler、Workspace 和事件事实源。61-0 至 
 [ADR 0045](adr/0045-deepseek-provider-clean-room-boundary.md)，当前进入 61-1
 contract/capability 实施，仍只记录为 Draft。61-1 checkpoint 已完成 strict
 `deepseek-provider/v1` Zod contracts 与 8/8 focused tests；它不发起网络请求、不改变
-AgentLoop 或默认 run，下一步为 61-2 的显式协议 streaming adapter。
+AgentLoop 或默认 run，当前进入 61-2 的显式协议 streaming adapter；该 adapter 只接受
+complete endpoint、运行时 credential 和冻结 config snapshot，首个可见 delta 后不透明重试。
 
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 
