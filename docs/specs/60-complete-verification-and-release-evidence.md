@@ -333,3 +333,12 @@ Spec 60 只有在以下条件全部满足后才能标记 `Implemented`：
 - 不把一次成功 smoke 扩大解释为容量、稳定性或所有 provider 的保证；
 - 不强制把原生 Android/iOS/HarmonyOS 客户端作为 Web 可用性的前置条件，但若作为
   release target，则必须纳入 60-8 的 evidence matrix。
+
+#### 60-2 implementation checkpoint (2026-08-05)
+
+The explicit full plan was rerun at `8876a99` and passed in 130.7 seconds. It
+covered the 22 workspace projects (796 tests), build/typecheck, Web build,
+`diff:check` and `git diff --check`. The ignored full bundle is
+`.ready4vibe/evidence/2026-08-05/8876a992c496f9c058c83ec3919ac6162f79469d/`.
+This closes only the static/unit gate; live provider, remote, certificate,
+cross-platform and signed-release gates remain separate.

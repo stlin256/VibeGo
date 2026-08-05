@@ -1045,3 +1045,11 @@ The `smoke:recovery` runner and four-test fixture are implemented. Windows
 evidence is healthy for peak concurrency 2, two completed runs, both cancellation
 paths and idempotent restart marking with zero post-recovery provider calls;
 workflow fixtures pass 51/51. This is bounded application evidence only.
+
+#### Spec 60-2 implementation checkpoint (2026-08-05)
+
+The full `verify:evidence` plan passed at `8876a99` in 130.7 seconds: 22
+workspace projects and 796 tests, plus build/typecheck, Web build and both diff
+checks. Its bounded bundle is under
+`.ready4vibe/evidence/2026-08-05/8876a992c496f9c058c83ec3919ac6162f79469d/`.
+This is not a live or release readiness claim.

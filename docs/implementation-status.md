@@ -954,3 +954,12 @@ name, prompt, raw response, header or absolute path was written to the report,
 repository or documentation. The result is live provider path evidence only;
 Spec 60 still requires the broader failure/recovery, security, concurrency,
 transport and release bundle gates.
+
+#### Spec 60-2 implementation checkpoint (2026-08-05)
+
+The full `verify:evidence` plan passed at commit `8876a99` in 130.7 seconds:
+22 workspace projects, 796 tests, build/typecheck, Web build and both diff
+checks. The ignored bundle is under
+`.ready4vibe/evidence/2026-08-05/8876a992c496f9c058c83ec3919ac6162f79469d/`.
+Only the static/unit gate is closed; runtime and release evidence remain
+partial or blocked.
