@@ -313,7 +313,7 @@ Phase 2A 不提供 raw event ingest、quota spend、claim UI 或 governed schedu
 后续 Phase 2B。Goal write API 已完成，Web editor、claim/release UI 和 governed preflight
 仍后置。
 
-## Spec 41：Host-first 发行、同源 Web 与后续客户端边界（设计已接受，代码待实现）
+## Spec 41：Host-first 发行、同源 Web 与后续客户端边界（设计约束已接受，Spec 51 R1–R4 已实现）
 
 详见 [Spec 41](specs/41-host-first-distribution-and-client-boundary.md) 与
 [ADR 0010](adr/0010-host-first-same-origin-web-and-client-boundary.md)。最终发行形态是一个
@@ -321,13 +321,14 @@ VibeGo Host：daemon 同时提供 React Web 静态资源、REST API、SSE、SQLi
 用户只需在桌面、手机、平板或折叠屏浏览器中打开 Host URL。生产环境不要求用户启动 Vite、
 配置 CORS 或单独部署 Web server。
 
-实现顺序为：daemon 同源托管 `apps/web/dist` → 统一 dev/preview/start 入口 → 内置 Node
-runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 secret store/签名
-更新 → 原生客户端 SDK。Android、iOS、HarmonyOS 客户端明确后置；它们只消费版本化 REST/SSE、
+实现顺序为：daemon 同源托管 `apps/web/dist` → launcher 生命周期与版本化 client SDK →
+内置 Node runtime 的 Windows/macOS/Linux Host 发行包 → LAN TLS/QR pairing/平台 secret
+store/签名更新 → 原生客户端 SDK。当前 Spec 51 R1–R4 已覆盖静态托管、launcher、证书 readiness
+和 SDK；R3b ACME/OS-store/renewal 与发行包仍后置。Android、iOS、HarmonyOS 客户端明确后置；它们只消费版本化 REST/SSE、
 pairing 和 device session，不读取 SQLite、workspace 或 memory sidecar，也不复制 AgentLoop、
 Scheduler、Approval 或 Sandbox。
 
-## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现，后续 42d 验收仍规划）
+## Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI（42a–42d-2 已实现，真实设备验收后置）
 
 详见 [Spec 42](specs/42-shadcn-style-web-design-system.md) 与
 [ADR 0011](adr/0011-shadcn-style-local-components-and-vibego-web.md)。Web 继续使用 React 19、
@@ -336,16 +337,17 @@ Vite 和 TypeScript，迁移为 VibeGo token 驱动的 shadcn 风格 conversatio
 简单语义元素，自定义 primitive 必须记录不采用现有库的原因并有完整无障碍测试。
 
 阶段顺序为：42a token/组件库接入与基础 primitives → 42b 对话 shell → 42c Settings、
-Approval、Goal、Memory 和 operation cards → 42d viewport/键盘/无障碍/bundle 验收。该阶段
+Approval、Goal、Memory 和 operation cards → 42d viewport/键盘/无障碍/bundle 验收。上述
+自动化阶段已完成，该阶段
 不改 daemon、REST/SSE、AgentLoop 或原生客户端边界。
 
 Phase 42a 已建立 semantic VibeGo tokens、轻量 `cn`/variant helper 以及
-Button/Input/Textarea/Label/Card/Badge/Separator/Skeleton 基础 primitives。
-它们只负责 presentational rendering，不访问 API、storage 或 secret；现有
-conversation shell 尚未迁移，避免在没有组件级回归覆盖时改变交互。Phase 42b
-再按组件逐步迁移 shell，42c 迁移 Settings/operation surfaces，42d 做 viewport、
-键盘、可访问性和 bundle 验收。当前 Web focused gate 为 88 tests、typecheck
-和 production build；观测到 JS gzip 80.68 KiB、CSS gzip 5.82 KiB。
+Button/Input/Textarea/Label/Card/Badge/Separator/Skeleton 基础 primitives；42b/42c
+已迁移 conversation shell、Settings、Approval、Goal、Memory 和 operation surfaces，
+42d-1/42d-2 已固定键盘语义、viewport CSS contract、typecheck/build 与 bundle gate。
+组件只负责 presentational rendering，不访问 API、storage 或 secret。当前 Web focused
+gate 为 94 tests，typecheck/build 与 `pnpm check:web` 均通过；真实屏幕阅读器、Playwright
+viewport 和物理设备 evidence 仍后置。
 
 Phase 42b-1 已将 conversation stream、composer、RunConsole 和 bounded
 tool-output inspector 抽出到 `components/vibego/ConversationShell.tsx`，并改用

@@ -327,16 +327,16 @@ freezes the single-authority, run-snapshot, fail-soft and host-first decisions.
 
 The following work is documented but not fully implemented yet:
 
-- **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1 policy
-  compiler and the R2 injected host-restricted process runner are implemented
-  bounded slices. Container smoke and full Web continuation remain later
-  phases. Existing daemon shell wiring remains explicit and default-off.
-- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): R1
-  injected stdio/Streamable HTTP transport and R2 immutable capability
-  snapshots are implemented behind fake ports. R3 now adds the optional,
-  authenticated non-secret MCP settings/status contract and Web card; its
-  injected probe remains off by default, so the daemon still does not
-  auto-start a process or access MCP transport on startup.
+- **Spec 48** (`specs/48-approval-sandbox-shell-runtime.md`): R1–R4 are
+  implemented bounded slices: policy compiler, host-restricted runner, opt-in
+  digest-pinned container smoke and untrusted-task Web approval continuation.
+  Existing daemon shell wiring remains explicit and default-off; VM/remote
+  execution and broader release closure remain later work.
+- **Spec 49** (`specs/49-mcp-skill-transport-and-capability-lifecycle.md`): R1–R4
+  are implemented as opt-in injected stdio/Streamable HTTP transport,
+  immutable capability snapshots, authenticated settings/status and a
+  run-scoped ToolRegistry bridge with lifecycle drain. The daemon remains
+  MCP-off by default and never auto-starts a server.
 - **Spec 50** (`specs/50-observability-lifecycle-integration.md`): 50-R1 now
   provides a pure application lifecycle recorder/fixture with bounded
   idempotency, conflict detection, disabled-sampling no-op and fail-soft writer
@@ -357,11 +357,11 @@ The following work is documented but not fully implemented yet:
   events through the existing provider usage adapter without changing run
   behavior. Resource/tool sampling and pricing settings remain outside this
   slice; focused observability and daemon gates pass.
-- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): R1 static
-  Web serving is implemented with 4 fixture tests and the current daemon gate;
-  cross-platform launcher, LAN/public certificate adapter and future versioned
-  client SDK remain planned. Development can still use the separate Vite
-  server; native Android/iOS/HarmonyOS clients remain post-MVP.
+- **Spec 51** (`specs/51-host-first-release-and-client-boundary.md`): R1–R4 are
+  implemented: static Web serving, cross-platform launcher boundary,
+  certificate readiness projection and the versioned TypeScript client SDK.
+  R3b ACME/OS-store/renewal, signed release artifacts and native
+  Android/iOS/HarmonyOS clients remain post-MVP.
 - **Spec 52** (`specs/52-capability-profiles-and-first-run-experience.md`): the
   cross-cutting capability-profile and first-run UX gate is now specified; ADR
   0033 freezes the R1 contract boundary. The strict
