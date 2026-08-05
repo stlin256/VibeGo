@@ -7,7 +7,7 @@ import type {
   ModelProviderSnapshot,
   ModelRequest,
 } from '@ready4vibe/contracts';
-import { SameAsRunApprovalReviewer } from './approval-review.js';
+import { DedicatedApprovalReviewer, SameAsRunApprovalReviewer } from './approval-review.js';
 
 const modelSnapshot: ModelProviderSnapshot = {
   schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
@@ -41,6 +41,12 @@ const reviewerSnapshot: ApprovalReviewerSnapshot = {
   limits: { maxLatencyMs: 100, maxRequestBytes: 16_384, maxResponseBytes: 8_192, cacheTtlMs: 0 },
   status: 'ready',
   capturedAt: '2026-08-05T00:00:00.000Z',
+};
+
+const dedicatedReviewerSnapshot: ApprovalReviewerSnapshot = {
+  ...reviewerSnapshot,
+  reviewerSource: 'dedicated',
+  dedicatedProfileId: 'reviewer-profile',
 };
 
 function request(overrides: Partial<ApprovalReviewRequest> = {}): ApprovalReviewRequest {
@@ -201,5 +207,52 @@ describe('SameAsRunApprovalReviewer', () => {
     const provider = new ScriptProvider([]);
     expect(() => new SameAsRunApprovalReviewer({ provider, modelSnapshot: { ...modelSnapshot, providerId: 'other-model' }, reviewerSnapshot })).toThrow(/snapshot mismatch|provider id/iu);
     expect(provider.calls).toBe(0);
+  });
+});
+
+describe('DedicatedApprovalReviewer', () => {
+  it('requires an explicitly resolved profile and preserves the bounded reviewer contract', async () => {
+    const provider = new ScriptProvider([
+      { type: 'text-delta', text: output(request()) },
+      { type: 'completed', finishReason: 'stop' },
+    ]);
+    const reviewer = new DedicatedApprovalReviewer({
+      provider,
+      modelSnapshot,
+      reviewerSnapshot: dedicatedReviewerSnapshot,
+      dedicatedProfileId: 'reviewer-profile',
+    });
+    const result = await reviewer.review(request(), new AbortController().signal);
+    expect(result).toMatchObject({ decision: 'allow', reasonCode: 'eligible' });
+    expect(reviewer.snapshot).toMatchObject({ reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-profile' });
+    expect(JSON.stringify(provider.lastRequest)).not.toMatch(/runtime-secret|C:\\\\|\/Users\//iu);
+  });
+
+  it('fails closed before provider use when the resolved profile does not match the snapshot', () => {
+    const provider = new ScriptProvider([]);
+    expect(() => new DedicatedApprovalReviewer({
+      provider,
+      modelSnapshot,
+      reviewerSnapshot: dedicatedReviewerSnapshot,
+      dedicatedProfileId: 'different-profile',
+    })).toThrow(/profile does not match/iu);
+    expect(() => new DedicatedApprovalReviewer({
+      provider,
+      modelSnapshot,
+      reviewerSnapshot,
+      dedicatedProfileId: 'reviewer-profile',
+    })).toThrow(/dedicated reviewer requires/iu);
+    expect(provider.calls).toBe(0);
+  });
+
+  it('keeps provider errors on the safe unavailable path', async () => {
+    const provider = new ScriptProvider([{ type: 'error', code: 'MODEL_HTTP_503', retryable: true, safeMessage: 'provider unavailable' }]);
+    const reviewer = new DedicatedApprovalReviewer({
+      provider,
+      modelSnapshot,
+      reviewerSnapshot: dedicatedReviewerSnapshot,
+      dedicatedProfileId: 'reviewer-profile',
+    });
+    await expect(reviewer.review(request(), new AbortController().signal)).resolves.toMatchObject({ decision: 'unavailable', reasonCode: 'provider-unavailable' });
   });
 });

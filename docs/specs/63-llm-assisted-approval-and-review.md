@@ -1,8 +1,9 @@
 # Spec 63: LLM-assisted approval and review
 
 - Status: 63-7 event projection and explicitly authorized same-as-run live
-  smoke implemented; 63-8 dedicated provider injection seam is next, while
-  production profile resolution and full release evidence remain staged
+  smoke and 63-8 dedicated provider injection seam implemented; production
+  profile resolution/live dedicated smoke and full release evidence remain
+  staged
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -363,7 +364,7 @@ latency, aggregate usage and bounded response-shape diagnostics. Live evidence
 is separate from unit fixtures and is not part of default `pnpm verify`.
 Dedicated-provider live evidence and full release verification remain staged.
 
-### 63-8: dedicated provider injection seam (next bounded slice)
+### 63-8: dedicated provider injection seam
 
 The dedicated source must use an explicitly injected provider binding resolved
 from the daemon's existing model/secret boundary. The adapter may not infer a
@@ -382,6 +383,12 @@ An injected resolver must return `undefined` for an unknown profile, stale
 snapshot, missing credential or provider mismatch. This slice does not add a
 second scheduler, ApprovalBroker, event table, browser credential path or
 multi-profile persistence. Dedicated live smoke is a later explicit gate.
+
+The adapter and daemon seam are implemented. Focused Agent evidence is 47/47
+tests with typecheck/build, and the daemon runtime fixture is 6/6 with
+typecheck. The main daemon still leaves the resolver unset, so this closes the
+injection boundary only; it does not claim a configured dedicated profile or a
+live dedicated provider request.
 
 ## 11. Acceptance matrix
 

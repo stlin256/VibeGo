@@ -3,68 +3,133 @@ import {
   ModelProviderSnapshotSchema,
   PermissionProfileRunSnapshotSchema,
   type ModelProvider,
+  type ModelProviderSnapshot,
   type PermissionProfileRunSnapshot,
 } from '@ready4vibe/contracts';
 import {
+  DedicatedApprovalReviewer,
   SameAsRunApprovalReviewer,
   type ApprovalReviewBinding,
   type ApprovalReviewRunBindingInput,
 } from '@ready4vibe/agent';
 import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
 
+export interface DedicatedApprovalReviewProviderBinding {
+  /** Must exactly match the daemon-owned reviewer setting. */
+  readonly profileId: string;
+  /** Runtime-only provider resolved from the daemon secret boundary. */
+  readonly provider: ModelProvider;
+  /** Secret-free snapshot for the dedicated reviewer model. */
+  readonly modelSnapshot: ModelProviderSnapshot;
+}
+
+export interface ApprovalReviewBindingOptions {
+  /**
+   * Optional application-owned resolver. The production daemon deliberately
+   * leaves this unset until multi-profile provider/secret storage is ready.
+   */
+  readonly dedicatedResolver?: (
+    profileId: string,
+    input: ApprovalReviewRunBindingInput,
+  ) => DedicatedApprovalReviewProviderBinding | undefined;
+}
+
 /**
- * Build the optional same-as-run reviewer binding at the daemon application
- * boundary. This function intentionally returns undefined for dedicated mode,
- * stale settings, missing model snapshots or missing permission snapshots;
- * those cases retain the existing deterministic approval path.
+ * Build the optional reviewer binding at the daemon application boundary.
+ * Same-as-run uses the provider captured by the current run. Dedicated mode
+ * is only available when an explicit resolver returns a matching provider and
+ * snapshot; without one it remains degraded and the deterministic Approval
+ * path is unchanged.
  */
 export function createApprovalReviewBinding(
   settings: ApprovalReviewSettingsManager,
   input: ApprovalReviewRunBindingInput,
+  options: ApprovalReviewBindingOptions = {},
 ): ApprovalReviewBinding | undefined {
   const projection = settings.status();
   const durable = settings.settingsSnapshot();
-  if (!durable.enabled || durable.reviewerSource !== 'same-as-run' || projection.status !== 'ready') return undefined;
+  if (!durable.enabled || projection.status === 'blocked') return undefined;
 
-  const modelSnapshot = ModelProviderSnapshotSchema.safeParse(input.modelSnapshot);
-  if (!modelSnapshot.success) return undefined;
-  const provider = input.modelProvider as ModelProvider;
-  if (!provider || typeof provider !== 'object' || typeof provider.stream !== 'function') return undefined;
+  if (durable.reviewerSource === 'same-as-run') {
+    if (projection.status !== 'ready') return undefined;
+    const modelSnapshot = ModelProviderSnapshotSchema.safeParse(input.modelSnapshot);
+    if (!modelSnapshot.success) return undefined;
+    const provider = input.modelProvider as ModelProvider;
+    if (!isProvider(provider)) return undefined;
+    return buildBinding({
+      source: 'same-as-run',
+      provider,
+      modelSnapshot: modelSnapshot.data,
+      input,
+      durable,
+    });
+  }
 
-  const reviewerSnapshot = ApprovalReviewerSnapshotSchema.parse({
-    schemaVersion: 'llm-approval/v1',
-    reviewerSource: 'same-as-run',
-    dedicatedProfileId: null,
-    providerId: modelSnapshot.data.providerId,
-    modelId: modelSnapshot.data.model,
-    descriptorRevision: modelSnapshot.data.descriptorRevision,
-    policyRevision: durable.policyRevision,
-    reviewerRevision: durable.reviewerRevision,
-    posture: durable.posture,
-    limits: durable.limits,
-    status: 'ready',
-    capturedAt: new Date().toISOString(),
-  });
-  const permission = permissionSummary(input.permissionSnapshot);
-  const sandbox = sandboxSummary(input);
-  const reviewer = new SameAsRunApprovalReviewer({
-    provider,
+  const profileId = durable.dedicatedProfileId;
+  if (!profileId || !options.dedicatedResolver) return undefined;
+  const resolved = options.dedicatedResolver(profileId, input);
+  if (!resolved || resolved.profileId !== profileId || !isProvider(resolved.provider)) return undefined;
+  const modelSnapshot = ModelProviderSnapshotSchema.safeParse(resolved.modelSnapshot);
+  if (!modelSnapshot.success || modelSnapshot.data.providerId !== resolved.provider.id) return undefined;
+  return buildBinding({
+    source: 'dedicated',
+    dedicatedProfileId: profileId,
+    provider: resolved.provider,
     modelSnapshot: modelSnapshot.data,
-    reviewerSnapshot,
+    input,
+    durable,
   });
-  return {
-    reviewer,
-    snapshot: reviewerSnapshot,
-    context: {
-      workspaceId: input.config.workspaceId,
-      taskTrust: input.config.taskTrust,
-      permission,
-      sandbox,
-      network: sandbox.network,
-      policyRevision: durable.policyRevision,
-      reviewerRevision: durable.reviewerRevision,
-    },
-  };
+}
+
+function buildBinding(options: {
+  readonly source: 'same-as-run' | 'dedicated';
+  readonly dedicatedProfileId?: string;
+  readonly provider: ModelProvider;
+  readonly modelSnapshot: ReturnType<typeof ModelProviderSnapshotSchema.parse>;
+  readonly input: ApprovalReviewRunBindingInput;
+  readonly durable: ReturnType<ApprovalReviewSettingsManager['settingsSnapshot']>;
+}): ApprovalReviewBinding | undefined {
+  try {
+    const reviewerSnapshot = ApprovalReviewerSnapshotSchema.parse({
+      schemaVersion: 'llm-approval/v1',
+      reviewerSource: options.source,
+      dedicatedProfileId: options.dedicatedProfileId ?? null,
+      providerId: options.modelSnapshot.providerId,
+      modelId: options.modelSnapshot.model,
+      descriptorRevision: options.modelSnapshot.descriptorRevision,
+      policyRevision: options.durable.policyRevision,
+      reviewerRevision: options.durable.reviewerRevision,
+      posture: options.durable.posture,
+      limits: options.durable.limits,
+      status: 'ready',
+      capturedAt: new Date().toISOString(),
+    });
+    const permission = permissionSummary(options.input.permissionSnapshot);
+    const sandbox = sandboxSummary(options.input);
+    const reviewer = options.source === 'same-as-run'
+      ? new SameAsRunApprovalReviewer({ provider: options.provider, modelSnapshot: options.modelSnapshot, reviewerSnapshot })
+      : new DedicatedApprovalReviewer({ provider: options.provider, modelSnapshot: options.modelSnapshot, reviewerSnapshot, dedicatedProfileId: options.dedicatedProfileId! });
+    return {
+      reviewer,
+      snapshot: reviewerSnapshot,
+      context: {
+        workspaceId: options.input.config.workspaceId,
+        taskTrust: options.input.config.taskTrust,
+        permission,
+        sandbox,
+        network: sandbox.network,
+        policyRevision: options.durable.policyRevision,
+        reviewerRevision: options.durable.reviewerRevision,
+      },
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function isProvider(value: unknown): value is ModelProvider {
+  return typeof value === 'object' && value !== null && typeof (value as ModelProvider).id === 'string'
+    && typeof (value as ModelProvider).stream === 'function';
 }
 
 function permissionSummary(value: unknown): {

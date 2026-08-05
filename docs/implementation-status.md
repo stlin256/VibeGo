@@ -1387,11 +1387,12 @@ evidence and full release verification remain staged.
 
 ### Spec 63-8 dedicated reviewer injection boundary (2026-08-06)
 
-The next bounded slice is frozen by [ADR 0046](adr/0046-dedicated-reviewer-provider-injection.md).
-It adds a generic dedicated reviewer adapter and an explicit daemon application
-resolver seam, but the production daemon will continue to provide no resolver
-by default. A dedicated setting therefore remains `degraded` until a validated
-multi-profile provider/secret boundary is supplied. The adapter must reuse the
-same bounded safety metadata, snapshot isolation, exact-key fingerprint and
-fail-closed behavior as same-as-run; it must not add a credential store,
-second scheduler, approval authority or event table.
+The adapter and daemon application seam are implemented under [ADR 0046](adr/0046-dedicated-reviewer-provider-injection.md).
+`DedicatedApprovalReviewer` accepts only an explicit profile id plus a matching
+secret-free provider snapshot; unknown, stale or mismatched resolver results
+return no binding. Focused Agent evidence is 47/47 tests with typecheck/build,
+and the daemon runtime fixture is 6/6 with typecheck. The production daemon
+still provides no resolver, so dedicated settings remain `degraded` and the
+normal deterministic ApprovalBroker path is unchanged. Evidence is recorded
+in `reports/spec63-8-dedicated-reviewer-adapter-2026-08-06.md`; multi-profile
+persistence and dedicated live smoke remain staged.

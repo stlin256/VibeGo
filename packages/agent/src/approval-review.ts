@@ -74,10 +74,28 @@ export class NoopApprovalReviewer implements ApprovalReviewer {
   }
 }
 
+interface ProviderApprovalReviewerOptions {
+  readonly provider: ModelProvider;
+  readonly modelSnapshot: ModelProviderSnapshot;
+  readonly reviewerSnapshot: ApprovalReviewerSnapshot;
+  readonly now?: () => number;
+  readonly expectedSource: 'same-as-run' | 'dedicated';
+  readonly expectedDedicatedProfileId?: string;
+}
+
 export interface SameAsRunApprovalReviewerOptions {
   readonly provider: ModelProvider;
   readonly modelSnapshot: ModelProviderSnapshot;
   readonly reviewerSnapshot: ApprovalReviewerSnapshot;
+  readonly now?: () => number;
+}
+
+export interface DedicatedApprovalReviewerOptions {
+  readonly provider: ModelProvider;
+  readonly modelSnapshot: ModelProviderSnapshot;
+  readonly reviewerSnapshot: ApprovalReviewerSnapshot;
+  /** The profile id resolved by the daemon-owned provider/secret boundary. */
+  readonly dedicatedProfileId: string;
   readonly now?: () => number;
 }
 
@@ -86,18 +104,23 @@ export interface SameAsRunApprovalReviewerOptions {
  * It consumes only normalized review metadata and never forwards the user
  * prompt, transcript, command, tool output, environment or host path.
  */
-export class SameAsRunApprovalReviewer implements ApprovalReviewer {
+class ProviderApprovalReviewer implements ApprovalReviewer {
   readonly snapshot: ApprovalReviewerSnapshot;
   private readonly provider: ModelProvider;
   private readonly modelSnapshot: ModelProviderSnapshot;
   private readonly now: () => number;
 
-  constructor(options: SameAsRunApprovalReviewerOptions) {
+  constructor(options: ProviderApprovalReviewerOptions) {
     this.provider = options.provider;
     this.modelSnapshot = deepFreeze(ModelProviderSnapshotSchema.parse(options.modelSnapshot));
     this.snapshot = deepFreeze(ApprovalReviewerSnapshotSchema.parse(options.reviewerSnapshot));
     this.now = options.now ?? Date.now;
-    if (this.snapshot.reviewerSource !== 'same-as-run') throw new Error('same-as-run reviewer requires a same-as-run snapshot');
+    if (this.snapshot.reviewerSource !== options.expectedSource) throw new Error(`${options.expectedSource} reviewer requires a matching reviewer snapshot`);
+    if (options.expectedSource === 'dedicated') {
+      if (!options.expectedDedicatedProfileId || this.snapshot.dedicatedProfileId !== options.expectedDedicatedProfileId) {
+        throw new Error('dedicated reviewer profile does not match the reviewer snapshot');
+      }
+    }
     if (this.snapshot.providerId !== null && this.snapshot.providerId !== this.modelSnapshot.providerId) throw new Error('reviewer/provider snapshot mismatch');
     if (this.snapshot.modelId !== null && this.snapshot.modelId !== this.modelSnapshot.model) throw new Error('reviewer/model snapshot mismatch');
     if (this.snapshot.descriptorRevision !== null && this.snapshot.descriptorRevision !== this.modelSnapshot.descriptorRevision) throw new Error('reviewer descriptor revision mismatch');
@@ -247,6 +270,20 @@ export class SameAsRunApprovalReviewer implements ApprovalReviewer {
       approvalKeyFingerprint: request.approvalKeyFingerprint,
       reviewedAt: new Date(this.now()).toISOString(),
     });
+  }
+}
+
+/** Reviewer bound to the provider profile explicitly resolved by the daemon. */
+export class DedicatedApprovalReviewer extends ProviderApprovalReviewer {
+  constructor(options: DedicatedApprovalReviewerOptions) {
+    super({ ...options, expectedSource: 'dedicated', expectedDedicatedProfileId: options.dedicatedProfileId });
+  }
+}
+
+/** Reviewer bound to the provider snapshot captured by the current run. */
+export class SameAsRunApprovalReviewer extends ProviderApprovalReviewer {
+  constructor(options: SameAsRunApprovalReviewerOptions) {
+    super({ ...options, expectedSource: 'same-as-run' });
   }
 }
 

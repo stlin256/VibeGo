@@ -116,6 +116,44 @@ describe('createApprovalReviewBinding', () => {
     expect(createApprovalReviewBinding(fresh, { ...input, modelSnapshot: undefined, permissionSnapshot: undefined })).toBeUndefined();
   });
 
+  it('uses only an explicit dedicated resolver and never reuses the active run provider', () => {
+    const settings = new ApprovalReviewSettingsManager({ settings: new InMemorySettingsStore(), policyRevision: () => 'policy-1' });
+    settings.patch({ enabled: true, reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-profile' });
+    const dedicatedProvider = {
+      id: 'dedicated-provider',
+      capabilities: { streaming: true, toolCalls: false, structuredOutput: false },
+      async *stream() { yield { type: 'completed' as const, finishReason: 'stop' as const }; },
+    };
+    const dedicatedSnapshot = ModelProviderSnapshotSchema.parse({
+      ...modelSnapshot,
+      providerId: 'dedicated-provider',
+      model: 'dedicated-reviewer-model',
+      descriptorRevision: 'dedicated-descriptor-1',
+    });
+    const binding = createApprovalReviewBinding(settings, input, {
+      dedicatedResolver: (profileId) => profileId === 'reviewer-profile'
+        ? { profileId, provider: dedicatedProvider, modelSnapshot: dedicatedSnapshot }
+        : undefined,
+    });
+    expect(binding).toBeDefined();
+    expect(binding?.snapshot).toMatchObject({ reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-profile', providerId: 'dedicated-provider' });
+    expect(binding?.reviewer).not.toBeUndefined();
+    expect(createApprovalReviewBinding(settings, input)).toBeUndefined();
+  });
+
+  it('fails closed for unknown profiles and provider/snapshot mismatches', () => {
+    const settings = new ApprovalReviewSettingsManager({ settings: new InMemorySettingsStore(), policyRevision: () => 'policy-1' });
+    settings.patch({ enabled: true, reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-profile' });
+    expect(createApprovalReviewBinding(settings, input, { dedicatedResolver: () => undefined })).toBeUndefined();
+    const mismatchedProvider = { ...provider, id: 'other-provider' };
+    expect(createApprovalReviewBinding(settings, input, {
+      dedicatedResolver: () => ({ profileId: 'reviewer-profile', provider: mismatchedProvider, modelSnapshot }),
+    })).toBeUndefined();
+    expect(createApprovalReviewBinding(settings, input, {
+      dedicatedResolver: () => ({ profileId: 'other-profile', provider, modelSnapshot }),
+    })).toBeUndefined();
+  });
+
   it('marks untrusted content and full-host as ineligible without widening scope', () => {
     const settings = new ApprovalReviewSettingsManager({ settings: new InMemorySettingsStore(), policyRevision: () => 'policy-1' });
     settings.patch({ enabled: true });

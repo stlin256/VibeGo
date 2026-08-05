@@ -38,3 +38,12 @@ secret or automatic fallback is introduced.
   wired to a provider profile and secret reference.
 - A future resolver can be added independently and must freeze its binding per
   run; changing settings affects only later runs.
+
+## 63-8 implementation checkpoint
+
+`DedicatedApprovalReviewer` and `createApprovalReviewBinding` now implement
+this seam. Agent focused evidence is 47/47 tests with typecheck/build; the
+daemon resolver fixture is 6/6 with typecheck. The production `main` wiring
+does not pass a resolver, so configured dedicated settings remain degraded and
+ordinary interactive runs retain the existing deterministic approval path.
+Multi-profile persistence and dedicated live provider evidence are not claimed.

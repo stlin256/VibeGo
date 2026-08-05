@@ -998,7 +998,7 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
-## Spec 63：LLM 辅助审批与审查（63-7 checkpoint，63-8 seam next）
+## Spec 63：LLM 辅助审批与审查（63-8 checkpoint）
 
 详见 [Spec 63](specs/63-llm-assisted-approval-and-review.md) 与
 [ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)。该规格为现有
@@ -1380,11 +1380,12 @@ Dedicated-provider live evidence and full release verification remain staged.
 
 ### Spec 63-8 dedicated provider injection seam (2026-08-06)
 
-The next code slice adds a reusable dedicated reviewer adapter plus an explicit
-resolver port. It accepts only a caller-supplied provider and secret-free
-snapshot for the configured profile; it never infers a profile from Web state
-or reuses the active run provider. The main daemon intentionally leaves the
-resolver unset, so dedicated settings stay `degraded` and ordinary interactive
-runs are unchanged. Focused tests will cover profile/snapshot mismatch,
-unknown resolver results, bounded privacy and fail-closed provider outcomes.
+The reusable `DedicatedApprovalReviewer` adapter and explicit daemon resolver
+port are implemented. It accepts only a caller-supplied provider and
+secret-free snapshot for the configured profile; it never infers a profile from
+Web state or reuses the active run provider. The main daemon intentionally
+leaves the resolver unset, so dedicated settings stay `degraded` and ordinary
+interactive runs are unchanged. Agent focused evidence is 47/47 tests and the
+daemon runtime fixture is 6/6. The redacted record is
+[`spec63-8-dedicated-reviewer-adapter-2026-08-06.md`](reports/spec63-8-dedicated-reviewer-adapter-2026-08-06.md).
 This is not dedicated live evidence or multi-profile persistence.
