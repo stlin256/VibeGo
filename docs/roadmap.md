@@ -965,3 +965,13 @@ Interactive and governed routes were exercised with an injected provider,
 including terminal SSE replay and governed Todo/quota writeback. This is
 application-path evidence only: live provider evidence and task-specific
 validation remain explicitly gated by Spec 60.
+
+### Spec 58-5 live provider checkpoint (2026-08-05)
+
+With explicit user authorization, the DeepSeek OpenAI-compatible endpoint was
+run once in each mode. Interactive and governed reports were both `healthy`
+and reached `run.completed`; governed writeback reached `validated`, completed
+the fixture Todo and consumed exactly one quota unit. Reports retained only
+bounded usage/status metadata. This does not close Spec 58-5/59-5 or the Spec
+60 release bundle: task-specific validation, failure/recovery, transport and
+release evidence remain outstanding.

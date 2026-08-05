@@ -508,10 +508,10 @@ tool arguments, absolute paths or a full event payload. Missing credentials,
 provider failure, timeout and governed validation failure are explicit
 `blocked`/`failed` outcomes; they never fall back to a fake provider.
 
-This slice adds focused script tests and a module-level build/test gate. It does
-not claim live evidence until a user-authorized provider run is executed with
-the command and its redacted report is reviewed. Container, MCP, Tailscale,
-SSH and ACME smoke commands remain separate release-profile gates.
+This slice adds focused script tests and a module-level build/test gate. The
+initial implementation did not claim live evidence; the live evidence note
+below records the later user-authorized run. Container, MCP, Tailscale, SSH and
+ACME smoke commands remain separate release-profile gates.
 
 ## Spec 58-5 minimum runner implementation note (2026-08-05)
 
@@ -536,3 +536,15 @@ Focused evidence: `node --test scripts/smoke-harness.test.mjs` passes 6 tests;
 build/typecheck and 220 daemon tests. An injected-provider run also completed
 both interactive and governed paths locally. No live DeepSeek/provider result
 is claimed until an explicit user-authorized command is run.
+
+## Spec 58-5 live smoke evidence (2026-08-05)
+
+An explicit user-authorized run against the configured DeepSeek OpenAI-compatible
+endpoint completed both modes through the new daemon harness. The redacted
+reports were `healthy` for interactive and governed; both reached
+`run.completed`, replayed terminal SSE, and reported bounded usage. Governed
+mode also reached `validated`, `todoStatus=done`, `totalSpent=1` with one each
+of `quota.reserved` and `quota.consumed`. The evidence contains no credential,
+secret reference, prompt, raw response, headers or path. This is live provider
+path evidence, not the final Spec 60 release bundle or task-specific verifier
+acceptance.

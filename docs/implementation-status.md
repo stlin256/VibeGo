@@ -843,8 +843,8 @@ admission and terminal writeback services via `/api/v1/runs/governed`.
 
 The smoke report is bounded and redacted. It is not allowed to print or persist
 the secret, prompt, raw model response, headers, tool arguments, environment
-variable names or absolute paths. No live-provider evidence is claimed until a
-user-authorized run supplies the endpoint/model/secret reference. The first
+variable names or absolute paths. The initial implementation made no live
+provider claim; the later user-authorized run is recorded below. The first
 governed fixture verifier is intentionally named and bounded; it does not
 replace task-specific validation or the Spec 60 release gate.
 
@@ -864,4 +864,19 @@ uses an isolated claimed Todo and the named bounded fixture verifier, and local
 injected-provider evidence completed admission, binding, validation, Todo
 completion and exactly-once quota consumption. The runner does not enable
 tools, MCP/Skill, shell, host execution or a fallback fake provider. The live
-LLM gate remains `blocked` until a user-authorized provider run is performed.
+provider path has now been exercised once with user authorization; the broader
+Spec 60 release gate remains `blocked` pending its complete evidence matrix.
+
+## Spec 58-5 live DeepSeek smoke evidence (2026-08-05)
+
+An explicit user-authorized live run used the configured DeepSeek
+OpenAI-compatible endpoint and the secret only in the child process
+environment. Both `interactive` and `governed` modes returned redacted
+`harness-smoke/v1` reports with `status=healthy`, `runStatus=completed`, model
+completion and terminal SSE evidence. Governed mode additionally returned
+`goal.status=validated`, `todoStatus=done`, `totalSpent=1`, and exactly one
+`quota.reserved` plus one `quota.consumed` event. No key, environment-variable
+name, prompt, raw response, header or absolute path was written to the report,
+repository or documentation. The result is live provider path evidence only;
+Spec 60 still requires the broader failure/recovery, security, concurrency,
+transport and release bundle gates.
