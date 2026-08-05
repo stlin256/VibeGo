@@ -1258,8 +1258,8 @@ unchanged.
 ### Spec 62-0 current prerequisite audit (2026-08-06)
 
 The fresh post-Spec-61 matrix is [`62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `62af21d` the fixed workflow fixture is 82/82; contracts (120/120),
-model-deepseek (20/20), daemon (272/272), the capability probe/run snapshot
+At `bd305be` the fixed workflow fixture is 82/82; contracts (120/120),
+model-deepseek (20/20), daemon (273/273), the capability probe/run snapshot
 slice, task-specific verifier registry and dedicated-reviewer smoke are
 focused-tested. Spec 60's current `pnpm verify` static/unit gate also passes; Spec 62 may correct bounded user-facing
 documentation, but it cannot claim release-ready Goal/full-host/ACME/

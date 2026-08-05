@@ -7,7 +7,7 @@ and records evidence strength separately from release claims.
 ## Gate decision
 
 **62-0 audit: complete; Spec 62 release-documentation gate: constrained.** The
-matrix is current for commit `62af21d`, but it does not authorize claims that
+matrix is current for commit `bd305be`, but it does not authorize claims that
 remain `partial`, `blocked`, or `not-run`. README changes may correct bounded
 status, setup and safety guidance; they must not call the project release-ready
 until Spec 60 and the required runtime/device/release gates are complete.
@@ -16,15 +16,15 @@ until Spec 60 and the required runtime/device/release gates are complete.
 
 | Check | Evidence |
 | --- | --- |
-| Branch / commit | `main` / `62af21d` (`origin/main`); clean worktree at audit start |
+| Branch / commit | `main` / `bd305be` (`origin/main`); clean worktree at audit start |
 | Remote | `origin` points to the public VibeGo repository |
 | Package manager | `pnpm@11.9.0` from `package.json` |
 | Node | bundled validation runtime `v24.14.0` |
 | Workspace graph | `pnpm-workspace.yaml`: `apps/*` and `packages/*`, 22 projects |
 | Lockfile | `pnpm-lock.yaml` present; not changed by this audit |
 | Workflow fixture | `pnpm test:workflow`: **82/82 passed** |
-| Focused current slice | contracts 120/120, model-deepseek 20/20, daemon 272/272; Spec 58-6 verifier-registry/timeout and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
-| Full static/unit gate | `pnpm verify` at `62af21d`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
+| Focused current slice | contracts 120/120, model-deepseek 20/20, daemon 273/273; Spec 58-6 verifier-registry/timeout/snapshot and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
+| Full static/unit gate | `pnpm verify` at `bd305be`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
 | Secret boundary | no provider key, private key, cookie, full environment, or user workspace was read or written |
 
 ## Evidence legend
@@ -35,10 +35,10 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | E2 | Focused package/application tests and typechecks recorded in the implementation status; only affected current slices were rerun |
 | E3 | Explicitly authorized DeepSeek text/governed/cancel/context-limit reports from the preceding live commit; no broad capacity or provider-failure claim |
 | E4 | Existing model, permission, recovery, transport, MCP, container, certificate and performance fixtures; they prove bounded application behavior only |
-| E5 | Current full static/unit `pnpm verify` at `62af21d`; does not cover live/remote/device/release gates |
+| E5 | Current full static/unit `pnpm verify` at `bd305be`; does not cover live/remote/device/release gates |
 | E6 | Required physical devices, public ACME/TLS, Tailscale/SSH, clean-host install, signing/SBOM/attestation and production host-runner evidence |
 | E7 | Spec 63-10 dedicated-reviewer offline fixture and separately authorized redacted DeepSeek adapter smoke; no run/tool/event or release-capacity claim |
-| E8 | Spec 58-6 task-specific verifier registry plus bounded timeout/cancellation tests; registry is empty in the default daemon and semantic task validation remains open |
+| E8 | Spec 58-6 task-specific verifier registry, bounded timeout/cancellation and per-run snapshot tests; registry is empty in the default daemon and semantic task validation remains open |
 
 ## Spec 01–61 matrix
 

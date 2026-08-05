@@ -1245,9 +1245,9 @@ Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.
 
 The fresh audit for the post-Spec-61 checkout is recorded in
 [`docs/reports/62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
-At `62af21d` on `main`, the bounded workflow fixture is 82/82 and the current
+At `bd305be` on `main`, the bounded workflow fixture is 82/82 and the current
 capability slice passes contracts 120/120, model-deepseek 20/20 and daemon
-272/272 focused suites. Spec 58-6 task-specific verifier-registry and Spec 63-10
+273/273 focused suites. Spec 58-6 task-specific verifier-registry and Spec 63-10
 dedicated-reviewer fixtures are included in these current gates. The current full
 `pnpm verify` also passes typecheck, build, all workspace test jobs and both diff checks. The audit still marks Spec 62 as
 documentation-constrained rather than release-ready: real-device,
