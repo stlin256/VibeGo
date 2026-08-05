@@ -1019,3 +1019,24 @@ package passes 17/17 tests, typecheck and build. A failed atomic-switch
 outcome retains the opaque candidate for explicit recovery rather than
 discarding material that may still serve TLS. No ACME/DNS, OS-store, listener,
 daemon API or run-authority integration is enabled.
+
+## Spec 60-7 application/resource performance fixture design freeze (2026-08-05)
+
+The repository has a low-overhead `ResourceCollector` and bounded
+RunManager/Scheduler recovery fixture, but no fixed performance evidence
+command. The accepted next slice is an opt-in `smoke:performance` runner over
+an isolated deterministic provider and the existing collector. It will emit
+only bounded overlap/latency, sample/drop and safe memory metadata; no real
+model, user workspace, shell/MCP/container, filesystem scan or unbounded load
+is permitted. This cannot be promoted to physical-device, cross-platform or
+release readiness.
+
+## Spec 60-7 application/resource performance implementation checkpoint (2026-08-05)
+
+`scripts/smoke-performance.mjs` and its four-test fixture are now wired as
+`pnpm smoke:performance`. The Windows both-mode run is healthy: two isolated
+fixture runs reached peak concurrency 2 with two terminal completions, p95
+latency around 120 ms, two resource samples and zero dropped samples. The
+workflow suite passes 59/59 and `@ready4vibe/observability` passes 66/66. The
+report contains bounded aggregate metrics only; real provider, user workspace,
+physical-device, cross-platform and release gates remain partial or blocked.

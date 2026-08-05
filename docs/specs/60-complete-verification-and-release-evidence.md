@@ -418,3 +418,27 @@ rollback result is not proven; cleanup is performed only for material that is
 known to be detached. This prevents a failed health check from deleting a
 revision that may still be serving TLS. The additional safety regression test
 keeps a failed atomic-switch revision protected rather than discarding it.
+
+### 60-7 application/resource performance fixture boundary (2026-08-05)
+
+The next opt-in `pnpm smoke:performance -- --mode both` fixture will compose
+the existing `RunManager`/`Scheduler` path with a deterministic provider and
+the existing low-overhead `ResourceCollector`. It will run a fixed, small
+number of isolated fixture runs, measure bounded overlap/completion latency,
+and collect only aggregate resource-sample counters and safe memory metrics.
+All limits, timeouts and output sizes are fixed by the runner; no user
+workspace, real model, shell, MCP, container, filesystem scan or unbounded
+stress load is allowed. The result is application/resource evidence only and
+does not close real-provider, physical-device, cross-platform or release gates.
+
+#### 60-7 performance implementation checkpoint (2026-08-05)
+
+`scripts/smoke-performance.mjs` and its four-test fixture are implemented and
+wired as `pnpm smoke:performance`. The Windows both-mode run returned
+`performance-smoke/v1` with `status=healthy`: two isolated fixture runs,
+peak concurrency 2, two terminal completions, p95 latency about 120 ms, two
+resource samples, zero dropped samples and a bounded RSS metric. The focused
+workflow now passes 59/59; the affected `@ready4vibe/observability` package
+passes 66/66. This is deterministic application/resource evidence only and
+does not claim capacity, real-provider, physical-device, cross-platform or
+release readiness.

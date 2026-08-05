@@ -1103,3 +1103,23 @@ serialized concurrency, stale revision and privacy-safe unsafe-ID rejection.
 It does not enable ACME, OS certificate stores, public listeners or daemon/run
 integration. A failed atomic-switch outcome retains the opaque candidate for
 explicit recovery instead of deleting material that may still serve TLS.
+
+### Spec 60-7 application/resource performance fixture boundary (2026-08-05)
+
+The next opt-in `smoke:performance` command will exercise a fixed small
+RunManager/Scheduler fixture provider and the existing low-overhead
+`ResourceCollector`. It will report only bounded concurrency, completion
+latency, sample/drop counters and safe memory metadata; it will not read a user
+workspace, call a real provider, spawn tools or perform an unbounded stress
+test. Fake-fixture results remain separate from physical-device,
+cross-platform and release evidence.
+
+#### Spec 60-7 performance implementation checkpoint (2026-08-05)
+
+`smoke-performance.mjs` is implemented and included in `test:workflow`. The
+Windows both-mode fixture is healthy with two runs, peak concurrency 2, two
+completions, p95 latency around 120 ms, two resource samples and zero drops.
+The runner is fixed-parameter, deterministic-provider, bounded and redacted;
+workflow tests pass 59/59 and the observability package passes 66/66. These
+results are application/resource evidence only, not a capacity, device,
+cross-platform or release claim.
