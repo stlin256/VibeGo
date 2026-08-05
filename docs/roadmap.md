@@ -1070,3 +1070,14 @@ fail-closed behavior, valid authorization and token expiry. `test:workflow`
 passes 55/55 with the transport fixture included. This is bounded in-memory
 configuration/auth evidence only; certificate lifecycle, public remote access,
 Tailscale/SSH, ACME, cross-platform and release evidence remain partial.
+
+### Spec 60-4 provider failure fixture checkpoint (2026-08-05)
+
+The bounded provider smoke boundary is verified: `smoke-model.test.mjs` passes
+7/7 and the `@ready4vibe/model-openai` package gate passes 19/19. Coverage
+includes missing credentials, initialization/network failure, HTTP/auth errors
+after partial output, timeout/abort, malformed or non-terminal streams and
+secret/path-free error mapping. No live failure request was run because this
+process has no configured provider secret reference; real-provider timeout/5xx,
+cancellation/disconnect and context-limit evidence remain blocked and must be
+explicitly authorized rather than replaced with a fake pass.

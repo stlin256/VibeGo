@@ -371,3 +371,19 @@ The focused workflow now passes 55/55 tests, including the four transport
 tests. This closes the memory-only 60-6 fixture boundary; it does not claim
 certificate file lifecycle, a public listener, Tailscale/SSH, ACME, remote
 device coverage or release readiness.
+
+### 60-4 provider failure fixture checkpoint (2026-08-05)
+
+The existing `scripts/smoke-model.mjs` boundary was rechecked with its focused
+fixture: `node --test scripts/smoke-model.test.mjs` passed 7/7. The fixture
+covers missing-secret fail-closed behavior, provider initialization failure,
+HTTP/auth error after a partial stream without retry, network unavailability,
+bounded timeout/abort, missing terminal event and stable redacted exit/error
+mapping. The `@ready4vibe/model-openai` package gate passed 19/19, including
+HTTP 401/429 handling, malformed protocol data and abort semantics.
+
+This closes only the adapter/application failure fixture boundary. The current
+process has no configured provider secret reference, so no live DeepSeek
+failure request was attempted or claimed; the mandatory real-provider
+timeout/5xx, cancellation/disconnect and context-limit evidence remains
+explicitly blocked until a user-authorized opt-in environment is available.

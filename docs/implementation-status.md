@@ -985,3 +985,15 @@ metadata and does not include tokens, secrets, raw errors or absolute paths.
 The focused transport fixture passes 4/4 and the workflow gate passes 55/55.
 This checkpoint does not claim production certificate lifecycle, public
 listeners, Tailscale/SSH, ACME, cross-platform or release readiness.
+
+## Spec 60-4 provider failure fixture checkpoint (2026-08-05)
+
+The existing provider smoke boundary was revalidated without network access:
+`node --test scripts/smoke-model.test.mjs` passes 7/7 and the
+`@ready4vibe/model-openai` package gate passes 19/19. The bounded fixtures
+exercise missing secret, provider init/network failure, HTTP/auth failure after
+partial output, timeout/abort, malformed/non-terminal streams and stable
+redacted error/exit mappings. This is adapter/application evidence only. No
+live provider failure was attempted because the current process has no secret
+reference; real-provider timeout/5xx, cancellation/disconnect and context-limit
+evidence remain blocked pending explicit opt-in.
