@@ -847,3 +847,21 @@ variable names or absolute paths. No live-provider evidence is claimed until a
 user-authorized run supplies the endpoint/model/secret reference. The first
 governed fixture verifier is intentionally named and bounded; it does not
 replace task-specific validation or the Spec 60 release gate.
+
+## Spec 58-5 minimum harness runner implementation (2026-08-05)
+
+`pnpm smoke:harness` now invokes `scripts/smoke-harness.mjs` after building the
+daemon dependency closure. The runner supports explicit interactive and
+governed modes, uses the existing daemon HTTP/SSE boundary, and returns only
+bounded `harness-smoke/v1` metadata. Secret references are read for the current
+process only; they never appear in output. SSE frames are sanitized to event
+types, bounded usage, and safe error codes before report construction, with a
+256 KiB/512-event limit.
+
+The default runtime composes the existing in-memory EventStore, Scheduler,
+RunManager, GoalAdmissionService and GoalRunWritebackService. Governed mode
+uses an isolated claimed Todo and the named bounded fixture verifier, and local
+injected-provider evidence completed admission, binding, validation, Todo
+completion and exactly-once quota consumption. The runner does not enable
+tools, MCP/Skill, shell, host execution or a fallback fake provider. The live
+LLM gate remains `blocked` until a user-authorized provider run is performed.

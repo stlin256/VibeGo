@@ -512,3 +512,27 @@ This slice adds focused script tests and a module-level build/test gate. It does
 not claim live evidence until a user-authorized provider run is executed with
 the command and its redacted report is reviewed. Container, MCP, Tailscale,
 SSH and ACME smoke commands remain separate release-profile gates.
+
+## Spec 58-5 minimum runner implementation note (2026-08-05)
+
+`scripts/smoke-harness.mjs` and `pnpm smoke:harness` now implement the scoped
+runner. The command builds the daemon dependency closure, accepts
+`--mode interactive|governed`, reads only an explicit secret environment
+reference, and emits a `harness-smoke/v1` JSON report. Its HTTP client checks
+daemon health, submits the selected route, replays SSE until a terminal event,
+and reads only bounded run/Goal projections. SSE parsing drops prompt, output,
+headers and arbitrary event payloads before the report is constructed.
+
+The default composition uses the existing in-memory EventStore, Scheduler,
+RunManager, GoalAdmissionService and GoalRunWritebackService. Governed smoke
+seeds a temporary Goal/Todo/claim fixture and uses the named
+`harness_fixture_verifier`; it does not claim task-specific semantic proof.
+The smoke never enables a ToolRuntime, MCP/Skill, shell, host process or
+networked tool. Missing configuration is `blocked`; no fake provider fallback
+exists.
+
+Focused evidence: `node --test scripts/smoke-harness.test.mjs` passes 6 tests;
+`pnpm check:module -- @ready4vibe/daemon` passes the daemon dependency-closure
+build/typecheck and 220 daemon tests. An injected-provider run also completed
+both interactive and governed paths locally. No live DeepSeek/provider result
+is claimed until an explicit user-authorized command is run.

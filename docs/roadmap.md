@@ -954,3 +954,14 @@ command reports only redacted status, bounded timing/usage, event-type counts
 and safe references. Missing secret/provider configuration is a blocked result,
 not a fake-provider substitute. A user-authorized live run remains required by
 Spec 60 before 58-5 or 59-5 can be marked release-ready.
+
+### Spec 58-5 implementation checkpoint (2026-08-05)
+
+`pnpm smoke:harness` is now wired to a bounded `scripts/smoke-harness.mjs`
+runner and its 6-test redaction/failure fixture. The default composition uses
+the existing daemon server, in-memory stores, RunManager, Goal admission and
+writeback services; it does not create a second scheduler or tool runtime.
+Interactive and governed routes were exercised with an injected provider,
+including terminal SSE replay and governed Todo/quota writeback. This is
+application-path evidence only: live provider evidence and task-specific
+validation remain explicitly gated by Spec 60.
