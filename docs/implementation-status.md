@@ -838,14 +838,18 @@ release evidence remain partial or blocked by design.
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-deepseek-first-class-provider-integration.md` is the Draft
-DeepSeek provider integration specification. It adopts the useful
+DeepSeek provider integration specification. Its `61-0` clean-room research
+gate is now recorded in
+[`docs/research/upstream-harness-implementations.md`](research/upstream-harness-implementations.md)
+and [ADR 0045](adr/0045-deepseek-provider-clean-room-boundary.md); it adopts the useful
 MinimumAgentLoop behaviors (two-layer turn/tool loop, multi-call aggregation,
 thinking modes, advisory reviewer and explicit provider-owned search) behind
 VibeGo's existing ModelProvider, ContextManager, Approval, Sandbox, Scheduler,
 Goal and event authorities. It does not copy upstream code, add Python/srt, or
 claim that the existing generic OpenAI-compatible adapter is already a complete
-DeepSeek integration. Contract, protocol, Web settings, real smoke and failure
-evidence remain staged under 61-0 through 61-7.
+DeepSeek integration. `61-1` contract/capability work is the current implementation
+slice; protocol, Web settings, real smoke and failure evidence remain staged under
+61-2 through 61-7.
 
 ## Spec 62 planning note (2026-08-05)
 

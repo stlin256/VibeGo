@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（实现规格；本文件不把规划写成已完成能力）
+- Status: Draft（61-0 已完成；61-1 contract 实施中；本文件不把规划写成已完成能力）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -348,12 +348,18 @@ response、完整参数或绝对路径。
 `examples/minimal_runtime.py`、依赖和许可证；建立“上游行为 → VibeGo contract →
 不复用边界”矩阵。同步复核 Spec 03、07、08、44、47、48、54、58、59、60 和当前
 `packages/model-openai`/`apps/daemon`，记录 endpoint、snapshot、secret 和 authority
-差异。不得在 dirty worktree 中 reset/checkout/clean。
+差异。不得在 dirty worktree 中 reset/checkout/clean。该门禁的 pinned checkout、
+许可证、读取文件、行为限制和 clean-room 映射已记录在
+[`research/upstream-harness-implementations.md`](../research/upstream-harness-implementations.md)
+与 [`ADR 0045`](../adr/0045-deepseek-provider-clean-room-boundary.md)；未复制源码、
+prompt、依赖或运行时。
 
 ### 61-1：Contract 与 capability snapshot
 
 实现 `deepseek-provider/v1` 配置、probe、capability、thinking、reviewer、search 和
 stable error contracts；为 unknown model/protocol/secret/path/unknown field 编写拒绝测试。
+当前先落地 Zod contract 和纯解析/隐私测试，不接入默认 run、AgentLoop、Web 或 provider
+网络请求；contract 验收后再进入 61-2 protocol adapter。
 
 ### 61-2：Protocol adapter 与 streaming
 

@@ -31,8 +31,10 @@ The following pins are the evidence anchors used for this planning pass:
 | Langfuse | [langfuse/langfuse](https://github.com/langfuse/langfuse) / `main` | `9ea1d895a71ac6954caf496235cefe4dfe23b39e` | MIT Expat outside `ee/` and third-party boundaries | trace/generation/span projections, usage/cost, pricing tiers |
 | Continue | [continuedev/continue](https://github.com/continuedev/continue) / `main` | `5522c6f44ca0ac3528b37244818fbfa39b5af470` | Apache-2.0 | core/context/tools boundaries, configuration reload, MCP and no-telemetry tests |
 | OpenTelemetry specification | [open-telemetry/opentelemetry-specification](https://github.com/open-telemetry/opentelemetry-specification) / `main` | `2b7a5617c0043ea0ac897a1452022eb04c72e89f` | Apache-2.0 | resource identity, bounded attributes, aggregation and dropped-signal semantics |
+| MinimumAgentLoop | [Here-Tim2354/MinimumAgentLoop](https://github.com/Here-Tim2354/MinimumAgentLoop) / `main` | `c61b33510c53b95b66f4e44bbe172fcca55516ac` | The Unlicense (public-domain dedication) | DeepSeek Responses-style two-layer loop, multi-tool aggregation, thinking controls, advisory reviewer and provider-owned web search |
 
-The Codex, OpenHands, Aider, Goose, MCP SDK, LiteLLM, Langfuse and Continue
+The Codex, OpenHands, Aider, Goose, MCP SDK, LiteLLM, Langfuse, Continue and
+MinimumAgentLoop
 checkouts used for this table were cloned only for observation. No upstream
 source, prompt, schema, UI asset, session format, proxy, scheduler or runtime
 was copied into ready4vibe. The MCP SDK's transition from MIT to Apache-2.0
@@ -40,6 +42,51 @@ means that a code reuse request is blocked until the exact file's provenance is
 recorded. Langfuse `ee/`, OpenHands optional services, LiteLLM `enterprise/`,
 and AxonHub/CC Switch research from [the provider study](upstream-provider-usage.md)
 remain separate license and runtime boundaries.
+
+### MinimumAgentLoop @ `c61b33510c53b95b66f4e44bbe172fcca55516ac`
+
+- repository: https://github.com/Here-Tim2354/MinimumAgentLoop
+- default branch: `main`; checked out detached at `c61b33510c53b95b66f4e44bbe172fcca55516ac`
+- commit subject: `feat:change to Response API and add official web_search tool`
+- checkedAt: 2026-08-05; shallow observation checkout outside the product tree at
+  `C:\Users\yjzlx\AppData\Local\Temp\ready4vibe-upstream-study\MinimumAgentLoop`
+- license / notice: root `LICENSE` is The Unlicense; no separate `NOTICE` file was
+  present at the pinned revision. The license permits reuse, but VibeGo still
+  chooses clean-room reimplementation to avoid importing Python/runtime and
+  upstream prompt/UI behavior.
+- manifest / overview: `README.md`, `LICENSE`, `package.json`,
+  `requirements.txt`, `.env.example`; the runtime is Python 3.10+, `openai>=2.21,<3`,
+  `python-dotenv`, Node `@anthropic-ai/sandbox-runtime`/`srt`, and the DeepSeek
+  Responses API.
+- filesRead: `examples/minimal_agent.py` (outer user loop plus inner
+  model/tool loop, output-item replay and `function_call_output` pairing),
+  `examples/minimal_runtime.py` (slash-command state, shell tools, srt settings,
+  reviewer call and permission modes), `examples/minimal_prompts.py` (main and
+  reviewer prompt boundaries), `examples/minimal_support.py` (terminal rendering
+  and folded tool output), README and license.
+- observed behaviors: one user message may produce multiple model calls; all
+  function calls from one response are collected and executed before the next
+  model request; each result is paired by `call_id`; `reasoning` and
+  `web_search_call` are rendered as response items; `/think-*` and
+  `/permission-*` mutate process-local session state; the optional reviewer
+  returns a JSON allow/deny decision; `web_search` is provider-owned.
+- explicit limitations: README states there is no context management,
+  AGENTS/SKILLS, subagents, browser-use, schema validation or defensive security
+  programming. The sample's `/permission-yolo` and `/sandbox-off` are therefore
+  not a VibeGo security model; its reviewer receives a working directory and raw
+  command, and its model context is an unbounded in-memory list.
+- designIdeas: separate outer run lifecycle from inner turn/tool loop; aggregate
+  multiple calls by stable call ID; expose thinking level and provider-owned
+  search as explicit capability state; keep reviewer output advisory.
+- VibeGo divergence: implement these semantics in native TypeScript contracts and
+  existing ModelProvider/AgentLoop/ContextManager/Approval/Sandbox/Scheduler
+  boundaries; never add Python, `srt`, OpenAI Python SDK, a second scheduler or a
+  second approval authority. Raw command/path/transcript/reasoning is not sent to
+  a reviewer or persisted as product data. DeepSeek protocol support is explicit
+  per endpoint profile and unknown capabilities fail closed.
+- reuseDecision: `clean-room`; no source, prompt, schema, UI, dependency or
+  runtime was copied. If a future code-reuse request is made, it needs a new ADR
+  with exact file provenance despite the permissive license.
 
 ## Findings by harness layer
 

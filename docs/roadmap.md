@@ -965,7 +965,10 @@ MinimumAgentLoop 的两层 turn/tool loop、多工具调用聚合、thinking/rea
 reviewer 和可选 provider-owned web search，同时不得复制 Python/srt 或绕过 VibeGo 的
 Approval、Sandbox、Goal、Scheduler、Workspace 和事件事实源。61-0 至 61-7 依次覆盖
 上游/现有实现复核、contract、协议、AgentLoop/context、Web 设置、真实 DeepSeek smoke
-和 evidence；当前只记录为 Draft。
+和 evidence；61-0 的 pinned commit、许可证与 clean-room 映射已记录在
+[上游 harness 调研](research/upstream-harness-implementations.md) 与
+[ADR 0045](adr/0045-deepseek-provider-clean-room-boundary.md)，当前进入 61-1
+contract/capability 实施，仍只记录为 Draft。
 
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 
