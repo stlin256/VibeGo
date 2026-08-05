@@ -1214,6 +1214,19 @@ stale-date test blocker only and does not support a release-ready claim. No
 default interactive run, event authority, AgentLoop, Scheduler,
 Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.
 
+## Spec 62-0 prerequisite audit checkpoint (current, 2026-08-06)
+
+The fresh audit for the post-Spec-61 checkout is recorded in
+[`docs/reports/62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
+At `1129b45` on `main`, the bounded workflow fixture is 78/78 and the affected
+Agent/daemon dedicated-reviewer gates pass. The audit still marks Spec 62 as
+documentation-constrained rather than release-ready: real-device,
+public-certificate, Tailscale/SSH, installer/signing/SBOM, cross-platform host
+and complete Spec 60 evidence remain partial or blocked. Spec 61 remains
+partial for provider-owned search/reasoning, production tool/reviewer evidence
+and its documentation handoff. The report is the current prerequisite matrix;
+the 2026-08-05 report remains historical.
+
 ## Verification follow-up: deterministic observability window fixture (2026-08-05)
 
 The current full verification exposed one time-dependent daemon test: the

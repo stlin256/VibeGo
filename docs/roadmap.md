@@ -1231,6 +1231,15 @@ not the real-provider, remote, device, or release gates. The default interactive
 run path and the independent `run_events`/`goal_events` authorities remain
 unchanged.
 
+### Spec 62-0 current prerequisite audit (2026-08-06)
+
+The fresh post-Spec-61 matrix is [`62-0-prerequisite-audit-2026-08-06.md`](reports/62-0-prerequisite-audit-2026-08-06.md).
+At `1129b45` the fixed workflow fixture is 78/78 and the dedicated-reviewer
+injection seam is focused-tested. Spec 62 may correct bounded user-facing
+documentation, but it cannot claim release-ready Goal/full-host/ACME/
+Tailscale/SSH/real-device/signed-release support while the matrix remains
+partial or blocked. The earlier 2026-08-05 audit remains historical.
+
 ### Verification follow-up: deterministic observability window fixture (2026-08-05)
 
 The first current-commit `pnpm verify` run found one daemon observability API
