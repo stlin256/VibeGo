@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { GoalEventType } from '@ready4vibe/contracts';
-import { SqliteGoalEventConflictError, SqliteGoalEventStore, SqliteGoalEventStoreError } from './goal.js';
+import { SqliteGoalEventConflictError, SqliteGoalEventOrderError, SqliteGoalEventStore, SqliteGoalEventStoreError } from './goal.js';
+import { SqliteGoalControlV1EventStore } from './goal-control-v1.js';
 import { SqliteEventStore } from './index.js';
 
 const goalId = 'goal_12345678';
@@ -33,6 +34,42 @@ function cleanup(path: string): void {
   rmSync(path, { force: true });
   rmSync(`${path}-wal`, { force: true });
   rmSync(`${path}-shm`, { force: true });
+}
+
+function v1BindingEvent() {
+  return {
+    schemaVersion: 'ready4vibe_goal_event_v1' as const,
+    eventId: 'gevt_00000002',
+    goalId,
+    eventType: 'binding.created' as const,
+    controlRevision: 2,
+    recordedAt: at,
+    producer: 'storage-test',
+    privacy: 'local_private' as const,
+    projectionVersion: 'goal_control_projection_v1' as const,
+    refs: { bindingId: 'binding_12345678' },
+    payload: {
+      binding: {
+        schemaVersion: 'ready4vibe_goal_binding_v1' as const,
+        bindingId: 'binding_12345678',
+        runId: 'run_12345678',
+        goalId,
+        todoId: 'todo_12345678',
+        mode: 'governed' as const,
+        goalControlRevision: 1,
+        policyRevision: 1,
+        capabilityProfileRevision: 1,
+        approvalPolicyRevision: 1,
+        sandboxSnapshotRevision: 1,
+        workspaceId: 'workspace_main',
+        admissionId: 'admission_12345678',
+        createdAt: at,
+        expiresAt: '2026-08-05T01:00:00.000Z',
+        attempt: 1,
+        requestId: 'request_12345678',
+      },
+    },
+  };
 }
 
 describe('SqliteGoalEventStore', () => {
@@ -68,6 +105,23 @@ describe('SqliteGoalEventStore', () => {
     await expect(store.append(goalEvent('gevt_00000001', 'goal.created', { a: 3, z: 1 }))).rejects.toBeInstanceOf(SqliteGoalEventConflictError);
     expect(store.lastSequence(goalId)).toBe(1);
     store.close();
+  });
+
+  it('keeps v0 reads compatible with additive v1 rows and rejects unsafe legacy appends', async () => {
+    const path = databasePath();
+    const legacy = new SqliteGoalEventStore(path);
+    const v1 = new SqliteGoalControlV1EventStore(path);
+    await legacy.append(goalEvent('gevt_00000001', 'goal.created'));
+    await v1.append(v1BindingEvent());
+
+    expect((await legacy.read(goalId)).map((event) => event.eventId)).toEqual(['gevt_00000001']);
+    expect(legacy.lastSequence(goalId)).toBe(1);
+    expect(legacy.listGoalIds()).toEqual([goalId]);
+    await expect(legacy.append(goalEvent('gevt_00000003', 'todo.added'))).rejects.toBeInstanceOf(SqliteGoalEventOrderError);
+
+    legacy.close();
+    v1.close();
+    cleanup(path);
   });
 
   it('assigns goal-local sequences and keeps a conflicting batch atomic', async () => {

@@ -52,6 +52,13 @@ const eventId = z.string().regex(EVENT_ID);
 const workspaceId = z.string().regex(WORKSPACE_ID);
 const turnKey = z.string().regex(TURN_KEY);
 const revision = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+/** Settings/profile revisions are opaque bounded tokens at the application boundary. */
+export const GoalRevisionTokenSchema = z.union([
+  revision,
+  z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u),
+]);
+export type GoalRevisionToken = z.infer<typeof GoalRevisionTokenSchema>;
+const revisionToken = GoalRevisionTokenSchema;
 const attempt = z.number().int().positive().max(10_000);
 const dateTime = z.string().datetime({ offset: true });
 const checksum = z.string().regex(SHA256);
@@ -83,10 +90,10 @@ export const GoalRunBindingV1Schema = z.object({
   todoId: todoId.optional(),
   mode: z.enum(['interactive', 'governed']),
   goalControlRevision: revision,
-  policyRevision: revision,
-  capabilityProfileRevision: revision,
-  approvalPolicyRevision: revision,
-  sandboxSnapshotRevision: revision,
+  policyRevision: revisionToken,
+  capabilityProfileRevision: revisionToken,
+  approvalPolicyRevision: revisionToken,
+  sandboxSnapshotRevision: revisionToken,
   workspaceId,
   admissionId,
   createdAt: dateTime,
@@ -102,6 +109,9 @@ export const GoalAdmissionReasonCodeV1Schema = z.enum([
   'GOAL_BLOCKED',
   'STALE_REVISION',
   'TODO_ALREADY_CLAIMED',
+  'TODO_CLAIM_REQUIRED',
+  'TODO_CLAIM_EXPIRED',
+  'TODO_NOT_ELIGIBLE',
   'QUOTA_EXHAUSTED',
   'QUOTA_RESERVED',
   'SCHEDULER_UNAVAILABLE',

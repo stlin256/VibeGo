@@ -17,6 +17,16 @@ type QueueEntry = {
 };
 type ActiveEntry = { request: SchedulerRequest; lease: SchedulerLease };
 
+export type SchedulerInspectionStatus = 'ready' | 'waiting' | 'blocked';
+export type SchedulerInspectionReason = 'READY' | 'CAPACITY_BUSY' | 'UNSATISFIABLE' | 'WORKSPACE_CONFLICT';
+
+export interface SchedulerInspection {
+  readonly status: SchedulerInspectionStatus;
+  readonly reasonCode: SchedulerInspectionReason;
+  /** Stable, bounded reference safe to carry in an application decision. */
+  readonly decisionRef: string;
+}
+
 export class SchedulerCancelledError extends Error {
   constructor(runId: string) {
     super(`scheduler request cancelled: ${runId}`);
@@ -61,6 +71,28 @@ export class Scheduler {
       this.queue.push({ request, order: this.order++, resolve, reject });
       this.pump();
     });
+  }
+
+  /**
+   * Read-only preflight used by application services. It never enqueues a
+   * request, creates a lease, changes active state, or adds a second queue.
+   */
+  inspect(request: SchedulerRequest): SchedulerInspection {
+    if (!this.canEverGrant(request)) {
+      return { status: 'blocked', reasonCode: 'UNSATISFIABLE', decisionRef: 'scheduler_unsatisfiable' };
+    }
+    if (this.active.has(request.runId) || this.queue.some((item) => item.request.runId === request.runId)) {
+      return { status: 'blocked', reasonCode: 'UNSATISFIABLE', decisionRef: 'scheduler_duplicate_run' };
+    }
+    if (this.canGrant(request)) {
+      return { status: 'ready', reasonCode: 'READY', decisionRef: 'scheduler_ready' };
+    }
+    const workspaceConflict = [...this.active.values()].some(({ request: activeRequest }) => this.workspaceConflicts(activeRequest, request));
+    return {
+      status: 'waiting',
+      reasonCode: workspaceConflict ? 'WORKSPACE_CONFLICT' : 'CAPACITY_BUSY',
+      decisionRef: workspaceConflict ? 'scheduler_workspace_conflict' : 'scheduler_capacity_busy',
+    };
   }
 
   cancelQueued(runId: string): boolean {

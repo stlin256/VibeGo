@@ -11,6 +11,26 @@ const request = (runId: string, workspaceId: string, workspaceAccess: SchedulerR
 });
 
 describe('Scheduler', () => {
+  it('supports side-effect-free readiness inspection', async () => {
+    const scheduler = new Scheduler({ ...DEFAULT_SCHEDULER_POLICY, maxActiveRuns: 1 });
+    const firstRequest = request('run_inspect_1', 'ws_inspect');
+    const secondRequest = request('run_inspect_2', 'ws_other');
+    expect(scheduler.inspect(firstRequest)).toMatchObject({ status: 'ready', reasonCode: 'READY' });
+    expect(scheduler.activeCount()).toBe(0);
+    expect(scheduler.queuedRunIds()).toEqual([]);
+    const lease = await scheduler.acquire(firstRequest);
+    expect(scheduler.inspect(secondRequest)).toMatchObject({ status: 'waiting', reasonCode: 'CAPACITY_BUSY' });
+    expect(scheduler.queuedRunIds()).toEqual([]);
+    lease.release();
+  });
+
+  it('reports unsatisfiable requests without reserving capacity', () => {
+    const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
+    expect(scheduler.inspect({ ...request('run_inspect_bad', 'ws_bad'), resources: { modelCalls: DEFAULT_SCHEDULER_POLICY.maxActiveModelCalls + 1 } })).toMatchObject({ status: 'blocked', reasonCode: 'UNSATISFIABLE' });
+    expect(scheduler.activeCount()).toBe(0);
+    expect(scheduler.queuedRunIds()).toEqual([]);
+  });
+
   it('runs independent read workloads concurrently up to the limit', async () => {
     const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
     const first = await scheduler.acquire(request('run_1', 'ws_1'));
