@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
 import { ContextRail, ConversationHeader, ConversationShell, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, WorkspaceRail } from './components/vibego/index.js';
@@ -22,6 +22,10 @@ export interface AppProps {
   locale?: Locale;
   onLocaleChange?: (locale: Locale) => void;
   profile?: RunProfile;
+  capabilityProfileSettings?: CapabilityProfileSettingsStatus;
+  capabilityProfileSettingsUnavailable?: boolean;
+  onPatchCapabilityProfileSettings?: (input: CapabilityProfileSettingsPatchInput) => Promise<void> | void;
+  onResetCapabilityProfileSettings?: (expectedRevision?: string) => Promise<void> | void;
   onProfileChange?: (profile: RunProfile) => void;
   onResetProfile?: () => void;
   certificateStatus?: CertificateStatus;
@@ -76,7 +80,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const t = createTranslator(locale);
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
@@ -84,6 +88,9 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [modelApiKey, setModelApiKey] = useState('');
   const [modelProbeEndpoint, setModelProbeEndpoint] = useState('https://api.deepseek.com/models');
   const [modelProbeBusy, setModelProbeBusy] = useState(false);
+  const [capabilityProfileId, setCapabilityProfileId] = useState<CapabilityProfile['profileId']>('preview');
+  const [capabilityAcknowledged, setCapabilityAcknowledged] = useState(false);
+  const [capabilityBusy, setCapabilityBusy] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('off');
   const [memoryTeamId, setMemoryTeamId] = useState('vibego');
@@ -135,6 +142,12 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   useEffect(() => {
     if (modelSettings?.baseUrl) setModelProbeEndpoint(`${modelSettings.baseUrl.replace(/\/$/u, '')}/models`);
   }, [modelSettings?.baseUrl]);
+  useEffect(() => {
+    const selected = capabilityProfileSettings?.settings.profile;
+    if (!selected) return;
+    setCapabilityProfileId(selected.profileId);
+    setCapabilityAcknowledged(selected.requiresAcknowledgement);
+  }, [capabilityProfileSettings?.settings.profile]);
   useEffect(() => {
     const settings = agentMemorySettings?.settings;
     if (!settings) return;
@@ -205,6 +218,31 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     try { await onProbeModel(modelProbeEndpoint.trim()); }
     catch { /* The parent renders a bounded error. */ }
     finally { setModelProbeBusy(false); }
+  };
+  const buildCapabilityProfile = (profileId: CapabilityProfile['profileId']): CapabilityProfile | undefined => {
+    const current = capabilityProfileSettings?.settings.profile;
+    if (!current) return undefined;
+    const updatedAt = new Date().toISOString();
+    const transportMode = current.transportMode;
+    if (profileId === 'preview') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, modelMode: 'fake', filesystemMode: 'off', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'none', policyRevision: current.policyRevision, requiresAcknowledgement: false, updatedAt };
+    if (profileId === 'advanced-local') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), modelMode: modelSettings?.configured ? 'configured' : 'fake', filesystemMode: 'workspace-write', shellMode: 'host-restricted', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'explicit', policyRevision: current.policyRevision, requiresAcknowledgement: capabilityAcknowledged, updatedAt };
+    if (profileId === 'workspace-coding') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), modelMode: modelSettings?.configured ? 'configured' : 'fake', filesystemMode: 'workspace-write', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'on-request', policyRevision: current.policyRevision, requiresAcknowledgement: false, updatedAt };
+    return { ...current, profileId: 'custom', ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), updatedAt };
+  };
+  const saveCapabilityProfile = async (): Promise<void> => {
+    if (!onPatchCapabilityProfileSettings || !capabilityProfileSettings) return;
+    const next = buildCapabilityProfile(capabilityProfileId);
+    if (!next) return;
+    setCapabilityBusy(true);
+    try {
+      await onPatchCapabilityProfileSettings({ profile: next, expectedRevision: capabilityProfileSettings.currentRevision });
+    } finally { setCapabilityBusy(false); }
+  };
+  const resetCapabilityProfile = async (): Promise<void> => {
+    if (!onResetCapabilityProfileSettings || !capabilityProfileSettings) return;
+    setCapabilityBusy(true);
+    try { await onResetCapabilityProfileSettings(capabilityProfileSettings.currentRevision); }
+    finally { setCapabilityBusy(false); }
   };
   const saveAgentMemorySettings = async (): Promise<void> => {
     if (!onPatchAgentMemorySettings) return;
@@ -358,6 +396,22 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
             <SettingsTabs ariaLabel="Settings sections" tabs={[{ id: 'run', label: 'Run' }, { id: 'tools', label: 'Tools' }, { id: 'access', label: 'Access' }]} activeTab={settingsTab} onTabChange={(tabId) => { if (tabId === 'run' || tabId === 'tools' || tabId === 'access') setSettingsTab(tabId); }}>
               <SettingsTabPanel tabId="run" activeTab={settingsTab}>
                 <div className="settings-grid">
+                  <SettingsSection id="capability-profile-settings" eyebrow="CAPABILITY PROFILE" title="Capability profile" description="Choose a bounded intent; the daemon resolves the effective permissions." status={capabilityProfileSettingsUnavailable ? 'unavailable' : capabilityProfileSettings?.resolution.status === 'blocked' ? 'degraded' : capabilityProfileSettings?.resolution.status === 'degraded' ? 'degraded' : capabilityProfileSettings ? 'ready' : 'loading'} statusLabel={capabilityProfileSettingsUnavailable ? 'Unavailable' : capabilityProfileSettings?.resolution.status ?? 'Loading'}>
+                    {capabilityProfileSettingsUnavailable ? <p className="muted">Capability profile settings are unavailable; existing run controls remain unchanged.</p> : capabilityProfileSettings ? <>
+                      <div className="capability-profile-cards" role="radiogroup" aria-label="Capability profiles">
+                        {([
+                          ['preview', 'Preview', 'Inspect the conversation with no side-effecting tools.'],
+                          ['workspace-coding', 'Workspace coding', 'Workspace-scoped coding with approval and no implicit host shell.'],
+                          ['advanced-local', 'Advanced local', 'Opt-in host-restricted shell; explicit acknowledgement is required.'],
+                          ['custom', 'Custom', 'Keep individually selected capability modes under daemon policy.'],
+                        ] as const).map(([id, label, description]) => <button key={id} type="button" className="capability-profile-card" data-selected={capabilityProfileId === id ? 'true' : 'false'} role="radio" aria-checked={capabilityProfileId === id} disabled={capabilityBusy} onClick={() => setCapabilityProfileId(id)}><strong>{label}</strong><span>{description}</span></button>)}
+                      </div>
+                      {capabilityProfileId === 'advanced-local' && <label className="toggle-row"><input type="checkbox" checked={capabilityAcknowledged} disabled={capabilityBusy} onChange={(event) => setCapabilityAcknowledged(event.target.checked)} /><span>I understand host-restricted execution requires explicit approval and never falls back silently.</span></label>}
+                      <p className="muted">Requested: {capabilityProfileSettings.resolution.requestedProfile.profileId} · Effective: {capabilityProfileSettings.resolution.effectiveProfile?.profileId ?? 'blocked'} · reason: {capabilityProfileSettings.resolution.reasonCode} · revision: {capabilityProfileSettings.currentRevision}</p>
+                      {capabilityProfileSettings.resolution.effectiveProfile && <p className="muted">Effective modes: model {capabilityProfileSettings.resolution.effectiveProfile.modelMode} · filesystem {capabilityProfileSettings.resolution.effectiveProfile.filesystemMode} · shell {capabilityProfileSettings.resolution.effectiveProfile.shellMode} · network {capabilityProfileSettings.resolution.effectiveProfile.networkMode} · MCP/Skill {capabilityProfileSettings.resolution.effectiveProfile.mcpSkillMode}</p>}
+                      <div className="inline-actions"><button type="button" disabled={capabilityBusy || !onPatchCapabilityProfileSettings || (capabilityProfileId === 'advanced-local' && !capabilityAcknowledged)} onClick={() => { void saveCapabilityProfile(); }}>Save capability profile</button><button className="reset-button" type="button" disabled={capabilityBusy || !onResetCapabilityProfileSettings} onClick={() => { void resetCapabilityProfile(); }}>Reset to Preview</button></div>
+                    </> : <p className="muted">Pair with the daemon to choose a capability profile.</p>}
+                  </SettingsSection>
                   <SettingsSection id="workspace-settings" eyebrow={t('settings.workspaces')} title="Workspace" description="Select the daemon workspace used by new runs." status={workspacesUnavailable ? 'unavailable' : workspaces ? 'ready' : 'loading'} statusLabel={workspacesUnavailable ? 'Unavailable' : workspaces ? 'Ready' : 'Loading'}>
                     <div className="workspace-setup" aria-label={t('settings.workspaceSetup')}>
                       <div className="eyebrow">{t('settings.workspaces')}</div>

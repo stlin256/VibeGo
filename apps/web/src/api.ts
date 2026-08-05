@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, CapabilityProfile as CapabilityProfileContract, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -229,6 +229,9 @@ export type AgentMemoryKnowledgeSettingsStatus = AgentMemoryKnowledgeSettingsSta
 export type AgentMemoryKnowledgeSettingsPatchInput = AgentMemoryKnowledgeSettingsPatch;
 export type McpSettingsStatus = McpSettingsStatusContract;
 export type McpSettingsPatchInput = McpSettingsPatch;
+export type CapabilityProfile = CapabilityProfileContract;
+export type CapabilityProfileSettingsStatus = CapabilityProfileSettingsStatusContract;
+export type CapabilityProfileSettingsPatchInput = CapabilityProfileSettingsPatch;
 
 export type UsageSummary = ObservabilityUsageSummary;
 export type UsageTimeseries = ObservabilityTimeseries;
@@ -357,6 +360,18 @@ export class ApiClient {
 
   async probeModel(endpoint: string, timeoutMs = 5_000): Promise<ModelProbeResult> {
     return this.request<ModelProbeResult>('/api/v1/settings/model/probe', { method: 'POST', body: JSON.stringify({ endpoint, timeoutMs }) });
+  }
+
+  async capabilityProfileSettings(): Promise<CapabilityProfileSettingsStatus> {
+    return this.request<CapabilityProfileSettingsStatus>('/api/v1/settings/capability-profile', { method: 'GET' });
+  }
+
+  async patchCapabilityProfileSettings(input: CapabilityProfileSettingsPatchInput): Promise<CapabilityProfileSettingsStatus> {
+    return this.request<CapabilityProfileSettingsStatus>('/api/v1/settings/capability-profile', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async resetCapabilityProfileSettings(expectedRevision?: string): Promise<CapabilityProfileSettingsStatus> {
+    return this.request<CapabilityProfileSettingsStatus>('/api/v1/settings/capability-profile/reset', { method: 'POST', body: JSON.stringify(expectedRevision ? { expectedRevision } : {}) });
   }
 
   async agentMemorySettings(): Promise<AgentMemorySettingsStatus> {

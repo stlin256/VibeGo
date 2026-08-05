@@ -24,6 +24,20 @@ describe('web console shell', () => {
     expect(html).not.toContain('privatekey');
   });
 
+  it('renders daemon-owned capability profile cards and bounded resolution guidance', () => {
+    const profile = { schemaVersion: 'ready4vibe_capability_profile_v1', profileId: 'preview', transportMode: 'loopback', modelMode: 'fake', filesystemMode: 'off', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'none', policyRevision: 'policy-1', requiresAcknowledgement: false, updatedAt: '2026-08-05T00:00:00.000Z' } as const;
+    const status = { schemaVersion: 'ready4vibe_capability_profile_settings_status_v1', settings: { schemaVersion: 'ready4vibe_capability_profile_settings_v1', profile, profileRevision: 'profile-1', updatedAt: '2026-08-05T00:00:00.000Z' }, resolution: { schemaVersion: 'ready4vibe_capability_profile_resolution_v1', status: 'degraded', reasonCode: 'CAPABILITY_NARROWED', requestedProfile: profile, effectiveProfile: profile, policyRevision: 'policy-1', evaluatedAt: '2026-08-05T00:00:00.000Z' }, currentRevision: 'profile-1', previousRevision: null } as const;
+    const html = renderToStaticMarkup(<App capabilityProfileSettings={status} onPatchCapabilityProfileSettings={() => undefined} onResetCapabilityProfileSettings={() => undefined} />);
+    expect(html).toContain('Capability profile');
+    expect(html).toContain('Workspace coding');
+    expect(html).toContain('Advanced local');
+    expect(html).toContain('Save capability profile');
+    expect(html).toContain('Effective: preview');
+    expect(html).toContain('reason: CAPABILITY_NARROWED');
+    expect(html).toContain('revision: profile-1');
+    expect(html).not.toMatch(/api[_-]?key|private[_-]?key|C:\\Users/iu);
+  });
+
   it('keeps the interactive composer available beside a read-only Goal projection', () => {
     const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback' as const, tlsRequired: false, boundAddresses: ['127.0.0.1' as const] }, auth: { pairingRequired: false }, storage: { kind: 'memory' as const, status: 'ready' as const }, sandbox: { availableModes: ['read-only' as const], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow' as const, 'prompt' as const, 'forbidden' as const] } };
     const projection = { schemaVersion: 'ready4vibe_goal_api_v0', goals: [{ goal: { goalId: 'goal_12345678', title: 'Goal', objective: 'Objective', status: 'active', controlRevision: 0, createdAt: '2026-08-03T00:00:00.000Z', updatedAt: '2026-08-03T00:00:00.000Z', schemaVersion: 1 }, todos: [], gates: [], evidence: [], handoffs: [], quota: { spentTurnKeys: [], totalSpent: 0 }, lastEventId: null, lastAppendSequence: 0, sourceEventCount: 0, sourceChecksum: 'a'.repeat(64), controlRevision: 0 }] } as never;

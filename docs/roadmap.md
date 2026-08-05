@@ -708,8 +708,11 @@ settings/patch/status DTO，daemon 使用 `profile-N` optimistic revision，stal
 policy 会 fail-closed 并恢复为 `preview`，认证 API 覆盖 GET/PATCH/reset 与现有
 LAN pairing/auth gate。该切片 focused gate 为 contracts 74、policy 24、daemon
 35（含现有 daemon fixtures），不启动任何 provider/process/network，不改变默认
-run 创建或事件事实源。下一小步是 conversation-first Settings Sheet 的 profile
-cards/blocked guidance，随后才在独立变更中绑定 profile/run snapshot。
+run 创建或事件事实源。R2 profile cards/blocked guidance 已实现：Web client 只在
+内存中保存 projection，四个 profile cards、Advanced Local acknowledgement、
+effective/reason/revision guidance 和 reset/conflict handling 均复用现有 Settings
+Sheet；Web focused gate 为 96 tests。浏览器不决定权限、不存储 credentials/path，
+daemon resolver 仍是唯一权威。随后才在独立变更中绑定 profile/run snapshot。
 
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。

@@ -77,7 +77,8 @@ server fixtures cover strict privacy, restart, stale/concurrent updates,
 resolver narrowing, reset history and the existing LAN authentication gate.
 No default run or execution authority was changed.
 
-The follow-up R2 Web card consumes this status DTO through the existing
+The R2 Web card now consumes this status DTO through the existing
 conversation-first Settings Sheet. It is a presentation and intent-editing
 surface only; the daemon remains the sole resolver and the card cannot widen
-an effective profile.
+an effective profile. Advanced Local has a separate acknowledgement control;
+the card does not persist profile payloads or credentials in browser storage.

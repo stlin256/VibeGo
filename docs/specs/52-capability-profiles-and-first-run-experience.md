@@ -496,7 +496,7 @@ path or starts any runtime.
   framework.
 - Add desktop, portrait, phone, foldable and tablet viewport fixtures.
 
-#### R2 profile-card implementation slice (next)
+#### R2 profile-card implementation slice (2026-08-05, implemented)
 
 The existing conversation-first Settings Sheet will add a compact capability
 profile card group before workspace/model controls. The cards show the four
@@ -507,7 +507,14 @@ current `profileRevision`; the browser never computes authorization, stores a
 credential, or receives a daemon path. Optimistic conflicts remain visible as
 a bounded error and require a fresh status read. The card layout reuses the
 existing VibeGo primitives and ratio-first CSS so desktop, portrait, phone,
-foldable and tablet fixtures preserve the one-action conversation flow.
+  foldable and tablet fixtures preserve the one-action conversation flow.
+
+`apps/web/src/api.ts` now consumes the authenticated capability-profile
+settings/reset routes, `apps/web/src/main.tsx` refreshes the projection after
+health/pairing and keeps mutations in memory, and `apps/web/src/App.tsx` adds
+the four cards plus Advanced Local acknowledgement and bounded effective-mode
+guidance. The Web focused suite has 96 tests. This remains an intent/status
+surface: profile/run snapshot binding is still a separate R3 slice.
 
 ### 52-R3: Existing runtime integration
 

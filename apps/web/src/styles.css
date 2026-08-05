@@ -44,6 +44,11 @@ h2 { margin: 7px 0 8px; font-size: 18px; letter-spacing: -.02em; }
 .settings-section[data-status="degraded"] { border-color: rgb(255 190 92 / 55%); }
 .settings-section[data-status="unavailable"] { border-color: rgb(189 102 90 / 60%); }
 .settings-section .ui-badge { flex: 0 0 auto; }
+.capability-profile-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.capability-profile-card { display: grid; gap: 6px; min-height: 92px; padding: 12px; text-align: left; color: var(--vibego-on-dark); border: 1px solid rgb(175 194 232 / 22%); border-radius: 10px; background: rgb(13 27 46 / 70%); cursor: pointer; }
+.capability-profile-card span { color: var(--vibego-on-dark-muted); font-size: 12px; line-height: 1.4; }
+.capability-profile-card[data-selected="true"] { border-color: var(--vibego-accent); background: rgb(21 50 83 / 80%); box-shadow: 0 0 0 1px rgb(115 194 255 / 30%); }
+.capability-profile-card:disabled { cursor: progress; opacity: .65; }
 .model-setup { grid-column: 1 / -1; display: grid; gap: 8px; margin-top: 4px; border-top: 1px solid #263650; padding-top: 14px; }
 .model-setup p { margin: 0; font-size: 12px; }
 .model-setup form { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
@@ -188,6 +193,7 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
   .settings-panel, .connection-panel, .pairing-panel, .safety-panel { grid-column: 1 / -1; }
   .main-column { grid-column: 1; }
   .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .capability-profile-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .model-setup form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .model-setup form .inline-actions { grid-column: 1 / -1; }
   .composer-footer, .run-header { align-items: center; }
@@ -227,6 +233,7 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
   .sidebar { grid-template-columns: 1fr; }
   .connection-panel, .pairing-panel, .safety-panel { grid-column: auto; }
   .settings-grid { grid-template-columns: 1fr; }
+  .capability-profile-cards { grid-template-columns: 1fr; }
   .model-setup form { grid-template-columns: 1fr; }
   .model-setup form .inline-actions { grid-column: auto; }
   .composer-footer, .run-header, .goal-panel-header { align-items: stretch; flex-direction: column; }
