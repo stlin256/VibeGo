@@ -1499,3 +1499,14 @@ the daemon focused registry/writeback run passes 269 tests with typecheck and
 diff checks. A bounded verifier timeout/cancellation slice is the next
 implementation gate; it will fail closed and release reservations without
 changing the default registry or run authorities.
+
+### Spec 58-6a verifier timeout/cancellation design checkpoint (2026-08-06)
+
+The bounded runtime slice is frozen in [ADR 0051](adr/0051-bounded-goal-verifier-timeout-and-cancellation.md).
+The writeback coordinator will enforce a server-owned 100 ms–30 s deadline
+(10 s default), pass an optional `AbortSignal`, and map timeout, cancellation,
+rejection or malformed verifier output to `inconclusive` evidence with quota
+release. The default registry remains empty; no AgentLoop, RunManager,
+Scheduler, Approval, Sandbox, WorkspaceRegistry or event authority changes are
+included. Focused tests will cover cooperative and non-cooperative verifiers,
+late results and bounded option validation before the implementation commit.

@@ -303,6 +303,15 @@ Memory、Observability、Transport/Certificate、Host/Release 逐项补齐 A–G
 模块若只完成 contract 或 fake fixture，必须继续标记为 `partial`，不能进入 stable
 release manifest。
 
+#### 58-6a：Goal verifier bounded runtime gate
+
+任务特定 verifier 的执行必须有 daemon 控制的超时和 `AbortSignal` 边界，不能让
+失控实现无限期持有 governed quota reservation。默认超时为 10 秒，服务端范围为
+100 ms–30 秒；Web/Goal payload 不能扩大该范围。超时、取消、拒绝或非法结果只能写
+bounded `inconclusive` evidence、释放 reservation，并保持 Todo 未完成；不能重试
+verifier、重放旧 tool call 或改变 interactive run。详细决策见
+[ADR 0051](../adr/0051-bounded-goal-verifier-timeout-and-cancellation.md)。
+
 ### 58-7：发布验收
 
 - Host 安装后无需 Node/pnpm 或手工编辑配置文件即可 pairing、选择 profile、配置模型、

@@ -1486,3 +1486,14 @@ A–G module closure remain staged. The next bounded gate adds a timeout and
 AbortSignal boundary around verifier execution; a timeout must write only
 bounded inconclusive evidence and release the reservation without changing
 interactive runs or any existing authority.
+
+### Spec 58-6a bounded verifier timeout/cancellation design (2026-08-06)
+
+The next code slice is frozen in [ADR 0051](adr/0051-bounded-goal-verifier-timeout-and-cancellation.md).
+`GoalRunWritebackService` will enforce a daemon-owned 100 ms–30 s verifier
+deadline (10 s default), pass an optional `AbortSignal`, and race non-cooperative
+implementations against the deadline. Timeout, cancellation, rejection or
+malformed output will produce bounded `inconclusive` evidence and release the
+reservation; Todo completion, quota spend, old tool replay and interactive run
+behavior remain unchanged. Tests must cover cooperative abort, non-cooperative
+timeout, late-result disposal and option bounds before implementation.
