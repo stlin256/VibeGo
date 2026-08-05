@@ -536,6 +536,22 @@ release evidence are accepted, unbound interactive runs remain outside Goal
 admission and `run_events`, `goal_events`, AgentLoop, RunManager, Scheduler,
 Approval, Sandbox and WorkspaceRegistry retain their existing authority.
 
+## Spec 58-0 prerequisite audit note (2026-08-05)
+
+The mandatory checkout audit is recorded in
+[`docs/reports/58-0-prerequisite-verification-2026-08-05.md`](reports/58-0-prerequisite-verification-2026-08-05.md).
+It re-verified the existing Goal contracts/replay/SQLite/bounded mutation and
+read-only projection boundaries, then classified the remaining Model,
+Context, AgentLoop, Approval, Sandbox, MCP/Skill, Memory, Observability,
+Transport/Certificate and Host/Release evidence as partial where only fake,
+fixture or opt-in smoke evidence exists. The focused Goal/daemon/Web gate passed
+with 78/17/66/180/96 tests and the full `pnpm verify` gate passed with 668 tests
+across 22 workspace projects.
+
+This is a documentation-only gate. It authorizes only Spec 58-1 contract and
+pure-reducer work; it does not add `GoalAdmissionService`, quota reservation,
+validation writeback, a Goal-aware default run path, or any second scheduler.
+
 ## Spec 59 planning note (2026-08-05)
 
 `docs/specs/59-permission-profiles-and-low-interruption-approval.md` is a Draft
