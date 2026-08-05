@@ -4,6 +4,8 @@ import { X509Certificate } from 'node:crypto';
 import { createSecureContext, type SecureContext, type SecureContextOptions } from 'node:tls';
 import { isIP } from 'node:net';
 
+export * from './lifecycle.js';
+
 export interface TlsCertificatePaths {
   certFile: string;
   keyFile: string;

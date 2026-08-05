@@ -1081,3 +1081,24 @@ secret/path-free error mapping. No live failure request was run because this
 process has no configured provider secret reference; real-provider timeout/5xx,
 cancellation/disconnect and context-limit evidence remain blocked and must be
 explicitly authorized rather than replaced with a fake pass.
+
+### Spec 55c / 60-6 certificate rotation controller design freeze (2026-08-05)
+
+The next certificate slice is a pure in-memory controller with an injected
+adapter. It will serialize `prepare -> probe -> atomic switch -> post-probe`,
+retain opaque `current/previous/candidate` revisions and fail closed on stale
+expected-current values. A post-switch health failure will attempt one bounded
+rollback; private key bytes, paths, ACME/DNS calls, listeners and daemon/run
+authorities are out of scope. This is lifecycle fixture evidence only, not
+public HTTPS or release readiness.
+
+### Spec 55c certificate rotation controller implementation checkpoint (2026-08-05)
+
+`CertificateRotationController` is implemented in
+`packages/certificates/src/lifecycle.ts` with eight focused tests. The
+`@ready4vibe/certificates` package passes 16/16 tests, typecheck and build.
+The slice proves candidate preparation/probe failure, successful
+current-to-previous rotation, post-switch rollback, rollback failure,
+serialized concurrency, stale revision and privacy-safe unsafe-ID rejection.
+It does not enable ACME, OS certificate stores, public listeners or daemon/run
+integration.

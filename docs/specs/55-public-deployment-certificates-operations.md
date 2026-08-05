@@ -186,3 +186,34 @@ composition; missing injection returns the bounded
 and the Settings drawer status card consume only the versioned fields. Focused
 daemon tests (156 total) and Web tests (68 total), daemon/Web typechecks and
 the Web production build pass.
+
+## 11. Phase 55c design freeze：bounded certificate rotation controller
+
+The next implementation slice is a pure, in-memory rotation controller in
+`@ready4vibe/certificates`. It accepts an injected adapter for candidate
+preparation, bounded health probes and atomic revision switching; it does not
+read certificate files, call ACME/DNS, modify an OS certificate store, open a
+listener or change daemon startup. Private key/certificate bytes remain inside
+the injected adapter and are never part of the controller projection.
+
+The controller exposes only `schemaVersion`, `status`, `operation`, opaque
+revision IDs, timestamps and stable error codes. Operations are serialized and
+an optional expected-current revision is fail-closed on mismatch. A successful
+rotation follows `prepare -> pre-probe -> switch -> post-probe`; post-switch
+failure attempts exactly one switch back to the previous revision and retains
+the old current/previous material when rollback cannot be proven healthy.
+Candidate cleanup is best-effort but bounded and cleanup failure is observable
+as a blocked result. This slice is a lifecycle fixture boundary, not a claim of
+ACME issuance, public HTTPS readiness, Tailscale/SSH support or release
+readiness.
+
+### Phase 55c implementation checkpoint (2026-08-05)
+
+`CertificateRotationController` and its eight focused lifecycle tests are now
+implemented. The controller serializes rotations, validates bounded opaque
+revision IDs, keeps candidate material out of projections, preserves
+current/previous on preparation or probe failure, and performs one bounded
+post-switch rollback. Stale expected-current revisions and missing previous
+revisions fail closed. The `@ready4vibe/certificates` package passes 16/16
+tests, typecheck and build. No daemon/API/ACME/OS-store integration is enabled
+by this checkpoint.

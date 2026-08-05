@@ -997,3 +997,23 @@ redacted error/exit mappings. This is adapter/application evidence only. No
 live provider failure was attempted because the current process has no secret
 reference; real-provider timeout/5xx, cancellation/disconnect and context-limit
 evidence remain blocked pending explicit opt-in.
+
+## Spec 55c certificate rotation controller design freeze (2026-08-05)
+
+The certificate package currently provides file-pair loading, X.509 metadata
+and readiness projection only. Before adding any runtime integration, the
+accepted slice is a pure in-memory candidate/current/previous controller with
+an injected prepare/probe/switch adapter, serialized operations and stale
+revision fail-closed behavior. The projection contains only opaque revision
+IDs, bounded status and stable error codes; private key bytes, absolute paths,
+ACME/DNS credentials and raw adapter errors stay out of state and reports.
+
+## Spec 55c certificate rotation controller implementation checkpoint (2026-08-05)
+
+`packages/certificates/src/lifecycle.ts` now provides the pure injected
+`CertificateRotationController`. It serializes candidate preparation, probe,
+atomic switch, post-switch health and one bounded rollback; stale revisions,
+missing previous material and unsafe IDs fail closed. The projection contains
+only opaque revisions, status, operation, timestamp and stable error code. The
+package passes 16/16 tests, typecheck and build. No ACME/DNS, OS-store,
+listener, daemon API or run-authority integration is enabled.

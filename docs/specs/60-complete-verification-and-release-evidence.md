@@ -387,3 +387,28 @@ process has no configured provider secret reference, so no live DeepSeek
 failure request was attempted or claimed; the mandatory real-provider
 timeout/5xx, cancellation/disconnect and context-limit evidence remains
 explicitly blocked until a user-authorized opt-in environment is available.
+
+### 60-6 certificate lifecycle fixture boundary (2026-08-05)
+
+Spec 55c will be verified with an injected certificate adapter only. The
+fixture must cover candidate validation/probe failure, successful current to
+previous rotation, post-switch health failure with rollback, rollback failure,
+stale expected-current revision and serialized concurrent operations. Reports
+may contain only opaque revision IDs, bounded status and stable error codes; no
+PEM/private-key bytes, absolute paths, ACME credentials or raw adapter errors.
+The fixture does not open a public listener, contact an ACME/DNS service or
+change the default daemon transport. Production certificate issuance,
+renewal, OS-store integration and public readiness remain separate gates.
+
+#### 60-6 certificate lifecycle implementation checkpoint (2026-08-05)
+
+The injected `CertificateRotationController` is implemented in
+`packages/certificates/src/lifecycle.ts` with eight focused tests. The package
+gate passes 16/16 tests, typecheck and build. Evidence covers successful
+candidate rotation, prepare/probe failure with cleanup, post-switch health
+failure with rollback, rollback failure fail-closed state, stale revision,
+explicit rollback, serialized concurrent rotations and unsafe revision privacy.
+Only opaque revision/status/error metadata is projected; no certificate bytes,
+private key, path or raw adapter error is retained. This closes the bounded
+lifecycle fixture boundary only; ACME, public listener, OS-store, Tailscale/SSH
+and release gates remain partial or blocked.
