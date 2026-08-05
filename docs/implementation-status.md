@@ -851,6 +851,19 @@ DeepSeek integration. `61-1` contract/capability work is the current implementat
 slice; protocol, Web settings, real smoke and failure evidence remain staged under
 61-2 through 61-7.
 
+### Spec 61-1 contract checkpoint (2026-08-05)
+
+`packages/contracts/src/deepseek-provider.ts` now defines the versioned
+`deepseek-provider/v1` boundary: explicit Chat Completions/Responses/Anthropic
+Messages endpoint profiles, thinking/tool/search/reviewer modes, capability and
+probe snapshots, stable error/retry codes, bounded reviewer input and untrusted
+retrieval item contracts. Strict Zod parsing rejects unknown fields, raw
+secret-shaped values, absolute paths, profile/path mismatches and provider-owned
+search on a non-Responses profile. `deepseek-provider.test.ts` passes 8/8 and the
+contracts package typecheck passes. This is contract-only: no provider request,
+Web setting, AgentLoop branch, run event, Goal admission or default run behavior
+changed; 61-2 owns protocol streaming next.
+
 ## Spec 62 planning note (2026-08-05)
 
 The former `docs/specs/61-user-facing-documentation-quality.md` has been moved

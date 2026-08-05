@@ -359,7 +359,12 @@ prompt、依赖或运行时。
 实现 `deepseek-provider/v1` 配置、probe、capability、thinking、reviewer、search 和
 stable error contracts；为 unknown model/protocol/secret/path/unknown field 编写拒绝测试。
 当前先落地 Zod contract 和纯解析/隐私测试，不接入默认 run、AgentLoop、Web 或 provider
-网络请求；contract 验收后再进入 61-2 protocol adapter。
+网络请求；contract 验收后再进入 61-2 protocol adapter。当前 checkpoint 已完成：
+`packages/contracts/src/deepseek-provider.ts` 提供严格 config、capability、probe、
+review、search、retry 和 stable error schemas，并由 `index.ts` 导出；focused
+`deepseek-provider.test.ts` 覆盖 endpoint profile、unknown/secret/path 拒绝、
+web-search gating、degraded 状态、review fingerprint 和 untrusted retrieval。该
+checkpoint 不改变 AgentLoop、RunManager、Web、run_events/goal_events 或默认 provider。
 
 ### 61-2：Protocol adapter 与 streaming
 
