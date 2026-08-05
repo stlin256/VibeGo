@@ -1,6 +1,7 @@
 # Spec 25: Configuration onboarding and settings UI
 
-Status: Accepted — first Web slice in progress.
+Status: Accepted (MVP Web slice implemented; Capability Profiles are tracked
+by [Spec 52](52-capability-profiles-and-first-run-experience.md)).
 
 ## Goal
 

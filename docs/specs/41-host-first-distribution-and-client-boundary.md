@@ -1,6 +1,6 @@
 # Spec 41：Host-first 发行、同源 Web 与后续客户端边界
 
-- 状态：Accepted（设计已确定；实现待进入独立代码切片）
+- 状态：Accepted（设计总约束；实现由 [Spec 51](51-host-first-release-and-client-boundary.md) R1–R4 跟踪）
 - 日期：2026-08-04
 - 适用范围：VibeGo Host、daemon、React Web/PWA、LAN/Tailscale/SSH transport、未来 Android/iOS/HarmonyOS 客户端
 - 相关 ADR：[ADR 0010：Host-first 同源 Web 与客户端边界](../adr/0010-host-first-same-origin-web-and-client-boundary.md)

@@ -1,6 +1,8 @@
 # Spec 48: Approval, sandbox and shell runtime closure
 
-- Status: 48-R2 implementation complete (host-restricted runner slice); R3 pending
+- Status: 48-R4 implementation complete (policy, host-restricted runner,
+  opt-in container smoke and approval continuation); later release hardening
+  remains pending
 - Date: 2026-08-04
 - Related: [harness contracts](../harness-contracts.md), [Spec 01](01-sandbox-approval.md), [Spec 10](10-sandbox-execution.md), [Spec 18](18-tool-wiring.md), [Spec 30](30-external-shell-sandbox-wiring.md), [upstream harness research](../research/upstream-harness-implementations.md)
 

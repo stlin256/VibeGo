@@ -678,9 +678,10 @@ same-origin REST、run create/read/cancel/retry/approval，以及带 `Last-Event
 去重、有限重连、取消和终态停止的 SSE。SDK 不读 SQLite/workspace/secret，不复制任何
 执行权威；native UI 仍以后置消费者处理。
 
-## Spec 52：Capability profiles 与 first-run experience（规划）
+## Spec 52：Capability profiles 与 first-run experience（R0 门禁完成，R1 待实现）
 
-详见 [Spec 52](specs/52-capability-profiles-and-first-run-experience.md)。本规格把
+详见 [Spec 52](specs/52-capability-profiles-and-first-run-experience.md) 及其
+[前置验证报告](reports/52-prerequisite-verification-2026-08-05.md)。本规格把
 配置引导、能力档位、Approval/Sandbox、conversation-first Web 和 Host-first
 开箱即用路径串成单一验收流，并把核心 Harness 的完整性作为发布门禁。它定义
 `preview`、`workspace-coding`、`advanced-local` 和 `custom` 档位，要求能力按需
@@ -688,8 +689,9 @@ same-origin REST、run create/read/cancel/retry/approval，以及带 `Last-Event
 RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、`run_events` 和
 `goal_events` 的权威地位。Spec 52 还纳入显式 Goal governed admission、真实
 Tailscale/SSH transport adapter、ACME staging/renewal 验证和强制真实 LLM smoke；
-原生客户端是后置消费者，不阻塞 Web/Host 发布。该规格当前只作为规划门禁，不改变
-任何默认权限或 run 创建行为。
+原生客户端是后置消费者，不阻塞 Web/Host 发布。R0 前置验证门禁已于
+2026-08-05 完成；下一步只实现版本化 Capability Profile contract 和纯 resolver，
+不改变任何默认权限或 run 创建行为。
 
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。

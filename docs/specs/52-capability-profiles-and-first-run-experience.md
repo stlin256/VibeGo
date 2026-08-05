@@ -1,6 +1,7 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: Proposed (planning gate; no runtime behavior change)
+- Status: R0 prerequisite verification complete (docs-only; no runtime
+  behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
   persistence, policy/approval boundaries, transport/certificate adapters,
@@ -43,6 +44,10 @@ This is a product and integration gate. It does not enable host commands,
 network access, MCP/Skill processes or automatic run admission by itself.
 
 ## 1.1 Mandatory pre-implementation verification gate
+
+The completed gate is recorded in [the 2026-08-05 verification report](../reports/52-prerequisite-verification-2026-08-05.md).
+It authorizes only the isolated contract/resolver slices below; it does not
+claim that the later release requirements in R4–R7 are complete.
 
 Before implementing any Spec 52 code, the implementer **must re-verify the
 execution status of every preceding and related specification**. The existence
