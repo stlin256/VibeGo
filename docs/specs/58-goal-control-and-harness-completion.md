@@ -653,3 +653,33 @@ quota. Focused evidence is recorded in
 [`spec58-6c-verifier-runtime-contract-2026-08-06.md`](../reports/spec58-6c-verifier-runtime-contract-2026-08-06.md).
 The default daemon remains without a semantic verifier, and real semantic
 validation plus broader A-G closure remain staged.
+
+## Spec 58-6d: bounded task execution-evidence verifier
+
+The next implementation slice replaces the Harness smoke's unconditional
+`validated` callback with a deterministic daemon-owned verifier for the
+`advancement` lane. It consumes only the versioned verifier input already
+bounded by Spec 58-6c. `validated` requires a completed run, a `run.completed`
+terminal digest, at least one `model.completed` digest, no failure/error
+digests, and non-zero aggregate output bytes. Any missing or contradictory fact
+is `inconclusive` and therefore releases quota without completing the Todo.
+
+This is independent execution evidence, not semantic proof of the Goal
+objective. The verifier is registered only by an explicit Harness fixture
+factory; the production daemon registry remains empty. The slice must include
+focused verifier and writeback tests for success, missing completion evidence,
+failure/error evidence, cancellation and abort, duplicate terminal
+notification, quota release and privacy-safe output. It must not modify the
+AgentLoop, RunManager default start, Scheduler, Approval, Sandbox,
+WorkspaceRegistry, `run_events` or `goal_events` authorities.
+
+### Spec 58-6d implementation checkpoint (2026-08-06)
+
+Implemented under [ADR 0054](../adr/0054-bounded-task-execution-verifier.md).
+The explicit Harness factory now registers the bounded `advancement` verifier;
+its focused verifier/writeback tests pass 9/9 and 13/13, the Harness workflow
+passes 16/16, and daemon build/typecheck pass. Incomplete evidence is
+`inconclusive`, releases quota and leaves the Todo open. The production daemon
+registry remains empty, so this is execution evidence rather than semantic
+Goal proof; the broader A-G closure remains staged. Evidence is recorded in
+[`spec58-6d-task-execution-verifier-2026-08-06.md`](../reports/spec58-6d-task-execution-verifier-2026-08-06.md).

@@ -14,6 +14,7 @@ import {
   type GoalRunWritebackOptions,
 } from './goal-writeback.js';
 import { GoalVerifierRegistry } from './goal-verifier-registry.js';
+import { createHarnessGoalVerifierRegistry } from './goal-execution-verifier.js';
 import { RunManager } from './run-manager.js';
 import { createDaemonServer } from './server.js';
 
@@ -342,6 +343,23 @@ describe('GoalRunWritebackService', () => {
     expect(seenInput).not.toHaveProperty('prompt');
     expect(seenInput).not.toHaveProperty('transcript');
     expect(seenInput).not.toHaveProperty('output');
+    fixture.writeback.close();
+  });
+
+  it('uses the deterministic execution verifier and releases quota for incomplete evidence', async () => {
+    const registry = createHarnessGoalVerifierRegistry();
+    const fixture = makeFixture(new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }), makeVerifier(), true, registry);
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.released')).toBe(true));
+    const projection = new GoalControlProjectionBuilder().build(await fixture.goalStore.read(goalId));
+    expect(projection.todos[0]?.status).toBe('open');
+    expect(projection.quota.reservations[0]?.status).toBe('released');
+    expect(projection.validationEvidence[0]).toMatchObject({
+      status: 'inconclusive',
+      verifierId: 'verifier_advancement_execution_v1',
+      verifierRevision: 1,
+    });
     fixture.writeback.close();
   });
 

@@ -1533,3 +1533,23 @@ closed before Todo/quota finalization. Evidence is recorded in
 [`spec58-6c-verifier-runtime-contract-2026-08-06.md`](reports/spec58-6c-verifier-runtime-contract-2026-08-06.md).
 No semantic verifier is registered by default and no existing execution/event
 authority changed.
+
+### Spec 58-6d bounded task execution-evidence verifier design freeze (2026-08-06)
+
+The next code slice adds a deterministic `advancement` verifier that consumes
+only the bounded Goal verifier input. It validates completed terminal evidence,
+one `model.completed` digest, absence of failure/error digests and non-zero
+aggregate output bytes; otherwise it returns `inconclusive`. The verifier is
+used only by an explicit Harness factory, replacing the previous unconditional
+fixture success callback. This is execution evidence, not semantic Goal proof;
+the default daemon registry remains empty and all existing run/Goal authorities
+remain unchanged. See [ADR 0054](adr/0054-bounded-task-execution-verifier.md).
+
+#### Spec 58-6d implementation checkpoint (2026-08-06)
+
+The Harness fixture now uses the explicit bounded `advancement` verifier. Its
+direct verifier and writeback tests pass 9/9 and 13/13; the Harness workflow
+passes 16/16; daemon build/typecheck pass. Incomplete evidence releases quota
+without completing the Todo. This remains execution evidence, not semantic Goal
+proof, and the production daemon registry remains empty. See
+[`spec58-6d-task-execution-verifier-2026-08-06.md`](reports/spec58-6d-task-execution-verifier-2026-08-06.md).

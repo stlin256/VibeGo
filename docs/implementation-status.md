@@ -1552,3 +1552,25 @@ The default daemon still registers no semantic verifier, and no interactive,
 AgentLoop, RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry,
 `run_events` or `goal_events` authority changed; real semantic validation and
 broader A–G closure remain staged.
+
+### Spec 58-6d bounded task execution-evidence verifier design checkpoint (2026-08-06)
+
+The next implementation replaces the Harness fixture's unconditional
+`validated` result with a deterministic `advancement` verifier. The bounded
+predicate checks only run status, terminal/model event digests, failure/error
+absence and aggregate output bytes. It will be registered only by an explicit
+Harness factory; the production daemon remains empty of semantic verifiers.
+This slice is execution evidence rather than semantic Goal proof and must not
+change AgentLoop, RunManager, Scheduler, Approval, Sandbox, Workspace,
+`run_events` or `goal_events` authorities. Focused tests and a redacted
+evidence report will be added before the implementation commit.
+
+#### Spec 58-6d implementation checkpoint (2026-08-06)
+
+The explicit Harness factory now uses a deterministic bounded `advancement`
+execution verifier instead of an unconditional `validated` callback. Direct
+verifier/writeback tests pass 9/9 and 13/13, the Harness workflow passes 16/16,
+and daemon build/typecheck pass. Incomplete evidence is `inconclusive`, quota
+is released and the Todo remains open. The production daemon registry remains
+empty; this is execution evidence rather than semantic Goal proof. Evidence is
+recorded in [`spec58-6d-task-execution-verifier-2026-08-06.md`](reports/spec58-6d-task-execution-verifier-2026-08-06.md).

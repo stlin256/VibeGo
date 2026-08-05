@@ -370,7 +370,7 @@ export function createHarnessToolRuntime(scenario = 'tool') {
 }
 
 export async function createDefaultRuntime(options, provider, dependencies = {}) {
-  const [contracts, storage, schedulerPackage, goalControl, daemon, runManagerPackage, goalAdmissionPackage, goalWritebackPackage] = await Promise.all([
+  const [contracts, storage, schedulerPackage, goalControl, daemon, runManagerPackage, goalAdmissionPackage, goalWritebackPackage, goalExecutionVerifierPackage] = await Promise.all([
     import('../packages/contracts/dist/index.js'),
     import('../packages/storage/dist/index.js'),
     import('../packages/scheduler/dist/index.js'),
@@ -379,6 +379,7 @@ export async function createDefaultRuntime(options, provider, dependencies = {})
     import('../apps/daemon/dist/run-manager.js'),
     import('../apps/daemon/dist/goal-admission.js'),
     import('../apps/daemon/dist/goal-writeback.js'),
+    import('../apps/daemon/dist/goal-execution-verifier.js'),
   ]);
   const eventStore = new storage.InMemoryEventStore();
   const goalStore = new goalControl.InMemoryGoalControlEventStore();
@@ -399,23 +400,13 @@ export async function createDefaultRuntime(options, provider, dependencies = {})
   });
   const capabilitySnapshot = createCapabilitySnapshot(contracts);
   const goalControlWriter = new goalControl.GoalControlV1WriteService(goalStore, { producer: 'harness-smoke' });
-  const verifier = {
-    async verify(input) {
-      return {
-        status: 'validated',
-        verifierId: 'harness_fixture_verifier',
-        verifierRevision: 1,
-        summary: `Harness terminal ${input.terminal.type} was observed.`,
-        refs: { runId: input.run.runId, eventIds: [input.terminal.id] },
-      };
-    },
-  };
+  const verifierRegistry = goalExecutionVerifierPackage.createHarnessGoalVerifierRegistry();
   let goalAdmission;
   const goalWriteback = new goalWritebackPackage.GoalRunWritebackService({
     goalStore,
     runManager,
     goalControl: goalControlWriter,
-    verifier,
+    verifierRegistry,
     admitGoverned: (input, runOptions) => goalAdmission.admit(input, runOptions),
   });
   goalAdmission = new goalAdmissionPackage.GoalAdmissionService({
