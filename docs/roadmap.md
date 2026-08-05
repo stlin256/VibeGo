@@ -1012,3 +1012,11 @@ host, remote, certificate, concurrency/recovery and release claims partial or
 blocked until their required runtime evidence exists. The next implementation
 slice is the bounded 60-1/60-2 verification orchestration; no default run,
 Goal admission or permission authority changes in 60-0.
+
+### Spec 60-1/60-2 verification evidence boundary (2026-08-05)
+
+The next code slice is the fixed-plan `pnpm verify:evidence` orchestrator. It
+records bounded, redacted focused/full gate results under the ignored runtime
+evidence directory, preserving `failed`/`blocked`/`not-run` distinctions. It
+does not accept arbitrary commands, turn fixture output into release evidence,
+or alter existing run/Goal/permission authorities.

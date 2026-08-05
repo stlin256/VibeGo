@@ -797,6 +797,15 @@ cross-platform remote/certificate, concurrency and signed release evidence
 remain partial or blocked. No runtime authority or default interactive path was
 changed by this checkpoint.
 
+### Spec 60-1/60-2 design freeze (2026-08-05)
+
+The next implementation is a fixed-plan `pnpm verify:evidence` runner. It will
+capture redacted dependency-closure/module/Web/workflow results or the explicit
+full `pnpm verify` result into ignored `.ready4vibe/evidence/<date>/<commit>/`
+metadata. Arbitrary shell, raw child output, secrets and absolute paths are
+excluded; no live provider, remote transport, full-host or release claim is
+introduced by this slice.
+
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation

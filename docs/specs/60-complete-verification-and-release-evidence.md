@@ -63,6 +63,22 @@ The audit authorizes only the focused/integration evidence slices that follow;
 it does not promote fixture-only or opt-in smoke results to release evidence,
 change the default interactive run path, or mark Spec 60 implemented.
 
+### 60-1/60-2 implementation boundary (2026-08-05)
+
+The next slice adds the explicit `pnpm verify:evidence` orchestrator in
+`scripts/verification-evidence.mjs`. It has only two fixed plans: `focused`
+for the documented dependency-closure/module/Web/workflow gates, and `full`
+for the existing `pnpm verify` gate. It accepts no arbitrary shell fragment or
+test selector. Child output is bounded and redacted before it is written to the
+ignored `.ready4vibe/evidence/<date>/<commit>/` bundle.
+
+The first bundle is limited to `verification-evidence/v1` metadata,
+`focused-results.json`/`full-verify.txt`, a prerequisite pointer, a bounded
+security/privacy note and known gaps. Failed, blocked and not-run steps remain
+distinct. This slice does not enable live LLM, remote transport, full-host,
+container or release operations, and it does not change AgentLoop, RunManager,
+Goal admission, Scheduler, Approval, Sandbox or event authorities.
+
 ## 3. 证据等级与结果语义
 
 每项测试结果必须带有 `evidenceLevel` 和 `claim`：
