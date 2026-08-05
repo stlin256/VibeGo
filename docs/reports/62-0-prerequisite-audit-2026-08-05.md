@@ -1,14 +1,14 @@
-# Spec 61-0 prerequisite audit (2026-08-05)
+# Spec 62-0 prerequisite audit (2026-08-05)
 
-This report is the mandatory prerequisite gate for Spec 61. It audits the
-current checkout against Spec 01 through Spec 60, including the already
+This report is the mandatory prerequisite gate for Spec 62. It audits the
+current checkout against Spec 01 through Spec 61, including the already
 existing Spec 58 and Spec 59 documents. It is a status matrix, not a release
 claim. The audit deliberately distinguishes source/test evidence from real
 provider, real-device, remote, certificate, and release evidence.
 
 ## Gate decision
 
-**61-0: verified for the prerequisite-audit boundary only.** The repository
+**62-0: historical audit only; not a current release gate.** The repository
 does contain Spec 58 and Spec 59:
 
 - [Spec 58](../specs/58-goal-control-and-harness-completion.md) is Draft with
@@ -20,15 +20,17 @@ does contain Spec 58 and Spec 59:
   smoke fixture exist; production host execution, cross-platform/container and
   release evidence remain partial.
 
-Because required `partial`, `blocked`, and `not-run` items remain, this report
-does **not** authorize rewriting the README as release-ready, changing the
-default run path, or marking Spec 61 complete.
+Because required `partial`, `blocked`, and `not-run` items remain, and because
+the new DeepSeek Spec 61 was defined after this checkpoint, this report does
+**not** authorize rewriting the README as release-ready, changing the default
+run path, or marking Spec 62 complete. A fresh `62-0` audit must be generated
+after Spec 61 provider/Web/live evidence is complete.
 
 ## Checkout, toolchain, and workspace graph
 
 | Check | Current evidence |
 | --- | --- |
-| Commit / branch | `d462ca1` on `main`; worktree clean; `main` tracks `origin/main` at the same commit after the Spec 61 gate push. |
+| Commit / branch | Historical audit checkpoint `d462ca1` on `main`; this report is retained as a bounded audit artifact and must be refreshed for the current commit before release claims. |
 | Remote | `https://github.com/stlin256/VibeGo.git` (`origin`). |
 | Package manager | `pnpm@11.9.0` from `package.json`. |
 | Node runtime | Bundled workspace Node `v24.14.0` (`codex-primary-runtime`); it is used only as a validation runtime and is not committed. |
@@ -50,7 +52,7 @@ default run path, or marking Spec 61 complete.
 | E7 | Observability/performance evidence: `@ready4vibe/observability` 66/66 and a bounded performance fixture with two runs, peak concurrency 2, p95 about 120 ms, two samples and zero drops. It is not a capacity or cross-platform result. |
 | E8 | Required real-device matrix, ACME, Tailscale/SSH, signed release artifacts, SBOM/provenance, clean-machine install/upgrade/rollback and production host-runner evidence are absent or explicitly deferred. |
 
-## Spec 01–60 matrix
+## Spec 01–61 matrix
 
 `verified (bounded)` means source and focused tests cover the documented slice;
 it does not imply real deployment evidence. `partial` means a slice exists but
@@ -71,7 +73,7 @@ required gate cannot be honestly claimed from this checkout.
 | 10 | SandboxResolver, PathGuard, ArgvGuard | E1/E2/E5 | container/host fixtures only | partial | cross-platform sandbox evidence and fail-closed host path |
 | 11 | filesystem/shell adapters and ToolExecutor | E1/E2/E5 | injected/local fixtures | partial | real approved tool run plus resource cleanup |
 | 12 | `packages/auth` and daemon transport gate | E1/E2/E5 | loopback/LAN negative fixture | partial | remote transport and disconnect evidence |
-| 13 | React/TypeScript PWA shell | E1/E2 | browser fixture only | partial | real browser/device matrix (56/61-6) |
+| 13 | React/TypeScript PWA shell | E1/E2 | browser fixture only | partial | real browser/device matrix (56/62-6) |
 | 14 | `packages/certificates`, HTTPS readiness | E1/E2/E6 | in-memory certificate lifecycle | partial | ACME/OS store/public listener evidence (55/60-6) |
 | 15 | Skill/MCP manifest and allowlist | E1/E2/E5 | local manifest/transport fixture | partial | authorized remote server and release evidence |
 | 16 | external sandbox runtime planning/resolver | E1/E2/E5 | Docker/Podman planning fixture | partial | installed runtime on target platforms |
@@ -83,7 +85,7 @@ required gate cannot be honestly claimed from this checkout.
 | 22 | restart recovery marker | E1/E2/E5 | deterministic restart fixture | verified (bounded) | clean daemon restart/install evidence |
 | 23 | explicit post-recovery retry | E1/E2/E5 | bounded retry fixture | partial | verify no old tool replay under real recovery |
 | 24 | certificate status projection | E1/E2/E6 | safe metadata fixtures | partial | live certificate lifecycle and public deployment |
-| 25 | configuration onboarding/settings | E1/E2 | Web/API fixtures | partial | clean-checkout user walkthrough (61-3) |
+| 25 | configuration onboarding/settings | E1/E2 | Web/API fixtures | partial | clean-checkout user walkthrough (62-3) |
 | 26 | certificate guidance in settings | E1/E2/E6 | Web metadata fixture | partial | ACME/installed certificate evidence |
 | 27 | non-secret profile persistence | E1/E2 | persistence/restart fixtures | verified (bounded) | full clean-host first-run proof |
 | 28 | model provider onboarding | E1/E2/E4 | bounded probe fixtures; E3 success | partial | secret-store/real failure evidence |
@@ -119,6 +121,7 @@ required gate cannot be honestly claimed from this checkout.
 | 58 | Goal Control/Harness completion umbrella | E1/E3/E5 | 58-0..58-5 slices and bounded Harness | partial | 58-6/58-7, task validation, failure/recovery and release evidence |
 | 59 | permission profiles/low-interruption approval umbrella | E1/E5 | 59-1..59-5 slices and permission smoke | partial | production host runner, cross-platform/container and release evidence |
 | 60 | complete verification/release evidence gate | E1; E2 is stale | focused fixtures only | blocked | current full verify, real failures, governed validation, remote/cert/device and release bundle |
+| 61 | DeepSeek first-class provider integration | E3/E4 | one live success smoke plus provider fixtures | partial | protocol/mode/tool/reviewer integration and live failure evidence |
 
 ## Required blockers and re-acceptance commands
 
@@ -129,13 +132,13 @@ required gate cannot be honestly claimed from this checkout.
 | Task-specific governed validation, writeback and crash/retry closure incomplete | Goal/daemon maintainer | Spec 58-6 and Spec 60-3 | `pnpm smoke:harness` plus independent verifier/recovery evidence; no default interactive admission |
 | Permission host runner and container/platform parity incomplete | Security/runtime maintainer | Spec 59-5 and Spec 48 | `pnpm smoke:permissions`, `pnpm smoke:container`, target-platform cleanup evidence |
 | ACME, public certificate lifecycle, Tailscale and SSH absent | Transport/release maintainer | Spec 55 and Spec 60-6 | staging-only ACME plus explicit remote adapter smoke; otherwise remain `blocked` |
-| Real device/accessibility matrix absent | Web/accessibility maintainer | Spec 56 and Spec 61-6 | manual desktop/portrait/phone/fold/tri-fold/tablet and screen-reader report |
+| Real device/accessibility matrix absent | Web/accessibility maintainer | Spec 56 and Spec 62-6 | manual desktop/portrait/phone/fold/tri-fold/tablet and screen-reader report |
 | Install/upgrade/rollback, signing, SBOM and provenance absent | Release maintainer | Spec 53/57 and Spec 60-8 | clean-machine artifact workflow with immutable manifest/checksum/signature/attestation |
 
 ## Allowed next action
 
 Until the blockers above are either verified or explicitly recorded as a
-release limitation, Spec 61 may proceed only with documentation corrections,
+release limitation, Spec 62 may proceed only with documentation corrections,
 focused tests, and bounded implementation slices that preserve the existing
 authorities. In particular:
 

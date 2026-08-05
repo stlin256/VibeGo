@@ -837,19 +837,25 @@ release evidence remain partial or blocked by design.
 
 ## Spec 61 planning note (2026-08-05)
 
-`docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation
-quality gate. It defines English-first README and synchronized `README-zh.md`,
-brand/banner and architecture presentation, Web-first onboarding, security and
-permission explanations, reproducible Quickstart, truthful maturity labels and
-link/command/privacy/user-review checks. It does not change runtime behavior or
-turn screenshots/marketing copy into implementation evidence.
+`docs/specs/61-deepseek-first-class-provider-integration.md` is the Draft
+DeepSeek provider integration specification. It adopts the useful
+MinimumAgentLoop behaviors (two-layer turn/tool loop, multi-call aggregation,
+thinking modes, advisory reviewer and explicit provider-owned search) behind
+VibeGo's existing ModelProvider, ContextManager, Approval, Sandbox, Scheduler,
+Goal and event authorities. It does not copy upstream code, add Python/srt, or
+claim that the existing generic OpenAI-compatible adapter is already a complete
+DeepSeek integration. Contract, protocol, Web settings, real smoke and failure
+evidence remain staged under 61-0 through 61-7.
 
-Spec 61 now has an explicit `61-0` prerequisite gate: before any user-facing
-documentation edit, the main thread must re-verify Spec 01–60, source/tests,
-Spec 60 evidence and the current checkout. Required Web release phases may not
-remain `partial`, `blocked` or `not-run`; unresolved implementation gaps must
-return to their owning Spec. This gate is documentation-only and does not claim
-that Spec 61 or the release is complete.
+## Spec 62 planning note (2026-08-05)
+
+The former `docs/specs/61-user-facing-documentation-quality.md` has been moved
+to `docs/specs/62-user-facing-documentation-quality.md`. Its prerequisite gate is
+now `62-0`, and it must re-verify Spec 01–61 (including DeepSeek) before any
+user-facing README/Quickstart/release wording is updated. The former
+`61-0-prerequisite-audit-2026-08-05.md` is retained as the renamed
+`62-0-prerequisite-audit-2026-08-05.md` historical audit; it is not a fresh
+release gate for the new Spec 61 and must be refreshed after DeepSeek evidence.
 
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
@@ -1048,15 +1054,14 @@ workflow suite passes 59/59 and `@ready4vibe/observability` passes 66/66. The
 report contains bounded aggregate metrics only; real provider, user workspace,
 physical-device, cross-platform and release gates remain partial or blocked.
 
-## Spec 61-0 prerequisite audit checkpoint (2026-08-05)
+## Spec 62-0 prerequisite audit checkpoint (historical rename, 2026-08-05)
 
-The mandatory Spec 61-0 audit is recorded in
-[`docs/reports/61-0-prerequisite-audit-2026-08-05.md`](reports/61-0-prerequisite-audit-2026-08-05.md).
-It explicitly audits Spec 01 through Spec 60, including the existing Spec 58
-and Spec 59 documents. The result is a prerequisite-gate pass only: Spec 58
-and Spec 59 remain Draft umbrella specs with implemented slices, while real
-provider failure/recovery, governed task validation, host/remote/certificate,
-device, and signed-release evidence remain partial or blocked.
+The former Spec 61-0 audit is retained at
+[`docs/reports/62-0-prerequisite-audit-2026-08-05.md`](reports/62-0-prerequisite-audit-2026-08-05.md).
+It is now a historical bounded audit after the numbering move. Because the new
+Spec 61 DeepSeek work was defined after that audit, it cannot be used as the
+fresh Spec 62-0 gate; the report must be regenerated after Spec 61's provider,
+Web and real-evidence phases are complete.
 
 The current `pnpm test:workflow` result is 59/59 on `d462ca1`. A complete
 `pnpm verify` rerun after the deterministic fixture correction passed typecheck,

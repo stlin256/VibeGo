@@ -1,4 +1,4 @@
-# Spec 61：用户可见文档质量、README 与开箱即用说明
+# Spec 62：用户可见文档质量、README 与开箱即用说明
 
 - Status: Draft（文档质量规格；不改变运行时）
 - Date: 2026-08-05
@@ -11,6 +11,7 @@
   [Spec 52：Capability profiles](52-capability-profiles-and-first-run-experience.md)、
   [Spec 55：Public deployment and certificates](55-public-deployment-certificates-operations.md)、
   [Spec 60：Complete verification](60-complete-verification-and-release-evidence.md)、
+  [Spec 61：DeepSeek first-class provider](61-deepseek-first-class-provider-integration.md)、
   [ADR 0010：Host-first Web boundary](../adr/0010-host-first-same-origin-web-and-client-boundary.md)、
   [ADR 0003：LAN access and approval](../adr/0003-lan-access-and-codex-like-approval.md)
 
@@ -29,13 +30,13 @@ VibeGo 的 README 和用户可见文档必须让一个不了解仓库历史的�
 本规格是独立文档规格，不把内容追加到 Spec 52。文档必须服从实际代码、测试和
 Spec 60 evidence；如果三者冲突，先降低文档中的能力声明并开 issue/补文档，再修改实现。
 
-## 2. 强制前置复核门禁（61-0）
+## 2. 强制前置复核门禁（62-0）
 
-Spec 61 是所有用户可见说明的收尾门禁，不是绕过前置实现缺口的文案任务。在开始
-任何 `61-1` 之后的 README、Quickstart、运维说明或发布文案修改前，主线程必须重新
+Spec 62 是所有用户可见说明的收尾门禁，不是绕过前置实现缺口的文案任务。在开始
+任何 `62-1` 之后的 README、Quickstart、运维说明或发布文案修改前，主线程必须重新
 核实此前所有 Spec 是否已经完成：
 
-1. 阅读当前 Spec 01–60、相关 ADR、`architecture.md`、`harness-contracts.md`、
+1. 阅读当前 Spec 01–61、相关 ADR、`architecture.md`、`harness-contracts.md`、
    `implementation-status.md`、`roadmap.md` 和 Spec 60 evidence；不能只依据旧的
    README、测试数量或其他 Agent 的总结。
 2. 执行 `git status --short --branch`、`git diff`、`git diff --cached`，记录当前
@@ -45,18 +46,18 @@ Spec 61 是所有用户可见说明的收尾门禁，不是绕过前置实现缺
    必需阶段只能标记为 `verified`、`implemented`、`partially implemented`、`blocked`
    或 `not applicable`；`partially implemented`、`blocked`、`not-run` 不得被 README
    改写成完成。
-4. 在 Web 发布目标范围内，Spec 01–60 的所有必需阶段必须为 `implemented/verified`。
+4. 在 Web 发布目标范围内，Spec 01–61 的所有必需阶段必须为 `implemented/verified`。
    明确后置的原生客户端或其他非 Web 目标只有在发布范围中写出“不适用”、给出理由并
-   保留后续入口后，才能不阻断 Spec 61；任何必需能力的 `partial/blocked` 都必须先
+   保留后续入口后，才能不阻断 Spec 62；任何必需能力的 `partial/blocked` 都必须先
    回到对应 Spec 实施，不能继续用文档掩盖缺口。
 5. 重新核对 Spec 60 的 full evidence bundle、真实 LLM、Goal governed、权限/审批、
    sandbox、并发/恢复、传输/证书和 release evidence 是否对应同一个 commit；缺少
-   真实证据时，先记录阻断并停止 61-1～61-6。
-6. 将复核结果写入 `docs/reports/61-0-prerequisite-audit-YYYY-MM-DD.md`，同步
+   真实证据时，先记录阻断并停止 62-1～62-6。
+6. 将复核结果写入 `docs/reports/62-0-prerequisite-audit-YYYY-MM-DD.md`，同步
    `implementation-status.md` 和 `roadmap.md`，再以独立 Git 提交记录。复核报告必须
    列出每个未完成项的 owner、回退 Spec、阻断原因和重新验收命令。
 
-该门禁通过后，Spec 61 才能进入用户文档编辑阶段；它的目标是让文档成为已完成产品
+该门禁通过后，Spec 62 才能进入用户文档编辑阶段；它的目标是让文档成为已完成产品
 的准确收尾，而不是把“规划完成”误报成“产品完成”。
 
 ## 3. 文档真相与用户分层
@@ -160,7 +161,7 @@ Spec 61 是所有用户可见说明的收尾门禁，不是绕过前置实现缺
 
 ## 8. 文档质量门禁
 
-Spec 61 的文档提交必须通过：
+Spec 62 的文档提交必须通过：
 
 1. Markdown 相对链接存在、锚点可解析、code fence 成对、`git diff --check` 通过；
 2. Quickstart 命令在 clean checkout 和声明的平台上逐条验证；不能只检查语法；
@@ -174,41 +175,41 @@ Spec 61 的文档提交必须通过：
 
 ## 9. 实施阶段
 
-### 61-1：用户文档审计
+### 62-1：用户文档审计
 
 盘点根 README、中文 README、docs 索引、Spec/ADR、安装/模型/安全/运维/贡献文档；
 标记重复、过期、互相矛盾、缺少状态、不可复制命令和 secret/path 泄露风险。
 
-### 61-2：信息架构与品牌入口
+### 62-2：信息架构与品牌入口
 
 完成英文优先 README 的首屏、横幅、状态、Why/Non-goals、目录、架构图和仓库地图；
 保持 VibeGo 品牌，不把 logo 做成占满首屏的布局，也不复制 Codex 私有 UI/文案。
 
-### 61-3：Quickstart 与配置引导
+### 62-3：Quickstart 与配置引导
 
 以 Web onboarding/settings 为主线重写安装、启动、pairing、第一条对话、模型 probe、
 workspace、停止/清理和安全失败排查；每条命令完成实际验证并维护 PowerShell/POSIX 变体。
 
-### 61-4：安全、权限与远程运维
+### 62-4：安全、权限与远程运维
 
 补齐 LAN/TLS、workspace/full-host、approval、Goal、memory、MCP/Skill、Tailscale/SSH、
 ACME、backup/recovery、release 和隐私说明；所有后置能力明确标记，不提供危险猜测步骤。
 
-### 61-5：中英文同步与维护者文档
+### 62-5：中英文同步与维护者文档
 
 同步 `README-zh.md`、`docs/README.md`、`CONTRIBUTING.md`、状态页、故障排查、变更记录和
 安全报告入口；建立术语表和文档 ownership，避免后续 commit 重新产生漂移。
 
-### 61-6：真实用户审阅与发布前校验
+### 62-6：真实用户审阅与发布前校验
 
 在 clean checkout、窄/宽 Web 视口和受控 LAN fixture 上按 README 走完一次；执行 Spec 60
 的文档/隐私/链接门禁，修复发现的问题后才可把文档状态写为 release-ready。
 
 ## 10. Definition of Done
 
-Spec 61 只有在以下条件全部满足后才能标记 `Implemented`：
+Spec 62 只有在以下条件全部满足后才能标记 `Implemented`：
 
-1. `61-0` 前置复核报告已完成；Spec 01–60 的所有 Web 发布必需阶段在同一目标 commit
+1. `62-0` 前置复核报告已完成；Spec 01–61 的所有 Web 发布必需阶段在同一目标 commit
    上均为 `implemented/verified`，没有未说明的 `partial`、`blocked` 或 `not-run`；
 2. Spec 60 的 full evidence bundle 已给出 `release-candidate`，并且其中的真实 LLM、
    Goal governed、权限、远程/证书、并发/恢复和 release 证据可追溯；

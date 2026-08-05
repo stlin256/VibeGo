@@ -957,13 +957,23 @@ workspace/full-host 安全、远程/证书、并发/恢复和 release evidence �
 允许分模块测试以节约时间，但 focused gate 不能替代最终全量门禁；缺少真实运行证据的
 模块必须保持 `partial` 或 `blocked`。
 
-## Spec 61：用户可见文档质量、README 与开箱即用说明（Draft）
+## Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop（Draft）
 
-详见 [Spec 61](specs/61-user-facing-documentation-quality.md)。该规格指导英文优先的
+详见 [Spec 61](specs/61-deepseek-first-class-provider-integration.md)。该规格把
+DeepSeek 从通用 OpenAI-compatible URL 提升为一等 provider，吸收
+MinimumAgentLoop 的两层 turn/tool loop、多工具调用聚合、thinking/reasoning、advisory
+reviewer 和可选 provider-owned web search，同时不得复制 Python/srt 或绕过 VibeGo 的
+Approval、Sandbox、Goal、Scheduler、Workspace 和事件事实源。61-0 至 61-7 依次覆盖
+上游/现有实现复核、contract、协议、AgentLoop/context、Web 设置、真实 DeepSeek smoke
+和 evidence；当前只记录为 Draft。
+
+## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
+
+详见 [Spec 62](specs/62-user-facing-documentation-quality.md)。该规格指导英文优先的
 README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/故障排查和贡献文档
 统一状态与品牌表达，要求配置以 Web onboarding/settings 为主路径、命令可复现、能力
 声明不夸大、中文同步，并通过链接、命令、隐私和真实用户审阅门禁。执行前必须先通过
-`61-0`，重新复核 Spec 01–60 和 Spec 60 evidence；任何必需 `partial/blocked/not-run`
+`62-0`，重新复核 Spec 01–61 和 Spec 60 evidence；任何必需 `partial/blocked/not-run`
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
@@ -1126,16 +1136,15 @@ workflow tests pass 59/59 and the observability package passes 66/66. These
 results are application/resource evidence only, not a capacity, device,
 cross-platform or release claim.
 
-### Spec 61-0 prerequisite audit checkpoint (2026-08-05)
+### Spec 62-0 prerequisite audit checkpoint (historical rename, 2026-08-05)
 
-The required Spec 61-0 audit is recorded in
-[`docs/reports/61-0-prerequisite-audit-2026-08-05.md`](reports/61-0-prerequisite-audit-2026-08-05.md).
+The former Spec 61-0 audit is retained at
+[`docs/reports/62-0-prerequisite-audit-2026-08-05.md`](reports/62-0-prerequisite-audit-2026-08-05.md).
 It confirms that Spec 58 and Spec 59 already exist and records their actual
-status as Draft umbrella specs with implemented slices, rather than treating
-them as missing work. The report supplies a Spec 01–60 source/test/runtime
-matrix and keeps incomplete real-provider failure, governed validation,
-permission host execution, ACME/Tailscale/SSH, real-device, and signed-release
-evidence explicitly partial or blocked.
+status as Draft umbrella specs with implemented slices. Because DeepSeek Spec 61
+was defined after this audit, the report is historical rather than a fresh
+Spec 62-0 release gate; it must be regenerated after Spec 61 provider/Web/live
+evidence is complete.
 
 The current focused workflow gate is 59/59 on `d462ca1`. A full `pnpm verify`
 rerun after the deterministic fixture correction passed typecheck/build, all 22
