@@ -1,6 +1,6 @@
 # ADR 0044: LLM-assisted approval review boundary
 
-- Status: Accepted for staged implementation (63-1 complete; runtime slices pending)
+- Status: Accepted for staged implementation (63-4 application integration complete; Web/events/live smoke pending)
 - Date: 2026-08-05
 - Related: [Spec 63](../specs/63-llm-assisted-approval-and-review.md),
   [ADR 0003](0003-lan-access-and-codex-like-approval.md),
@@ -83,3 +83,25 @@ routes. Revision and policy fencing fail closed; dedicated mode without a
 profile is blocked and configured dedicated intent remains degraded until its
 provider adapter exists. The probe is local validation only, so ordinary runs
 remain independent of reviewer availability.
+
+## 63-4 application integration checkpoint
+
+The runtime slice now adds an application-owned `ApprovalReviewBroker` wrapper
+around the existing ApprovalBroker. `RunManager` captures a frozen binding per
+run, records the secret-free reviewer snapshot in `run.created` and
+`RunSnapshot`, and keeps the bounded request context live only until terminal
+cleanup before starting the unchanged AgentLoop. The wrapper is reached only after the
+existing ToolRuntime has returned `APPROVAL_REQUIRED`; it cannot create a
+capability, alter Scheduler/Sandbox/Workspace policy, or replace the delegate
+broker.
+
+For an exact, eligible low-risk request, a `bounded-auto-low-risk` reviewer
+allow is applied by creating and immediately resolving the delegate's normal
+approval entry. This preserves the delegate's decision/history semantics and
+the existing `approval.required`/`approval.decided` event path. Advisory mode,
+reviewer denial/unavailability, stale revisions, cancellation, or malformed
+binding data leave the delegate pending for the user. The wrapper's bounded
+in-flight/cache key includes the normalized request, reviewer/policy revisions
+and run boundary; terminal cleanup and expiry invalidate it. No AgentLoop core
+state transition, RunManager default behavior, run_events/goal_events schema,
+or second scheduler/approval authority was introduced.

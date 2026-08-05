@@ -8,6 +8,7 @@ import {
   AgentMemoryWriteRequestSchema,
   CapabilityProfileRunSnapshotSchema,
   DeepSeekRunSnapshotSchema,
+  ApprovalReviewerSnapshotSchema,
   ModelProviderSnapshotSchema,
   PermissionProfileSchema,
   PermissionProfileRunSnapshotSchema,
@@ -17,6 +18,7 @@ import {
   type AgentMemoryWriteRequest,
   type CapabilityProfileRunSnapshot,
   type DeepSeekRunSnapshot,
+  type ApprovalReviewerSnapshot,
   type PermissionProfileRunSnapshot,
   type EventStore,
   type ModelProvider,
@@ -28,7 +30,7 @@ import {
 } from '@ready4vibe/contracts';
 import type { ContextItem } from '@ready4vibe/context';
 import type { PermissionProfileApplication } from '@ready4vibe/policy';
-import { AgentLoop, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ToolRuntime } from '@ready4vibe/agent';
+import { AgentLoop, ApprovalReviewBroker, InMemoryApprovalBroker, type AgentRunResult, type ApprovalBroker, type ApprovalDecision, type ApprovalDecisionResult, type ApprovalRequest, type ApprovalReviewBinding, type ApprovalReviewBindingFactory, type ToolRuntime } from '@ready4vibe/agent';
 import type { RunUsageObserver } from '@ready4vibe/observability';
 import { Scheduler } from '@ready4vibe/scheduler';
 import type { AgentMemoryRunSnapshot, AgentMemorySettingsManager } from './agent-memory-settings.js';
@@ -47,6 +49,7 @@ export interface RunSnapshot {
   config: RunConfig;
   modelSnapshot?: ModelProviderSnapshot;
   deepSeekSnapshot?: DeepSeekRunSnapshot;
+  approvalReviewerSnapshot?: ApprovalReviewerSnapshot;
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
   permissionSnapshot?: PermissionProfileRunSnapshot;
   lastEventSeq: number;
@@ -74,6 +77,9 @@ export interface RunManagerOptions {
   toolRuntime?: ToolRuntime;
   toolRuntimeForRun?: (config: RunConfig, capabilitySnapshot?: CapabilityProfileRunSnapshot) => ToolRuntime | undefined;
   approvalBroker?: ApprovalBroker;
+  /** Optional application-owned reviewer binding factory. It is called once
+   * per run after model/permission snapshots are frozen. */
+  approvalReviewForRun?: ApprovalReviewBindingFactory;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
   workspaceExists?: (workspaceId: string) => boolean;
@@ -113,6 +119,8 @@ export class RunManager {
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
   private readonly agentMemoryKnowledgeSettings: AgentMemoryKnowledgeSettingsManager | undefined;
   private readonly observabilityUsageObserver: RunUsageObserver | undefined;
+  private readonly approvalReviewForRun: ApprovalReviewBindingFactory | undefined;
+  private readonly approvalReviewBindings = new Map<string, ApprovalReviewBinding>();
   private readonly controllers = new Map<string, AbortController>();
   private readonly completions = new Map<string, AgentRunResult>();
 
@@ -122,6 +130,7 @@ export class RunManager {
     this.modelBindingForRun = options.modelBindingForRun;
     this.capabilityProfileForRun = options.capabilityProfileForRun;
     this.permissionProfileForRun = options.permissionProfileForRun;
+    this.approvalReviewForRun = options.approvalReviewForRun;
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
@@ -134,7 +143,10 @@ export class RunManager {
       maxExternalSandboxes: 1,
       workspaceWriteMode: 'exclusive',
     });
-    this.approvalBroker = options.approvalBroker ?? new InMemoryApprovalBroker();
+    const delegateApprovalBroker = options.approvalBroker ?? new InMemoryApprovalBroker();
+    this.approvalBroker = this.approvalReviewForRun
+      ? new ApprovalReviewBroker({ delegate: delegateApprovalBroker, bindingForRun: (runId) => this.approvalReviewBindings.get(runId) })
+      : delegateApprovalBroker;
     this.agentLoop = new AgentLoop({
       eventStore: this.eventStore,
       scheduler: this.scheduler,
@@ -214,6 +226,22 @@ export class RunManager {
     const knowledgeContext = capturedKnowledge
       ? await this.recallKnowledge(capturedKnowledge, config, runId, controller.signal)
       : [];
+    let approvalReviewBinding: ApprovalReviewBinding | undefined;
+    if (this.approvalReviewForRun) {
+      try {
+        approvalReviewBinding = this.approvalReviewForRun({
+          runId,
+          config,
+          modelProvider: capturedModelBinding.provider,
+          ...(capturedModelBinding.snapshot ? { modelSnapshot: capturedModelBinding.snapshot } : {}),
+          ...(permissionSnapshot ? { permissionSnapshot } : {}),
+        });
+        if (approvalReviewBinding !== undefined) this.approvalReviewBindings.set(runId, approvalReviewBinding);
+      } catch {
+        // Reviewer construction is advisory. A malformed/unavailable binding
+        // must preserve the normal deterministic approval path.
+      }
+    }
     const promise = this.agentLoop.run({
       runId,
       config,
@@ -223,6 +251,7 @@ export class RunManager {
       ...(!capturedMemory?.modelProvider && capturedModelBinding.deepSeekSnapshot ? { deepSeekSnapshot: capturedModelBinding.deepSeekSnapshot } : {}),
       ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       ...(permissionSnapshot ? { permissionSnapshot } : {}),
+      ...(approvalReviewBinding ? { approvalReviewerSnapshot: approvalReviewBinding.snapshot } : {}),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
       ...([...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...memoryContext, ...knowledgeContext] } : {}),
     });
@@ -245,6 +274,8 @@ export class RunManager {
       if (capturedMemory) void capturedMemory.dispose().catch(() => undefined);
       if (capturedKnowledge) void capturedKnowledge.dispose().catch(() => undefined);
     }).finally(() => {
+      this.approvalReviewBindings.delete(runId);
+      if (this.approvalBroker instanceof ApprovalReviewBroker) this.approvalBroker.disposeRun(runId);
       const dispose = (capturedToolRuntime as (ToolRuntime & { dispose?: () => Promise<void> | void }) | undefined)?.dispose;
       if (!dispose) return;
       return Promise.resolve().then(() => dispose()).catch(() => undefined);
@@ -281,6 +312,7 @@ export class RunManager {
     if (!config) return undefined;
     const modelSnapshot = readModelSnapshot(created?.payload);
     const deepSeekSnapshot = readDeepSeekSnapshot(created?.payload);
+    const approvalReviewerSnapshot = readApprovalReviewerSnapshot(created?.payload);
     const capabilitySnapshot = readCapabilitySnapshot(created?.payload);
     const permissionSnapshot = readPermissionSnapshot(created?.payload);
     let status: RunStatus = 'created';
@@ -314,6 +346,7 @@ export class RunManager {
       config,
       ...(modelSnapshot ? { modelSnapshot } : {}),
       ...(deepSeekSnapshot ? { deepSeekSnapshot } : {}),
+      ...(approvalReviewerSnapshot ? { approvalReviewerSnapshot } : {}),
       ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       ...(permissionSnapshot ? { permissionSnapshot } : {}),
       lastEventSeq: events.at(-1)?.seq ?? 0,
@@ -588,6 +621,12 @@ function readCapabilitySnapshot(value: unknown): CapabilityProfileRunSnapshot | 
 function readDeepSeekSnapshot(value: unknown): DeepSeekRunSnapshot | undefined {
   if (typeof value !== 'object' || value === null || !('deepSeekSnapshot' in value)) return undefined;
   const parsed = DeepSeekRunSnapshotSchema.safeParse(value.deepSeekSnapshot);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function readApprovalReviewerSnapshot(value: unknown): ApprovalReviewerSnapshot | undefined {
+  if (typeof value !== 'object' || value === null || !('approvalReviewerSnapshot' in value)) return undefined;
+  const parsed = ApprovalReviewerSnapshotSchema.safeParse(value.approvalReviewerSnapshot);
   return parsed.success ? parsed.data : undefined;
 }
 

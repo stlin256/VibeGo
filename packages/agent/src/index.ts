@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { ContextBudgetError, ContextManager, type ContextItem } from '@ready4vibe/context';
 import {
   assertTransition,
+  ApprovalReviewerSnapshotSchema,
   CapabilityProfileRunSnapshotSchema,
   DeepSeekRunSnapshotSchema,
   PermissionProfileRunSnapshotSchema,
@@ -12,6 +13,7 @@ import {
   type ModelProvider,
   type ModelProviderSnapshot,
   type CapabilityProfileRunSnapshot,
+  type ApprovalReviewerSnapshot,
   type DeepSeekRunSnapshot,
   type PermissionProfileRunSnapshot,
   type ModelRequest,
@@ -25,6 +27,7 @@ import { ApprovalBrokerError, type ApprovalBroker, type ApprovalDetails, type Ap
 
 export * from './approval.js';
 export * from './approval-review.js';
+export * from './approval-review-broker.js';
 
 export interface AgentRunRequest {
   config: RunConfig;
@@ -44,6 +47,8 @@ export interface AgentRunRequest {
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
   /** Secret-free permission profile decision captured by the application service. */
   permissionSnapshot?: PermissionProfileRunSnapshot;
+  /** Secret-free reviewer snapshot captured by the application boundary. */
+  approvalReviewerSnapshot?: ApprovalReviewerSnapshot;
 }
 
 export interface AgentRunResult {
@@ -103,6 +108,7 @@ export class AgentLoop {
     const deepSeekSnapshot = request.deepSeekSnapshot ? DeepSeekRunSnapshotSchema.parse(request.deepSeekSnapshot) : undefined;
     const capabilitySnapshot = request.capabilitySnapshot ? CapabilityProfileRunSnapshotSchema.parse(request.capabilitySnapshot) : undefined;
     const permissionSnapshot = request.permissionSnapshot ? deepFreeze(PermissionProfileRunSnapshotSchema.parse(request.permissionSnapshot)) : undefined;
+    const approvalReviewerSnapshot = request.approvalReviewerSnapshot ? deepFreeze(ApprovalReviewerSnapshotSchema.parse(request.approvalReviewerSnapshot)) : undefined;
     const modelProvider = request.modelProvider ?? this.options.modelProvider;
     const toolRuntime = request.toolRuntime ?? this.options.toolRuntime;
     const runId = request.runId ?? `run_${uuidv7()}`;
@@ -155,6 +161,7 @@ export class AgentLoop {
         ...(deepSeekSnapshot ? { deepSeekSnapshot } : {}),
         ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
         ...(permissionSnapshot ? { permissionSnapshot } : {}),
+        ...(approvalReviewerSnapshot ? { approvalReviewerSnapshot } : {}),
       });
       let contextResult: ReturnType<ContextManager['build']>;
       try {

@@ -925,7 +925,7 @@ user-facing README/Quickstart/release wording is updated. The former
 `62-0-prerequisite-audit-2026-08-05.md` historical audit; it is not a fresh
 release gate for the new Spec 61 and must be refreshed after DeepSeek evidence.
 
-## Spec 63 planning and 63-1 implementation checkpoint (2026-08-05)
+## Spec 63 planning and 63-4 implementation checkpoint (2026-08-05)
 
 `docs/specs/63-llm-assisted-approval-and-review.md` and
 `docs/adr/0044-llm-assisted-approval-review-boundary.md` define the proposed
@@ -1304,3 +1304,22 @@ the secret-free provider/config snapshot, and usage 19/9. The redacted record is
 [`docs/reports/spec61-6-live-evidence-2026-08-05.md`](reports/spec61-6-live-evidence-2026-08-05.md).
 This is live text/terminal evidence only; tool/Approval/Sandbox, reviewer,
 provider-owned search, reasoning, governed quota, and release gates remain open.
+
+### Spec 63-4 ApprovalBroker application integration checkpoint (2026-08-05)
+
+`ApprovalReviewBroker` now wraps the existing ApprovalBroker without changing
+the AgentLoop core loop or RunManager's historical default start behavior.
+RunManager captures an optional immutable reviewer binding per run, records its
+secret-free snapshot in `run.created`/`RunSnapshot`, and removes the live
+binding during terminal cleanup. The wrapper receives only bounded approval
+metadata after the existing ToolRuntime has requested approval; it does not
+receive prompts, commands, raw arguments/output, environment values,
+credentials or absolute paths. Reviewer allow is accepted only for the exact
+fingerprint and `bounded-auto-low-risk` posture, and is applied by resolving a
+normal delegate approval entry so ApprovalBroker remains authoritative.
+Advisory/deny/unavailable/stale/cancelled outcomes use the existing user
+approval path. Same-run in-flight/TTL entries are bounded and invalidated by
+run/session/revision changes and terminal cleanup. Focused evidence is tracked
+in `reports/spec63-4-approval-review-broker-2026-08-05.md`; Web controls,
+durable reviewer events, dedicated provider selection and live smoke remain
+pending.

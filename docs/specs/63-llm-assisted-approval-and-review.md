@@ -1,7 +1,7 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: 63-1 implemented (contracts and default-disabled Noop reviewer;
-  provider/runtime integration remains staged)
+- Status: 63-4 implemented (bounded ApprovalBroker application integration;
+  Web, durable reviewer events and live smoke remain staged)
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -282,9 +282,29 @@ event-authority behavior changes are included in this phase.
 
 ### 63-4: ApprovalBroker application integration
 
-Integrate the reviewer as a second-stage bounded check for eligible low-risk
-requests. Preserve exact-key/session/TTL semantics, deterministic policy
-precedence, existing event authorities and interactive run behavior.
+Implemented as an application-layer `ApprovalReviewBroker` wrapper around the
+existing `ApprovalBroker`. `RunManager` captures an optional immutable
+reviewer binding per run, records its secret-free snapshot in `run.created` /
+`RunSnapshot`, and removes the live binding when the run reaches terminal
+cleanup; the AgentLoop core state machine and its default start path are
+unchanged. The
+wrapper is invoked only after the existing tool runtime has returned
+`APPROVAL_REQUIRED`, so deterministic policy and sandbox/runtime readiness have
+already requested the normal approval path. It builds a bounded
+`ApprovalReviewRequest` from the run snapshot and approval metadata, never from
+the prompt, command, raw arguments, tool output, environment or host paths.
+
+Reviewer `allow` is intersected with the configured posture and exact request
+fingerprint. For `bounded-auto-low-risk`, the wrapper creates the normal pending
+approval in the delegate and immediately resolves that same delegate request;
+the delegate remains the authority and the normal approval events are retained.
+`advisory-low-risk`, reviewer deny/unavailable, stale revisions, ineligible
+risk/trust/sandbox and binding errors all use the existing user ask/deny path.
+Only identical requests within the same run may share a bounded in-flight or
+TTL result; the cache key includes the full normalized request fingerprint,
+reviewer/policy revisions and run/session boundary. Terminal run cleanup,
+expiry and abort remove the review state. Dedicated provider selection and
+durable reviewer events remain later phases.
 
 ### 63-5: Web settings and approval explanation
 

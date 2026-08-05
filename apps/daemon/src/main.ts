@@ -22,6 +22,7 @@ import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
+import { createApprovalReviewBinding } from './approval-review-runtime.js';
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalControlV1WriteService, GoalWriteService } from '@ready4vibe/goal-control';
@@ -167,6 +168,7 @@ const runManager = new RunManager({
     return constrainToolRuntime(composed, profile ?? undefined);
   },
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
+  approvalReviewForRun: (input) => createApprovalReviewBinding(approvalReviewSettings, input),
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   observabilityUsageObserver,

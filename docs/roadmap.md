@@ -998,7 +998,7 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
-## Spec 63：LLM 辅助审批与审查（63-1 checkpoint）
+## Spec 63：LLM 辅助审批与审查（63-4 checkpoint）
 
 详见 [Spec 63](specs/63-llm-assisted-approval-and-review.md) 与
 [ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)。该规格为现有
@@ -1294,3 +1294,19 @@ bounded tool requested/completed evidence and, for approval, one daemon
 `/approve` broker round-trip. It must not be presented as production
 filesystem/shell/external-sandbox, reviewer/search or governed evidence.
 The bounded fixture record is [`spec61-6-tool-approval-fixture-2026-08-05.md`](reports/spec61-6-tool-approval-fixture-2026-08-05.md).
+
+### Spec 63-4 ApprovalReviewBroker checkpoint (2026-08-05)
+
+`ApprovalReviewBroker` now wraps the existing ApprovalBroker and is activated
+only by an application-owned per-run binding, whose secret-free snapshot is
+recorded in `run.created`/`RunSnapshot`. It runs after the existing
+ToolRuntime has returned `APPROVAL_REQUIRED`, consumes bounded metadata from
+the frozen run snapshot, and never sees prompts, commands, raw arguments or
+host paths. A reviewer allow is effective only for the exact fingerprint and
+`bounded-auto-low-risk` posture; it resolves the delegate's normal pending
+approval so the existing broker and approval events remain authoritative.
+Advisory, denial, unavailability, stale revision, cancellation and binding
+errors use the existing user approval path. In-flight/TTL state is bounded to
+the run/revision boundary and cleaned at terminal completion. Web controls,
+durable reviewer events, dedicated provider selection and live smoke remain
+later phases.
