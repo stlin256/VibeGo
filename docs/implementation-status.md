@@ -1058,9 +1058,19 @@ and Spec 59 remain Draft umbrella specs with implemented slices, while real
 provider failure/recovery, governed task validation, host/remote/certificate,
 device, and signed-release evidence remain partial or blocked.
 
-The current `pnpm test:workflow` result is 59/59 on `d462ca1`. The last complete
-`pnpm verify` result (22 workspace projects, 796 tests) is from `8876a99` and is
-explicitly stale for the later certificate/performance implementation commits;
-it must be rerun on the current commit before any release-ready documentation
-claim. No default interactive run, event authority, AgentLoop, Scheduler,
+The current `pnpm test:workflow` result is 59/59 on `d462ca1`. A complete
+`pnpm verify` rerun after the deterministic fixture correction passed typecheck,
+build, all 22 workspace project test jobs, `diff:check`, and `git diff --check`;
+the earlier `8876a99` result remains historical evidence. This closes the
+stale-date test blocker only and does not support a release-ready claim. No
+default interactive run, event authority, AgentLoop, Scheduler,
 Approval, Sandbox or WorkspaceRegistry behavior changed in this audit.
+
+## Verification follow-up: deterministic observability window fixture (2026-08-05)
+
+The current full verification exposed one time-dependent daemon test: the
+observability API fixture used a fixed timestamp that had aged beyond the
+requested `24h` window. The production projection correctly excludes records
+outside the requested range; the fixture now generates its timestamp one hour
+before the test clock. Focused daemon (222/222) and full verification gates
+pass. No production aggregation, event schema, or retention policy changed.

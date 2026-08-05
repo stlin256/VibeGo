@@ -9,7 +9,9 @@ import { createDaemonServer } from './server.js';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
 const ledgers: ObservabilityLedger[] = [];
-const at = '2026-08-04T10:00:00.000Z';
+// Keep the fixture inside the API's 24-hour projection window regardless of
+// the calendar date on which the test suite runs.
+const at = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
 const model: ModelUsageRecord = {
   schemaVersion: 'ready4vibe_model_usage_v1', usageId: 'usage_daemon_api_01', runId: 'run_daemon_api_01', turnId: 'turn_daemon_api_01', requestId: 'request_daemon_api_01',

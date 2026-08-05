@@ -1137,8 +1137,19 @@ matrix and keeps incomplete real-provider failure, governed validation,
 permission host execution, ACME/Tailscale/SSH, real-device, and signed-release
 evidence explicitly partial or blocked.
 
-The current focused workflow gate is 59/59 on `d462ca1`. The prior full gate at
-`8876a99` is retained as historical evidence only because it predates the later
-certificate/performance code; a fresh `pnpm verify` is required before any
-release-ready README or roadmap status. The default interactive run path and
-the independent `run_events`/`goal_events` authorities remain unchanged.
+The current focused workflow gate is 59/59 on `d462ca1`. A full `pnpm verify`
+rerun after the deterministic fixture correction passed typecheck/build, all 22
+workspace project test jobs, `diff:check`, and `git diff --check`; `8876a99` is
+retained as historical evidence only. This closes the stale-date test blocker,
+not the real-provider, remote, device, or release gates. The default interactive
+run path and the independent `run_events`/`goal_events` authorities remain
+unchanged.
+
+### Verification follow-up: deterministic observability window fixture (2026-08-05)
+
+The first current-commit `pnpm verify` run found one daemon observability API
+fixture using a timestamp older than its requested `24h` range. The production
+window filter is behaving as specified; the fixture now uses a bounded time
+relative to the test clock. Daemon focused tests (222/222) and the full gate
+pass. This is a test-only correction and does not change retention, event
+schemas, or runtime authorities.
