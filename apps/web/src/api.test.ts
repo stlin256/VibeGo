@@ -82,6 +82,44 @@ describe('ApiClient', () => {
     expect(calls[1]?.input).not.toContain('token');
   });
 
+  it('uses authenticated bounded Goal mutations and read-only preflight without browser secrets', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      if (input.endsWith('/pairing/complete')) return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 2_000 });
+      if (input.endsWith('/preflight')) return response({ schemaVersion: 'ready4vibe_goal_preflight_v1', decision: { status: 'eligible' }, checks: [] });
+      return response({ schemaVersion: 'ready4vibe_goal_write_api_v0', eventId: 'gevt_test', controlRevision: 1, projection: {} });
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    await client.completePairing('PAIR');
+    await client.createGoal({ title: 'Goal', objective: 'Bounded objective.' });
+    await client.addGoalTodo('goal_12345678', { expectedRevision: 1, title: 'Todo' });
+    await client.openGoalGate('goal_12345678', { expectedRevision: 2, question: 'Approve?' });
+    await client.resolveGoalGate('goal_12345678', 'gate_12345678', { expectedRevision: 3, status: 'approved' });
+    await client.attachGoalEvidence('goal_12345678', { expectedRevision: 4, summary: 'Observed.' });
+    await client.preflightGoal('goal_12345678', {
+      runMode: 'governed', expectedControlRevision: 5, agentId: 'agent_12345678',
+      turnKey: 'turn_goal_12345678', requestId: 'request_12345678', workspaceId: 'default', userMessage: 'Preview',
+      model: { provider: 'fake', name: 'deterministic' }, taskTrust: 'trusted-workspace', sandbox: { mode: 'read-only', network: 'restricted' },
+      approval: 'on-request', limits: DEFAULT_RUN_PROFILE.limits, createdBySessionId: 'session_12345678', clientRequestId: 'client_12345678',
+    });
+    expect(calls.map((call) => call.input)).toEqual([
+      'http://daemon/api/v1/pairing/complete',
+      'http://daemon/api/v1/goals',
+      'http://daemon/api/v1/goals/goal_12345678/todos',
+      'http://daemon/api/v1/goals/goal_12345678/gates',
+      'http://daemon/api/v1/goals/goal_12345678/gates/gate_12345678/resolve',
+      'http://daemon/api/v1/goals/goal_12345678/evidence',
+      'http://daemon/api/v1/goals/goal_12345678/preflight',
+    ]);
+    for (const call of calls.slice(1)) {
+      expect(call.init?.headers).toMatchObject({ Authorization: 'Bearer access', 'X-CSRF-Token': 'csrf' });
+      expect(String(call.init?.body ?? '')).not.toMatch(/api[_-]?key|private[_-]?key|secret|C:\\Users/iu);
+    }
+    expect(JSON.parse(String(calls[1]?.init?.body))).toMatchObject({ title: 'Goal', objective: 'Bounded objective.' });
+    expect(JSON.parse(String(calls.at(-1)?.init?.body))).toMatchObject({ goalId: 'goal_12345678', runMode: 'governed' });
+  });
+
   it('uses bounded usage and audit projections without placing credentials in URLs', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const client = new ApiClient('', async (input, init) => {

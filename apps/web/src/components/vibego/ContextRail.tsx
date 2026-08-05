@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { AuditEventsResponse, GoalProjectionListResponse, HealthResponse, UsageSummary } from '../../api.js';
+import type { AuditEventsResponse, GoalMutationResponse, GoalPreflightResult, GoalProjectionListResponse, HealthResponse, UsageSummary } from '../../api.js';
 import { GoalProjectionPanel } from '../../GoalProjectionPanel.js';
 import { ObservabilityPanel } from '../../ObservabilityPanel.js';
 import { Card } from '../ui/index.js';
@@ -22,6 +22,12 @@ export interface ContextRailProps {
   readonly goalProjectionUnavailable: boolean;
   readonly goalProjectionRefreshing: boolean;
   readonly onRefreshGoalProjection?: (() => Promise<void> | void) | undefined;
+  readonly onCreateGoal?: (input: { title: string; objective: string; workspaceId?: string }) => Promise<GoalMutationResponse> | void;
+  readonly onAddTodo?: (goalId: string, input: { expectedRevision: number; title: string }) => Promise<GoalMutationResponse> | void;
+  readonly onOpenGate?: (goalId: string, input: { expectedRevision: number; question: string }) => Promise<GoalMutationResponse> | void;
+  readonly onResolveGate?: (goalId: string, gateId: string, input: { expectedRevision: number; status: 'approved' | 'rejected' | 'deferred' | 'expired' }) => Promise<GoalMutationResponse> | void;
+  readonly onAttachEvidence?: (goalId: string, input: { expectedRevision: number; summary: string }) => Promise<GoalMutationResponse> | void;
+  readonly onPreflight?: (goalId: string, todoId: string, expectedRevision: number) => Promise<GoalPreflightResult>;
   readonly usageSummary?: UsageSummary | undefined;
   readonly auditEvents?: AuditEventsResponse | undefined;
   readonly observabilityLoading: boolean;
@@ -34,10 +40,10 @@ export interface ContextRailProps {
 }
 
 /** Read-only context rail; all data fetching stays in RuntimeApp/ApiClient. */
-export function ContextRail({ goalProjection, goalProjectionLoading, goalProjectionUnavailable, goalProjectionRefreshing, onRefreshGoalProjection, usageSummary, auditEvents, observabilityLoading, observabilityUnavailable, observabilityRefreshing, onRefreshObservability, health, copy, open }: ContextRailProps): JSX.Element {
+export function ContextRail({ goalProjection, goalProjectionLoading, goalProjectionUnavailable, goalProjectionRefreshing, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading, observabilityUnavailable, observabilityRefreshing, onRefreshObservability, health, copy, open }: ContextRailProps): JSX.Element {
   return (
     <aside className="context-rail" data-open={open} aria-label={copy.ariaLabel}>
-      <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} />
+      <GoalProjectionPanel {...(goalProjection ? { projection: goalProjection } : {})} loading={goalProjectionLoading} unavailable={goalProjectionUnavailable} refreshing={goalProjectionRefreshing} {...(onRefreshGoalProjection ? { onRefresh: onRefreshGoalProjection } : {})} {...(onCreateGoal ? { onCreateGoal } : {})} {...(onAddTodo ? { onAddTodo } : {})} {...(onOpenGate ? { onOpenGate } : {})} {...(onResolveGate ? { onResolveGate } : {})} {...(onAttachEvidence ? { onAttachEvidence } : {})} {...(onPreflight ? { onPreflight } : {})} />
       <ObservabilityPanel {...(usageSummary ? { summary: usageSummary } : {})} {...(auditEvents ? { audit: auditEvents } : {})} loading={observabilityLoading} unavailable={observabilityUnavailable} refreshing={observabilityRefreshing} {...(onRefreshObservability ? { onRefresh: onRefreshObservability } : {})} />
       <Card className="panel connection-panel">
         <div className="eyebrow">{copy.connectionEyebrow}</div>

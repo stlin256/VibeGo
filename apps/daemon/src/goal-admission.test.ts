@@ -321,6 +321,77 @@ describe('GoalAdmissionService', () => {
     }
   });
 
+  it('returns a complete side-effect-free preflight projection', async () => {
+    const fixture = serviceFixture({ quotaPolicy: { enabled: true, units: 1 } });
+    const expectedRevision = await seed(fixture.goalStore);
+    const result = await fixture.service.preview(input(expectedRevision));
+    expect(result).toMatchObject({
+      schemaVersion: 'ready4vibe_goal_preflight_v1',
+      goalId,
+      todoId,
+      decision: { status: 'eligible', reasonCode: 'ELIGIBLE', nextStep: 'create_run' },
+    });
+    expect(result.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'goal', status: 'ready' }),
+      expect.objectContaining({ key: 'gate', status: 'ready' }),
+      expect.objectContaining({ key: 'todo', status: 'ready' }),
+      expect.objectContaining({ key: 'claim', status: 'ready' }),
+      expect.objectContaining({ key: 'quota', status: 'ready' }),
+      expect.objectContaining({ key: 'capability', status: 'ready' }),
+      expect.objectContaining({ key: 'workspace', status: 'ready' }),
+      expect.objectContaining({ key: 'scheduler', status: 'ready' }),
+      expect.objectContaining({ key: 'approval', status: 'ready' }),
+      expect.objectContaining({ key: 'sandbox', status: 'ready' }),
+    ]));
+    expect(await fixture.goalStore.read(goalId)).toHaveLength(expectedRevision);
+    expect(fixture.eventStore.listRunIds()).toEqual([]);
+    expect(fixture.model.requests).toHaveLength(0);
+  });
+
+  it('explains a blocked Gate without mutating quota, binding, or run state', async () => {
+    const fixture = serviceFixture({ quotaPolicy: { enabled: true, units: 1 } });
+    const expectedRevision = await seed(fixture.goalStore, { gate: true });
+    const result = await fixture.service.preview(input(expectedRevision));
+    expect(result.decision).toMatchObject({ status: 'blocked', reasonCode: 'GATE_OPEN', nextStep: 'resolve_gate' });
+    expect(result.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'gate', status: 'blocked' }),
+      expect.objectContaining({ key: 'capability', status: 'not_evaluated' }),
+    ]));
+    expect(await fixture.goalStore.read(goalId)).toHaveLength(expectedRevision);
+    expect(fixture.eventStore.listRunIds()).toEqual([]);
+  });
+
+  it('serves preflight through the authenticated Goal route without exposing request secrets', async () => {
+    const fixture = serviceFixture();
+    const expectedRevision = await seed(fixture.goalStore);
+    const server = createDaemonServer({ runManager: fixture.runManager, goalAdmissionService: fixture.service });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('server did not expose a TCP address');
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/goals/${goalId}/preflight`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...input(expectedRevision, { requestId: 'request_web_12345678' }), apiKey: 'must-not-echo' }),
+      });
+      expect(response.status).toBe(400);
+      const invalid = await response.text();
+      expect(invalid).not.toContain('must-not-echo');
+
+      const valid = await fetch(`http://127.0.0.1:${address.port}/api/v1/goals/${goalId}/preflight`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...input(expectedRevision, { requestId: 'request_web_22345678' }) }),
+      });
+      expect(valid.status).toBe(200);
+      expect(await valid.json()).toMatchObject({ schemaVersion: 'ready4vibe_goal_preflight_v1', decision: { status: 'eligible' } });
+      expect(await fixture.goalStore.read(goalId)).toHaveLength(expectedRevision);
+      expect(fixture.eventStore.listRunIds()).toEqual([]);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it('rejects a governed envelope on the ordinary interactive route', async () => {
     const fixture = serviceFixture();
     const expectedRevision = await seed(fixture.goalStore);

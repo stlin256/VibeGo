@@ -470,6 +470,38 @@ async function handleRequest(
     return;
   }
 
+  const goalPreflightMatch = /^\/api\/v1\/goals\/([^/]+)\/preflight$/u.exec(pathname);
+  if (goalPreflightMatch) {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalAdmissionService) {
+      writeJson(response, 503, { error: { code: 'GOAL_PREFLIGHT_UNAVAILABLE', message: 'Governed Goal preflight is unavailable.' } });
+      return;
+    }
+    try {
+      const input = await readJson(request, options.bodyLimitBytes);
+      const body = typeof input === 'object' && input !== null && !Array.isArray(input)
+        ? { ...(input as Record<string, unknown>), goalId: decodeGoalId(goalPreflightMatch[1]) }
+        : input;
+      writeJson(response, 200, await options.goalAdmissionService.preview(body));
+    } catch (error) {
+      if (error instanceof GoalAdmissionError) {
+        const status = error.code === 'PROJECTION_UNAVAILABLE' ? 503
+          : error.code === 'STALE_REVISION' ? 409 : error.code === 'GOAL_NOT_FOUND' ? 404 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message, ...(error.decision ? { decision: error.decision } : {}) } });
+        return;
+      }
+      if (isValidationError(error)) {
+        writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Governed preflight request validation failed.' } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
   const completeTodoMatch = /^\/api\/v1\/goals\/([^/]+)\/todos\/([^/]+)\/complete$/u.exec(pathname);
   if (completeTodoMatch) {
     if (request.method !== 'POST') {
