@@ -818,6 +818,15 @@ full-host, cross-platform or signed-release evidence.
 After commit `f3843f2`, the same five-step focused plan was rerun successfully;
 the bounded bundle is under `.ready4vibe/evidence/2026-08-05/f3843f2f0fd644a98ec20e5e8b8dbaab653d6329/`.
 
+### Spec 60-3/60-7 design freeze (2026-08-05)
+
+The next code slice is the opt-in `smoke:recovery` fixture. It will exercise
+existing RunManager/Scheduler/AgentLoop ports for concurrent runs, bounded
+cancellation and idempotent metadata-only restart recovery, without replaying
+old tools/approvals or introducing a second scheduler. Its output will remain
+bounded and redacted, and will not promote fake-provider evidence to release
+readiness.
+
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation

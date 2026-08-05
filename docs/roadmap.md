@@ -1031,3 +1031,10 @@ cross-platform and release claims partial or blocked.
 
 The post-commit rerun at `f3843f2` passed all five focused steps and refreshed
 the ignored bundle at `.ready4vibe/evidence/2026-08-05/f3843f2f0fd644a98ec20e5e8b8dbaab653d6329/`.
+
+### Spec 60-3/60-7 concurrency and recovery evidence boundary (2026-08-05)
+
+The next opt-in `pnpm smoke:recovery` fixture will use the existing daemon
+application objects to prove bounded overlap, queue/in-flight cancellation and
+metadata-only restart reconciliation. It will report application evidence
+only; provider, remote, cross-platform and release claims remain separate.

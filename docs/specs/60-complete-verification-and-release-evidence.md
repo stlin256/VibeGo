@@ -93,6 +93,21 @@ ignored bundle is `.ready4vibe/evidence/2026-08-05/f3843f2f0fd644a98ec20e5e8b8db
 the manifest contains only bounded status, timing, command descriptors and
 digests.
 
+### 60-3/60-7 concurrency and recovery evidence boundary (2026-08-05)
+
+The next opt-in fixture is `pnpm smoke:recovery`. It composes the existing
+`RunManager`, `AgentLoop`, `Scheduler` and `run_events` EventStore with a
+bounded injected model provider. It checks two independent runs overlapping,
+queued-run cancellation, an in-flight cancellation, and metadata-only daemon
+restart recovery (one `run.needs_recovery`, no provider/tool replay, and an
+idempotent second reconciliation). The report contains counts, statuses and
+bounded timings only.
+
+This fixture is application/concurrency evidence, not live-provider or
+cross-platform release evidence. It does not add a scheduler, alter restart
+semantics, resume old approvals, execute tools during recovery, or change Goal
+Control/permission/event authorities.
+
 ## 3. 证据等级与结果语义
 
 每项测试结果必须带有 `evidenceLevel` 和 `claim`：
