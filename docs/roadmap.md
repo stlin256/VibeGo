@@ -988,6 +988,19 @@ unavailable，provider-owned search 只在 Responses probe、network 与 approva
 focused gate 为 13/13。该 adapter slice 不改 AgentLoop 核心循环、ApprovalBroker、
 Scheduler、Sandbox、Goal 或 Web 设置，后续仍需 application/UI wiring 与 live evidence。
 
+### Spec 61-8 application capability boundary (complete, 2026-08-06)
+
+The bounded slice adds an injectable daemon service over the captured
+DeepSeek run snapshot. It resolves thinking/tool-call eligibility, requires an
+explicit network+approval gate for provider-owned Responses search, and maps
+strict results to bounded untrusted retrieval context through ContextManager.
+The service has no transport, credential, tool, scheduler, approval, sandbox,
+Goal or event side effect; AgentLoop and the default interactive RunManager path
+remain unchanged. Focused evidence is recorded in
+[`spec61-8-application-capability-2026-08-06.md`](reports/spec61-8-application-capability-2026-08-06.md).
+Live provider reasoning/search and release evidence stay separate Spec 60/61
+gates.
+
 ### Spec 61-7 capability probe and run snapshot slice (complete, 2026-08-06)
 
 The bounded capability boundary is implemented under [ADR 0047](adr/0047-deepseek-capability-probe-and-run-snapshot.md):

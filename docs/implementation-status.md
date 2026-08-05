@@ -928,6 +928,20 @@ The slice does not alter AgentLoop, Scheduler, Approval, Sandbox,
 WorkspaceRegistry or event authorities; live provider support and release
 evidence remain separate gates.
 
+### Spec 61-8 application capability boundary (complete, 2026-08-06)
+
+The application boundary is frozen in [ADR 0048](adr/0048-deepseek-application-capability-boundary.md).
+The service consumes only immutable DeepSeek/generic provider snapshots:
+it resolves thinking and tool-calling eligibility, gates provider-owned search
+on the captured Responses capability plus network/approval, and maps strict
+search results through bounded ContextManager metadata. It must not create a
+provider request, mutate AgentLoop/RunManager defaults, or become a second
+Approval/Scheduler/Sandbox/Goal authority. The focused daemon suite passed
+254/254 (including seven new tests), daemon build passed, and the model-deepseek
+suite passed 20/20. Redacted evidence is recorded in
+`reports/spec61-8-application-capability-2026-08-06.md`; live provider search/
+reasoning and release evidence remain separate gates.
+
 ## Spec 62 planning note (2026-08-05)
 
 The former `docs/specs/61-user-facing-documentation-quality.md` has been moved

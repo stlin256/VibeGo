@@ -25,6 +25,18 @@ import type { GoalRunWritebackService } from './goal-writeback.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 import { serveStaticWeb } from './static-web.js';
 
+export {
+  DeepSeekApplicationCapabilityService,
+  type DeepSeekApplicationCapabilityOptions,
+  type DeepSeekApplicationRunBinding,
+  type DeepSeekApplicationRunBindingInput,
+  type DeepSeekSearchContextResult,
+  type DeepSeekSearchGateResult,
+  type DeepSeekThinkingResolution,
+  type DeepSeekToolCallingResolution,
+  type DeepSeekToolDescriptor,
+} from './deepseek-capability-runtime.js';
+
 export type LoopbackHost = '127.0.0.1' | '::1';
 export type LanHost = '0.0.0.0' | '::';
 export type DaemonHost = LoopbackHost | LanHost;

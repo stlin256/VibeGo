@@ -527,6 +527,33 @@ new runs. This does not claim live provider support or alter AgentLoop,
 Scheduler, Approval, Sandbox, WorkspaceRegistry, `run_events` or
 `goal_events`.
 
+#### 61-8 application capability boundary (complete, 2026-08-06)
+
+The bounded implementation slice adds a daemon application port for the
+provider-specific capabilities already represented by the immutable DeepSeek
+run snapshot. The port is deliberately narrower than a provider or tool
+runtime:
+
+- reasoning resolution is derived from the captured thinking mode and the
+  matching ready capability snapshot; `high`/`max` never silently downgrade;
+- provider-owned search requires the captured Responses profile, a matching
+  ready `webSearch` capability, enabled network and an explicit approval
+  decision;
+- search results are accepted only through the strict versioned search
+  contract, converted to bounded `retrieval`/`untrusted` context items, and
+  passed through a bounded `ContextManager` projection;
+- tool descriptors are exposed only when the captured run explicitly enables
+  tool calling and the generic model snapshot says tool calls are ready.
+
+The service has no fetch, shell, filesystem, MCP, Skill, ApprovalBroker,
+Scheduler or Goal authority. It does not modify the AgentLoop core loop or the
+default interactive `RunManager` start path. A denied/degraded capability
+returns a bounded reason and no provider request. The service is an injectable
+application seam. Focused evidence is recorded in
+[`spec61-8-application-capability-2026-08-06.md`](../reports/spec61-8-application-capability-2026-08-06.md).
+Production provider-owned retrieval wiring and live reasoning/search evidence
+remain separate Spec 60/61 gates.
+
 ## 13. Definition of Done
 
 Spec 61 只有在以下条件全部满足后才能标记 `Implemented`：
