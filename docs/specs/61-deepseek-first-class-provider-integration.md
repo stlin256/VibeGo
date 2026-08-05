@@ -320,6 +320,18 @@ timeout 和 malformed terminal；live 命令仍需用户显式提供 endpoint/mo
 RunManager → AgentLoop、tool/Approval/Sandbox、reviewer/search 和 governed evidence
 仍需后续 61-6/Spec 60 evidence gate，不得用此 adapter smoke 冒充 harness 完成。
 
+在 adapter slice 之后，`smoke:harness` 增加显式 `--provider deepseek` 模式。该模式
+仍复用同一个 daemon、RunManager、Scheduler、Approval/Sandbox 和事件事实源；它只在
+provider binding seam 选择 `DeepSeekProvider`，并把 `providerId`、endpoint profile、
+model 和 secret-free descriptor revision 捕获到现有 `run.created`/`model.requested`
+事件。`--provider deepseek` 必须同时接受完整 endpoint、profile、model 和
+`--secret-env`；API key 不得出现在命令行参数、JSON body、日志或 smoke report。
+`thinking=high|max` 在没有 ready capability snapshot 时保持 blocked，不能静默降级；
+首个 harness slice 只验收 text/terminal、timeout/cancel、provider error、run snapshot
+和 interactive/governed 路由，tool/Approval/Sandbox、reviewer、provider-owned search
+和 context-limit 继续作为独立 evidence gate。报告必须标记 provider、profile、status、
+bounded latency、event counts、usage 和 stable error code，不保存 prompt/raw response。
+
 至少收集以下可重现证据：
 
 1. DeepSeek text streaming：首 token、终态、usage、model snapshot；

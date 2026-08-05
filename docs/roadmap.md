@@ -1234,3 +1234,14 @@ included in the workflow gate. It is explicitly direct-adapter evidence: the
 runner never creates a second daemon/scheduler or writes events, and reports
 contain no key, prompt, raw output, headers, endpoint or absolute path. Live
 DeepSeek and daemon/harness readiness remain separate, opt-in gates.
+
+### Spec 61-6 explicit harness provider checkpoint (2026-08-05)
+
+`smoke:harness` now accepts an opt-in `--provider deepseek` mode while keeping
+`openai-compatible` as the default. DeepSeek requires the complete endpoint,
+explicit profile, model and `--secret-env`; it uses the existing daemon,
+RunManager, Scheduler and event path. Fixture coverage includes secret-free
+provider construction, profile/path validation, interactive routing, run
+metadata, capability-gated high thinking and explicit daemon cancellation.
+Tool/Approval/Sandbox, reviewer/search and live provider evidence remain
+separate gates.

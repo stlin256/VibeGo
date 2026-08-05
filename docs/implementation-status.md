@@ -1215,11 +1215,23 @@ live evidence remain blocked/deferred to the next 61-6 slice.
 
 The accepted boundary for this slice is an opt-in `smoke:deepseek` adapter
 evidence runner. It
-read a runtime key only from a bounded `--secret-env` reference, call the
-complete configured endpoint through `DeepSeekProvider`, and emit only provider
+reads a runtime key only from a bounded `--secret-env` reference, calls the
+complete configured endpoint through `DeepSeekProvider`, and emits only provider
 id/profile/model, status, bounded latency, event counts, finish reason, usage
 and stable error code. It will not create another daemon/scheduler, persist
 events, print prompts/raw output, or enter default `pnpm verify`. Fixture tests
 will cover missing credentials, auth/5xx, malformed/partial streams, explicit
 cancel and timeout before any live request is attempted. Full harness, tool,
 reviewer, search and governed evidence remain separate gates.
+
+### Spec 61-6 explicit harness provider checkpoint (2026-08-05)
+
+`smoke:harness` now accepts an opt-in `--provider deepseek` mode while keeping
+`openai-compatible` as the default. DeepSeek requires the complete endpoint,
+explicit profile, model and `--secret-env`; it binds through the existing daemon
+path and reports provider/profile/scenario, bounded timing, event counts, usage
+and stable errors only. The fixture covers provider construction without hidden
+path joining, interactive routing, run metadata, capability-gated high thinking,
+and explicit daemon cancellation. No new scheduler, event ledger, approval
+authority or sandbox authority was introduced; tool/reviewer/search and live
+provider evidence remain separate gates.

@@ -3,6 +3,8 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 
 import {
+  createDeepSeekRunBinding,
+  createProvider,
   exitCodeForHarnessSmokeStatus,
   parseHarnessSmokeArgs,
   runHarnessSmoke,
@@ -11,9 +13,12 @@ import {
 
 const valid = {
   mode: 'interactive',
+  provider: 'openai-compatible',
   endpoint: 'https://api.example.test/v1/chat/completions',
   model: 'deepseek-v4-flash',
   secretEnv: 'HARNESS_TEST_SECRET',
+  scenario: 'text',
+  thinkingMode: 'off',
   timeoutMs: 500,
 };
 
@@ -36,6 +41,81 @@ test('parses explicit mode and provider references without accepting secret-shap
   assert.throws(() => parseHarnessSmokeArgs(['--endpoint', 'http://api.example.test/v1/chat/completions']), /HTTPS/u);
   assert.throws(() => parseHarnessSmokeArgs(['--model', 'sk-' + 'x'.repeat(24)]), /model/u);
   assert.throws(() => parseHarnessSmokeArgs(['--secret-env', 'sk-secret']), /secret-env/u);
+});
+
+test('parses the explicit DeepSeek harness provider boundary', () => {
+  assert.deepEqual(parseHarnessSmokeArgs([
+    '--provider', 'deepseek',
+    '--mode', 'interactive',
+    '--endpoint', 'https://api.example.test/v1/chat/completions',
+    '--profile', 'openai-chat-completions',
+    '--model', 'deepseek-v4-flash',
+    '--secret-env', valid.secretEnv,
+    '--thinking', 'auto',
+    '--scenario', 'cancel',
+    '--timeout-ms', '1200',
+  ]), {
+    ...valid,
+    provider: 'deepseek',
+    endpointProfile: 'openai-chat-completions',
+    thinkingMode: 'auto',
+    scenario: 'cancel',
+    timeoutMs: 1200,
+  });
+  assert.throws(() => parseHarnessSmokeArgs([
+    '--provider', 'deepseek',
+    '--endpoint', 'https://api.example.test/v1/chat/completions',
+    '--profile', 'openai-responses',
+    '--model', valid.model,
+    '--secret-env', valid.secretEnv,
+  ]), /profile/u);
+  assert.throws(() => parseHarnessSmokeArgs([
+    '--provider', 'deepseek',
+    '--endpoint', 'https://api.example.test/v1/chat/completions',
+    '--model', valid.model,
+    '--secret-env', valid.secretEnv,
+    '--api-key', 'secret',
+  ]), /usage/u);
+});
+
+test('constructs DeepSeek provider with a secret-free config and no hidden endpoint path', async () => {
+  let received;
+  const provider = await createProvider({
+    ...valid,
+    provider: 'deepseek',
+    endpointProfile: 'openai-chat-completions',
+    thinkingMode: 'auto',
+  }, 'sk-' + 'x'.repeat(32), {
+    modelDeepSeek: {
+      DeepSeekProvider: class {
+        constructor(options) {
+          received = options;
+        }
+      },
+    },
+  });
+  assert.ok(provider);
+  assert.equal(received.config.endpoint, valid.endpoint);
+  assert.equal(received.config.endpointProfile, 'openai-chat-completions');
+  assert.equal(received.config.authRef, 'secret.deepseek.harness');
+  assert.equal(received.apiKey, 'sk-' + 'x'.repeat(32));
+  assert.doesNotMatch(JSON.stringify(received.config), /sk-|apiKey|authorization/iu);
+});
+
+test('captures a secret-free DeepSeek provider and run snapshot at the binding seam', () => {
+  const provider = providerForHarnessEvents();
+  const identity = { parse: (value) => value };
+  const binding = createDeepSeekRunBinding({
+    ...valid,
+    provider: 'deepseek',
+    endpointProfile: 'openai-chat-completions',
+    thinkingMode: 'auto',
+  }, provider, { ModelProviderSnapshotSchema: identity, DeepSeekRunSnapshotSchema: identity });
+  assert.equal(binding.snapshot.providerId, 'deepseek');
+  assert.equal(binding.snapshot.endpointPolicy.baseUrl, valid.endpoint);
+  assert.equal(binding.deepSeekSnapshot.configRevision, 'harness-deepseek-config');
+  assert.equal(binding.deepSeekSnapshot.capabilityRevision, 'deepseek-provider-capability-unprobed');
+  assert.doesNotMatch(JSON.stringify(binding), /sk-|apiKey|authorization|C:\\private/iu);
 });
 
 test('missing configuration is blocked before runtime construction', async () => {
@@ -65,6 +145,7 @@ test('interactive smoke uses the ordinary route and returns only bounded SSE evi
   assert.deepEqual(result.usage, { inputTokens: 4, outputTokens: 2 });
   assert.equal(observed.route, '/api/v1/runs');
   assert.equal(observed.body.runMode, undefined);
+  assert.equal(observed.body.model.provider, 'openai-compatible');
   const serialized = JSON.stringify(result);
   assert.doesNotMatch(serialized, /HARNESS_TEST_SECRET|sk-|ready4vibe-harness-smoke|C:\\private|raw provider output/iu);
 });
@@ -108,16 +189,77 @@ test('provider/run failure and timeout stay bounded and never expose raw payload
   assert.equal(timedOut.errorCode, 'HARNESS_SSE_TIMEOUT');
 });
 
+test('DeepSeek provider mode uses the ordinary harness route and preserves snapshot metadata', async () => {
+  const observed = { route: undefined, body: undefined };
+  const runtime = fakeRuntime({ observed, mode: 'interactive' });
+  const result = await runHarnessSmoke({
+    ...valid,
+    provider: 'deepseek',
+    endpointProfile: 'openai-chat-completions',
+    thinkingMode: 'auto',
+  }, {
+    secretValue: () => 'sk-' + 'd'.repeat(32),
+    provider: providerForHarnessEvents(),
+    runtimeFactory: async () => runtime,
+  });
+  assert.equal(result.status, 'healthy');
+  assert.equal(result.provider, 'deepseek');
+  assert.equal(result.endpointProfile, 'openai-chat-completions');
+  assert.deepEqual(result.providerSnapshot, {
+    providerId: 'deepseek',
+    descriptorRevision: 'harness-deepseek-config',
+    configRevision: 'harness-deepseek-config',
+    capabilityRevision: 'deepseek-provider-capability-unprobed',
+  });
+  assert.equal(observed.route, '/api/v1/runs');
+  assert.equal(observed.body.model.provider, 'deepseek');
+  assert.doesNotMatch(JSON.stringify(result), /sk-|api.example|ready4vibe-harness-smoke/iu);
+});
+
+test('DeepSeek thinking high remains blocked without a ready capability snapshot', async () => {
+  const result = await runHarnessSmoke({
+    ...valid,
+    provider: 'deepseek',
+    endpointProfile: 'openai-chat-completions',
+    thinkingMode: 'high',
+  }, {
+    secretValue: () => 'sk-' + 'h'.repeat(32),
+    modelDeepSeek: {
+      DeepSeekProvider: class {
+        constructor() { throw Object.assign(new Error('unsupported'), { code: 'DEEPSEEK_THINKING_UNSUPPORTED' }); }
+      },
+    },
+    runtimeFactory: async () => { throw new Error('must not construct runtime'); },
+  });
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.errorCode, 'DEEPSEEK_THINKING_UNSUPPORTED');
+});
+
+test('explicit harness cancellation uses the daemon cancel route and never replays the provider', async () => {
+  const observed = { route: undefined, body: undefined, cancelled: false };
+  const result = await runHarnessSmoke({ ...valid, scenario: 'cancel' }, {
+    secretValue: () => 'sk-' + 'c'.repeat(32),
+    provider: providerForHarnessEvents(),
+    runtimeFactory: async () => fakeRuntime({ observed, mode: 'interactive', delayed: true, delayMs: 150 }),
+  });
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.runStatus, 'cancelled');
+  assert.equal(result.errorCode, undefined);
+  assert.equal(observed.cancelled, true);
+});
+
 test('exit codes and safe error mapping are stable', () => {
   assert.equal(exitCodeForHarnessSmokeStatus('healthy'), 0);
   assert.equal(exitCodeForHarnessSmokeStatus('blocked'), 2);
   assert.equal(exitCodeForHarnessSmokeStatus('timeout'), 3);
+  assert.equal(exitCodeForHarnessSmokeStatus('cancelled'), 3);
   assert.equal(exitCodeForHarnessSmokeStatus('failed'), 1);
   assert.equal(safeHarnessErrorCode({ code: 'MODEL_HTTP_429', message: 'secret at C:\\private' }), 'MODEL_HTTP_429');
+  assert.equal(safeHarnessErrorCode({ code: 'DEEPSEEK_HTTP_401', message: 'secret at C:\\private' }), 'DEEPSEEK_HTTP_401');
   assert.equal(safeHarnessErrorCode(new Error('secret at C:\\private')), 'HARNESS_FAILED');
 });
 
-function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = false }) {
+function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = false, delayMs = 1_000 }) {
   observed ??= {};
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -129,13 +271,25 @@ function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = f
       observed.body = JSON.parse(await readBody(request));
       return json(response, 202, { runId: 'run_harness0001', status: 'queued' });
     }
+    if (request.method === 'POST' && url.pathname === '/api/v1/runs/run_harness0001/cancel') {
+      observed.cancelled = true;
+      return json(response, 202, { runId: 'run_harness0001', status: 'cancelling' });
+    }
     if (url.pathname === '/api/v1/runs/run_harness0001/events') {
-      if (delayed) await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000));
+      if (delayed) await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
       const terminal = failed
         ? { type: 'run.failed', payload: { code: 'MODEL_HTTP_401', safeMessage: 'credentials rejected' } }
+        : observed.cancelled
+          ? { type: 'run.cancelled', payload: { reason: 'user-cancelled-during-model' } }
         : { type: 'run.completed', payload: { summary: 'raw provider output', exitReason: 'model-completed' } };
       const events = [
-        { type: 'run.created', payload: { config: { userMessage: 'ready4vibe-harness-smoke sk-raw' } } },
+        { type: 'run.created', payload: {
+          config: { userMessage: 'ready4vibe-harness-smoke sk-raw' },
+          ...(observed.body?.model?.provider === 'deepseek' ? {
+            modelSnapshot: { providerId: 'deepseek', descriptorRevision: 'harness-deepseek-config' },
+            deepSeekSnapshot: { providerId: 'deepseek', configRevision: 'harness-deepseek-config', capabilityRevision: 'deepseek-provider-capability-unprobed' },
+          } : {}),
+        } },
         { type: 'model.usage', payload: { inputTokens: 4, outputTokens: 2 } },
         terminal,
       ];
@@ -144,7 +298,7 @@ function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = f
       return response.end();
     }
     if (url.pathname === '/api/v1/runs/run_harness0001') {
-      return json(response, 200, { status: failed ? 'failed' : 'completed' });
+      return json(response, 200, { status: failed ? 'failed' : observed.cancelled ? 'cancelled' : 'completed' });
     }
     return json(response, 404, { error: { code: 'NOT_FOUND' } });
   });
@@ -152,6 +306,18 @@ function fakeRuntime({ observed, mode, goal = false, failed = false, delayed = f
     server,
     ...(goal ? { goalId: 'goal_harness01', todoId: 'todo_harness01', expectedControlRevision: 3, turnKey: 'turn_harness_1', requestId: 'request_harness_1' } : {}),
     ...(goal ? { goalOutcome: async () => ({ status: 'validated', todoStatus: 'done', totalSpent: 1, eventTypes: { 'quota.consumed': 1 } }) } : {}),
+  };
+}
+
+function providerForHarnessEvents() {
+  return {
+    id: 'deepseek',
+    capabilities: { streaming: true, toolCalls: false, structuredOutput: false },
+    async *stream() {
+      yield { type: 'text-delta', text: 'ok' };
+      yield { type: 'usage', inputTokens: 2, outputTokens: 1 };
+      yield { type: 'completed', finishReason: 'stop' };
+    },
   };
 }
 

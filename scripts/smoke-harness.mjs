@@ -2,9 +2,13 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
-const USAGE = 'usage: pnpm smoke:harness -- --mode <interactive|governed> --endpoint <https://provider.example/v1/chat/completions> --model <model-id> --secret-env <ENV_VAR> [--timeout-ms <100..30000>]';
-const MODEL_PROVIDER_ID = 'openai-compatible';
+const USAGE = 'usage: pnpm smoke:harness -- --mode <interactive|governed> --provider <openai-compatible|deepseek> --endpoint <https://provider.example/v1/chat/completions> --model <model-id> --secret-env <ENV_VAR> [--profile <openai-chat-completions|openai-responses|anthropic-messages>] [--thinking <off|auto|high|max>] [--scenario <text|cancel|timeout>] [--timeout-ms <100..30000>]';
+const DEFAULT_PROVIDER_ID = 'openai-compatible';
+const DEEPSEEK_PROVIDER_ID = 'deepseek';
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_SCENARIO = 'text';
+const DEFAULT_THINKING = 'off';
+const DEFAULT_DEEPSEEK_PROFILE = 'openai-chat-completions';
 const SMOKE_WORKSPACE_ID = 'harness_workspace';
 const SMOKE_SESSION_ID = 'harness_session';
 const SMOKE_AGENT_ID = 'harness_agent';
@@ -13,30 +17,42 @@ const SMOKE_TODO_ID = 'todo_harness01';
 const SMOKE_TURN_KEY = 'turn_harness_1';
 const SMOKE_REQUEST_ID = 'request_harness_1';
 const ENV_MODE = 'VIBEGO_HARNESS_SMOKE_MODE';
+const ENV_PROVIDER = 'VIBEGO_HARNESS_SMOKE_PROVIDER';
 const ENV_ENDPOINT = 'VIBEGO_MODEL_SMOKE_ENDPOINT';
 const ENV_MODEL = 'VIBEGO_MODEL_SMOKE_MODEL';
 const ENV_SECRET = 'VIBEGO_MODEL_SMOKE_SECRET_ENV';
+const ENV_PROFILE = 'VIBEGO_DEEPSEEK_SMOKE_PROFILE';
+const ENV_SCENARIO = 'VIBEGO_HARNESS_SMOKE_SCENARIO';
+const ENV_THINKING = 'VIBEGO_HARNESS_SMOKE_THINKING';
 const ENV_TIMEOUT = 'VIBEGO_HARNESS_SMOKE_TIMEOUT_MS';
 
 export function parseHarnessSmokeArgs(argv, environment = process.env) {
   let mode = environment[ENV_MODE] ?? 'interactive';
+  let provider = environment[ENV_PROVIDER] ?? DEFAULT_PROVIDER_ID;
   let endpoint = environment[ENV_ENDPOINT];
   let model = environment[ENV_MODEL];
   let secretEnv = environment[ENV_SECRET];
+  let endpointProfile = environment[ENV_PROFILE];
+  let scenario = environment[ENV_SCENARIO] ?? DEFAULT_SCENARIO;
+  let thinkingMode = environment[ENV_THINKING] ?? DEFAULT_THINKING;
   let timeoutMs = Number(environment[ENV_TIMEOUT] ?? DEFAULT_TIMEOUT_MS);
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--') continue;
     if (argument === '--help') return Object.freeze({ help: true });
-    if (argument === '--mode' || argument === '--endpoint' || argument === '--model' || argument === '--secret-env' || argument === '--timeout-ms') {
+    if (argument === '--mode' || argument === '--provider' || argument === '--endpoint' || argument === '--model' || argument === '--secret-env' || argument === '--profile' || argument === '--scenario' || argument === '--thinking' || argument === '--timeout-ms') {
       const value = argv[index + 1];
       if (!value || value.startsWith('--')) throw new Error(USAGE);
       index += 1;
       if (argument === '--mode') mode = value;
+      else if (argument === '--provider') provider = value;
       else if (argument === '--endpoint') endpoint = value;
       else if (argument === '--model') model = value;
       else if (argument === '--secret-env') secretEnv = value;
+      else if (argument === '--profile') endpointProfile = value;
+      else if (argument === '--scenario') scenario = value;
+      else if (argument === '--thinking') thinkingMode = value;
       else timeoutMs = Number(value);
       continue;
     }
@@ -44,14 +60,25 @@ export function parseHarnessSmokeArgs(argv, environment = process.env) {
   }
 
   if (mode !== 'interactive' && mode !== 'governed') throw new Error('mode must be interactive or governed');
-  if (endpoint !== undefined) endpoint = validateEndpoint(endpoint);
+  if (provider !== DEFAULT_PROVIDER_ID && provider !== DEEPSEEK_PROVIDER_ID) throw new Error('provider must be openai-compatible or deepseek');
+  if (provider === DEEPSEEK_PROVIDER_ID) endpointProfile = validateDeepSeekProfile(endpointProfile ?? DEFAULT_DEEPSEEK_PROFILE);
+  else if (endpointProfile !== undefined) throw new Error('profile is only valid for the DeepSeek provider');
+  scenario = validateHarnessScenario(scenario);
+  thinkingMode = validateHarnessThinking(thinkingMode);
+  if (endpoint !== undefined) endpoint = provider === DEEPSEEK_PROVIDER_ID
+    ? validateDeepSeekEndpoint(endpoint, endpointProfile)
+    : validateEndpoint(endpoint);
   if (model !== undefined) model = validateModel(model);
   if (secretEnv !== undefined) secretEnv = validateSecretEnv(secretEnv);
   return Object.freeze({
     mode,
+    provider,
     ...(endpoint === undefined ? {} : { endpoint }),
     ...(model === undefined ? {} : { model }),
     ...(secretEnv === undefined ? {} : { secretEnv }),
+    ...(endpointProfile === undefined ? {} : { endpointProfile }),
+    scenario,
+    thinkingMode,
     timeoutMs: validateTimeout(timeoutMs),
   });
 }
@@ -59,13 +86,13 @@ export function parseHarnessSmokeArgs(argv, environment = process.env) {
 export function exitCodeForHarnessSmokeStatus(status) {
   if (status === 'healthy') return 0;
   if (status === 'blocked') return 2;
-  if (status === 'timeout') return 3;
+  if (status === 'timeout' || status === 'cancelled') return 3;
   return 1;
 }
 
 export function safeHarnessErrorCode(error, fallback = 'HARNESS_FAILED') {
   const code = error && typeof error === 'object' ? error.code : undefined;
-  return typeof code === 'string' && /^(?:HARNESS|MODEL|RUN)_[A-Z0-9_]{1,64}$/u.test(code) ? code : fallback;
+  return typeof code === 'string' && /^(?:DEEPSEEK|HARNESS|MODEL|RUN)_[A-Z0-9_]{1,64}$/u.test(code) ? code : fallback;
 }
 
 /**
@@ -93,8 +120,9 @@ export async function runHarnessSmoke(options, dependencies = {}) {
     runtime = dependencies.runtimeFactory
       ? await dependencies.runtimeFactory({ options, provider })
       : await createDefaultRuntime(options, provider);
-  } catch {
-    return report(options, 'failed', elapsedMs(startedAt, now()), undefined, undefined, undefined, 'HARNESS_RUNTIME_INIT');
+  } catch (error) {
+    const providerError = safeHarnessErrorCode(error, 'HARNESS_RUNTIME_INIT');
+    return report(options, providerError === 'DEEPSEEK_THINKING_UNSUPPORTED' ? 'blocked' : 'failed', elapsedMs(startedAt, now()), undefined, undefined, undefined, providerError);
   }
 
   let address;
@@ -119,19 +147,30 @@ export async function runHarnessSmoke(options, dependencies = {}) {
     }
 
     const runId = started.body.runId;
+    const cancelTimer = options.scenario === 'cancel'
+      ? setTimeout(() => { void requestJson(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' }, options.timeoutMs).catch(() => undefined); }, Math.min(100, Math.max(10, Math.trunc(options.timeoutMs / 4))))
+      : undefined;
     const events = await readSse(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/events`, options.timeoutMs);
+    if (cancelTimer !== undefined) clearTimeout(cancelTimer);
     const snapshot = await requestJson(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' }, options.timeoutMs);
     const finalStatus = readRunStatus(snapshot.body, events);
     const goal = options.mode === 'governed'
       ? await waitForGoalOutcome(runtime, options.timeoutMs, now)
       : undefined;
     const providerError = events.errorCode ?? readSafeRunError(snapshot.body);
-    const hasTerminalEvent = events.events.some((event) => event.type === 'run.completed');
-    const runHealthy = finalStatus === 'completed' && hasTerminalEvent && providerError === undefined;
+    const expectedTerminalEvent = options.scenario === 'cancel' ? 'run.cancelled' : 'run.completed';
+    const hasTerminalEvent = events.events.some((event) => event.type === expectedTerminalEvent);
+    const expectedStatus = options.scenario === 'cancel' ? 'cancelled' : 'completed';
+    const runHealthy = finalStatus === expectedStatus && hasTerminalEvent && providerError === undefined;
     const goalHealthy = options.mode !== 'governed' || goal?.status === 'validated';
+    const terminalStatus = events.timedOut
+      ? 'timeout'
+      : options.scenario === 'cancel' && finalStatus === 'cancelled'
+        ? 'cancelled'
+        : runHealthy && goalHealthy ? 'healthy' : 'failed';
     return report(
       options,
-      events.timedOut ? 'timeout' : runHealthy && goalHealthy ? 'healthy' : 'failed',
+      terminalStatus,
       elapsedMs(startedAt, now()),
       runId,
       events,
@@ -150,15 +189,19 @@ export async function runHarnessSmoke(options, dependencies = {}) {
 }
 
 function report(options, status, elapsed, runId, events, goal, errorCode, finalStatus) {
-  const result = {
+    const result = {
     schemaVersion: 'harness-smoke/v1',
     mode: options.mode,
-    provider: MODEL_PROVIDER_ID,
+    provider: options.provider ?? DEFAULT_PROVIDER_ID,
+    ...(options.endpointProfile ? { endpointProfile: options.endpointProfile } : {}),
+    scenario: options.scenario ?? DEFAULT_SCENARIO,
+    thinkingMode: options.thinkingMode ?? DEFAULT_THINKING,
     model: options.model ?? null,
     status,
     elapsedMs: elapsed,
     ...(runId ? { runId } : {}),
     ...(finalStatus ? { runStatus: finalStatus } : {}),
+    ...(events?.providerSnapshot ? { providerSnapshot: events.providerSnapshot } : {}),
     eventTypes: countEventTypes(events?.events ?? []),
     usage: {
       inputTokens: boundedUsage(events?.inputTokens),
@@ -178,10 +221,11 @@ function report(options, status, elapsed, runId, events, goal, errorCode, finalS
 }
 
 function buildRunInput(options, runtime) {
+  const provider = options.provider ?? DEFAULT_PROVIDER_ID;
   const config = {
     workspaceId: SMOKE_WORKSPACE_ID,
     userMessage: 'Reply with exactly the word ready4vibe-harness-smoke.',
-    model: { provider: MODEL_PROVIDER_ID, name: options.model },
+    model: { provider, name: options.model },
     taskTrust: 'trusted-workspace',
     sandbox: { mode: 'read-only', network: 'restricted' },
     approval: 'on-request',
@@ -210,10 +254,33 @@ function buildRunInput(options, runtime) {
   };
 }
 
-async function createProvider(options, secretValue, dependencies) {
+export async function createProvider(options, secretValue, dependencies = {}) {
+  const provider = options.provider ?? DEFAULT_PROVIDER_ID;
+  if (provider === DEEPSEEK_PROVIDER_ID) {
+    const modelDeepSeek = dependencies.modelDeepSeek ?? await import('../packages/model-deepseek/dist/index.js');
+    const endpointProfile = validateDeepSeekProfile(options.endpointProfile ?? DEFAULT_DEEPSEEK_PROFILE);
+    const config = {
+      schemaVersion: 'deepseek-provider/v1',
+      providerId: 'deepseek',
+      endpointProfile,
+      endpoint: validateDeepSeekEndpoint(options.endpoint, endpointProfile),
+      model: options.model,
+      authRef: 'secret.deepseek.harness',
+      thinkingMode: options.thinkingMode ?? DEFAULT_THINKING,
+      toolCalling: 'disabled',
+      webSearch: 'off',
+      reviewer: 'off',
+      timeoutMs: options.timeoutMs,
+      maxRetries: 0,
+      maxOutputTokens: 64,
+      revision: 'harness-deepseek-config',
+      updatedAt: new Date().toISOString(),
+    };
+    return new modelDeepSeek.DeepSeekProvider({ config, apiKey: secretValue, ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}) });
+  }
   const modelOpenAi = dependencies.modelOpenAi ?? await import('../packages/model-openai/dist/index.js');
   return new modelOpenAi.OpenAICompatibleProvider({
-    id: MODEL_PROVIDER_ID,
+    id: DEFAULT_PROVIDER_ID,
     endpoint: options.endpoint,
     apiKey: secretValue,
   });
@@ -234,10 +301,14 @@ export async function createDefaultRuntime(options, provider) {
   const goalStore = new goalControl.InMemoryGoalControlEventStore();
   await seedGoal(goalStore, goalControl, contracts);
   const scheduler = new schedulerPackage.Scheduler(contracts.DEFAULT_SCHEDULER_POLICY);
+  const modelBindingForRun = options.provider === DEEPSEEK_PROVIDER_ID
+    ? () => createDeepSeekRunBinding(options, provider, contracts)
+    : undefined;
   const runManager = new runManagerPackage.RunManager({
     eventStore,
     scheduler,
     modelProvider: provider,
+    ...(modelBindingForRun ? { modelBindingForRun } : {}),
     workspaceExists: (workspaceId) => workspaceId === SMOKE_WORKSPACE_ID,
   });
   const capabilitySnapshot = createCapabilitySnapshot(contracts);
@@ -291,6 +362,47 @@ export async function createDefaultRuntime(options, provider) {
     goalOutcome: async () => readGoalOutcome(goalStore, goalControl, SMOKE_GOAL_ID, SMOKE_TODO_ID),
     close: async () => { goalWriteback.close(); },
   };
+}
+
+export function createDeepSeekRunBinding(options, provider, contracts) {
+  const endpointProfile = validateDeepSeekProfile(options.endpointProfile ?? DEFAULT_DEEPSEEK_PROFILE);
+  const endpoint = validateDeepSeekEndpoint(options.endpoint, endpointProfile);
+  const model = options.model;
+  const capturedAt = new Date().toISOString();
+  const modelSnapshot = contracts.ModelProviderSnapshotSchema.parse({
+    schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
+    providerId: DEEPSEEK_PROVIDER_ID,
+    model,
+    pricingModel: model,
+    descriptorRevision: 'harness-deepseek-config',
+    endpointPolicy: { kind: 'explicit-url', baseUrl: endpoint },
+    capabilities: {
+      streaming: provider.capabilities.streaming,
+      toolCalls: provider.capabilities.toolCalls,
+      structuredOutput: provider.capabilities.structuredOutput,
+      reasoning: false,
+      promptCaching: false,
+      audioInput: false,
+      audioOutput: false,
+    },
+    authRef: 'secret.deepseek.harness',
+    capturedAt,
+  });
+  const deepSeekSnapshot = contracts.DeepSeekRunSnapshotSchema.parse({
+    schemaVersion: 'deepseek-provider-run/v1',
+    providerId: DEEPSEEK_PROVIDER_ID,
+    endpointProfile,
+    endpoint,
+    model,
+    thinkingMode: options.thinkingMode ?? DEFAULT_THINKING,
+    toolCalling: 'disabled',
+    webSearch: 'off',
+    reviewer: 'off',
+    configRevision: 'harness-deepseek-config',
+    capabilityRevision: 'deepseek-provider-capability-unprobed',
+    capturedAt,
+  });
+  return { provider, snapshot: modelSnapshot, deepSeekSnapshot };
 }
 
 async function seedGoal(store, goalControl, contracts) {
@@ -396,6 +508,7 @@ async function readSse(fetchImpl, url, timeoutMs) {
     let inputTokens = 0;
     let outputTokens = 0;
     let errorCode;
+    let providerSnapshot;
     try {
       while (true) {
         const next = await reader.read();
@@ -416,6 +529,7 @@ async function readSse(fetchImpl, url, timeoutMs) {
             outputTokens += safeTokenValue(parsed.payload?.outputTokens);
           }
           if (parsed.type === 'run.failed') errorCode = safeEventErrorCode(parsed.payload?.code);
+          if (parsed.providerSnapshot) providerSnapshot = parsed.providerSnapshot;
         }
       }
       buffer += decoder.decode();
@@ -424,7 +538,7 @@ async function readSse(fetchImpl, url, timeoutMs) {
     } finally {
       reader.releaseLock();
     }
-    return { events, timedOut: false, inputTokens, outputTokens, ...(errorCode ? { errorCode } : {}) };
+    return { events, timedOut: false, inputTokens, outputTokens, ...(providerSnapshot ? { providerSnapshot } : {}), ...(errorCode ? { errorCode } : {}) };
   } catch (error) {
     if (controller.signal.aborted) return { events: [], timedOut: true };
     throw error;
@@ -456,7 +570,33 @@ function parseSseFrame(frame) {
     return { type: eventType, payload: { finishReason: typeof payload?.finishReason === 'string' ? payload.finishReason : undefined } };
   }
   if (eventType === 'run.failed') return { type: eventType, payload: { code: safeEventErrorCode(payload?.code) } };
+  if (eventType === 'run.created') return { type: eventType, providerSnapshot: readProviderSnapshot(payload) };
+  if (eventType === 'model.requested') return { type: eventType, providerSnapshot: readProviderSnapshot(payload) };
   return { type: eventType };
+}
+
+function readProviderSnapshot(payload) {
+  const model = payload?.modelSnapshot;
+  const deepSeek = payload?.deepSeekSnapshot;
+  const providerId = typeof model?.providerId === 'string' && /^[a-z][a-z0-9-]{1,63}$/u.test(model.providerId)
+    ? model.providerId
+    : typeof deepSeek?.providerId === 'string' && /^[a-z][a-z0-9-]{1,63}$/u.test(deepSeek.providerId)
+      ? deepSeek.providerId
+      : undefined;
+  const descriptorRevision = boundedRevision(model?.descriptorRevision);
+  const configRevision = boundedRevision(deepSeek?.configRevision);
+  const capabilityRevision = boundedRevision(deepSeek?.capabilityRevision);
+  if (!providerId && !descriptorRevision && !configRevision && !capabilityRevision) return undefined;
+  return {
+    ...(providerId ? { providerId } : {}),
+    ...(descriptorRevision ? { descriptorRevision } : {}),
+    ...(configRevision ? { configRevision } : {}),
+    ...(capabilityRevision ? { capabilityRevision } : {}),
+  };
+}
+
+function boundedRevision(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(value) ? value : undefined;
 }
 
 async function requestJson(fetchImpl, url, init, timeoutMs) {
@@ -535,6 +675,29 @@ function validateEndpoint(value) {
   let url;
   try { url = new URL(value); } catch { throw new Error('endpoint is invalid'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname === '/' || url.pathname.length < 2) throw new Error('endpoint must be an explicit HTTPS provider path');
+  return value;
+}
+
+function validateDeepSeekProfile(value) {
+  if (value !== 'openai-chat-completions' && value !== 'openai-responses' && value !== 'anthropic-messages') throw new Error('profile is invalid');
+  return value;
+}
+
+function validateDeepSeekEndpoint(value, profile) {
+  const endpoint = validateEndpoint(value);
+  const pathname = new URL(endpoint).pathname.replace(/\/+$/u, '');
+  const expected = profile === 'openai-responses' ? '/responses' : profile === 'anthropic-messages' ? '/messages' : '/chat/completions';
+  if (!pathname.endsWith(expected)) throw new Error('profile endpoint path does not match profile');
+  return endpoint;
+}
+
+function validateHarnessScenario(value) {
+  if (value !== 'text' && value !== 'cancel' && value !== 'timeout') throw new Error('scenario must be text, cancel or timeout');
+  return value;
+}
+
+function validateHarnessThinking(value) {
+  if (value !== 'off' && value !== 'auto' && value !== 'high' && value !== 'max') throw new Error('thinking mode is invalid');
   return value;
 }
 
