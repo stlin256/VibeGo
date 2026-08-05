@@ -243,9 +243,23 @@ event-authority behavior changes are included in this phase.
 
 ### 63-2: same-as-run reviewer adapter
 
-Add a provider-port adapter that consumes only a frozen `ModelProviderSnapshot`,
-uses bounded request/response limits and maps timeout, 4xx/5xx, malformed output
-and cancellation to stable unavailable results.
+Implemented as `SameAsRunApprovalReviewer` in
+`packages/agent/src/approval-review.ts`. The adapter validates and freezes the
+run's `ModelProviderSnapshot` plus a same-as-run reviewer snapshot, sends only
+bounded normalized safety metadata, and never forwards the exact approval key,
+prompt, transcript, command, tool output, environment value, credential or
+absolute path. Trusted low-risk requests require restricted network and a ready
+read/workspace-write sandbox; full-host, network, destructive, shell, unknown,
+untrusted and unavailable-sandbox requests are not sent to the provider.
+Request/response bytes and latency are bounded. Provider errors, timeout,
+cancellation, malformed/incomplete streams, tool-call output, schema mismatch
+and exact-key fingerprint mismatch map to stable `unavailable` decisions with
+no retry or capability grant. The strict model response contract is
+`ApprovalReviewModelOutputSchema`; runtime metadata is filled by the adapter.
+Focused evidence is recorded in
+[`spec63-2-same-as-run-reviewer-2026-08-05.md`](../reports/spec63-2-same-as-run-reviewer-2026-08-05.md).
+No ApprovalBroker, AgentLoop, RunManager, Scheduler, Sandbox, Workspace or
+event-authority behavior changes are included in this phase.
 
 ### 63-3: dedicated reviewer settings
 

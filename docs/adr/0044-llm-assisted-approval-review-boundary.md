@@ -69,3 +69,10 @@ prompt, ApprovalBroker, AgentLoop or event-authority path is invoked. Canonical
 fingerprints and an in-memory idempotency ledger reject changed payloads for a
 reused event or idempotency key. Same-as-run provider calls, dedicated settings
 and ApprovalBroker intersection remain explicitly staged for 63-2 onward.
+
+The 63-2 same-as-run adapter is now implemented as a provider-port boundary.
+It validates and freezes the run snapshot, sends bounded normalized safety
+metadata only, and maps provider failure, timeout, cancellation, malformed
+output and fingerprint mismatch to `unavailable`. It still does not call the
+ApprovalBroker or change the existing authority order; dedicated settings,
+cache/revoke semantics and Web integration remain later stages.

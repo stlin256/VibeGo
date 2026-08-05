@@ -179,6 +179,17 @@ export const ApprovalReviewRequestSchema = z.object({
 });
 export type ApprovalReviewRequest = z.infer<typeof ApprovalReviewRequestSchema>;
 
+/** Strict model-facing response; runtime metadata is filled by the adapter. */
+export const ApprovalReviewModelOutputSchema = z.object({
+  schemaVersion: z.literal(LLM_APPROVAL_SCHEMA_VERSION),
+  reviewId: IdSchema,
+  decision: ApprovalReviewDecisionSchema,
+  reasonCode: ApprovalReviewReasonCodeSchema,
+  explanation: BoundedTextSchema(1_024),
+  approvalKeyFingerprint: FingerprintSchema,
+}).strict().superRefine((value, context) => addPrivacyIssues(value, context));
+export type ApprovalReviewModelOutput = z.infer<typeof ApprovalReviewModelOutputSchema>;
+
 export const ApprovalReviewDecisionRecordSchema = z.object({
   schemaVersion: z.literal(LLM_APPROVAL_SCHEMA_VERSION),
   reviewId: IdSchema,
@@ -307,6 +318,10 @@ export function parseApprovalReviewRequest(value: unknown): ApprovalReviewReques
 
 export function parseApprovalReviewDecision(value: unknown): ApprovalReviewDecisionRecord {
   return ApprovalReviewDecisionRecordSchema.parse(value);
+}
+
+export function parseApprovalReviewModelOutput(value: unknown): ApprovalReviewModelOutput {
+  return ApprovalReviewModelOutputSchema.parse(value);
 }
 
 export function parseLlmApprovalSettingsProjection(value: unknown): LlmApprovalSettingsProjection {

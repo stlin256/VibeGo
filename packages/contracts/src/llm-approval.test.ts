@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ApprovalReviewDecisionRecordSchema,
   ApprovalReviewEventSchema,
+  ApprovalReviewModelOutputSchema,
   ApprovalReviewRequestSchema,
   ApprovalReviewerSnapshotSchema,
   LlmApprovalSettingsProjectionSchema,
@@ -87,6 +88,20 @@ describe('llm-approval/v1 contracts', () => {
     expect(ApprovalReviewDecisionRecordSchema.parse(allow).decision).toBe('allow');
     expect(() => ApprovalReviewDecisionRecordSchema.parse({ ...allow, expiresAt: null })).toThrow(/expiry/iu);
     expect(() => ApprovalReviewDecisionRecordSchema.parse({ ...allow, decision: 'ask' })).toThrow();
+  });
+
+  it('parses only the bounded model output shape', () => {
+    const output = ApprovalReviewModelOutputSchema.parse({
+      schemaVersion: 'llm-approval/v1',
+      reviewId: 'review-1',
+      decision: 'allow',
+      reasonCode: 'eligible',
+      explanation: 'Exact low-risk key is eligible.',
+      approvalKeyFingerprint: 'b'.repeat(64),
+    });
+    expect(output.decision).toBe('allow');
+    expect(() => ApprovalReviewModelOutputSchema.parse({ ...output, rawResponse: 'do not persist' })).toThrow();
+    expect(() => ApprovalReviewModelOutputSchema.parse({ ...output, explanation: 'api_key=sk-' + 'a'.repeat(24) })).toThrow(/secret/iu);
   });
 
   it('keeps settings migration default off and bounds status metadata', () => {

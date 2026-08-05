@@ -2,12 +2,19 @@ import { createHash } from 'node:crypto';
 import {
   ApprovalReviewDecisionRecordSchema,
   ApprovalReviewEventSchema,
+  ApprovalReviewModelOutputSchema,
   ApprovalReviewRequestSchema,
   ApprovalReviewerSnapshotSchema,
+  ModelEventSchema,
+  ModelProviderSnapshotSchema,
   type ApprovalReviewDecisionRecord,
   type ApprovalReviewEvent,
+  type ApprovalReviewModelOutput,
   type ApprovalReviewRequest,
   type ApprovalReviewerSnapshot,
+  type ModelProvider,
+  type ModelProviderSnapshot,
+  type ModelRequest,
 } from '@ready4vibe/contracts';
 
 export interface ApprovalReviewer {
@@ -65,6 +72,224 @@ export class NoopApprovalReviewer implements ApprovalReviewer {
       reviewedAt: new Date().toISOString(),
     });
   }
+}
+
+export interface SameAsRunApprovalReviewerOptions {
+  readonly provider: ModelProvider;
+  readonly modelSnapshot: ModelProviderSnapshot;
+  readonly reviewerSnapshot: ApprovalReviewerSnapshot;
+  readonly now?: () => number;
+}
+
+/**
+ * Bounded adapter for the provider already captured by an in-flight run.
+ * It consumes only normalized review metadata and never forwards the user
+ * prompt, transcript, command, tool output, environment or host path.
+ */
+export class SameAsRunApprovalReviewer implements ApprovalReviewer {
+  readonly snapshot: ApprovalReviewerSnapshot;
+  private readonly provider: ModelProvider;
+  private readonly modelSnapshot: ModelProviderSnapshot;
+  private readonly now: () => number;
+
+  constructor(options: SameAsRunApprovalReviewerOptions) {
+    this.provider = options.provider;
+    this.modelSnapshot = deepFreeze(ModelProviderSnapshotSchema.parse(options.modelSnapshot));
+    this.snapshot = deepFreeze(ApprovalReviewerSnapshotSchema.parse(options.reviewerSnapshot));
+    this.now = options.now ?? Date.now;
+    if (this.snapshot.reviewerSource !== 'same-as-run') throw new Error('same-as-run reviewer requires a same-as-run snapshot');
+    if (this.snapshot.providerId !== null && this.snapshot.providerId !== this.modelSnapshot.providerId) throw new Error('reviewer/provider snapshot mismatch');
+    if (this.snapshot.modelId !== null && this.snapshot.modelId !== this.modelSnapshot.model) throw new Error('reviewer/model snapshot mismatch');
+    if (this.snapshot.descriptorRevision !== null && this.snapshot.descriptorRevision !== this.modelSnapshot.descriptorRevision) throw new Error('reviewer descriptor revision mismatch');
+    if (this.provider.id !== this.modelSnapshot.providerId) throw new Error('provider id does not match the frozen model snapshot');
+  }
+
+  async review(request: ApprovalReviewRequest, signal: AbortSignal): Promise<ApprovalReviewDecisionRecord> {
+    const parsed = ApprovalReviewRequestSchema.parse(request);
+    const startedAt = this.now();
+    if (signal.aborted) return this.unavailable(parsed, 'cancelled', startedAt);
+    const preflight = this.preflight(parsed);
+    if (preflight !== undefined) return this.unavailable(parsed, preflight, startedAt);
+
+    const modelRequest = this.buildModelRequest(parsed);
+    if (byteLength(canonicalApprovalReviewJson(modelRequest)) > this.snapshot.limits.maxRequestBytes) {
+      return this.unavailable(parsed, 'request-too-large', startedAt);
+    }
+
+    const controller = new AbortController();
+    let timedOut = false;
+    let cancelled = false;
+    const onAbort = (): void => {
+      cancelled = true;
+      controller.abort();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.snapshot.limits.maxLatencyMs);
+    let output = '';
+    let completed = false;
+    try {
+      for await (const rawEvent of this.provider.stream(modelRequest, controller.signal)) {
+        const event = ModelEventSchema.safeParse(rawEvent);
+        if (!event.success) return this.unavailable(parsed, 'schema-mismatch', startedAt);
+        if (event.data.type === 'text-delta') {
+          output += event.data.text;
+          if (byteLength(output) > this.snapshot.limits.maxResponseBytes) {
+            controller.abort();
+            return this.unavailable(parsed, 'response-too-large', startedAt);
+          }
+        } else if (event.data.type === 'tool-call-delta') {
+          return this.unavailable(parsed, 'schema-mismatch', startedAt);
+        } else if (event.data.type === 'error') {
+          return this.unavailable(parsed, mapProviderError(event.data.code), startedAt);
+        } else if (event.data.type === 'completed') {
+          completed = true;
+          if (event.data.finishReason !== 'stop') return this.unavailable(parsed, 'malformed-response', startedAt);
+        }
+      }
+      if (timedOut) return this.unavailable(parsed, 'timeout', startedAt);
+      if (cancelled || signal.aborted) return this.unavailable(parsed, 'cancelled', startedAt);
+      if (!completed) return this.unavailable(parsed, 'malformed-response', startedAt);
+      return this.mapModelOutput(parsed, output, startedAt);
+    } catch {
+      if (timedOut) return this.unavailable(parsed, 'timeout', startedAt);
+      if (cancelled || signal.aborted) return this.unavailable(parsed, 'cancelled', startedAt);
+      return this.unavailable(parsed, 'provider-unavailable', startedAt);
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+    }
+  }
+
+  private preflight(request: ApprovalReviewRequest): 'reviewer-disabled' | 'provider-unavailable' | 'revision-stale' | 'ineligible-risk' | 'ineligible-trust' | 'ineligible-sandbox' | undefined {
+    if (this.snapshot.status === 'disabled' || this.snapshot.posture === 'off') return 'reviewer-disabled';
+    if (this.snapshot.status !== 'ready' || this.modelSnapshot.capabilities.streaming !== true || this.provider.capabilities.streaming !== true) return 'provider-unavailable';
+    if (request.reviewerRevision !== this.snapshot.reviewerRevision || request.policyRevision !== this.snapshot.policyRevision) return 'revision-stale';
+    if (request.taskTrust !== 'trusted-workspace') return 'ineligible-trust';
+    if (request.tool.risk !== 'read-only' && request.tool.risk !== 'workspace-write') return 'ineligible-risk';
+    if (request.tool.operationClass !== 'read' && request.tool.operationClass !== 'write') return 'ineligible-risk';
+    if (request.network !== 'restricted') return 'ineligible-risk';
+    if (request.sandbox.mode !== 'read-only' && request.sandbox.mode !== 'workspace-write') return 'ineligible-sandbox';
+    if (request.sandbox.status !== 'ready' || request.permission.status !== 'ready' || request.permission.effectiveScope === 'none') return 'ineligible-sandbox';
+    return undefined;
+  }
+
+  private buildModelRequest(request: ApprovalReviewRequest): ModelRequest {
+    const safetySummary = {
+      reviewId: request.reviewId,
+      approvalKeyFingerprint: request.approvalKeyFingerprint,
+      workspaceId: request.workspaceId,
+      tool: request.tool,
+      taskTrust: request.taskTrust,
+      permission: request.permission,
+      sandbox: request.sandbox,
+      network: request.network,
+      ...(request.goal === undefined ? {} : { goal: request.goal }),
+      policyRevision: request.policyRevision,
+      reviewerRevision: request.reviewerRevision,
+    };
+    const systemContent = 'Return one strict JSON object matching llm-approval/v1. Review only the bounded safety metadata. Never widen deterministic policy; never request or infer secrets, paths, commands, transcripts or tool output.';
+    return {
+      model: this.modelSnapshot.model,
+      messages: [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: canonicalApprovalReviewJson(safetySummary) },
+      ],
+      tools: [],
+      budget: { maxInputTokens: 1_024, maxOutputTokens: 512 },
+      metadata: { runId: request.runId, turnId: request.turnId, requestId: request.reviewId },
+    };
+  }
+
+  private mapModelOutput(request: ApprovalReviewRequest, output: string, startedAt: number): ApprovalReviewDecisionRecord {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(output);
+    } catch {
+      return this.unavailable(request, 'malformed-response', startedAt);
+    }
+    const parsed = ApprovalReviewModelOutputSchema.safeParse(raw);
+    if (!parsed.success) return this.unavailable(request, 'schema-mismatch', startedAt);
+    const value: ApprovalReviewModelOutput = parsed.data;
+    if (value.reviewId !== request.reviewId || value.approvalKeyFingerprint !== request.approvalKeyFingerprint) {
+      return this.unavailable(request, 'fingerprint-mismatch', startedAt);
+    }
+    if (value.decision === 'allow' && Date.parse(request.deadlineAt) <= this.now()) return this.unavailable(request, 'timeout', startedAt);
+    const decision = value.decision;
+    return ApprovalReviewDecisionRecordSchema.parse({
+      schemaVersion: 'llm-approval/v1',
+      reviewId: request.reviewId,
+      decision,
+      reasonCode: value.reasonCode,
+      explanation: value.explanation,
+      reviewerRevision: this.snapshot.reviewerRevision,
+      policyRevision: request.policyRevision,
+      latencyMs: boundedLatency(this.now() - startedAt),
+      expiresAt: decision === 'allow' ? request.deadlineAt : null,
+      approvalKeyFingerprint: request.approvalKeyFingerprint,
+      reviewedAt: new Date(this.now()).toISOString(),
+    });
+  }
+
+  private unavailable(request: ApprovalReviewRequest, reasonCode: Parameters<typeof reasonMessage>[0], startedAt: number): ApprovalReviewDecisionRecord {
+    return ApprovalReviewDecisionRecordSchema.parse({
+      schemaVersion: 'llm-approval/v1',
+      reviewId: request.reviewId,
+      decision: 'unavailable',
+      reasonCode,
+      explanation: reasonMessage(reasonCode),
+      reviewerRevision: this.snapshot.reviewerRevision,
+      policyRevision: request.policyRevision,
+      latencyMs: boundedLatency(this.now() - startedAt),
+      expiresAt: null,
+      approvalKeyFingerprint: request.approvalKeyFingerprint,
+      reviewedAt: new Date(this.now()).toISOString(),
+    });
+  }
+}
+
+function mapProviderError(code: string): 'provider-unavailable' | 'timeout' | 'cancelled' | 'malformed-response' | 'schema-mismatch' {
+  if (/(?:TIMEOUT|TIMED_OUT)/iu.test(code)) return 'timeout';
+  if (/(?:CANCEL|ABORT)/iu.test(code)) return 'cancelled';
+  if (/(?:MALFORMED|INVALID_JSON|STREAM_ENDED)/iu.test(code)) return 'malformed-response';
+  if (/(?:SCHEMA|UNSUPPORTED)/iu.test(code)) return 'schema-mismatch';
+  return 'provider-unavailable';
+}
+
+function reasonMessage(reason: 'reviewer-disabled' | 'provider-unavailable' | 'revision-stale' | 'ineligible-risk' | 'ineligible-trust' | 'ineligible-sandbox' | 'request-too-large' | 'response-too-large' | 'timeout' | 'cancelled' | 'malformed-response' | 'schema-mismatch' | 'fingerprint-mismatch'): string {
+  const messages: Record<typeof reason, string> = {
+    'reviewer-disabled': 'LLM approval review is disabled.',
+    'provider-unavailable': 'The run reviewer provider is unavailable.',
+    'revision-stale': 'The reviewer or policy snapshot is stale.',
+    'ineligible-risk': 'This operation is outside the low-risk reviewer scope.',
+    'ineligible-trust': 'Untrusted content is not eligible for reviewer automation.',
+    'ineligible-sandbox': 'The required permission or sandbox readiness is not available.',
+    'request-too-large': 'The bounded reviewer request exceeded its byte limit.',
+    'response-too-large': 'The bounded reviewer response exceeded its byte limit.',
+    timeout: 'The bounded reviewer request timed out.',
+    cancelled: 'The bounded reviewer request was cancelled.',
+    'malformed-response': 'The reviewer returned an incomplete or malformed response.',
+    'schema-mismatch': 'The reviewer response did not match the strict contract.',
+    'fingerprint-mismatch': 'The reviewer response did not match the exact approval key.',
+  };
+  return messages[reason];
+}
+
+function boundedLatency(value: number): number {
+  return Math.max(0, Math.min(120_000, Number.isSafeInteger(value) ? value : 120_000));
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value !== 'object' || value === null) return value;
+  Object.freeze(value);
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+  return value;
 }
 
 /** Stable JSON encoding used for exact-key/cache/event fingerprints. */

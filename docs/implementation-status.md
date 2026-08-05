@@ -957,6 +957,22 @@ stay on the existing safe `ask`/`deny` path. Implementation is staged as 63-0
 through 63-7 and must preserve the default interactive run path and existing
 authorities until the corresponding focused tests and evidence are complete.
 
+### Spec 63-2 same-as-run reviewer checkpoint (2026-08-05)
+
+`SameAsRunApprovalReviewer` now consumes only a frozen model-provider
+snapshot plus the strict reviewer snapshot. It constructs bounded safety
+metadata without the exact approval key, prompt, transcript, command, tool
+output, environment, credential or absolute path. Only trusted low-risk,
+restricted-network requests with ready read/workspace-write sandbox state are
+eligible. Request/response bytes and latency are capped; provider errors,
+timeout, cancellation, malformed/incomplete output, tool-call output,
+schema mismatch and exact-key fingerprint mismatch return stable bounded
+`unavailable` decisions. The strict model-output contract keeps runtime
+revision/latency/expiry fields outside model control. Evidence is recorded in
+[`spec63-2-same-as-run-reviewer-2026-08-05.md`](reports/spec63-2-same-as-run-reviewer-2026-08-05.md).
+No ApprovalBroker, Web, dedicated settings, durable reviewer event, AgentLoop,
+RunManager, Scheduler, Sandbox, Workspace or event-authority behavior changed.
+
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
 The R3 application boundary is implemented under

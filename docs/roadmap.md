@@ -1023,6 +1023,16 @@ subprocess 或 prompt。证据见
 本阶段不改变 AgentLoop、RunManager 默认启动路径、ApprovalBroker 或事件事实源；
 same-as-run、dedicated settings、Broker 集成和 Web 仍待后续阶段。
 
+63-2 same-as-run adapter 已实现：它只消费冻结的 model/reviewer snapshot，
+对 trusted low-risk、restricted network、ready read/workspace-write sandbox
+请求发送 bounded safety metadata；full-host、网络、破坏性、shell、unknown、
+untrusted 和 sandbox 不可用请求在 provider 之前 fail-closed。请求/响应字节、
+延迟、取消、timeout、provider error、malformed/incomplete stream、schema 和
+exact-key fingerprint mismatch 均有稳定 `unavailable` 映射，不重试、不授予
+能力。模型输出不包含运行时 revision/latency/expiry，adapter 负责补齐这些字段。
+证据见 [`spec63-2-same-as-run-reviewer-2026-08-05.md`](reports/spec63-2-same-as-run-reviewer-2026-08-05.md)；
+ApprovalBroker、Web、dedicated settings、durable events 和 live smoke 仍待后续阶段。
+
 ## Spec 58-5 audit checkpoint (2026-08-05)
 
 The repository already contains `smoke:model` for provider-protocol checks, but
