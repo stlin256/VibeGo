@@ -154,7 +154,7 @@ function makeFixture(
     approval: () => ({ ready: true, revision: 'approval-1' }),
     sandbox: () => ({ ready: true, revision: 'sandbox-1' }),
     quotaPolicy: { enabled: true },
-    ...(registerBinding ? { registerBinding: (binding: Parameters<typeof writeback.registerBinding>[0]) => { writeback.registerBinding(binding); } } : {}),
+    ...(registerBinding ? { registerBinding: (binding: Parameters<typeof writeback.registerBinding>[0]) => { writeback.registerBinding(binding, 'advancement'); } } : {}),
     clock: () => new Date(at),
   });
   return { goalStore, eventStore, runManager, writeback, admission };
@@ -431,6 +431,57 @@ describe('GoalRunWritebackService', () => {
     expect(projection.validationEvidence[0]).toMatchObject({ status: 'inconclusive', verifierId: 'verifier_timeout' });
     expect(projection.todos[0]?.status).toBe('open');
     expect(projection.quota.reservations[0]?.status).toBe('released');
+    fixture.writeback.close();
+  });
+
+  it('uses the verifier revision captured before terminal events when the registry updates', async () => {
+    let firstCalls = 0;
+    let secondCalls = 0;
+    const firstVerifier: GoalRunVerifier = {
+      verify: async () => {
+        firstCalls += 1;
+        return { status: 'validated', verifierId: 'verifier_advancement_v1', verifierRevision: 1, summary: 'first', refs: {} };
+      },
+    };
+    const secondVerifier: GoalRunVerifier = {
+      verify: async () => {
+        secondCalls += 1;
+        return { status: 'validated', verifierId: 'verifier_advancement_v2', verifierRevision: 2, summary: 'second', refs: {} };
+      },
+    };
+    const registry = new GoalVerifierRegistry();
+    registry.register({
+      schemaVersion: 'ready4vibe_goal_verifier_descriptor_v1',
+      verifierId: 'verifier_advancement_v1',
+      taskClass: 'advancement',
+      verifierRevision: 1,
+      status: 'ready',
+      privacy: 'local_private',
+      updatedAt: at,
+    }, firstVerifier);
+    const fixture = makeFixture(
+      new FakeModelProvider({ delayMs: 80, events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }),
+      firstVerifier,
+      true,
+      registry,
+    );
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    registry.register({
+      schemaVersion: 'ready4vibe_goal_verifier_descriptor_v1',
+      verifierId: 'verifier_advancement_v2',
+      taskClass: 'advancement',
+      verifierRevision: 2,
+      status: 'ready',
+      privacy: 'local_private',
+      updatedAt: at,
+    }, secondVerifier);
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.consumed')).toBe(true), { timeout: 3_000 });
+    const projection = new GoalControlProjectionBuilder().build(await fixture.goalStore.read(goalId));
+    expect(firstCalls).toBe(1);
+    expect(secondCalls).toBe(0);
+    expect(projection.validationEvidence[0]).toMatchObject({ verifierId: 'verifier_advancement_v1', verifierRevision: 1, status: 'validated' });
     fixture.writeback.close();
   });
 

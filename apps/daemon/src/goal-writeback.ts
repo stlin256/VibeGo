@@ -20,7 +20,7 @@ import {
   type GoalControlEventStoreV1,
 } from '@ready4vibe/goal-control';
 import type { RunManager, RunSnapshot } from './run-manager.js';
-import type { GoalVerifierRegistry } from './goal-verifier-registry.js';
+import type { GoalVerifierRegistry, GoalVerifierResolution } from './goal-verifier-registry.js';
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const RUN_ID = /^run_[A-Za-z0-9_-]{8,128}$/u;
@@ -108,6 +108,7 @@ export interface GoalRunWritebackReconciliationResult {
 interface Registration {
   readonly binding: GoalRunBindingV1;
   readonly unsubscribe: () => void;
+  readonly verifierSnapshot?: Promise<GoalVerifierResolution>;
 }
 
 /**
@@ -145,18 +146,21 @@ export class GoalRunWritebackService {
   }
 
   /** Subscribe before RunManager.start so run.created/terminal races are observable. */
-  registerBinding(bindingInput: unknown): () => void {
+  registerBinding(bindingInput: unknown, taskClass?: TodoTaskClass): () => void {
     const binding = GoalRunBindingV1Schema.parse(bindingInput);
     const existing = this.registrations.get(binding.runId);
     if (existing) {
       if (existing.binding.bindingId !== binding.bindingId) throw new Error('A run id is already registered to another Goal binding.');
       return () => undefined;
     }
+    const verifierSnapshot = this.verifierRegistry
+      ? Promise.resolve(taskClass === undefined ? this.captureVerifier(binding) : this.verifierRegistry.resolve(taskClass))
+      : undefined;
     const unsubscribe = this.options.runManager.subscribe(binding.runId, (event) => {
       if (!isTerminalEvent(event)) return;
-      void this.withRunLock(binding.runId, () => this.processTerminal(binding, event)).catch(() => undefined);
+      void this.withRunLock(binding.runId, () => this.processTerminal(binding, event, verifierSnapshot)).catch(() => undefined);
     });
-    this.registrations.set(binding.runId, { binding, unsubscribe });
+    this.registrations.set(binding.runId, { binding, unsubscribe, ...(verifierSnapshot ? { verifierSnapshot } : {}) });
     return () => this.unregister(binding.runId, binding.bindingId);
   }
 
@@ -192,7 +196,8 @@ export class GoalRunWritebackService {
           continue;
         }
         terminalRuns += 1;
-        await this.withRunLock(binding.runId, () => this.processTerminal(binding, terminal));
+        const verifierSnapshot = this.registrations.get(binding.runId)?.verifierSnapshot;
+        await this.withRunLock(binding.runId, () => this.processTerminal(binding, terminal, verifierSnapshot));
       }
     }
     return { bindings, terminalRuns, recovered, skipped };
@@ -229,7 +234,11 @@ export class GoalRunWritebackService {
     this.registrations.clear();
   }
 
-  private async processTerminal(binding: GoalRunBindingV1, terminalEvent: StoredEvent | GoalRunEventDigest): Promise<void> {
+  private async processTerminal(
+    binding: GoalRunBindingV1,
+    terminalEvent: StoredEvent | GoalRunEventDigest,
+    verifierSnapshot?: Promise<GoalVerifierResolution>,
+  ): Promise<void> {
     const events = await this.options.runManager.readEvents(binding.runId);
     const fallbackTerminal = 'version' in terminalEvent ? digestEvent(terminalEvent) : terminalEvent;
     const terminal = findTerminalEvent(events) ?? fallbackTerminal;
@@ -259,7 +268,7 @@ export class GoalRunWritebackService {
         refs: { runId: binding.runId, eventIds: [terminal.id] },
       };
     } else {
-      result = await this.verify(binding, snapshot, terminal, events);
+      result = await this.verify(binding, snapshot, terminal, events, verifierSnapshot);
     }
     const evidence = await this.writeValidation(binding, terminal, result);
     if (evidence.status !== 'validated' || snapshot.status !== 'completed') {
@@ -269,7 +278,13 @@ export class GoalRunWritebackService {
     await this.finalize(binding, evidence);
   }
 
-  private async verify(binding: GoalRunBindingV1, snapshot: RunSnapshot, terminal: GoalRunEventDigest, events: readonly StoredEvent[]): Promise<GoalRunVerifierResult> {
+  private async verify(
+    binding: GoalRunBindingV1,
+    snapshot: RunSnapshot,
+    terminal: GoalRunEventDigest,
+    events: readonly StoredEvent[],
+    verifierSnapshot?: Promise<GoalVerifierResolution>,
+  ): Promise<GoalRunVerifierResult> {
     let projection: GoalControlProjectionV1;
     try {
       projection = this.builder.build(await this.options.goalStore.read(binding.goalId));
@@ -293,7 +308,7 @@ export class GoalRunWritebackService {
     let verifier = this.verifier;
     let descriptor: { readonly verifierId: string; readonly verifierRevision: number } | undefined;
     if (this.verifierRegistry) {
-      const resolution = this.verifierRegistry.resolve(taskClass);
+      const resolution = await (verifierSnapshot ?? this.captureVerifier(binding));
       if (resolution.status !== 'ready' || !resolution.verifier || !resolution.descriptor) {
         return {
           status: 'inconclusive',
@@ -375,6 +390,19 @@ export class GoalRunWritebackService {
     } finally {
       if (timer !== undefined) clearTimeout(timer);
       controller.abort();
+    }
+  }
+
+  private async captureVerifier(binding: GoalRunBindingV1): Promise<GoalVerifierResolution> {
+    if (!this.verifierRegistry) {
+      return { status: 'missing', reason: 'No task-specific verifier registry is configured.' };
+    }
+    try {
+      const projection = this.builder.build(await this.options.goalStore.read(binding.goalId));
+      const taskClass = projection.todos.find((todo) => todo.todoId === binding.todoId)?.taskClass ?? null;
+      return this.verifierRegistry.resolve(taskClass);
+    } catch {
+      return { status: 'blocked', reason: 'The authoritative Goal projection was unavailable during verifier capture.' };
     }
   }
 

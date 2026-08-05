@@ -40,3 +40,12 @@ the existing fail-closed verifier behavior.
   than falling back to a different verifier.
 - No AgentLoop, RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry or
   event-authority behavior changes.
+
+## Implementation evidence
+
+The writeback coordinator now captures the registry resolution when a binding
+is registered (the governed admission boundary supplies the authoritative
+Todo task class) and passes that promise through terminal reconciliation. A
+focused daemon fixture updates the registry from revision 1 to revision 2
+while a run is in flight and proves that revision 1 is invoked once; duplicate
+terminal notifications reuse the persisted evidence.

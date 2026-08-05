@@ -13,6 +13,7 @@ import {
   type GoalControlProjectionV1,
   type GoalQuotaReservationV1,
   type GoalRunBindingV1,
+  type TodoTaskClass,
   type PermissionProfileRunSnapshot,
   type GoalRevisionToken,
   type RunConfig,
@@ -79,7 +80,7 @@ export interface GoalAdmissionOptions {
   readonly writeScopesForSnapshot?: (snapshot: CapabilityProfileRunSnapshot, config: RunConfig) => readonly string[];
   readonly goalControl?: GoalControlV1WriteService;
   /** Registers the binding before the first run event can be emitted. */
-  readonly registerBinding?: (binding: GoalRunBindingV1) => void;
+  readonly registerBinding?: (binding: GoalRunBindingV1, taskClass?: TodoTaskClass) => void;
   /** Delivery quota is opt-in so existing interactive/admission fixtures and
    * deployments can migrate without changing their durable event stream. */
   readonly quotaPolicy?: GoalAdmissionQuotaPolicy;
@@ -234,7 +235,7 @@ export class GoalAdmissionService {
         throw new GoalAdmissionError('QUOTA_RESERVATION_FAILED', 'The previous governed binding no longer has a spendable quota reservation.');
       }
       try {
-        this.options.registerBinding?.(existingBinding);
+        this.options.registerBinding?.(existingBinding, projection.todos.find((candidate) => candidate.todoId === existingBinding.todoId)?.taskClass);
         await this.options.runManager.start(request.config, { runId: existingBinding.runId, capabilitySnapshot, ...(runOptions.permissionSnapshot ? { permissionSnapshot: runOptions.permissionSnapshot } : {}) });
       } catch (error) {
         if (isRunIdConflict(error) && await this.options.runManager.snapshot(existingBinding.runId)) {
@@ -391,7 +392,7 @@ export class GoalAdmissionService {
     const reservation = await this.ensureReservation(request, persistedBinding, bindingResult.projection);
 
     try {
-      this.options.registerBinding?.(persistedBinding);
+      this.options.registerBinding?.(persistedBinding, todo.taskClass);
       await this.options.runManager.start(request.config, { runId, capabilitySnapshot, ...(runOptions.permissionSnapshot ? { permissionSnapshot: runOptions.permissionSnapshot } : {}) });
     } catch (error) {
       if (isRunIdConflict(error) && await this.options.runManager.snapshot(runId)) {

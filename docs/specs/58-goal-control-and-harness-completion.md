@@ -318,10 +318,10 @@ semantic verifier，也不把 run completed 当作 Todo 证明。
 
 #### 58-6b：Goal verifier snapshot fence
 
-registry resolution 必须在 governed run 注册时捕获，并在终态写回时只使用该 descriptor/
+registry resolution 已在 governed run 注册时捕获，并在终态写回时只使用该 descriptor/
 implementation；不能因为 registry 热更新让 in-flight run 改用新 revision。捕获失败、
-缺失或 non-ready lane 必须保持 bounded `inconclusive`，不得 fallback 到另一个 verifier。
-重复终态通知复用现有 validation evidence，不重复调用 verifier。详细边界见
+缺失或 non-ready lane 保持 bounded `inconclusive`，不得 fallback 到另一个 verifier。
+重复终态通知复用现有 validation evidence，不重复调用 verifier。当前实现和边界见
 [ADR 0052](../adr/0052-goal-verifier-run-snapshot.md)。
 
 ### 58-7：发布验收

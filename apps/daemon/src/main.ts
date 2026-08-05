@@ -198,7 +198,7 @@ goalAdmissionService = new GoalAdmissionService({
   workspace: { exists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined },
   scheduler: runManager.scheduler,
   goalControl: goalControlV1WriteService,
-  registerBinding: (binding) => { goalRunWriteback.registerBinding(binding); },
+  registerBinding: (binding, taskClass) => { goalRunWriteback.registerBinding(binding, taskClass); },
   // Governed delivery spends one bounded unit only after terminal validation;
   // interactive / ordinary run creation never passes through this policy.
   quotaPolicy: { enabled: true, units: 1, reservationTtlMs: 30 * 60 * 1_000 },
