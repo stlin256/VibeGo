@@ -1,6 +1,6 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R1 contract design frozen (implementation pending; no runtime
+- Status: R1 strict contract implemented (pure resolver pending; no runtime
   behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
@@ -162,7 +162,7 @@ relax the existing auth/pairing boundary.
 
 ### 3.3 Versioned profile fields
 
-The eventual contract belongs in `packages/contracts` and must reject unknown
+The R1 contract lives in `packages/contracts` and must reject unknown
 fields and secret-shaped values. The minimum shape is:
 
 ```text
@@ -475,6 +475,15 @@ On restart:
 
 The contract-only commit precedes the resolver commit. Both remain below the
 daemon application boundary and are independently mergeable.
+
+#### R1 contract implementation (2026-08-05)
+
+`@ready4vibe/contracts` now exports the strict
+`ready4vibe_capability_profile_v1` schema and parser. Its focused suite has 71
+tests, including five capability-profile cases for all four profile ids,
+unknown-field rejection, secret/path/environment rejection, acknowledgement
+requirements and external-sandbox references. No daemon package imports the
+contract yet; the pure resolver is the next isolated change.
 
 ### 52-R2: Onboarding and capability status UI
 
