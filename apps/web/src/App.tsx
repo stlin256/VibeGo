@@ -1,9 +1,9 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalMutationResponse, GoalPreflightResult, GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
-import { ContextRail, ConversationHeader, ConversationShell, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, WorkspaceRail } from './components/vibego/index.js';
+import { ContextRail, ConversationHeader, ConversationShell, PermissionProfileCard, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, WorkspaceRail } from './components/vibego/index.js';
 import { createTranslator, type Locale } from './locale.js';
 import './styles.css';
 
@@ -26,6 +26,12 @@ export interface AppProps {
   capabilityProfileSettingsUnavailable?: boolean;
   onPatchCapabilityProfileSettings?: (input: CapabilityProfileSettingsPatchInput) => Promise<void> | void;
   onResetCapabilityProfileSettings?: (expectedRevision?: string) => Promise<void> | void;
+  permissionSettings?: PermissionProfileSettingsStatus;
+  permissionStatus?: PermissionStatus;
+  permissionSettingsUnavailable?: boolean;
+  onPatchPermissionSettings?: (input: PermissionProfileSettingsPatchInput) => Promise<void> | void;
+  onConfirmFullHost?: (input: { requestedProfile: PermissionProfile; expectedProfileRevision: string }) => Promise<void> | void;
+  onRevokePermission?: (input: { expectedRevision?: string; reason: 'user-requested' }) => Promise<void> | void;
   onProfileChange?: (profile: RunProfile) => void;
   onResetProfile?: () => void;
   certificateStatus?: CertificateStatus;
@@ -86,7 +92,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const t = createTranslator(locale);
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
@@ -97,6 +103,12 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [capabilityProfileId, setCapabilityProfileId] = useState<CapabilityProfile['profileId']>('preview');
   const [capabilityAcknowledged, setCapabilityAcknowledged] = useState(false);
   const [capabilityBusy, setCapabilityBusy] = useState(false);
+  const [permissionProfileId, setPermissionProfileId] = useState<'workspace-coding' | 'full-host'>('workspace-coding');
+  const [permissionApprovalPosture, setPermissionApprovalPosture] = useState<'bounded-auto' | 'session-auto' | 'explicit'>('bounded-auto');
+  const [permissionFullHostAcknowledged, setPermissionFullHostAcknowledged] = useState(false);
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [permissionConfirmBusy, setPermissionConfirmBusy] = useState(false);
+  const [permissionRevokeBusy, setPermissionRevokeBusy] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('off');
   const [memoryTeamId, setMemoryTeamId] = useState('vibego');
@@ -154,6 +166,13 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setCapabilityProfileId(selected.profileId);
     setCapabilityAcknowledged(selected.requiresAcknowledgement);
   }, [capabilityProfileSettings?.settings.profile]);
+  useEffect(() => {
+    const selected = permissionSettings?.settings.profile;
+    if (!selected) return;
+    setPermissionProfileId(selected.profileId === 'full-host' ? 'full-host' : 'workspace-coding');
+    setPermissionApprovalPosture(selected.approvalPosture === 'session-auto' || selected.approvalPosture === 'explicit' ? selected.approvalPosture : 'bounded-auto');
+    if (selected.profileId !== 'full-host') setPermissionFullHostAcknowledged(false);
+  }, [permissionSettings?.settings.profile]);
   useEffect(() => {
     const settings = agentMemorySettings?.settings;
     if (!settings) return;
@@ -249,6 +268,63 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setCapabilityBusy(true);
     try { await onResetCapabilityProfileSettings(capabilityProfileSettings.currentRevision); }
     finally { setCapabilityBusy(false); }
+  };
+  const buildPermissionProfile = (): PermissionProfile | undefined => {
+    const current = permissionSettings?.settings.profile;
+    if (!current) return undefined;
+    const updatedAt = new Date().toISOString();
+    if (permissionProfileId === 'workspace-coding') {
+      return {
+        ...current,
+        profileId: 'workspace-coding',
+        filesystemScope: 'workspace-only',
+        processScope: 'none',
+        networkMode: 'off',
+        mcpSkillMode: 'off',
+        approvalPosture: permissionApprovalPosture === 'session-auto' ? 'bounded-auto' : permissionApprovalPosture,
+        taskTrust: current.taskTrust === 'untrusted-content' ? 'trusted-workspace' : current.taskTrust,
+        ...(current.workspaceId || profile.workspaceId ? { workspaceId: current.workspaceId ?? profile.workspaceId } : {}),
+        requiresConfirmation: false,
+        updatedAt,
+      };
+    }
+    const { workspaceId: _workspaceId, ...hostBase } = current;
+    return {
+      ...hostBase,
+      profileId: 'full-host',
+      filesystemScope: 'host',
+      processScope: 'host',
+      networkMode: 'off',
+      mcpSkillMode: 'off',
+      approvalPosture: permissionApprovalPosture === 'bounded-auto' ? 'explicit' : permissionApprovalPosture,
+      taskTrust: 'trusted-user',
+      requiresConfirmation: true,
+      updatedAt,
+    };
+  };
+  const savePermissionProfile = async (): Promise<void> => {
+    if (!onPatchPermissionSettings || !permissionSettings) return;
+    const next = buildPermissionProfile();
+    if (!next) return;
+    setPermissionBusy(true);
+    try {
+      await onPatchPermissionSettings({ profile: next, expectedRevision: permissionSettings.currentRevision });
+    } finally { setPermissionBusy(false); }
+  };
+  const confirmFullHost = async (): Promise<void> => {
+    if (!onConfirmFullHost || !permissionSettings || permissionSettings.settings.profile.profileId !== 'full-host') return;
+    setPermissionConfirmBusy(true);
+    try {
+      await onConfirmFullHost({ requestedProfile: permissionSettings.settings.profile, expectedProfileRevision: permissionSettings.currentRevision });
+    } finally { setPermissionConfirmBusy(false); }
+  };
+  const revokePermission = async (): Promise<void> => {
+    if (!onRevokePermission) return;
+    setPermissionRevokeBusy(true);
+    try {
+      const expectedRevision = permissionStatus?.currentRevision ?? permissionSettings?.currentRevision;
+      await onRevokePermission({ ...(expectedRevision ? { expectedRevision } : {}), reason: 'user-requested' });
+    } finally { setPermissionRevokeBusy(false); }
   };
   const saveAgentMemorySettings = async (): Promise<void> => {
     if (!onPatchAgentMemorySettings) return;
@@ -402,6 +478,25 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
             <SettingsTabs ariaLabel="Settings sections" tabs={[{ id: 'run', label: 'Run' }, { id: 'tools', label: 'Tools' }, { id: 'access', label: 'Access' }]} activeTab={settingsTab} onTabChange={(tabId) => { if (tabId === 'run' || tabId === 'tools' || tabId === 'access') setSettingsTab(tabId); }}>
               <SettingsTabPanel tabId="run" activeTab={settingsTab}>
                 <div className="settings-grid">
+                  <SettingsSection id="permission-profile-settings" eyebrow="PERMISSION PROFILE" title="Permission profile" description="Choose the daemon-owned capability posture for new runs. Existing runs keep their frozen snapshot." status={permissionSettingsUnavailable ? 'unavailable' : permissionStatus?.status === 'blocked' || permissionSettings?.resolution.status === 'blocked' ? 'degraded' : permissionStatus?.status === 'degraded' || permissionSettings?.resolution.status === 'degraded' ? 'degraded' : permissionSettings ? 'ready' : 'loading'} statusLabel={permissionSettingsUnavailable ? 'Unavailable' : permissionStatus?.status ?? permissionSettings?.resolution.status ?? 'Loading'}>
+                    <PermissionProfileCard
+                      settings={permissionSettings}
+                      {...(permissionStatus ? { status: permissionStatus } : {})}
+                      unavailable={permissionSettingsUnavailable}
+                      selectedProfileId={permissionProfileId}
+                      selectedApprovalPosture={permissionApprovalPosture}
+                      onProfileChange={setPermissionProfileId}
+                      onApprovalPostureChange={setPermissionApprovalPosture}
+                      onSave={onPatchPermissionSettings ? () => { void savePermissionProfile(); } : undefined}
+                      saveBusy={permissionBusy}
+                      fullHostAcknowledged={permissionFullHostAcknowledged}
+                      onFullHostAcknowledgedChange={setPermissionFullHostAcknowledged}
+                      onConfirmFullHost={onConfirmFullHost ? () => { void confirmFullHost(); } : undefined}
+                      confirmBusy={permissionConfirmBusy}
+                      onRevoke={onRevokePermission ? () => { void revokePermission(); } : undefined}
+                      revokeBusy={permissionRevokeBusy}
+                    />
+                  </SettingsSection>
                   <SettingsSection id="capability-profile-settings" eyebrow="CAPABILITY PROFILE" title="Capability profile" description="Choose a bounded intent; the daemon resolves the effective permissions." status={capabilityProfileSettingsUnavailable ? 'unavailable' : capabilityProfileSettings?.resolution.status === 'blocked' ? 'degraded' : capabilityProfileSettings?.resolution.status === 'degraded' ? 'degraded' : capabilityProfileSettings ? 'ready' : 'loading'} statusLabel={capabilityProfileSettingsUnavailable ? 'Unavailable' : capabilityProfileSettings?.resolution.status ?? 'Loading'}>
                     {capabilityProfileSettingsUnavailable ? <p className="muted">Capability profile settings are unavailable; existing run controls remain unchanged.</p> : capabilityProfileSettings ? <>
                       <div className="capability-profile-cards" role="radiogroup" aria-label="Capability profiles">

@@ -60,4 +60,26 @@ describe('ConversationShell', () => {
     expect(recovery).toContain('Retry as new run');
     expect(recovery).not.toContain('APPROVAL REQUIRED');
   });
+
+  it('renders the immutable permission snapshot beside the run timeline', () => {
+    const permissionSnapshot = {
+      schemaVersion: 'ready4vibe_permission_profile_run_snapshot_v1',
+      status: 'ready',
+      reasonCode: 'PROFILE_READY',
+      profileRevision: 'profile-1',
+      policyRevision: 'policy-1',
+      requestedProfile: { schemaVersion: 'ready4vibe_permission_profile_v1', profileId: 'workspace-coding', filesystemScope: 'workspace-only', processScope: 'none', networkMode: 'off', mcpSkillMode: 'off', approvalPosture: 'bounded-auto', taskTrust: 'trusted-workspace', workspaceId: 'workspace-default', policyRevision: 'policy-1', profileRevision: 'profile-1', requiresConfirmation: false, updatedAt: '2026-08-05T00:00:00.000Z' },
+      effectiveProfile: { schemaVersion: 'ready4vibe_permission_profile_v1', profileId: 'workspace-coding', filesystemScope: 'workspace-only', processScope: 'none', networkMode: 'off', mcpSkillMode: 'off', approvalPosture: 'bounded-auto', taskTrust: 'trusted-workspace', workspaceId: 'workspace-default', policyRevision: 'policy-1', profileRevision: 'profile-1', requiresConfirmation: false, updatedAt: '2026-08-05T00:00:00.000Z' },
+      effectiveScope: { kind: 'run', profileId: 'workspace-coding', filesystemScope: 'workspace-only', processScope: 'none', networkMode: 'off', mcpSkillMode: 'off', approvalPosture: 'bounded-auto', taskTrust: 'trusted-workspace', workspaceId: 'workspace-default' },
+      grantId: null,
+      grantExpiresAt: null,
+      capturedAt: '2026-08-05T00:00:00.000Z',
+    } as never;
+    const html = renderToStaticMarkup(<ConversationShell run={{ ...runFixture('executing'), permissionSnapshot }} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} />);
+    expect(html).toContain('PERMISSION SNAPSHOT');
+    expect(html).toContain('Frozen for this run');
+    expect(html).toContain('profile-1');
+    expect(html).toContain('workspace-coding');
+    expect(html).not.toMatch(/api[_-]?key|Authorization|sessionId|accessToken|C:\\Users\\|\/home\//iu);
+  });
 });

@@ -1,5 +1,5 @@
 import type { FormEvent, JSX, RefObject } from 'react';
-import type { RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
+import type { PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
 import { Button, Textarea } from '../ui/index.js';
 import { ApprovalCard } from './ApprovalCard.js';
 import { RecoveryCard } from './RecoveryCard.js';
@@ -114,5 +114,30 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function RunConsole({ run, events, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
+  return <>
+    {run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} />}
+    <RunConsoleContent run={run} events={events} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} />
+  </>;
+}
+
+function PermissionSnapshotSummary({ snapshot }: { readonly snapshot: PermissionProfileRunSnapshot }): JSX.Element {
+  const effective = snapshot.effectiveProfile;
+  const scope = snapshot.effectiveScope;
+  const statusLabel = snapshot.status === 'ready' ? 'active' : snapshot.status;
+  return <section className="permission-snapshot-summary" data-status={snapshot.status} aria-label="Frozen permission snapshot">
+    <div className="permission-snapshot-heading"><div><div className="eyebrow">PERMISSION SNAPSHOT</div><strong>Frozen for this run</strong></div><span className="status-chip" data-status={snapshot.status}>{statusLabel}</span></div>
+    <div className="permission-snapshot-grid"><div><span>requested</span><strong>{snapshot.requestedProfile.profileId}</strong></div><div><span>effective</span><strong>{effective?.profileId ?? 'blocked'}</strong></div><div><span>profile revision</span><strong>{snapshot.profileRevision}</strong></div><div><span>policy revision</span><strong>{snapshot.policyRevision}</strong></div></div>
+    {effective && <p className="muted">Scope: {effective.filesystemScope} · process {effective.processScope} · network {effective.networkMode} · posture {scope?.approvalPosture ?? effective.approvalPosture}</p>}
+    {!effective && <p className="permission-snapshot-blocked">Reason: {snapshot.reasonCode}. The daemon will not silently widen this run.</p>}
+    {snapshot.grantExpiresAt && <p className="muted">Session grant expiry: {formatSnapshotTimestamp(snapshot.grantExpiresAt)}</p>}
+  </section>;
+}
+
+function formatSnapshotTimestamp(value: string): string {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : 'not set';
+}
+
+function RunConsoleContent({ run, events, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
   return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div><div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <RecoveryCard onRetry={onRetry} />}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} />)}<ToolOutputInspector events={events} /><pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list">{events.map((event) => <div className="event-row" key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{event.type}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <Button variant="destructive" className="cancel-button" onClick={onCancel}>请求取消</Button>}</section>;
 }

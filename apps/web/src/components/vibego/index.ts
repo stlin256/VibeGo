@@ -2,6 +2,7 @@ export * from './ConversationShell.js';
 export * from './ConversationHeader.js';
 export * from './ContextRail.js';
 export * from './ApprovalCard.js';
+export * from './PermissionProfileCard.js';
 export * from './RecoveryCard.js';
 export * from './SettingsSheet.js';
 export * from './SettingsSection.js';
