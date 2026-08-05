@@ -2,6 +2,7 @@ import type { ApprovalPolicy as ApprovalPolicyConfig, TaskTrust } from '@ready4v
 import { ToolRegistry, type ToolDescriptor, type ToolRisk, type ToolSandboxMode } from '@ready4vibe/tools';
 
 export * from './compiler.js';
+export * from './capability-profile.js';
 
 export type PolicyDecision = 'allow' | 'prompt' | 'forbidden';
 

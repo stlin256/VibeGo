@@ -64,5 +64,10 @@ must not become a second policy or execution engine.
 `ready4vibe_capability_profile_v1` schema and parser. The contract tests cover
 all four profile ids, unknown fields, secret/path/environment rejection,
 timestamp and acknowledgement rules, and external-sandbox references. No
-daemon or runtime package imports this contract yet; resolver and application
-integration remain later slices.
+daemon run path imports this contract yet. `@ready4vibe/policy` now provides
+the pure resolver; application integration remains a later slice.
+
+The resolver tests cover deterministic replay, monotonic narrowing, stale
+revision fail-closed behavior, transport/workspace gates and degraded optional
+model/sandbox/MCP health. It performs no filesystem, process, network,
+scheduler, approval or event-store operation.

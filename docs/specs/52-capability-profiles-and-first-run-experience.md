@@ -1,7 +1,7 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R1 strict contract implemented (pure resolver pending; no runtime
-  behavior change)
+- Status: R1 strict contract and pure resolver implemented (runtime integration
+  pending; no default behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
   persistence, policy/approval boundaries, transport/certificate adapters,
@@ -482,8 +482,10 @@ daemon application boundary and are independently mergeable.
 `ready4vibe_capability_profile_v1` schema and parser. Its focused suite has 71
 tests, including five capability-profile cases for all four profile ids,
 unknown-field rejection, secret/path/environment rejection, acknowledgement
-requirements and external-sandbox references. No daemon package imports the
-contract yet; the pure resolver is the next isolated change.
+requirements and external-sandbox references. `@ready4vibe/policy` now adds a
+pure `CapabilityProfileResolver` with deterministic narrowing and health gates;
+its focused package suite has 24 tests. Neither slice changes the daemon run
+path or starts any runtime.
 
 ### 52-R2: Onboarding and capability status UI
 

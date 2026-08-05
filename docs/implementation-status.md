@@ -366,8 +366,9 @@ The following work is documented but not fully implemented yet:
   cross-cutting capability-profile and first-run UX gate is now specified; ADR
   0033 freezes the R1 contract boundary. The strict
   `ready4vibe_capability_profile_v1` contract is implemented in
-  `packages/contracts` with 5 focused tests (71 contract tests total). The
-  pure resolver and daemon integration remain pending. The plan defines
+  `packages/contracts` with 5 focused tests (71 contract tests total).
+  `@ready4vibe/policy` now provides the pure resolver with 7 focused tests
+  (24 policy tests total); daemon integration remains pending. The plan defines
   preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
   profile/run snapshot isolation and Host-first acceptance. Its release gate
