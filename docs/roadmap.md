@@ -1217,3 +1217,20 @@ and search, and a responsive Web card. The existing generic model settings
 surface and all run/Goal/permission authorities remain unchanged. Contracts,
 adapter, daemon, and Web focused tests plus typechecks pass; live provider
 requests and reviewer/ApprovalBroker integration remain deferred to 61-6/63.
+
+## Spec 61-6 next slice: DeepSeek adapter smoke evidence (2026-08-05)
+
+Add a fixed-parameter, opt-in `smoke:deepseek` runner and workflow fixture.
+The command must use `--secret-env` rather than a key argument, keep reports
+bounded/redacted, and distinguish fixture adapter evidence from live daemon /
+harness readiness. Start with text/usage/terminal, cancel, timeout and failure
+mapping; defer full tool/reviewer/search/governed evidence to the subsequent
+explicit harness integration gate.
+
+### Spec 61-6 adapter smoke implementation checkpoint (2026-08-05)
+
+The bounded `smoke:deepseek` command and six-test fixture are implemented and
+included in the workflow gate. It is explicitly direct-adapter evidence: the
+runner never creates a second daemon/scheduler or writes events, and reports
+contain no key, prompt, raw output, headers, endpoint or absolute path. Live
+DeepSeek and daemon/harness readiness remain separate, opt-in gates.

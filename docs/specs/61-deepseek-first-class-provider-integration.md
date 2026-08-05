@@ -310,6 +310,16 @@ YAML 或 JSON：
 只接受 `--endpoint`、`--model`、`--secret-env` 等 bounded 参数。它不能进入默认
 `pnpm verify`，也不能把 key 写到命令行、仓库、事件或报告。
 
+首个实现 slice 采用独立 `scripts/smoke-deepseek.mjs`：它直接调用已经构造好的
+`DeepSeekProvider`，只负责 bounded text stream、首个可见 token/终态/usage、显式
+AbortSignal 和 timeout 的 adapter evidence；不会创建第二个 daemon、scheduler 或
+事件事实源。`--secret-env` 只传环境变量名，key 在进程内读取一次。fixture tests
+通过注入 provider/fetch 覆盖 missing secret、HTTP/auth、partial stream、cancel、
+timeout 和 malformed terminal；live 命令仍需用户显式提供 endpoint/model/secret-env，
+报告不写 endpoint、prompt、headers、raw output、key 或绝对路径。完整 daemon →
+RunManager → AgentLoop、tool/Approval/Sandbox、reviewer/search 和 governed evidence
+仍需后续 61-6/Spec 60 evidence gate，不得用此 adapter smoke 冒充 harness 完成。
+
 至少收集以下可重现证据：
 
 1. DeepSeek text streaming：首 token、终态、usage、model snapshot；
@@ -437,9 +447,11 @@ evidence，未宣称真实 DeepSeek/live search 或 Spec 63 reviewer authority �
 
 ### 61-6：真实 provider 与 Harness evidence
 
-实现 `smoke:deepseek` 或显式 harness provider mode，按本规格 10.2 执行真实 text、
-thinking、tool、reviewer、search、cancel/timeout/context-limit evidence，并与 Spec 60
-的 full evidence bundle 关联。
+先落地 `smoke:deepseek` 的 adapter evidence 和红线测试；随后再把显式 DeepSeek
+provider mode 接入现有 harness smoke，按本规格 10.2 执行真实 text、thinking、tool、
+reviewer、search、cancel/timeout/context-limit evidence，并与 Spec 60 的 full
+evidence bundle 关联。每一层必须单独标记 `fixture`/`live`/`blocked`，不能把 direct
+adapter smoke 晋级为 daemon/harness readiness。
 
 ### 61-7：文档与 Spec 62 handoff
 

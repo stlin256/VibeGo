@@ -1194,3 +1194,32 @@ Web API/App suites 106/106; contracts, model-deepseek, daemon and Web
 typechecks passed; `git diff --check` passed. This is fixture/application
 evidence only. Real DeepSeek smoke, live search, reviewer-to-ApprovalBroker
 wiring and Spec 61-7 documentation audit remain open.
+
+## Spec 61-6 adapter smoke implementation checkpoint (2026-08-05)
+
+`scripts/smoke-deepseek.mjs` and its six-test Node fixture are now wired as
+`pnpm smoke:deepseek`. The command accepts only a complete endpoint/profile,
+model, bounded scenario/thinking options and a `--secret-env` reference; it
+never accepts a key argument. The runner emits provider/profile/model, status,
+bounded latency, first-token timing, event counts, finish reason, usage and a
+stable error code only. It covers fixture healthy, missing credential,
+auth/partial-stream, cancel, timeout and CLI/privacy boundaries. The focused
+adapter suite remains 16/16 and the smoke workflow fixture is 6/6.
+
+This checkpoint is adapter evidence only: no daemon, RunManager, Scheduler,
+tool, reviewer, search, Goal or event ledger is created by the runner, and no
+live request has been used as release evidence. Full harness integration and
+live evidence remain blocked/deferred to the next 61-6 slice.
+
+### Spec 61-6 smoke boundary (design freeze retained, 2026-08-05)
+
+The accepted boundary for this slice is an opt-in `smoke:deepseek` adapter
+evidence runner. It
+read a runtime key only from a bounded `--secret-env` reference, call the
+complete configured endpoint through `DeepSeekProvider`, and emit only provider
+id/profile/model, status, bounded latency, event counts, finish reason, usage
+and stable error code. It will not create another daemon/scheduler, persist
+events, print prompts/raw output, or enter default `pnpm verify`. Fixture tests
+will cover missing credentials, auth/5xx, malformed/partial streams, explicit
+cancel and timeout before any live request is attempted. Full harness, tool,
+reviewer, search and governed evidence remain separate gates.
