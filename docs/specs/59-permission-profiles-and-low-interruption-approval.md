@@ -444,6 +444,26 @@ a fake provider. A healthy fixture smoke proves only the daemon/permission
 boundary; it is not release evidence for host security, cross-platform support,
 transport certificates or a production LLM. Those claims remain Spec 60 gates.
 
+#### 59-5 implementation checkpoint (2026-08-05)
+
+The first fixture slice is implemented by `scripts/smoke-permissions.mjs` and
+`scripts/smoke-permissions.test.mjs`, with the opt-in `smoke:permissions`
+package command. The default runner pairs through the daemon AuthGate, observes
+the daemon permission settings/confirmation/revoke boundary, captures the
+workspace-coding and trusted full-host snapshots, executes only the fixed
+bounded host fixture through the existing `HostRestrictedProcessRunner`, and
+checks cancellation, TTL expiry, revoke, session isolation, untrusted denial,
+host-runner-unavailable denial and snapshot immutability. The report contains
+only bounded statuses/codes and platform metadata.
+
+On the current Windows checkout, the fixture was run separately for
+`workspace-coding` and `full-host` and together; all three reports were
+`healthy`. Focused script tests pass 4/4, the daemon permission file passes 7/7,
+and the host-process lifecycle file passes 8/8. This is application/fixture
+evidence only: the production daemon still reports a missing host runner by
+default, no real LLM/tool run is claimed by this slice, and Spec 59 remains
+Draft until the real runtime and Spec 60 release gates are complete.
+
 ## 9. Definition of Done
 
 Spec 59 只有在以下条件全部满足后才能标记 `Implemented`：

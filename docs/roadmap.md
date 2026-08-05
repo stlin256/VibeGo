@@ -937,6 +937,17 @@ external sandbox. Reports are redacted and `blocked`/`not-run` remain distinct
 from healthy. Real provider, Windows, container and release claims remain
 partial until the Spec 60 evidence matrix is satisfied.
 
+### Spec 59-5 implementation checkpoint (2026-08-05)
+
+The opt-in `smoke:permissions` runner and its 4-test redaction/failure fixture
+are now implemented. On Windows, separate `workspace-coding`, `full-host` and
+combined runs reached `healthy`; the daemon permission focused file passed 7
+tests and the host process lifecycle file passed 8 tests. Evidence covers
+AuthGate-bound settings/confirmation/revoke, immutable snapshots, TTL/session
+isolation, untrusted and unavailable-host fail-closed behavior and a fixed
+bounded host-process fixture. Production host-runner wiring, real LLM/tool
+execution, container parity and release evidence remain partial under Spec 60.
+
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 
 详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程

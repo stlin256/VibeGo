@@ -41,14 +41,21 @@ const runConfig = (overrides: Partial<RunConfig> = {}): RunConfig => ({
   ...overrides,
 });
 
-function manager(settings = new InMemorySettingsStore(), policyValue: CapabilityProfilePolicy = policy(), grantMaxUses = 2): DurablePermissionProfileSettingsManager {
+function manager(
+  settings = new InMemorySettingsStore(),
+  policyValue: CapabilityProfilePolicy = policy(),
+  grantMaxUses = 2,
+  clock: () => Date = () => new Date(at),
+  grantTtlMs?: number,
+): DurablePermissionProfileSettingsManager {
   return new DurablePermissionProfileSettingsManager({
     settings,
     policy: () => policyValue,
     workspaceExists: (workspaceId) => workspaceId === 'repo' || workspaceId === 'default',
     defaultWorkspaceId: 'repo',
     sessionGrantMaxUses: grantMaxUses,
-    clock: () => new Date(at),
+    ...(grantTtlMs === undefined ? {} : { sessionGrantTtlMs: grantTtlMs }),
+    clock,
   });
 }
 
@@ -61,6 +68,29 @@ describe('DurablePermissionProfileSettingsManager', () => {
       resolution: { status: 'ready', effectiveProfile: { profileId: 'workspace-coding' } },
     });
     expect(JSON.stringify(value.status())).not.toMatch(/api[_-]?key|token|secret|password|[A-Z]:\\/iu);
+
+    const snapshot = value.snapshotForRun(runConfig(), 'session-1');
+    expect(snapshot).toMatchObject({
+      status: 'ready',
+      reasonCode: 'PROFILE_READY',
+      profileRevision: 'profile-1',
+      effectiveProfile: {
+        profileId: 'workspace-coding',
+        filesystemScope: 'workspace-only',
+        processScope: 'none',
+        networkMode: 'off',
+      },
+      effectiveScope: {
+        profileId: 'workspace-coding',
+        filesystemScope: 'workspace-only',
+        processScope: 'none',
+        networkMode: 'off',
+      },
+      grantId: null,
+      grantExpiresAt: null,
+    });
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(JSON.stringify(snapshot)).not.toMatch(/api[_-]?key|token|secret|password|[A-Z]:\\/iu);
   });
 
   it('uses optimistic revisions and recovers stale policy to the safe default', () => {
@@ -100,12 +130,23 @@ describe('DurablePermissionProfileSettingsManager', () => {
       requestedAt: at,
     };
     expect(() => value.confirmFullHost(request, undefined)).toThrowError(expect.objectContaining({ code: 'AUTHENTICATION_REQUIRED' }));
+    expect(() => value.confirmFullHost(request, { sessionId: 'session-2', userId: 'local-user' })).toThrowError(expect.objectContaining({ code: 'AUTHENTICATION_REQUIRED' }));
     const confirmed = value.confirmFullHost(request, { sessionId: 'session-1', userId: 'local-user' });
     expect(confirmed).toMatchObject({ status: 'ready', grant: { status: 'active', maxUses: 2, usedUses: 0 } });
     const hostRun = runConfig({ sandbox: { mode: 'danger-full-access', enabledBy: 'explicit-user-only' }, createdBySessionId: 'session-1' });
     expect(value.snapshotForRun(hostRun, 'session-1')).toMatchObject({ status: 'ready', grantId: expect.any(String), effectiveProfile: { profileId: 'full-host' } });
     expect(value.snapshotForRun(hostRun, 'session-1')).toMatchObject({ status: 'ready' });
     expect(value.snapshotForRun(hostRun, 'session-1')).toMatchObject({ status: 'blocked', reasonCode: 'SESSION_GRANT_EXHAUSTED' });
+    expect(value.snapshotForRun({ ...hostRun, createdBySessionId: 'session-2' }, 'session-2')).toMatchObject({ status: 'blocked', reasonCode: 'FULL_HOST_CONFIRMATION_REQUIRED' });
+    expect(() => value.revoke({
+      schemaVersion: 'ready4vibe_permission_revoke_request_v1',
+      requestId: 'revoke-wrong-session',
+      sessionId: 'session-1',
+      userId: 'local-user',
+      grantId: confirmed.grant?.grantId,
+      reason: 'user-requested',
+      requestedAt: at,
+    }, { sessionId: 'session-2', userId: 'local-user' })).toThrowError(expect.objectContaining({ code: 'AUTHENTICATION_REQUIRED' }));
     const revoked = value.revoke({
       schemaVersion: 'ready4vibe_permission_revoke_request_v1',
       requestId: 'revoke-1',
@@ -116,6 +157,79 @@ describe('DurablePermissionProfileSettingsManager', () => {
       requestedAt: at,
     }, { sessionId: 'session-1', userId: 'local-user' });
     expect(revoked.status).toBe('revoked');
+    expect(value.snapshotForRun(hostRun, 'session-1')).toMatchObject({ status: 'blocked', reasonCode: 'SESSION_GRANT_REVOKED', grantId: null });
+  });
+
+  it('expires a full-host grant at its bounded TTL and never falls back to host execution', () => {
+    let now = new Date(at);
+    const value = manager(new InMemorySettingsStore(), policy(), 5, () => now, 1_000);
+    const fullHost = {
+      ...value.status().settings.profile,
+      profileId: 'full-host' as const,
+      filesystemScope: 'host' as const,
+      processScope: 'host' as const,
+      approvalPosture: 'session-auto' as const,
+      taskTrust: 'trusted-user' as const,
+      workspaceId: undefined,
+      requiresConfirmation: true,
+    };
+    const saved = value.patch({ profile: fullHost, expectedRevision: 'profile-1' });
+    const request = {
+      schemaVersion: 'ready4vibe_permission_confirmation_request_v1' as const,
+      requestId: 'request-ttl',
+      sessionId: 'session-1',
+      userId: 'local-user',
+      requestedProfile: saved.settings.profile,
+      expectedProfileRevision: saved.currentRevision,
+      acknowledged: true as const,
+      requestedAt: at,
+    };
+    value.confirmFullHost(request, { sessionId: 'session-1', userId: 'local-user' });
+    const hostRun = runConfig({ sandbox: { mode: 'danger-full-access', enabledBy: 'explicit-user-only' }, createdBySessionId: 'session-1' });
+    expect(value.snapshotForRun(hostRun, 'session-1')).toMatchObject({ status: 'ready' });
+
+    now = new Date(Date.parse(at) + 1_001);
+    expect(value.permissionStatus('session-1')).toMatchObject({
+      status: 'expired',
+      reasonCode: 'SESSION_GRANT_EXPIRED',
+      effectiveProfile: null,
+      grant: { status: 'expired' },
+    });
+    expect(value.snapshotForRun(hostRun, 'session-1')).toMatchObject({
+      status: 'blocked',
+      reasonCode: 'SESSION_GRANT_EXPIRED',
+      effectiveProfile: null,
+      grantId: null,
+    });
+  });
+
+  it('keeps an already captured workspace snapshot unchanged after settings change', () => {
+    const value = manager();
+    const captured = value.snapshotForRun(runConfig(), 'session-1');
+    const original = structuredClone(captured);
+    const fullHost = {
+      ...value.status().settings.profile,
+      profileId: 'full-host' as const,
+      filesystemScope: 'host' as const,
+      processScope: 'host' as const,
+      approvalPosture: 'explicit' as const,
+      taskTrust: 'trusted-user' as const,
+      workspaceId: undefined,
+      requiresConfirmation: true,
+    };
+    value.patch({ profile: fullHost, expectedRevision: 'profile-1' });
+
+    expect(captured).toEqual(original);
+    expect(captured).toMatchObject({
+      status: 'ready',
+      profileRevision: 'profile-1',
+      effectiveProfile: { profileId: 'workspace-coding', processScope: 'none' },
+    });
+    expect(value.snapshotForRun(runConfig({ sandbox: { mode: 'danger-full-access', enabledBy: 'explicit-user-only' } }), 'session-1')).toMatchObject({
+      status: 'blocked',
+      reasonCode: 'FULL_HOST_CONFIRMATION_REQUIRED',
+      profileRevision: 'profile-2',
+    });
   });
 
   it('fails closed for untrusted host requests and an unavailable host runner', () => {

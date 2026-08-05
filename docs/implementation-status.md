@@ -712,6 +712,17 @@ semantics. Production daemon startup remains host-runner-missing by default,
 and no fallback to host or external sandbox is permitted. Real LLM, Windows,
 container and release evidence stays partial until the Spec 60 gates run.
 
+### Spec 59-5 implementation checkpoint (2026-08-05)
+
+Implemented `scripts/smoke-permissions.mjs` plus its 4-test fixture and the
+`smoke:permissions` package command. The runner uses a generated temporary
+workspace, daemon AuthGate/settings routes, the existing HostRestrictedProcessRunner
+and bounded redacted reports. Current Windows evidence is healthy for
+workspace-coding, full-host and combined modes; focused daemon permission tests
+pass 7/7 and host process lifecycle tests pass 8/8. The smoke does not enable a
+host runner in production daemon startup, invoke a real LLM/tool run or claim
+container/remote/release support; those remain partial/blocked under Spec 60.
+
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 
 The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).
