@@ -7,7 +7,7 @@ and records evidence strength separately from release claims.
 ## Gate decision
 
 **62-0 audit: complete; Spec 62 release-documentation gate: constrained.** The
-matrix is current for commit `11c2b33`, but it does not authorize claims that
+matrix is current for commit `0a41cb4`, but it does not authorize claims that
 remain `partial`, `blocked`, or `not-run`. README changes may correct bounded
 status, setup and safety guidance; they must not call the project release-ready
 until Spec 60 and the required runtime/device/release gates are complete.
@@ -16,7 +16,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 
 | Check | Evidence |
 | --- | --- |
-| Branch / commit | `main` / `11c2b33` (`origin/main`); clean worktree at audit start |
+| Branch / commit | `main` / `0a41cb4` (`origin/main`); clean worktree at audit start |
 | Remote | `origin` points to the public VibeGo repository |
 | Package manager | `pnpm@11.9.0` from `package.json` |
 | Node | bundled validation runtime `v24.14.0` |
@@ -24,7 +24,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | Lockfile | `pnpm-lock.yaml` present; not changed by this audit |
 | Workflow fixture | `pnpm test:workflow`: **78/78 passed** |
 | Focused current slice | contracts 112/112, model-deepseek 20/20, daemon 247/247; affected typecheck/build gates pass |
-| Full release gate | not rerun at this commit; previous `pnpm verify` evidence is historical |
+| Full static/unit gate | `pnpm verify`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
 | Secret boundary | no provider key, private key, cookie, full environment, or user workspace was read or written |
 
 ## Evidence legend
@@ -35,7 +35,7 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | E2 | Focused package/application tests and typechecks recorded in the implementation status; only affected current slices were rerun |
 | E3 | Explicitly authorized DeepSeek text/governed/cancel/context-limit reports from the preceding live commit; no broad capacity or provider-failure claim |
 | E4 | Existing model, permission, recovery, transport, MCP, container, certificate and performance fixtures; they prove bounded application behavior only |
-| E5 | Historical full `pnpm verify` result; stale for `1129b45` and must be rerun before release |
+| E5 | Current full static/unit `pnpm verify` at `0a41cb4`; does not cover live/remote/device/release gates |
 | E6 | Required physical devices, public ACME/TLS, Tailscale/SSH, clean-host install, signing/SBOM/attestation and production host-runner evidence |
 
 ## Spec 01–61 matrix
@@ -111,9 +111,12 @@ gate cannot honestly be claimed from this checkout.
 
 ## Required blockers and re-acceptance
 
+The former stale full-gate blocker is resolved by the current `pnpm verify`
+run at `0a41cb4`; the remaining blockers below are runtime, remote, device or
+release evidence gaps.
+
 | Blocker | Return spec | Evidence required |
 | --- | --- | --- |
-| Current full gate is stale | 60-1/60-2 | `pnpm verify` plus both diff checks at a clean or recorded fixture checkout |
 | Provider 5xx/timeout and broad failure evidence | 60-4/47 | explicitly authorized bounded live negative smoke, never a fake pass |
 | Task-specific Goal validation/recovery | 58-6/60-3 | independent verifier, crash/retry evidence and no old tool replay |
 | Host/container/platform parity | 48/59-5 | permission/container cleanup evidence on target platforms |
