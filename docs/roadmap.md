@@ -783,7 +783,7 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
 
-## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0、58-1 已完成，58-2 应用切片已实现，后续 58-3 进行中，Draft）
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0、58-1 已完成，58-2 已实现，58-3 进行中，Draft）
 
 详见 [Spec 58](specs/58-goal-control-and-harness-completion.md) 及其
 [58-0 prerequisite audit](reports/58-0-prerequisite-verification-2026-08-05.md)。当前 Goal Control
@@ -807,6 +807,11 @@ stale revision、quota 状态转移和验证证据门禁；本阶段仍不接入
 admission 与 binding，最后调用现有 `RunManager.start`；普通 interactive run 不变。v0/v1
 SQLite reader/writer 的混合表兼容和 fail-closed append 顺序也已加入回归测试。后续 58-3
 负责 validation writeback、quota exactly-once 和 crash reconciliation。
+
+58-3 已进入实现：新增的设计边界见 [ADR 0038](adr/0038-governed-terminal-writeback-and-recovery.md)。
+当前切片将通过现有 `RunManager.subscribe/readEvents` 观察 governed run 终态，由独立 verifier
+返回 bounded validation，再在 Goal lock 下完成 Todo/quota 原子写回，并为 restart/retry 保留
+fail-closed、fresh-attempt 语义。真实 task-specific verifier 和 LLM governed smoke 仍后置。
 
 Spec 58 将 Goal 作为第一条“从基础概念到生产闭环”的纵切，同时定义 Model、Context、
 AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability、

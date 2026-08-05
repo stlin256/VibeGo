@@ -230,12 +230,28 @@ admission/binding 事件误交给 v0 reducer；v0 的可见 cursor 也只统计 
 
 ### 58-3：终态验证、写回与恢复
 
-- Run 终态后异步调用独立 verifier，写回不阻塞 run 终态；
-- 只有 validated evidence 才能在同一 Goal lock 下完成 Todo 并 consume quota；
-- run 成功/验证失败、run 失败、取消、超时、needs-recovery、重复 webhook 和 daemon
-  restart 都有确定的 Goal projection 结果；
-- 重试创建新 run/attempt，绝不重复执行旧工具调用、旧 approval 或旧 quota spend；
-- reconciliation 只能读取既有 `run_events`，不得执行模型、工具或 shell。
+- daemon application layer 新增 `GoalRunWritebackService`，通过现有
+  `RunManager.subscribe/readEvents` 观察绑定 run 的终态；不修改 AgentLoop 核心循环；
+- 终态后异步调用注入的独立 `GoalRunVerifier`。verifier 只返回 bounded status、summary、
+  verifier revision 和 safe event refs；默认实现 fail-closed 为 `inconclusive`，不能把
+  模型自报完成直接变成 Todo 完成；写回不阻塞 run 终态；
+- governed admission 在 binding 后、`RunManager.start` 前创建 `quota.reserved`（单位、
+  turnKey、attempt 和过期时间均受 contract 限制）。run 启动失败会释放 reservation；
+  binding/reservation 已持久化但进程崩溃时，重试可恢复同一 request 的未启动 saga；
+- 只有 `validated` evidence 才能在 Goal Control 的单 Goal lock 和一个原子 batch 内同时
+  `todo.completed` 与 `quota.consumed`。重复终态通知、重复 evidence、已完成 Todo 或已消费
+  reservation 都是 no-op；状态不一致或 stale revision fail-closed；
+- `failed`、`cancelled`、`timed-out`、`needs-recovery` 或验证非 validated 只写 bounded
+  validation/recovery evidence，不完成 Todo、不消费 quota；
+- restart reconciliation 只读取已有 `run_events` 和 `goal_events`，发现 terminal run 后
+  重放 verifier/writeback；不执行模型、工具、shell、Git、MCP、Skill 或旧 tool call；
+- governed retry 由 daemon application service 显式创建新 request、runId、attempt、
+  turnKey 和 binding，旧 run 的 tool/approval/quota 不会重放。无 Goal binding 的 interactive
+  retry 继续使用现有 `RunManager` 行为。
+
+58-3 的失败/恢复边界冻结在 [ADR 0038](../adr/0038-governed-terminal-writeback-and-recovery.md)。
+本阶段不宣称真实 task-specific verifier 或真实 LLM governed smoke；verifier adapter 和
+live evidence 仍属于 58-5。
 
 ### 58-4：Goal Web 工作流
 

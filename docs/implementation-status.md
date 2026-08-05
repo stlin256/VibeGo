@@ -629,6 +629,25 @@ scheduler tests and 191 daemon tests. This note does not claim 58-3 validation
 writeback, quota reservation/consume, crash reconciliation or real governed
 LLM smoke.
 
+## Spec 58-3 governed terminal writeback and recovery design note (2026-08-05)
+
+The 58-3 boundary is frozen in [ADR 0038](adr/0038-governed-terminal-writeback-and-recovery.md).
+The planned implementation adds a daemon `GoalRunWritebackService` and an
+injected fail-closed `GoalRunVerifier` around the existing `RunManager` event
+ports. Governed admission will reserve one bounded quota unit before starting
+the run when the production quota policy is enabled; terminal writeback will
+record bounded validation/recovery evidence; only validated evidence may enter
+the atomic Goal-lock `todo.completed` + `quota.consumed` operation. Restart
+reconciliation reads existing `run_events` only, and governed retry creates a
+fresh request/run/attempt/binding rather than calling generic interactive
+recovery.
+
+This is a design freeze, not an implementation claim yet. The acceptance
+fixture set must cover validation failure, run failure/cancel/restart, duplicate
+terminal notification, reservation release/consume, stale revision, and fresh
+governed retry. No AgentLoop core change, second scheduler, raw transcript
+writeback or real governed LLM smoke is in scope for this slice.
+
 ## Spec 60 planning note (2026-08-05)
 
 `docs/specs/60-complete-verification-and-release-evidence.md` is the Draft master
