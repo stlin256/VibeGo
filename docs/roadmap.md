@@ -1020,3 +1020,11 @@ records bounded, redacted focused/full gate results under the ignored runtime
 evidence directory, preserving `failed`/`blocked`/`not-run` distinctions. It
 does not accept arbitrary commands, turn fixture output into release evidence,
 or alter existing run/Goal/permission authorities.
+
+#### Spec 60-1/60-2 implementation checkpoint (2026-08-05)
+
+The fixed-plan `pnpm verify:evidence` runner and six-test redaction fixture are
+implemented. A Windows focused run passed all five gates and produced an
+ignored bounded bundle; the workflow fixture gate reports 47/47 tests passed.
+This is verification evidence only and leaves live provider, remote, full-host,
+cross-platform and release claims partial or blocked.

@@ -79,6 +79,15 @@ distinct. This slice does not enable live LLM, remote transport, full-host,
 container or release operations, and it does not change AgentLoop, RunManager,
 Goal admission, Scheduler, Approval, Sandbox or event authorities.
 
+#### 60-1/60-2 implementation checkpoint (2026-08-05)
+
+`pnpm verify:evidence` and its six-test fixture are now implemented. The
+focused plan ran all five fixed gates successfully on Windows and wrote only
+bounded/redacted bundle files under `.ready4vibe/evidence/`; `pnpm
+test:workflow` reports 47/47 tests passed. The bundle is explicitly labelled
+`verification-gate-only`; the full plan and all live/remote/release gates remain
+opt-in and are not implied by this result.
+
 ## 3. 证据等级与结果语义
 
 每项测试结果必须带有 `evidenceLevel` 和 `claim`：

@@ -806,6 +806,15 @@ metadata. Arbitrary shell, raw child output, secrets and absolute paths are
 excluded; no live provider, remote transport, full-host or release claim is
 introduced by this slice.
 
+#### Spec 60-1/60-2 implementation checkpoint (2026-08-05)
+
+`scripts/verification-evidence.mjs`, its six-test fixture and the
+`verify:evidence` package command are implemented. The fixed focused plan ran
+successfully on Windows and emitted a secret/path-redacted bundle in the
+ignored runtime directory; `pnpm test:workflow` passes 47/47. The runner keeps
+failed, blocked and not-run distinct and does not claim live LLM, remote,
+full-host, cross-platform or signed-release evidence.
+
 ## Spec 61 planning note (2026-08-05)
 
 `docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation
