@@ -7,6 +7,7 @@ import {
   type GoalControlProjectionV1,
   type GoalRecoveryStatusV1,
   type GoalRunBindingV1,
+  type TodoTaskClass,
   type GoalValidationEvidenceV1,
   type GoalValidationStatusV1,
   type PermissionProfileRunSnapshot,
@@ -19,6 +20,7 @@ import {
   type GoalControlEventStoreV1,
 } from '@ready4vibe/goal-control';
 import type { RunManager, RunSnapshot } from './run-manager.js';
+import type { GoalVerifierRegistry } from './goal-verifier-registry.js';
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const RUN_ID = /^run_[A-Za-z0-9_-]{8,128}$/u;
@@ -35,6 +37,8 @@ export interface GoalRunEventDigest {
 
 export interface GoalRunVerifierInput {
   readonly binding: GoalRunBindingV1;
+  /** Derived only from the authoritative Goal projection; null means no Todo lane. */
+  readonly taskClass: TodoTaskClass | null;
   readonly run: {
     readonly runId: string;
     readonly status: RunStatus;
@@ -80,6 +84,8 @@ export interface GoalRunWritebackOptions {
   readonly runManager: RunManager;
   readonly goalControl?: GoalControlV1WriteService;
   readonly verifier?: GoalRunVerifier;
+  /** Optional explicit task-class registry; when supplied, missing lanes fail closed. */
+  readonly verifierRegistry?: GoalVerifierRegistry;
   readonly admitGoverned?: (input: unknown, options?: { readonly permissionSnapshot?: PermissionProfileRunSnapshot }) => Promise<unknown>;
   readonly clock?: () => Date;
   readonly producer?: string;
@@ -106,6 +112,7 @@ export class GoalRunWritebackService {
   private readonly builder = new GoalControlProjectionBuilder();
   private readonly goalControl: GoalControlV1WriteService;
   private readonly verifier: GoalRunVerifier;
+  private readonly verifierRegistry: GoalVerifierRegistry | undefined;
   private readonly clock: () => Date;
   private readonly producer: string;
   private readonly registrations = new Map<string, Registration>();
@@ -117,6 +124,7 @@ export class GoalRunWritebackService {
       clock: () => this.now(),
     });
     this.verifier = options.verifier ?? new FailClosedGoalRunVerifier();
+    this.verifierRegistry = options.verifierRegistry;
     this.clock = options.clock ?? (() => new Date());
     this.producer = options.producer ?? 'daemon-goal-writeback';
     if (!SAFE_ID.test(this.producer)) throw new Error('Goal writeback producer is invalid.');
@@ -239,15 +247,54 @@ export class GoalRunWritebackService {
   }
 
   private async verify(binding: GoalRunBindingV1, snapshot: RunSnapshot, terminal: GoalRunEventDigest, events: readonly StoredEvent[]): Promise<GoalRunVerifierResult> {
+    let projection: GoalControlProjectionV1;
+    try {
+      projection = this.builder.build(await this.options.goalStore.read(binding.goalId));
+    } catch {
+      return {
+        status: 'inconclusive',
+        verifierId: 'goal_projection_unavailable',
+        verifierRevision: 0,
+        summary: 'Validation was inconclusive because the authoritative Goal projection was unavailable.',
+        refs: { runId: binding.runId, eventIds: [terminal.id] },
+      };
+    }
+    const taskClass = projection.todos.find((todo) => todo.todoId === binding.todoId)?.taskClass ?? null;
     const input: GoalRunVerifierInput = {
       binding,
+      taskClass,
       run: { runId: snapshot.runId, status: snapshot.status, lastEventSeq: snapshot.lastEventSeq, outputBytes: Buffer.byteLength(snapshot.output, 'utf8') },
       terminal,
       events: events.map(digestEvent),
     };
+    let verifier = this.verifier;
+    let descriptor: { readonly verifierId: string; readonly verifierRevision: number } | undefined;
+    if (this.verifierRegistry) {
+      const resolution = this.verifierRegistry.resolve(taskClass);
+      if (resolution.status !== 'ready' || !resolution.verifier || !resolution.descriptor) {
+        return {
+          status: 'inconclusive',
+          verifierId: `registry_${resolution.status}`,
+          verifierRevision: 0,
+          summary: boundedSummary(`Task-specific verifier unavailable: ${resolution.reason}`),
+          refs: { runId: binding.runId, eventIds: [terminal.id] },
+        };
+      }
+      verifier = resolution.verifier;
+      descriptor = resolution.descriptor;
+    }
     try {
-      const candidate = await this.verifier.verify(input);
-      return normalizeVerifierResult(candidate, terminal.id, binding.runId);
+      const candidate = normalizeVerifierResult(await verifier.verify(input), terminal.id, binding.runId);
+      if (descriptor && (candidate.verifierId !== descriptor.verifierId || candidate.verifierRevision !== descriptor.verifierRevision)) {
+        return {
+          status: 'inconclusive',
+          verifierId: 'verifier_mismatch',
+          verifierRevision: 0,
+          summary: 'Validation was inconclusive because the verifier identity or revision did not match its descriptor.',
+          refs: { runId: binding.runId, eventIds: [terminal.id] },
+        };
+      }
+      return candidate;
     } catch {
       return {
         status: 'inconclusive',

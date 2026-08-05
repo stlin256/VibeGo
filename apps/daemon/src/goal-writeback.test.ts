@@ -6,6 +6,7 @@ import { InMemoryEventStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
 import { GoalAdmissionService } from './goal-admission.js';
 import { GoalRunWritebackService, type GoalRunVerifier } from './goal-writeback.js';
+import { GoalVerifierRegistry } from './goal-verifier-registry.js';
 import { RunManager } from './run-manager.js';
 import { createDaemonServer } from './server.js';
 
@@ -123,13 +124,13 @@ function makeVerifier(status: 'validated' | 'inconclusive' = 'validated'): GoalR
   };
 }
 
-function makeFixture(model: FakeModelProvider, verifier: GoalRunVerifier = makeVerifier(), registerBinding = true) {
+function makeFixture(model: FakeModelProvider, verifier: GoalRunVerifier = makeVerifier(), registerBinding = true, verifierRegistry?: GoalVerifierRegistry) {
   const goalStore = new InMemoryGoalControlEventStore();
   const eventStore = new InMemoryEventStore();
   const scheduler = new Scheduler(DEFAULT_SCHEDULER_POLICY);
   const runManager = new RunManager({ eventStore, scheduler, modelProvider: model, workspaceExists: () => true });
   const goalControl = new GoalControlV1WriteService(goalStore, { producer: 'writeback-test', clock: () => at });
-  const writeback = new GoalRunWritebackService({ goalStore, runManager, goalControl, verifier, clock: () => new Date(at) });
+  const writeback = new GoalRunWritebackService({ goalStore, runManager, goalControl, verifier, ...(verifierRegistry ? { verifierRegistry } : {}), clock: () => new Date(at) });
   const admission = new GoalAdmissionService({
     goalStore,
     runManager,
@@ -291,5 +292,73 @@ describe('GoalRunWritebackService', () => {
     expect(projection.quota.reservations[0]).toMatchObject({ status: 'reserved' });
     expect(model.requests).toHaveLength(0);
     writeback.close();
+  });
+
+  it('selects a task-specific verifier from the Goal projection and passes only bounded digests', async () => {
+    let seenInput: Record<string, unknown> | undefined;
+    const taskVerifier: GoalRunVerifier = {
+      verify: async (input) => {
+        seenInput = input as unknown as Record<string, unknown>;
+        return {
+          status: 'validated',
+          verifierId: 'verifier_advancement_v1',
+          verifierRevision: 1,
+          summary: 'Task verifier passed.',
+          refs: {},
+        };
+      },
+    };
+    const registry = new GoalVerifierRegistry();
+    registry.register({
+      schemaVersion: 'ready4vibe_goal_verifier_descriptor_v1',
+      verifierId: 'verifier_advancement_v1',
+      taskClass: 'advancement',
+      verifierRevision: 1,
+      status: 'ready',
+      privacy: 'local_private',
+      updatedAt: at,
+    }, taskVerifier);
+    const fixture = makeFixture(new FakeModelProvider({ events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }), taskVerifier, true, registry);
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.consumed')).toBe(true));
+    expect(seenInput).toBeDefined();
+    expect(seenInput).toMatchObject({ taskClass: 'advancement' });
+    expect(Object.keys(seenInput ?? {}).sort()).toEqual(['binding', 'events', 'run', 'taskClass', 'terminal']);
+    expect(seenInput).not.toHaveProperty('prompt');
+    expect(seenInput).not.toHaveProperty('transcript');
+    expect(seenInput).not.toHaveProperty('output');
+    fixture.writeback.close();
+  });
+
+  it('fails closed and releases quota when a registry verifier returns a mismatched id or revision', async () => {
+    const mismatched: GoalRunVerifier = {
+      verify: async () => ({
+        status: 'validated',
+        verifierId: 'verifier_other',
+        verifierRevision: 99,
+        summary: 'must not complete',
+        refs: {},
+      }),
+    };
+    const registry = new GoalVerifierRegistry();
+    registry.register({
+      schemaVersion: 'ready4vibe_goal_verifier_descriptor_v1',
+      verifierId: 'verifier_advancement_v1',
+      taskClass: 'advancement',
+      verifierRevision: 1,
+      status: 'ready',
+      privacy: 'local_private',
+      updatedAt: at,
+    }, mismatched);
+    const fixture = makeFixture(new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }), mismatched, true, registry);
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.released')).toBe(true));
+    const projection = new GoalControlProjectionBuilder().build(await fixture.goalStore.read(goalId));
+    expect(projection.todos[0]?.status).toBe('open');
+    expect(projection.quota.reservations[0]?.status).toBe('released');
+    expect(projection.validationEvidence[0]).toMatchObject({ status: 'inconclusive', verifierId: 'verifier_mismatch', verifierRevision: 0 });
+    fixture.writeback.close();
   });
 });

@@ -1453,7 +1453,7 @@ recorded in `reports/spec63-9-dedicated-profile-resolver-2026-08-06.md`.
 This closes the local resolver boundary only; no dedicated live provider smoke
 or upstream health claim is made.
 
-### Spec 58-6 task-specific Goal verifier registry design checkpoint (2026-08-06)
+### Spec 58-6 task-specific Goal verifier registry implementation checkpoint (2026-08-06)
 
 The implementation slice is now specified under [ADR 0050](adr/0050-task-specific-goal-verifier-registry.md).
 It will add a strict versioned `GoalVerifierDescriptorV1` contract and a small
@@ -1461,7 +1461,9 @@ daemon-owned registry keyed by authoritative Todo `taskClass`. Automatic
 selection is limited to `advancement`, `monitor` and `blocker`; `user_action`
 and `user_gate` remain fail-closed. The writeback service will pass only the
 bounded task class and run/event digests, and exact verifier id/revision
-matching will be required. The default daemon will register no semantic
-verifier, so no existing interactive or governed behavior changes in this
-design checkpoint. Focused contract/daemon tests and a redacted evidence report
-are required before this slice is marked implemented.
+matching is enforced. Missing, non-ready and user-owned lanes fail closed; a
+mismatch yields bounded `inconclusive` evidence and releases quota. The default
+daemon registers no semantic verifier, so existing interactive and governed
+fail-closed behavior remains unchanged. The contracts suite passes 120 tests;
+the daemon focused registry/writeback run passes 269 tests with typecheck and
+diff checks.

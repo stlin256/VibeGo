@@ -1450,3 +1450,10 @@ Todo or spend quota. The registry receives only task class and bounded
 run/event digests and never executes model/tool/shell/Git/MCP/Skill/filesystem or
 sandbox work. The default daemon keeps the registry empty, preserving ordinary
 interactive runs and existing governed fail-closed behavior.
+
+The implementation is complete for this bounded slice: contracts and daemon
+focused tests cover strict descriptor/privacy validation, duplicate/stale
+registration, missing/non-ready/user-owned lanes, authoritative task-class
+derivation, bounded verifier input, exact id/revision matching and quota
+release. No semantic verifier is registered by the default daemon; live
+task-specific validation and the broader 58-6 A–G module closure remain staged.

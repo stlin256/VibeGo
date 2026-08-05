@@ -582,3 +582,20 @@ Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities. The
 default daemon registers no semantic verifier, so existing unbound interactive
 runs and governed fail-closed behavior remain unchanged until a later explicit
 profile supplies a verifier.
+
+## Spec 58-6 task-specific verifier registry implementation checkpoint (2026-08-06)
+
+The bounded registry slice is implemented in `packages/contracts` and
+`apps/daemon`. `GoalVerifierDescriptorV1` is strict, revisioned and
+privacy/path checked; the daemon registry allows one lane per task class and
+only replaces it with a newer revision. `GoalRunWritebackService` derives the
+task class from the replayed Goal projection, selects the registry lane when an
+explicit registry is injected, and requires exact verifier id/revision
+matching. Missing, non-ready, user-owned (`user_action`/`user_gate`) and
+mismatched selections produce `inconclusive` evidence and release any
+reservation. The default daemon still injects no semantic registry, so
+ordinary interactive runs and the existing governed fail-closed path are
+unchanged.
+
+Focused evidence for this checkpoint is recorded in
+[`spec58-6-task-verifier-registry-2026-08-06.md`](../reports/spec58-6-task-verifier-registry-2026-08-06.md).
