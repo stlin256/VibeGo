@@ -1,7 +1,7 @@
 import type { FormEvent, JSX, RefObject } from 'react';
 import type { PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
 import { Button, Textarea } from '../ui/index.js';
-import { ApprovalCard } from './ApprovalCard.js';
+import { ApprovalCard, type ApprovalReviewPresentation } from './ApprovalCard.js';
 import { RecoveryCard } from './RecoveryCard.js';
 
 export interface ConversationCopy {
@@ -139,5 +139,58 @@ function formatSnapshotTimestamp(value: string): string {
 }
 
 function RunConsoleContent({ run, events, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
-  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div><div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <RecoveryCard onRetry={onRetry} />}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} />)}<ToolOutputInspector events={events} /><pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list">{events.map((event) => <div className="event-row" key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{event.type}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <Button variant="destructive" className="cancel-button" onClick={onCancel}>请求取消</Button>}</section>;
+  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">RUN CONSOLE</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div>{run.approvalReviewerSnapshot && <ReviewerRunSummary snapshot={run.approvalReviewerSnapshot} />}<div className="run-metrics"><div><span>queue</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>active</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>lease</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>events</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <RecoveryCard onRetry={onRetry} />}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} />)}<ToolOutputInspector events={events} /><pre className="output-view">{run.output || '等待模型输出…'}</pre><div className="event-list" aria-label="Run timeline">{events.map((event) => <div className="event-row" data-event-type={event.type} key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{timelineEventLabel(event)}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{!['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status) && <Button variant="destructive" className="cancel-button" onClick={onCancel}>请求取消</Button>}</section>;
+}
+
+function ReviewerRunSummary({ snapshot }: { readonly snapshot: NonNullable<RunSnapshot['approvalReviewerSnapshot']> }): JSX.Element {
+  const state = snapshot.status === 'disabled' || snapshot.posture === 'off' ? 'disabled' : snapshot.status;
+  return <div className="reviewer-run-summary" data-status={state} role="status"><span className="eyebrow">APPROVAL REVIEW SNAPSHOT</span><strong>{state === 'disabled' ? 'off' : `${snapshot.reviewerSource} · ${snapshot.posture}`}</strong><span className="muted">revision {snapshot.reviewerRevision} · policy {snapshot.policyRevision} · frozen for this run</span></div>;
+}
+
+function reviewStatusForApproval(approval: { readonly approvalId: string; readonly callId: string }, events: readonly StoredEvent[]): ApprovalReviewPresentation | undefined {
+  const matching = events.filter((event) => {
+    if (!event.type.startsWith('review.')) return false;
+    const payload = asRecord(event.payload);
+    if (!payload) return false;
+    return payload.approvalId === approval.approvalId || payload.correlationId === approval.callId || payload.callId === approval.callId;
+  });
+  const latest = matching.at(-1);
+  if (!latest) return undefined;
+  const payload = asRecord(latest.payload);
+  const reasonCode = safeReviewReasonCode(payload?.reasonCode);
+  const latencyMs = payload && typeof payload.latencyMs === 'number' && Number.isSafeInteger(payload.latencyMs) && payload.latencyMs >= 0 && payload.latencyMs <= 120_000 ? payload.latencyMs : undefined;
+  if (latest.type === 'review.unavailable') return { state: 'review-unavailable', ...(reasonCode ? { reasonCode } : {}), ...(latencyMs === undefined ? {} : { latencyMs }) };
+  if (latest.type === 'review.completed') {
+    const decision = payload?.decision;
+    if (decision === 'allow') return { state: 'reviewed', ...(reasonCode ? { reasonCode } : {}), ...(latencyMs === undefined ? {} : { latencyMs }) };
+    if (decision === 'deny') return { state: 'denied', ...(reasonCode ? { reasonCode } : {}), ...(latencyMs === undefined ? {} : { latencyMs }) };
+    return { state: 'asked', ...(reasonCode ? { reasonCode } : {}), ...(latencyMs === undefined ? {} : { latencyMs }) };
+  }
+  return { state: 'asked', ...(reasonCode ? { reasonCode } : {}), ...(latencyMs === undefined ? {} : { latencyMs }) };
+}
+
+const SAFE_REVIEW_REASON_CODES = new Set([
+  'eligible', 'reviewer-disabled', 'ineligible-risk', 'ineligible-trust',
+  'ineligible-sandbox', 'policy-denied', 'policy-ask', 'provider-unavailable',
+  'dedicated-profile-missing', 'timeout', 'cancelled', 'request-too-large',
+  'response-too-large', 'malformed-response', 'schema-mismatch',
+  'fingerprint-mismatch', 'revision-stale', 'budget-exhausted',
+  'review-revoked', 'invalid-request',
+]);
+
+function safeReviewReasonCode(value: unknown): string | undefined {
+  return typeof value === 'string' && SAFE_REVIEW_REASON_CODES.has(value) ? value : undefined;
+}
+
+function timelineEventLabel(event: StoredEvent): string {
+  if (event.type === 'review.completed') {
+    const decision = asRecord(event.payload)?.decision;
+    if (decision === 'allow') return 'reviewed';
+    if (decision === 'deny') return 'denied';
+    return 'asked';
+  }
+  if (event.type === 'review.unavailable') return 'review-unavailable';
+  if (event.type === 'review.requested') return 'asked';
+  if (event.type === 'review.revoked') return 'review-unavailable';
+  return event.type;
 }

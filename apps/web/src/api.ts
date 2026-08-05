@@ -1,4 +1,4 @@
-import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, ApprovalPosture as ApprovalPostureContract, CapabilityProfile as CapabilityProfileContract, CapabilityProfileRunSnapshot, DeepSeekSettingsStatus as DeepSeekSettingsStatusContract, PermissionConfirmationRequest, PermissionProfile as PermissionProfileContract, PermissionProfileId as PermissionProfileIdContract, PermissionProfileRunSnapshot as PermissionProfileRunSnapshotContract, PermissionProfileSettingsPatch, PermissionProfileSettingsStatus as PermissionProfileSettingsStatusContract, PermissionRevokeReason as PermissionRevokeReasonContract, PermissionRevokeRequest, PermissionRevokeResult as PermissionRevokeResultContract, PermissionSessionGrant, PermissionStatus as PermissionStatusContract, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary } from '@ready4vibe/contracts';
+import type { AgentMemoryKnowledgeSettingsPatch, AgentMemoryKnowledgeSettingsStatus as AgentMemoryKnowledgeSettingsStatusContract, AgentMemoryMode, AgentMemoryOperations, AgentMemorySettingsPatch, AgentMemorySettingsStatus as AgentMemorySettingsStatusContract, ApprovalPosture as ApprovalPostureContract, ApprovalReviewerSnapshot, CapabilityProfile as CapabilityProfileContract, CapabilityProfileRunSnapshot, DeepSeekSettingsStatus as DeepSeekSettingsStatusContract, PermissionConfirmationRequest, PermissionProfile as PermissionProfileContract, PermissionProfileId as PermissionProfileIdContract, PermissionProfileRunSnapshot as PermissionProfileRunSnapshotContract, PermissionProfileSettingsPatch, PermissionProfileSettingsStatus as PermissionProfileSettingsStatusContract, PermissionRevokeReason as PermissionRevokeReasonContract, PermissionRevokeRequest, PermissionRevokeResult as PermissionRevokeResultContract, PermissionSessionGrant, PermissionStatus as PermissionStatusContract, CapabilityProfileSettingsPatch, CapabilityProfileSettingsStatus as CapabilityProfileSettingsStatusContract, DeploymentReadiness, GoalProjection as GoalProjectionContract, GoalTodo, McpSettingsPatch, McpSettingsStatus as McpSettingsStatusContract, ModelProbeResult as ModelProbeResultContract, ObservabilityAuditResponse, ObservabilityOperationResponse, ObservabilityPricingResponse, ObservabilityRunUsage, ObservabilityTimeseries, ObservabilityUsageSummary, ApprovalReviewSettingsPatch, LlmApprovalSettingsProjection } from '@ready4vibe/contracts';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -134,6 +134,8 @@ export interface RunSnapshot {
   lastEventSeq: number;
   output: string;
   approvals?: readonly ApprovalSummary[];
+  /** Secret-free reviewer snapshot captured when this run started. */
+  approvalReviewerSnapshot?: ApprovalReviewerSnapshot;
   final?: { summary: string; exitReason: string };
   scheduler: { queuePosition: number | null; activeRunCount: number; workspaceLease: string | null };
 }
@@ -242,6 +244,8 @@ export type PermissionProfileRunSnapshot = PermissionProfileRunSnapshotContract;
 export type PermissionProfileIntent = PermissionProfile;
 export type PermissionProfileId = PermissionProfileIdContract;
 export type PermissionApprovalPosture = ApprovalPostureContract;
+export type ApprovalReviewSettingsStatus = LlmApprovalSettingsProjection;
+export type ApprovalReviewSettingsPatchInput = ApprovalReviewSettingsPatch;
 
 /**
  * Browser-safe permission status. The daemon's internal grant projection is
@@ -521,6 +525,18 @@ export class ApiClient {
 
   async probeDeepSeek(timeoutMs = 5_000): Promise<DeepSeekProbeResult> {
     return this.request<DeepSeekProbeResult>('/api/v1/settings/deepseek/probe', { method: 'POST', body: JSON.stringify({ timeoutMs }) });
+  }
+
+  async approvalReviewSettings(): Promise<ApprovalReviewSettingsStatus> {
+    return this.request<ApprovalReviewSettingsStatus>('/api/v1/settings/llm-approval', { method: 'GET' });
+  }
+
+  async patchApprovalReviewSettings(input: ApprovalReviewSettingsPatchInput): Promise<ApprovalReviewSettingsStatus> {
+    return this.request<ApprovalReviewSettingsStatus>('/api/v1/settings/llm-approval', { method: 'PATCH', body: JSON.stringify(input) });
+  }
+
+  async probeApprovalReview(): Promise<ApprovalReviewSettingsStatus> {
+    return this.request<ApprovalReviewSettingsStatus>('/api/v1/settings/llm-approval/probe', { method: 'POST' });
   }
 
   async capabilityProfileSettings(): Promise<CapabilityProfileSettingsStatus> {

@@ -49,4 +49,13 @@ describe('ApprovalCard', () => {
     expect(html).not.toContain('sandbox:');
     expect(html).not.toContain('sha256:demo');
   });
+
+  it('explains a bounded reviewer outcome while keeping the one-time user action', () => {
+    const html = renderToStaticMarkup(<ApprovalCard approval={approval} sandboxMode="workspace-write" reviewStatus={{ state: 'review-unavailable', reasonCode: 'timeout', latencyMs: 1_500 }} onApprove={() => undefined} />);
+    expect(html).toContain('REVIEW UNAVAILABLE');
+    expect(html).toContain('timeout');
+    expect(html).toContain('Allow once');
+    expect(html).toContain('Session-wide grants are managed in Permission settings.');
+    expect(html).not.toContain('auto-approve all');
+  });
 });

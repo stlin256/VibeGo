@@ -925,7 +925,7 @@ user-facing README/Quickstart/release wording is updated. The former
 `62-0-prerequisite-audit-2026-08-05.md` historical audit; it is not a fresh
 release gate for the new Spec 61 and must be refreshed after DeepSeek evidence.
 
-## Spec 63 planning and 63-4 implementation checkpoint (2026-08-05)
+## Spec 63 planning and 63-5 implementation checkpoint (2026-08-05)
 
 `docs/specs/63-llm-assisted-approval-and-review.md` and
 `docs/adr/0044-llm-assisted-approval-review-boundary.md` define the proposed
@@ -1323,3 +1323,17 @@ run/session/revision changes and terminal cleanup. Focused evidence is tracked
 in `reports/spec63-4-approval-review-broker-2026-08-05.md`; Web controls,
 durable reviewer events, dedicated provider selection and live smoke remain
 pending.
+
+### Spec 63-5 Web reviewer controls checkpoint (2026-08-05)
+
+The existing conversation-first Web shell now has typed reviewer settings
+projection/API wiring and an Approval Review Settings section. The switch is
+off by default; same-as-run is the only ready source, while dedicated mode is
+shown as blocked/degraded until a provider adapter exists. Patches carry only
+bounded non-secret intent and the daemon revision fence. Approval cards and
+the event timeline expose only `reviewed`, `asked`, `denied` and
+`review-unavailable` labels; the one-time allow action remains the existing
+authenticated `/approve` path, and session grants are not fabricated. Focused
+evidence is recorded in
+`reports/spec63-5-web-approval-review-2026-08-05.md`. Durable reviewer events,
+live smoke and full Spec 63 release evidence remain pending.

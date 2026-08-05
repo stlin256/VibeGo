@@ -1,6 +1,6 @@
 # ADR 0044: LLM-assisted approval review boundary
 
-- Status: Accepted for staged implementation (63-4 application integration complete; Web/events/live smoke pending)
+- Status: Accepted for staged implementation (63-5 Web/settings explanation complete; events/live smoke pending)
 - Date: 2026-08-05
 - Related: [Spec 63](../specs/63-llm-assisted-approval-and-review.md),
   [ADR 0003](0003-lan-access-and-codex-like-approval.md),
@@ -105,3 +105,17 @@ in-flight/cache key includes the normalized request, reviewer/policy revisions
 and run boundary; terminal cleanup and expiry invalidate it. No AgentLoop core
 state transition, RunManager default behavior, run_events/goal_events schema,
 or second scheduler/approval authority was introduced.
+
+## 63-5 Web checkpoint
+
+The conversation-first Web shell now exposes the authenticated reviewer
+projection through typed API methods and an Approval Review Settings section.
+It keeps the migration default off, renders dedicated mode as blocked/degraded
+until its provider adapter exists, and sends only non-secret patches with the
+daemon-owned expected revision. The UI explains the bounded low-risk scope and
+does not present an `Approve everything` or session-grant action. Approval
+cards and the run event timeline use bounded labels (`reviewed`, `asked`,
+`denied`, `review-unavailable`) without exposing prompts, commands, paths,
+credentials or raw model output. Responsive and accessibility fixtures cover
+the existing ratio-first shell; durable reviewer event storage and live smoke
+remain later phases.

@@ -1,7 +1,7 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: 63-4 implemented (bounded ApprovalBroker application integration;
-  Web, durable reviewer events and live smoke remain staged)
+- Status: 63-5 implemented (authenticated reviewer Settings UI and bounded
+  approval explanation; durable reviewer events and live smoke remain staged)
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -308,8 +308,24 @@ durable reviewer events remain later phases.
 
 ### 63-5: Web settings and approval explanation
 
-Add the Settings-sheet controls, status/degraded states and bounded timeline
-projection. Test keyboard, screen-reader, mobile and foldable variants.
+Implemented in the existing conversation-first Settings sheet. The browser API
+adds typed GET/PATCH/probe calls for `/api/v1/settings/llm-approval` and stores
+only the non-secret projection in React state; reviewer credentials, endpoints
+and raw model data are never accepted by the Web API helper or browser storage.
+The new Approval Review section has an explicit off-by-default switch, source
+selection (`Use current run model` or blocked/degraded `Dedicated reviewer`),
+posture and bounded-limit controls, health/revision/latency/error/next-step
+status, and plain-language scope copy. Settings changes are revision-fenced by
+the daemon; existing runs continue using their captured snapshot.
+
+Approval cards now explain `reviewed`, `asked`, `denied` and
+`review-unavailable` states from bounded run events/snapshot metadata. The
+primary action remains one exact approval; session-wide grants are explicitly
+directed to Permission settings and are never fabricated by this UI. The
+timeline and settings controls retain keyboard/screen-reader semantics and use
+ratio-aware layout rules for phone, foldable, tablet and portrait/landscape
+desktop widths. Focused Web evidence is recorded in
+[`spec63-5-web-approval-review-2026-08-05.md`](../reports/spec63-5-web-approval-review-2026-08-05.md).
 
 ### 63-6: security, failure and concurrency evidence
 

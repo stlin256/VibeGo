@@ -998,7 +998,7 @@ README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/
 项都必须先回到对应 Spec。截图不是硬性验收物；
 若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
 
-## Spec 63：LLM 辅助审批与审查（63-4 checkpoint）
+## Spec 63：LLM 辅助审批与审查（63-5 checkpoint）
 
 详见 [Spec 63](specs/63-llm-assisted-approval-and-review.md) 与
 [ADR 0044](adr/0044-llm-assisted-approval-review-boundary.md)。该规格为现有
@@ -1310,3 +1310,16 @@ errors use the existing user approval path. In-flight/TTL state is bounded to
 the run/revision boundary and cleaned at terminal completion. Web controls,
 durable reviewer events, dedicated provider selection and live smoke remain
 later phases.
+
+### Spec 63-5 Web reviewer controls checkpoint (2026-08-05)
+
+Web 已接入 authenticated `llm-approval/v1` GET/PATCH/probe API，并在现有
+conversation-first Settings sheet 增加 Approval Review 区块：默认关闭、
+same-as-run/dedicated source、advisory/bounded posture、bounded limits、
+health/revision/latency/error/next-step 投影均不含 secret。Dedicated provider
+没有实现时明确显示 degraded/blocked；设置按 daemon revision fence 保存，
+不改变运行中的 reviewer snapshot。ApprovalCard 与 run timeline 只显示
+bounded `reviewed/asked/denied/review-unavailable` 标签；“allow once”仍走
+现有 `/approve`，session grant 引导到 Permission settings，UI 不伪造第二套
+授权。新增键盘/屏幕阅读器与 phone/foldable/tablet/portrait desktop 的
+focused fixtures；durable reviewer events 和 live smoke 仍待 63-6/63-7。

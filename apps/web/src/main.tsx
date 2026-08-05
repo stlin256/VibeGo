@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type GoalProjectionListResponse, type GovernedPreflightInput, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionConfirmationInput, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type PermissionRevokeInput, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput, type GoalMutationResponse, type GoalPreflightResult } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type GoalProjectionListResponse, type GovernedPreflightInput, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionConfirmationInput, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type PermissionRevokeInput, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput, type GoalMutationResponse, type GoalPreflightResult } from './api.js';
 import { App } from './App.js';
 import { applyLocaleToDocument, loadLocale, saveLocale, type Locale } from './locale.js';
 
@@ -28,6 +28,8 @@ function RuntimeApp(): JSX.Element {
   const [permissionSettings, setPermissionSettings] = useState<PermissionProfileSettingsStatus>();
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>();
   const [permissionSettingsUnavailable, setPermissionSettingsUnavailable] = useState(false);
+  const [approvalReviewSettings, setApprovalReviewSettings] = useState<ApprovalReviewSettingsStatus>();
+  const [approvalReviewSettingsUnavailable, setApprovalReviewSettingsUnavailable] = useState(false);
   const [agentMemorySettings, setAgentMemorySettings] = useState<AgentMemorySettingsStatus>();
   const [agentMemorySettingsUnavailable, setAgentMemorySettingsUnavailable] = useState(false);
   const [agentMemoryOperations, setAgentMemoryOperations] = useState<AgentMemoryOperationsStatus>();
@@ -121,6 +123,16 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) {
       setPermissionStatus(undefined);
       setPermissionSettingsUnavailable(isPermissionSettingsUnavailable(reason));
+    }
+  };
+
+  const refreshApprovalReviewSettings = async (): Promise<void> => {
+    try {
+      setApprovalReviewSettings(await client.approvalReviewSettings());
+      setApprovalReviewSettingsUnavailable(false);
+    } catch (reason) {
+      setApprovalReviewSettings(undefined);
+      setApprovalReviewSettingsUnavailable(isApprovalReviewSettingsUnavailable(reason));
     }
   };
 
@@ -269,6 +281,7 @@ function RuntimeApp(): JSX.Element {
         void refreshDeepSeekSettings();
         void refreshCapabilityProfileSettings();
         void refreshPermissionSettings();
+        void refreshApprovalReviewSettings();
         void refreshAgentMemorySettings();
         void refreshAgentMemoryOperations();
         void refreshAgentMemoryKnowledgeSettings();
@@ -294,6 +307,7 @@ function RuntimeApp(): JSX.Element {
       await refreshDeepSeekSettings();
       await refreshCapabilityProfileSettings();
       await refreshPermissionSettings();
+      await refreshApprovalReviewSettings();
       await refreshAgentMemorySettings();
       await refreshAgentMemoryOperations();
       await refreshAgentMemoryKnowledgeSettings();
@@ -396,6 +410,22 @@ function RuntimeApp(): JSX.Element {
     try {
       await client.revokePermission(input);
       await refreshPermissionStatus();
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const patchApprovalReviewSettings = async (input: ApprovalReviewSettingsPatchInput): Promise<void> => {
+    try {
+      setApprovalReviewSettings(await client.patchApprovalReviewSettings(input));
+      setApprovalReviewSettingsUnavailable(false);
+      setError(undefined);
+    } catch (reason) { setError(safeError(reason)); throw reason; }
+  };
+
+  const probeApprovalReview = async (): Promise<void> => {
+    try {
+      setApprovalReviewSettings(await client.probeApprovalReview());
+      setApprovalReviewSettingsUnavailable(false);
       setError(undefined);
     } catch (reason) { setError(safeError(reason)); throw reason; }
   };
@@ -575,7 +605,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} locale={locale} onLocaleChange={setLocale} profile={profile} {...(capabilityProfileSettings ? { capabilityProfileSettings } : {})} capabilityProfileSettingsUnavailable={capabilityProfileSettingsUnavailable} {...(permissionSettings ? { permissionSettings } : {})} {...(permissionStatus ? { permissionStatus } : {})} permissionSettingsUnavailable={permissionSettingsUnavailable} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(deepSeekSettings ? { deepSeekSettings } : {})} deepSeekSettingsUnavailable={deepSeekSettingsUnavailable} {...(deepSeekProbe ? { deepSeekProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onCreateGoal={createGoal} onAddTodo={addGoalTodo} onOpenGate={openGoalGate} onResolveGate={resolveGoalGate} onAttachEvidence={attachGoalEvidence} onPreflight={preflightGoal} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onConfigureDeepSeek={configureDeepSeek} onClearDeepSeekSettings={clearDeepSeekSettings} onProbeDeepSeek={probeDeepSeek} onPatchCapabilityProfileSettings={patchCapabilityProfileSettings} onResetCapabilityProfileSettings={resetCapabilityProfileSettings} onPatchPermissionSettings={patchPermissionSettings} onConfirmFullHost={confirmFullHost} onRevokePermission={revokePermission} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} locale={locale} onLocaleChange={setLocale} profile={profile} {...(capabilityProfileSettings ? { capabilityProfileSettings } : {})} capabilityProfileSettingsUnavailable={capabilityProfileSettingsUnavailable} {...(permissionSettings ? { permissionSettings } : {})} {...(permissionStatus ? { permissionStatus } : {})} permissionSettingsUnavailable={permissionSettingsUnavailable} {...(approvalReviewSettings ? { approvalReviewSettings } : {})} approvalReviewSettingsUnavailable={approvalReviewSettingsUnavailable} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(deepSeekSettings ? { deepSeekSettings } : {})} deepSeekSettingsUnavailable={deepSeekSettingsUnavailable} {...(deepSeekProbe ? { deepSeekProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onCreateGoal={createGoal} onAddTodo={addGoalTodo} onOpenGate={openGoalGate} onResolveGate={resolveGoalGate} onAttachEvidence={attachGoalEvidence} onPreflight={preflightGoal} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onConfigureDeepSeek={configureDeepSeek} onClearDeepSeekSettings={clearDeepSeekSettings} onProbeDeepSeek={probeDeepSeek} onPatchCapabilityProfileSettings={patchCapabilityProfileSettings} onResetCapabilityProfileSettings={resetCapabilityProfileSettings} onPatchPermissionSettings={patchPermissionSettings} onConfirmFullHost={confirmFullHost} onRevokePermission={revokePermission} onPatchApprovalReviewSettings={patchApprovalReviewSettings} onProbeApprovalReview={probeApprovalReview} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {
@@ -605,6 +635,10 @@ function isCapabilityProfileSettingsUnavailable(reason: unknown): boolean {
 
 function isPermissionSettingsUnavailable(reason: unknown): boolean {
   return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'PERMISSION_SETTINGS_UNAVAILABLE';
+}
+
+function isApprovalReviewSettingsUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'APPROVAL_REVIEW_SETTINGS_UNAVAILABLE';
 }
 
 function isAgentMemorySettingsUnavailable(reason: unknown): boolean {

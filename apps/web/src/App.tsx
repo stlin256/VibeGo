@@ -1,9 +1,9 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
 import type { GoalMutationResponse, GoalPreflightResult, GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
-import { ContextRail, ConversationHeader, ConversationShell, PermissionProfileCard, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, WorkspaceRail } from './components/vibego/index.js';
+import { ApprovalReviewSettingsCard, ContextRail, ConversationHeader, ConversationShell, PermissionProfileCard, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, WorkspaceRail } from './components/vibego/index.js';
 import { createTranslator, type Locale } from './locale.js';
 import './styles.css';
 
@@ -32,6 +32,10 @@ export interface AppProps {
   onPatchPermissionSettings?: (input: PermissionProfileSettingsPatchInput) => Promise<void> | void;
   onConfirmFullHost?: (input: { requestedProfile: PermissionProfile; expectedProfileRevision: string }) => Promise<void> | void;
   onRevokePermission?: (input: { expectedRevision?: string; reason: 'user-requested' }) => Promise<void> | void;
+  approvalReviewSettings?: ApprovalReviewSettingsStatus;
+  approvalReviewSettingsUnavailable?: boolean;
+  onPatchApprovalReviewSettings?: (input: ApprovalReviewSettingsPatchInput) => Promise<void> | void;
+  onProbeApprovalReview?: () => Promise<void> | void;
   onProfileChange?: (profile: RunProfile) => void;
   onResetProfile?: () => void;
   certificateStatus?: CertificateStatus;
@@ -98,7 +102,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, run, events = [], error, onPair, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, approvalReviewSettings, approvalReviewSettingsUnavailable = false, onPatchApprovalReviewSettings, onProbeApprovalReview, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const t = createTranslator(locale);
   const [pairingCode, setPairingCode] = useState('');
   const [message, setMessage] = useState('');
@@ -124,6 +128,15 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [permissionConfirmBusy, setPermissionConfirmBusy] = useState(false);
   const [permissionRevokeBusy, setPermissionRevokeBusy] = useState(false);
+  const [approvalReviewEnabled, setApprovalReviewEnabled] = useState(false);
+  const [approvalReviewSource, setApprovalReviewSource] = useState<ApprovalReviewSettingsStatus['reviewerSource']>('same-as-run');
+  const [approvalReviewDedicatedProfileId, setApprovalReviewDedicatedProfileId] = useState('');
+  const [approvalReviewPosture, setApprovalReviewPosture] = useState<ApprovalReviewSettingsStatus['posture']>('off');
+  const [approvalReviewMaxLatencyMs, setApprovalReviewMaxLatencyMs] = useState(1_500);
+  const [approvalReviewMaxRequestBytes, setApprovalReviewMaxRequestBytes] = useState(16_384);
+  const [approvalReviewMaxResponseBytes, setApprovalReviewMaxResponseBytes] = useState(8_192);
+  const [approvalReviewCacheTtlMs, setApprovalReviewCacheTtlMs] = useState(0);
+  const [approvalReviewBusy, setApprovalReviewBusy] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [memoryMode, setMemoryMode] = useState<AgentMemorySettingsMode>('off');
   const [memoryTeamId, setMemoryTeamId] = useState('vibego');
@@ -199,6 +212,18 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
     setPermissionApprovalPosture(selected.approvalPosture === 'session-auto' || selected.approvalPosture === 'explicit' ? selected.approvalPosture : 'bounded-auto');
     if (selected.profileId !== 'full-host') setPermissionFullHostAcknowledged(false);
   }, [permissionSettings?.settings.profile]);
+  useEffect(() => {
+    const settings = approvalReviewSettings;
+    if (!settings) return;
+    setApprovalReviewEnabled(settings.enabled);
+    setApprovalReviewSource(settings.reviewerSource);
+    setApprovalReviewDedicatedProfileId(settings.dedicatedProfileId ?? '');
+    setApprovalReviewPosture(settings.posture);
+    setApprovalReviewMaxLatencyMs(settings.limits.maxLatencyMs);
+    setApprovalReviewMaxRequestBytes(settings.limits.maxRequestBytes);
+    setApprovalReviewMaxResponseBytes(settings.limits.maxResponseBytes);
+    setApprovalReviewCacheTtlMs(settings.limits.cacheTtlMs);
+  }, [approvalReviewSettings]);
   useEffect(() => {
     const settings = agentMemorySettings?.settings;
     if (!settings) return;
@@ -370,6 +395,20 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
       await onRevokePermission({ ...(expectedRevision ? { expectedRevision } : {}), reason: 'user-requested' });
     } finally { setPermissionRevokeBusy(false); }
   };
+  const saveApprovalReviewSettings = async (input: ApprovalReviewSettingsPatchInput): Promise<void> => {
+    if (!onPatchApprovalReviewSettings) return;
+    setApprovalReviewBusy(true);
+    try { await onPatchApprovalReviewSettings(input); }
+    catch { /* Parent renders a safe error and keeps the bounded draft. */ }
+    finally { setApprovalReviewBusy(false); }
+  };
+  const probeApprovalReview = async (): Promise<void> => {
+    if (!onProbeApprovalReview) return;
+    setApprovalReviewBusy(true);
+    try { await onProbeApprovalReview(); }
+    catch { /* Parent renders a safe error. */ }
+    finally { setApprovalReviewBusy(false); }
+  };
   const saveAgentMemorySettings = async (): Promise<void> => {
     if (!onPatchAgentMemorySettings) return;
     setMemoryBusy(true);
@@ -539,6 +578,31 @@ export function App({ health, run, events = [], error, onPair, onCreateRun, onCa
                       confirmBusy={permissionConfirmBusy}
                       onRevoke={onRevokePermission ? () => { void revokePermission(); } : undefined}
                       revokeBusy={permissionRevokeBusy}
+                    />
+                  </SettingsSection>
+                  <SettingsSection id="approval-review-settings" eyebrow="LLM APPROVAL REVIEW" title="Approval review" description="Optional bounded review for exact low-risk approvals. It never replaces deterministic policy or the user." status={approvalReviewSettingsUnavailable ? 'unavailable' : approvalReviewSettings?.status === 'blocked' ? 'degraded' : approvalReviewSettings?.status === 'degraded' ? 'degraded' : approvalReviewSettings?.status === 'ready' ? 'ready' : approvalReviewSettings ? 'idle' : 'loading'} statusLabel={approvalReviewSettingsUnavailable ? 'Unavailable' : approvalReviewSettings?.status ?? 'Loading'}>
+                    <ApprovalReviewSettingsCard
+                      settings={approvalReviewSettings}
+                      unavailable={approvalReviewSettingsUnavailable}
+                      enabled={approvalReviewEnabled}
+                      reviewerSource={approvalReviewSource}
+                      dedicatedProfileId={approvalReviewDedicatedProfileId}
+                      posture={approvalReviewPosture}
+                      maxLatencyMs={approvalReviewMaxLatencyMs}
+                      maxRequestBytes={approvalReviewMaxRequestBytes}
+                      maxResponseBytes={approvalReviewMaxResponseBytes}
+                      cacheTtlMs={approvalReviewCacheTtlMs}
+                      onEnabledChange={setApprovalReviewEnabled}
+                      onReviewerSourceChange={(source) => { setApprovalReviewSource(source); if (source === 'same-as-run') setApprovalReviewDedicatedProfileId(''); }}
+                      onDedicatedProfileIdChange={setApprovalReviewDedicatedProfileId}
+                      onPostureChange={setApprovalReviewPosture}
+                      onMaxLatencyMsChange={setApprovalReviewMaxLatencyMs}
+                      onMaxRequestBytesChange={setApprovalReviewMaxRequestBytes}
+                      onMaxResponseBytesChange={setApprovalReviewMaxResponseBytes}
+                      onCacheTtlMsChange={setApprovalReviewCacheTtlMs}
+                      onSave={onPatchApprovalReviewSettings ? (input) => { void saveApprovalReviewSettings(input); } : undefined}
+                      onProbe={onProbeApprovalReview ? () => { void probeApprovalReview(); } : undefined}
+                      busy={approvalReviewBusy}
                     />
                   </SettingsSection>
                   <SettingsSection id="capability-profile-settings" eyebrow="CAPABILITY PROFILE" title="Capability profile" description="Choose a bounded intent; the daemon resolves the effective permissions." status={capabilityProfileSettingsUnavailable ? 'unavailable' : capabilityProfileSettings?.resolution.status === 'blocked' ? 'degraded' : capabilityProfileSettings?.resolution.status === 'degraded' ? 'degraded' : capabilityProfileSettings ? 'ready' : 'loading'} statusLabel={capabilityProfileSettingsUnavailable ? 'Unavailable' : capabilityProfileSettings?.resolution.status ?? 'Loading'}>

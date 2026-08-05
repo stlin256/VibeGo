@@ -230,6 +230,26 @@ describe('ApiClient', () => {
     expect(JSON.stringify(status)).not.toContain('test-secret');
   });
 
+  it('uses the bounded authenticated approval-review settings projection without browser secrets', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const status = {
+      schemaVersion: 'llm-approval/v1', enabled: false, reviewerSource: 'same-as-run', dedicatedProfileId: null,
+      posture: 'off', status: 'disabled', reviewerRevision: 'reviewer-1', policyRevision: 'policy-1',
+      limits: { maxLatencyMs: 1_500, maxRequestBytes: 16_384, maxResponseBytes: 8_192, cacheTtlMs: 0 },
+      lastLatencyMs: null, lastErrorCode: null, lastHealthAt: null,
+      nextStep: 'Enable bounded approval review explicitly in Settings.', updatedAt: '2026-08-05T00:00:00.000Z',
+    } as const;
+    const client = new ApiClient('', async (input, init) => { calls.push({ input, init }); return response(status); });
+    await client.approvalReviewSettings();
+    await client.patchApprovalReviewSettings({ enabled: true, posture: 'advisory-low-risk', expectedRevision: 'reviewer-1' });
+    await client.probeApprovalReview();
+    expect(calls.map((call) => call.input)).toEqual(['/api/v1/settings/llm-approval', '/api/v1/settings/llm-approval', '/api/v1/settings/llm-approval/probe']);
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(calls[1]?.init?.method).toBe('PATCH');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ enabled: true, posture: 'advisory-low-risk', expectedRevision: 'reviewer-1' }));
+    expect(JSON.stringify(calls)).not.toMatch(/api[_-]?key|private[_-]?key|authorization|cookie|C:\\Users/iu);
+  });
+
   it('uses the authenticated capability-profile settings projection with revision fencing', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const status = {

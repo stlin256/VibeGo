@@ -65,4 +65,12 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.ui-skeleton {');
     expect(styles).toContain('.ui-button__spinner');
   });
+
+  it('keeps reviewer settings and approval explanations ratio-safe', () => {
+    expect(styles).toContain('.approval-review-setup');
+    expect(styles).toContain('.approval-review-status-grid');
+    expect(styles).toContain('.approval-review-summary[data-review-status="review-unavailable"]');
+    expect(styles).toContain('.reviewer-run-summary');
+    expect(styles).toContain('.approval-review-choice-grid, .approval-review-limits, .approval-review-posture-options { grid-template-columns: 1fr; }');
+  });
 });
