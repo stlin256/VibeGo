@@ -342,3 +342,16 @@ covered the 22 workspace projects (796 tests), build/typecheck, Web build,
 `.ready4vibe/evidence/2026-08-05/8876a992c496f9c058c83ec3919ac6162f79469d/`.
 This closes only the static/unit gate; live provider, remote, certificate,
 cross-platform and signed-release gates remain separate.
+
+### 60-6 LAN/TLS/AuthGate fixture boundary (2026-08-05)
+
+The next opt-in `pnpm smoke:transport` fixture will exercise the existing
+transport resolver, certificate-readiness projection and `AuthGate` with
+deterministic in-memory inputs. It will prove LAN opt-in, default TLS
+requirement, explicit insecure-LAN opt-in, local-only pairing, TLS/Origin/CSRF
+and query-token rejection. It will not read certificate files, print tokens,
+open a public listener, contact ACME, or claim Tailscale/SSH support.
+
+The result is bounded security/configuration evidence only; production remote
+and certificate lifecycle gates remain partial or blocked until real opt-in
+evidence is collected.

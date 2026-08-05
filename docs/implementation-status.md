@@ -963,3 +963,11 @@ checks. The ignored bundle is under
 `.ready4vibe/evidence/2026-08-05/8876a992c496f9c058c83ec3919ac6162f79469d/`.
 Only the static/unit gate is closed; runtime and release evidence remain
 partial or blocked.
+
+### Spec 60-6 design freeze (2026-08-05)
+
+The next implementation is `smoke:transport`: a bounded transport resolver,
+certificate-readiness and AuthGate fixture for LAN opt-in, TLS, pairing,
+Origin/CSRF and query-token fail-closed behavior. It will avoid certificate
+files, tokens, public listeners and remote side effects; lifecycle/release
+evidence remains later work.

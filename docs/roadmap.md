@@ -1053,3 +1053,9 @@ workspace projects and 796 tests, plus build/typecheck, Web build and both diff
 checks. Its bounded bundle is under
 `.ready4vibe/evidence/2026-08-05/8876a992c496f9c058c83ec3919ac6162f79469d/`.
 This is not a live or release readiness claim.
+
+### Spec 60-6 LAN/TLS/AuthGate fixture boundary (2026-08-05)
+
+The next opt-in `pnpm smoke:transport` fixture will cover LAN/TLS configuration
+and AuthGate negative paths using memory-only deterministic inputs. It will not
+read private keys, open public listeners or simulate Tailscale/SSH/ACME.
