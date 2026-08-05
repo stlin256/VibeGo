@@ -1438,3 +1438,17 @@ still provides no resolver, so dedicated settings remain `degraded` and the
 normal deterministic ApprovalBroker path is unchanged. Evidence is recorded
 in `reports/spec63-8-dedicated-reviewer-adapter-2026-08-06.md`; multi-profile
 persistence and dedicated live smoke remain staged.
+
+### Spec 63-9 daemon-owned dedicated profile resolver (2026-08-06)
+
+`DedicatedReviewerProfilesManager` now persists a bounded list of non-secret
+profile metadata through the existing `daemon_settings` adapter and keeps
+write-only API keys in process memory only. It resolves an explicitly selected
+profile into a fresh provider/snapshot binding for the existing dedicated
+reviewer port; it never infers or reuses the active run provider. Unknown,
+stale, malformed or credential-missing profiles fail closed, and restart
+restores metadata as credential-required. Authenticated status/configure/delete
+routes return only redacted projections. Focused daemon/contract evidence is
+recorded in `reports/spec63-9-dedicated-profile-resolver-2026-08-06.md`.
+This closes the local resolver boundary only; no dedicated live provider smoke
+or upstream health claim is made.

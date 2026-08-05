@@ -1,9 +1,8 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: 63-7 event projection and explicitly authorized same-as-run live
-  smoke and 63-8 dedicated provider injection seam implemented; production
-  profile resolution/live dedicated smoke and full release evidence remain
-  staged
+- Status: 63-7 event projection, 63-8 dedicated provider injection seam and
+  63-9 daemon-owned profile resolver implemented; live dedicated smoke and
+  full release evidence remain staged
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
@@ -412,6 +411,32 @@ At minimum, tests must prove:
   command, environment value or absolute path;
 - focused package gates, `pnpm test:workflow`, `pnpm verify`, diff checks and
   the opt-in live smoke remain distinct evidence classes.
+
+### 63-9: daemon-owned dedicated profile resolver
+
+The production daemon now owns a bounded `DedicatedReviewerProfilesManager`
+behind the existing application port. It supports a small, explicitly
+configured set of OpenAI-compatible reviewer profiles. Durable storage contains
+only the profile id, provider id, complete HTTPS endpoint, model name, profile
+revision and timestamp. A write-only API key is used to construct a runtime
+provider and is never persisted, returned by the API, placed in settings,
+events, logs or snapshots. A restart therefore restores metadata with
+`credentialState=required` and does not silently make a profile usable.
+
+The resolver is wired into `createApprovalReviewBinding` only at run creation.
+It returns a fresh, secret-free `ModelProviderSnapshot` and a runtime provider
+for the exact requested profile id; unknown profiles, missing runtime
+credentials, malformed metadata and stale/mismatched revisions return no
+binding. The active run provider is never inferred or reused. Profile changes
+affect later runs only, and the normal deterministic ApprovalBroker remains the
+authority.
+
+This slice deliberately does not perform a provider network probe or claim
+dedicated live evidence. `status=ready` means that a local runtime credential
+and validated profile are available for a future bounded review call; provider
+health, timeout/5xx and cost evidence remain an explicit opt-in live gate. The
+dedicated profile API is authenticated and returns only bounded status
+projections.
 
 ## 12. Definition of Done
 

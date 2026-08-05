@@ -215,3 +215,4 @@ export * from './capability-profile-settings.js';
 export * from './permission-profile.js';
 export * from './deepseek-provider.js';
 export * from './llm-approval.js';
+export * from './dedicated-reviewer-profile.js';

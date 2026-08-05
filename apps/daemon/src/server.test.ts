@@ -24,6 +24,7 @@ import { McpSettingsManager } from './mcp-settings.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
+import { DedicatedReviewerProfilesManager } from './dedicated-reviewer-profiles.js';
 import { type CapabilityProfilePolicy } from '@ready4vibe/policy';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
@@ -738,6 +739,40 @@ describe('daemon health server', () => {
     });
     expect(invalid.status).toBe(400);
     expect(await invalid.text()).not.toContain('sk-');
+  });
+
+  it('serves explicit dedicated reviewer profile status and write-only configuration', async () => {
+    const profiles = new DedicatedReviewerProfilesManager({ settings: new InMemorySettingsStore(), clock: () => new Date('2026-08-06T00:00:00.000Z') });
+    const server = createDaemonServer({ dedicatedReviewerProfiles: profiles });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/llm-approval/profiles`;
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({ profiles: [] });
+
+    const configured = await fetch(base, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profileId: 'reviewer-primary', providerId: 'openai-compatible', endpoint: 'https://reviewer.example.test/v1/chat/completions', modelName: 'reviewer-model', apiKey: 'sk-' + 'r'.repeat(24) }),
+    });
+    const configuredText = await configured.text();
+    expect(configured.status).toBe(200);
+    expect(configuredText).not.toMatch(/sk-|api[_-]?key|secret|token/iu);
+    const configuredBody = JSON.parse(configuredText) as { profiles: Array<{ profileRevision: string; credentialState: string }> };
+    expect(configuredBody).toMatchObject({ profiles: [{ credentialState: 'available' }] });
+
+    const stale = await fetch(base, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profileId: 'reviewer-primary', providerId: 'openai-compatible', endpoint: 'https://reviewer.example.test/v1/chat/completions', modelName: 'reviewer-model', apiKey: 'sk-' + 'r'.repeat(24), expectedRevision: 'reviewer-profile-0' }),
+    });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: 'REVISION_CONFLICT' } });
+
+    const deleted = await fetch(`${base}/reviewer-primary`, { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedRevision: configuredBody.profiles[0]?.profileRevision }) });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toMatchObject({ profiles: [] });
   });
 
   it('serves the DeepSeek-specific write-only settings adapter with revision fencing', async () => {

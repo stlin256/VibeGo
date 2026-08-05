@@ -37,6 +37,18 @@ describe('ApprovalReviewSettingsManager', () => {
     expect(calls).toBe(0);
   });
 
+  it('reports a dedicated profile ready only when the daemon resolver has a runtime binding', () => {
+    const manager = new ApprovalReviewSettingsManager({
+      settings: new InMemorySettingsStore(),
+      policyRevision: () => 'policy-1',
+      dedicatedProfileAvailable: (profileId) => profileId === 'reviewer-ready',
+    });
+    const configured = manager.patch({ enabled: true, reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-ready' });
+    expect(configured).toMatchObject({ status: 'ready', lastErrorCode: null });
+    const missing = manager.patch({ enabled: true, reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-missing', expectedRevision: configured.reviewerRevision });
+    expect(missing).toMatchObject({ status: 'degraded', lastErrorCode: 'provider-unavailable' });
+  });
+
   it('marks a policy revision mismatch blocked until an explicit patch refreshes it', () => {
     let policy = 'policy-1';
     const manager = new ApprovalReviewSettingsManager({ settings: new InMemorySettingsStore(), policyRevision: () => policy });

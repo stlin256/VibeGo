@@ -1423,3 +1423,16 @@ interactive runs are unchanged. Agent focused evidence is 47/47 tests and the
 daemon runtime fixture is 6/6. The redacted record is
 [`spec63-8-dedicated-reviewer-adapter-2026-08-06.md`](reports/spec63-8-dedicated-reviewer-adapter-2026-08-06.md).
 This is not dedicated live evidence or multi-profile persistence.
+
+### Spec 63-9 daemon-owned dedicated profile resolver (2026-08-06)
+
+The production daemon now wires an explicit, bounded dedicated reviewer profile
+registry into the 63-8 resolver port. Profile metadata is persisted through
+`daemon_settings`; API keys remain process-only and are accepted only by a
+write-only configure action. Resolution returns a fresh secret-free provider
+snapshot for the exact profile id and fails closed for unknown, stale or
+credential-missing entries. Authenticated status/configure/delete routes expose
+no secret, raw provider data or absolute path. Focused evidence is recorded in
+[`spec63-9-dedicated-profile-resolver-2026-08-06.md`](reports/spec63-9-dedicated-profile-resolver-2026-08-06.md).
+This closes local profile resolution only; dedicated live smoke, upstream
+health and release evidence remain staged.

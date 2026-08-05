@@ -20,6 +20,7 @@ import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { PermissionProfileSettingsError, type PermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { ApprovalReviewSettingsError, type ApprovalReviewSettingsManager } from './approval-review-settings.js';
+import { DedicatedReviewerProfilesError, type DedicatedReviewerProfilesManager } from './dedicated-reviewer-profiles.js';
 import { GoalAdmissionError, GoalAdmissionService } from './goal-admission.js';
 import type { GoalRunWritebackService } from './goal-writeback.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
@@ -76,6 +77,7 @@ export interface DaemonServerOptions {
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
   approvalReviewSettings?: ApprovalReviewSettingsManager;
+  dedicatedReviewerProfiles?: DedicatedReviewerProfilesManager;
   approvalReviewEventStore?: ApprovalReviewEventStore;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
@@ -112,6 +114,7 @@ interface ResolvedDaemonServerOptions {
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
   approvalReviewSettings?: ApprovalReviewSettingsManager;
+  dedicatedReviewerProfiles?: DedicatedReviewerProfilesManager;
   approvalReviewEventStore?: ApprovalReviewEventStore;
   observabilityLedger?: ObservabilityLedger;
   pricingCatalog?: PricingCatalog;
@@ -179,6 +182,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.capabilityProfileSettings ? { capabilityProfileSettings: options.capabilityProfileSettings } : {}),
     ...(options.permissionProfileSettings ? { permissionProfileSettings: options.permissionProfileSettings } : {}),
     ...(options.approvalReviewSettings ? { approvalReviewSettings: options.approvalReviewSettings } : {}),
+    ...(options.dedicatedReviewerProfiles ? { dedicatedReviewerProfiles: options.dedicatedReviewerProfiles } : {}),
     ...(options.approvalReviewEventStore ? { approvalReviewEventStore: options.approvalReviewEventStore } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
@@ -226,6 +230,13 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
       if (error instanceof ApprovalReviewSettingsError) {
         const status = error.code === 'PERSISTENCE_FAILED' || error.code === 'CORRUPT_SETTINGS' ? 503
           : error.code === 'REVISION_CONFLICT' || error.code === 'STALE_POLICY_REVISION' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      if (error instanceof DedicatedReviewerProfilesError) {
+        const status = error.code === 'PERSISTENCE_FAILED' || error.code === 'CORRUPT_SETTINGS' ? 503
+          : error.code === 'REVISION_CONFLICT' ? 409
+            : error.code === 'PROFILE_NOT_FOUND' ? 404 : 400;
         writeJson(response, status, { error: { code: error.code, message: error.message } });
         return;
       }
@@ -981,6 +992,49 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/v1/settings/llm-approval/profiles') {
+    if (!options.dedicatedReviewerProfiles) {
+      writeJson(response, 503, { error: { code: 'DEDICATED_REVIEWER_PROFILES_UNAVAILABLE', message: 'Dedicated reviewer profiles are unavailable.' } });
+      return;
+    }
+    if (request.method === 'GET') {
+      writeJson(response, 200, options.dedicatedReviewerProfiles.status());
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST required' } }, { Allow: 'GET, POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isDedicatedReviewerProfileInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Profile id, provider, endpoint, model and write-only API key are required.' } });
+      return;
+    }
+    writeJson(response, 200, options.dedicatedReviewerProfiles.configure(input));
+    return;
+  }
+
+  const dedicatedProfileMatch = /^\/api\/v1\/settings\/llm-approval\/profiles\/([^/]+)$/u.exec(pathname);
+  if (dedicatedProfileMatch) {
+    if (!options.dedicatedReviewerProfiles) {
+      writeJson(response, 503, { error: { code: 'DEDICATED_REVIEWER_PROFILES_UNAVAILABLE', message: 'Dedicated reviewer profiles are unavailable.' } });
+      return;
+    }
+    if (request.method !== 'DELETE') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'DELETE required' } }, { Allow: 'DELETE' });
+      return;
+    }
+    let profileId: string;
+    try { profileId = decodeURIComponent(dedicatedProfileMatch[1] ?? ''); } catch { profileId = ''; }
+    const body = await readJson(request, options.bodyLimitBytes);
+    if (!isExpectedRevisionInput(body)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Expected revision must be a bounded string when provided.' } });
+      return;
+    }
+    writeJson(response, 200, options.dedicatedReviewerProfiles.remove(profileId, body.expectedRevision));
+    return;
+  }
+
   if (pathname === '/api/v1/settings/agent-memory/knowledge') {
     if (!options.agentMemoryKnowledgeSettings) {
       writeJson(response, 503, { error: { code: 'AGENT_MEMORY_KNOWLEDGE_SETTINGS_UNAVAILABLE', message: 'Agent memory knowledge settings are unavailable.' } });
@@ -1633,6 +1687,27 @@ function parseCursor(value: string | string[] | null): number {
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new RequestError(400, 'INVALID_CURSOR', 'Invalid event cursor.');
   return parsed;
+}
+
+function isDedicatedReviewerProfileInput(value: unknown): value is import('./dedicated-reviewer-profiles.js').DedicatedReviewerProfileConfigureInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const allowed = new Set(['profileId', 'providerId', 'endpoint', 'modelName', 'apiKey', 'expectedRevision']);
+  if (!Object.keys(record).every((key) => allowed.has(key))) return false;
+  return record.providerId === 'openai-compatible'
+    && typeof record.profileId === 'string'
+    && typeof record.endpoint === 'string'
+    && typeof record.modelName === 'string'
+    && typeof record.apiKey === 'string'
+    && (record.expectedRevision === undefined || typeof record.expectedRevision === 'string');
+}
+
+function isExpectedRevisionInput(value: unknown): value is { expectedRevision?: string } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (!Object.keys(record).every((key) => key === 'expectedRevision')) return false;
+  return record.expectedRevision === undefined
+    || (typeof record.expectedRevision === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(record.expectedRevision));
 }
 
 function parseReviewEventLimit(value: string | null): number {

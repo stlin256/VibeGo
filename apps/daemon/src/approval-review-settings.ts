@@ -17,6 +17,8 @@ export const APPROVAL_REVIEW_SETTINGS_KEY = 'v1' as const;
 export interface ApprovalReviewSettingsManagerOptions {
   readonly settings: SettingsStore;
   readonly policyRevision?: () => string;
+  /** Local daemon-owned availability only; this callback must not perform I/O. */
+  readonly dedicatedProfileAvailable?: (profileId: string) => boolean;
   readonly clock?: () => Date;
 }
 
@@ -41,6 +43,7 @@ const DEFAULT_LIMITS = {
 export class ApprovalReviewSettingsManager {
   private readonly settings: SettingsStore;
   private readonly policyRevision: () => string;
+  private readonly dedicatedProfileAvailable: ((profileId: string) => boolean) | undefined;
   private readonly clock: () => Date;
   private settingsValue: ApprovalReviewSettings;
   private statusValue: 'disabled' | 'ready' | 'degraded' | 'blocked';
@@ -51,6 +54,7 @@ export class ApprovalReviewSettingsManager {
   constructor(options: ApprovalReviewSettingsManagerOptions) {
     this.settings = options.settings;
     this.policyRevision = options.policyRevision ?? (() => 'policy-1');
+    this.dedicatedProfileAvailable = options.dedicatedProfileAvailable;
     this.clock = options.clock ?? (() => new Date());
     this.settingsValue = this.loadSettings();
     this.statusValue = this.settingsValue.enabled ? 'ready' : 'disabled';
@@ -193,8 +197,13 @@ export class ApprovalReviewSettingsManager {
       return;
     }
     if (this.settingsValue.reviewerSource === 'dedicated') {
-      this.statusValue = 'degraded';
-      this.lastErrorCode = 'provider-unavailable';
+      if (this.dedicatedProfileAvailable?.(this.settingsValue.dedicatedProfileId ?? '') === true) {
+        this.statusValue = 'ready';
+        this.lastErrorCode = null;
+      } else {
+        this.statusValue = 'degraded';
+        this.lastErrorCode = 'provider-unavailable';
+      }
       return;
     }
     this.statusValue = 'ready';

@@ -6,6 +6,7 @@ import {
 import { InMemorySettingsStore } from '@ready4vibe/storage';
 import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { createApprovalReviewBinding } from './approval-review-runtime.js';
+import { DedicatedReviewerProfilesManager } from './dedicated-reviewer-profiles.js';
 
 const provider = {
   id: 'fake',
@@ -152,6 +153,23 @@ describe('createApprovalReviewBinding', () => {
     expect(createApprovalReviewBinding(settings, input, {
       dedicatedResolver: () => ({ profileId: 'other-profile', provider, modelSnapshot }),
     })).toBeUndefined();
+  });
+
+  it('resolves the daemon-owned profile without reusing the active run provider', () => {
+    const settings = new ApprovalReviewSettingsManager({ settings: new InMemorySettingsStore(), policyRevision: () => 'policy-1' });
+    settings.patch({ enabled: true, reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-profile' });
+    const profiles = new DedicatedReviewerProfilesManager({ settings: new InMemorySettingsStore() });
+    profiles.configure({
+      profileId: 'reviewer-profile',
+      providerId: 'openai-compatible',
+      endpoint: 'https://reviewer.example.test/v1/chat/completions',
+      modelName: 'reviewer-model',
+      apiKey: 'sk-' + 'r'.repeat(24),
+    });
+    const binding = createApprovalReviewBinding(settings, input, { dedicatedResolver: (profileId) => profiles.resolve(profileId) });
+    expect(binding).toMatchObject({ snapshot: { reviewerSource: 'dedicated', dedicatedProfileId: 'reviewer-profile', providerId: 'openai-compatible', modelId: 'reviewer-model' } });
+    expect(binding?.reviewer).not.toBeUndefined();
+    expect(binding?.reviewer).not.toBe(input.modelProvider);
   });
 
   it('marks untrusted content and full-host as ineligible without widening scope', () => {
