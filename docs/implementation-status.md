@@ -374,8 +374,8 @@ The following work is documented but not fully implemented yet:
   policy recovery to `preview`, and an authenticated resolver projection with
   LAN auth coverage. The contracts/daemon focused gate is 74/24/35 tests
   respectively at this slice. It does not change default run creation or
-  start any runtime. Profile cards, profile/run snapshot binding and the later
-  Goal/transport/ACME/release gates remain independently planned. The R2 Web
+  start any runtime. The R3 profile/run snapshot binding now captures the
+  resolver decision at RunManager start and the later Goal/transport/ACME/release gates remain independently planned. The R2 Web
   card slice is now implemented in the existing Settings Sheet with four
   profile cards, Advanced Local acknowledgement and bounded effective-mode
   guidance; Web focused tests total 96. It consumes the projection without
@@ -547,19 +547,24 @@ fallback for untrusted content or an unhealthy external sandbox, and never widen
 network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
 No runtime behavior is claimed by this planning note.
 
-## Spec 52-R3 run-snapshot design gate (2026-08-05)
+## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
-The R3 application boundary is frozen in
-`docs/adr/0035-capability-profile-run-snapshot.md` before implementation.
-The planned slice adds a strict, secret-free capability run snapshot and an
-optional `RunManager` capture provider. A blocked resolver result will fail
-closed before provider/tool/sandbox work; a degraded result can only use the
-resolver's narrowed effective profile and never host fallback. The snapshot
-will be immutable for the run, visible as bounded `run.created` metadata and
-read back through `RunSnapshot`; a settings update will affect only later runs.
-Recovery will create a fresh snapshot. Until the implementation commit lands,
-no R3 runtime behavior is claimed and the existing unbound interactive path
-remains unchanged.
+The R3 application boundary is implemented under
+`docs/adr/0035-capability-profile-run-snapshot.md`. The strict, secret-free
+run snapshot is captured before model binding or runtime selection; blocked or
+config-incompatible results fail closed, while degraded results use only the
+resolver's narrowed profile and never host fallback. The snapshot is immutable
+for the run, visible as bounded `run.created` metadata and replayed through
+`RunSnapshot`; settings changes affect later runs only. Recovery creates a
+fresh snapshot. The main daemon narrows filesystem, shell and MCP descriptors
+to the effective profile, while the existing AgentLoop state machine,
+Scheduler, Approval, Sandbox, WorkspaceRegistry and event authorities remain
+unchanged. Focused contract/AgentLoop/daemon tests cover the slice; Goal
+  governed admission remains Spec 52-R4. The R3 addition has 4 focused
+  capability-snapshot contract tests, AgentLoop metadata coverage, daemon
+  runtime-constraint fixtures and RunManager/server blocked, isolation and
+  recovery tests. The affected package gates currently pass with contracts 78,
+  AgentLoop 21, daemon 180 and Web 96 tests, plus typecheck/build coverage.
 
 ## Spec 49-R4 implementation note (2026-08-04)
 

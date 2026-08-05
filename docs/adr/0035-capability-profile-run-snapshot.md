@@ -60,3 +60,17 @@ capture, blocked zero-side-effect behavior, settings-change isolation,
 metadata projection, compatibility without an injected provider and fresh
 recovery snapshots. It must not add Goal admission, a second scheduler or a
 new approval/sandbox authority.
+
+## Implementation evidence (2026-08-05)
+
+`CapabilityProfileRunSnapshotSchema` is implemented in
+`packages/contracts/src/capability-profile-run.ts`. The daemon settings
+manager captures a bounded snapshot and marks a profile/workspace mismatch as
+blocked. `RunManager` captures it before provider binding, rejects blocked or
+config-incompatible requests, and forwards it as `run.created` metadata; the
+existing `RunSnapshot` projection replays it without changing event storage.
+The main daemon applies a narrow descriptor filter to filesystem, shell and
+MCP runtimes. Focused tests cover strict privacy, ready/degraded/blocked
+states, zero side effects, settings isolation, recovery freshness and the
+compatibility path without a profile provider. Goal admission and all existing
+execution authorities remain unchanged.

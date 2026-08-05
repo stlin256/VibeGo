@@ -2,12 +2,14 @@ import { v7 as uuidv7 } from 'uuid';
 import { ContextBudgetError, ContextManager, type ContextItem } from '@ready4vibe/context';
 import {
   assertTransition,
+  CapabilityProfileRunSnapshotSchema,
   ModelProviderSnapshotSchema,
   parseRunConfig,
   type EventStore,
   type ModelEvent,
   type ModelProvider,
   type ModelProviderSnapshot,
+  type CapabilityProfileRunSnapshot,
   type ModelRequest,
   type RunConfig,
   type RunStatus,
@@ -31,6 +33,8 @@ export interface AgentRunRequest {
   toolRuntime?: ToolRuntime;
   /** Secret-free provider/capability snapshot captured by the application service. */
   modelSnapshot?: ModelProviderSnapshot;
+  /** Secret-free capability profile decision captured by the application service. */
+  capabilitySnapshot?: CapabilityProfileRunSnapshot;
 }
 
 export interface AgentRunResult {
@@ -87,6 +91,7 @@ export class AgentLoop {
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const config = parseRunConfig(request.config);
     const modelSnapshot = request.modelSnapshot ? ModelProviderSnapshotSchema.parse(request.modelSnapshot) : undefined;
+    const capabilitySnapshot = request.capabilitySnapshot ? CapabilityProfileRunSnapshotSchema.parse(request.capabilitySnapshot) : undefined;
     const modelProvider = request.modelProvider ?? this.options.modelProvider;
     const toolRuntime = request.toolRuntime ?? this.options.toolRuntime;
     const runId = request.runId ?? `run_${uuidv7()}`;
@@ -136,6 +141,7 @@ export class AgentLoop {
       await this.append(runId, 'run.created', 'user', correlationId, {
         config,
         ...(modelSnapshot ? { modelSnapshot } : {}),
+        ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       });
       let contextResult: ReturnType<ContextManager['build']>;
       try {

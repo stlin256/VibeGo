@@ -79,6 +79,42 @@ describe('AgentLoop', () => {
         },
         capturedAt: '2026-08-04T00:00:00.000Z',
       },
+      capabilitySnapshot: {
+        schemaVersion: 'ready4vibe_capability_profile_run_snapshot_v1',
+        profileRevision: 'profile-1',
+        policyRevision: 'policy-1',
+        status: 'ready',
+        reasonCode: 'PROFILE_READY',
+        requestedProfile: {
+          schemaVersion: 'ready4vibe_capability_profile_v1',
+          profileId: 'preview',
+          transportMode: 'loopback',
+          modelMode: 'fake',
+          filesystemMode: 'off',
+          shellMode: 'off',
+          networkMode: 'off',
+          mcpSkillMode: 'off',
+          approvalMode: 'none',
+          policyRevision: 'policy-1',
+          requiresAcknowledgement: false,
+          updatedAt: '2026-08-04T00:00:00.000Z',
+        },
+        effectiveProfile: {
+          schemaVersion: 'ready4vibe_capability_profile_v1',
+          profileId: 'preview',
+          transportMode: 'loopback',
+          modelMode: 'fake',
+          filesystemMode: 'off',
+          shellMode: 'off',
+          networkMode: 'off',
+          mcpSkillMode: 'off',
+          approvalMode: 'none',
+          policyRevision: 'policy-1',
+          requiresAcknowledgement: false,
+          updatedAt: '2026-08-04T00:00:00.000Z',
+        },
+        capturedAt: '2026-08-04T00:00:00.000Z',
+      },
     });
     const events = await eventStore.read('run_normal');
     expect(result).toMatchObject({ runId: 'run_normal', status: 'completed', output: 'hello' });
@@ -90,6 +126,7 @@ describe('AgentLoop', () => {
     expect(scheduler.activeCount()).toBe(0);
     expect(provider.requests[0]?.metadata.runId).toBe('run_normal');
     expect(events[0]?.payload).toMatchObject({ modelSnapshot: { providerId: 'fake-model', descriptorRevision: 'fake-rev-1' } });
+    expect(events[0]?.payload).toMatchObject({ capabilitySnapshot: { profileRevision: 'profile-1', status: 'ready', effectiveProfile: { profileId: 'preview' } } });
     expect(events.find((event) => event.type === 'model.requested')?.payload).toMatchObject({
       providerId: 'fake-model',
       requestId: provider.requests[0]?.metadata.requestId,

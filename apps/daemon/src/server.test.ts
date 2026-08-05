@@ -688,6 +688,40 @@ describe('daemon health server', () => {
     expect(eventStore.listRunIds()).toEqual([]);
   });
 
+  it('returns a bounded capability-profile block before creating a run', async () => {
+    const eventStore = new InMemoryEventStore();
+    const manager = new RunManager({
+      eventStore,
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] }),
+      capabilityProfileForRun: () => ({
+        schemaVersion: 'ready4vibe_capability_profile_run_snapshot_v1',
+        profileRevision: 'profile-1',
+        policyRevision: 'policy-1',
+        status: 'blocked',
+        reasonCode: 'WORKSPACE_UNAVAILABLE',
+        requestedProfile: {
+          schemaVersion: 'ready4vibe_capability_profile_v1', profileId: 'workspace-coding', transportMode: 'loopback', workspaceId: 'repo',
+          modelMode: 'fake', filesystemMode: 'workspace-write', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'on-request',
+          policyRevision: 'policy-1', requiresAcknowledgement: false, updatedAt: '2026-08-05T00:00:00.000Z',
+        },
+        effectiveProfile: null,
+        capturedAt: '2026-08-05T00:00:00.000Z',
+      }),
+    });
+    const server = createDaemonServer({ runManager: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(runConfig()),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: { code: 'CAPABILITY_PROFILE_BLOCKED', message: 'The capability profile is blocked: WORKSPACE_UNAVAILABLE.' } });
+    expect(eventStore.listRunIds()).toEqual([]);
+  });
+
   it('serves authenticated capability profile settings with resolver projection and revision fencing', async () => {
     const settings = new InMemorySettingsStore();
     const manager = new DurableCapabilityProfileSettingsManager({ settings, policy: capabilityPolicy, clock: () => new Date('2026-08-05T00:00:00.000Z') });

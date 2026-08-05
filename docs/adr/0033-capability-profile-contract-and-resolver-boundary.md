@@ -63,9 +63,10 @@ must not become a second policy or execution engine.
 `packages/contracts/src/capability-profile.ts` implements the strict
 `ready4vibe_capability_profile_v1` schema and parser. The contract tests cover
 all four profile ids, unknown fields, secret/path/environment rejection,
-timestamp and acknowledgement rules, and external-sandbox references. No
-daemon run path imports this contract yet. `@ready4vibe/policy` now provides
-the pure resolver; application integration remains a later slice.
+timestamp and acknowledgement rules, and external-sandbox references.
+`@ready4vibe/policy` provides the pure resolver; the R3 daemon application
+snapshot consumes that resolver without moving authority into the browser or
+the AgentLoop.
 
 The resolver tests cover deterministic replay, monotonic narrowing, stale
 revision fail-closed behavior, transport/workspace gates and degraded optional

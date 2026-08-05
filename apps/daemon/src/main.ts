@@ -20,6 +20,7 @@ import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-se
 import { McpSettingsManager } from './mcp-settings.js';
 import { McpRunBindingManager } from './mcp-runtime-binding.js';
 import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalWriteService } from '@ready4vibe/goal-control';
 import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
@@ -128,7 +129,17 @@ const runManager = new RunManager({
   modelProvider: modelSettings.provider,
   modelProviderForRun: () => modelSettings.provider.snapshot(),
   modelBindingForRun: (config) => modelSettings.bindRun(config.model),
-  toolRuntimeForRun: (config) => composeToolRuntimes([toolSettings.runtimeForRun(config), gitSettings.runtimeForRun(config), sandboxSettings.runtimeForRun(config), mcpRuntimeBinding.runtimeForRun(config)]),
+  capabilityProfileForRun: (config) => capabilityProfileSettings.snapshotForRun(config.workspaceId),
+  toolRuntimeForRun: (config, capabilitySnapshot) => {
+    const profile = capabilitySnapshot?.effectiveProfile;
+    const composed = composeToolRuntimes([
+      profile && profile.filesystemMode === 'off' ? undefined : toolSettings.runtimeForRun(config),
+      profile && profile.filesystemMode === 'off' ? undefined : gitSettings.runtimeForRun(config),
+      profile && profile.shellMode === 'off' ? undefined : sandboxSettings.runtimeForRun(config),
+      profile && profile.mcpSkillMode === 'off' ? undefined : mcpRuntimeBinding.runtimeForRun(config),
+    ]);
+    return constrainToolRuntime(composed, profile ?? undefined);
+  },
   workspaceExists: (workspaceId) => workspaceRegistry.resolveRoot(workspaceId) !== undefined,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,

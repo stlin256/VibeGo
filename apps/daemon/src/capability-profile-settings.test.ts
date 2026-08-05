@@ -95,4 +95,31 @@ describe('DurableCapabilityProfileSettingsManager', () => {
     const value = manager();
     expect(() => value.patch({ profile: profile({ policyRevision: 'policy-2' }), expectedRevision: 'profile-1' })).toThrowError(new CapabilityProfileSettingsError('STALE_POLICY_REVISION', 'Capability profile policy revision is stale.'));
   });
+
+  it('captures a ready immutable run snapshot and blocks a workspace mismatch', () => {
+    const value = manager();
+    value.patch({ profile: profile(), expectedRevision: 'profile-1' });
+    expect(value.snapshotForRun('repo')).toMatchObject({
+      schemaVersion: 'ready4vibe_capability_profile_run_snapshot_v1',
+      profileRevision: 'profile-2',
+      status: 'ready',
+      reasonCode: 'PROFILE_READY',
+      effectiveProfile: { workspaceId: 'repo' },
+    });
+    expect(value.snapshotForRun('other')).toMatchObject({
+      status: 'blocked',
+      reasonCode: 'PROFILE_WORKSPACE_MISMATCH',
+      effectiveProfile: null,
+    });
+  });
+
+  it('captures degraded and blocked resolver states without widening them', () => {
+    const degraded = manager(new InMemorySettingsStore(), policy({ modelHealth: 'missing', modelModes: ['off', 'fake', 'configured'] }));
+    degraded.patch({ profile: profile(), expectedRevision: 'profile-1' });
+    expect(degraded.snapshotForRun('repo')).toMatchObject({ status: 'degraded', reasonCode: 'CAPABILITY_NARROWED', effectiveProfile: { modelMode: 'fake' } });
+
+    const blocked = manager(new InMemorySettingsStore(), policy({ workspaceHealth: 'missing' }));
+    blocked.patch({ profile: profile(), expectedRevision: 'profile-1' });
+    expect(blocked.snapshotForRun('repo')).toMatchObject({ status: 'blocked', reasonCode: 'WORKSPACE_UNAVAILABLE', effectiveProfile: null });
+  });
 });

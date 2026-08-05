@@ -1,11 +1,13 @@
 import {
   CapabilityProfileResolutionSchema,
+  CapabilityProfileRunSnapshotSchema,
   CapabilityProfileSettingsPatchSchema,
   CapabilityProfileSettingsSchema,
   CapabilityProfileSettingsStatusSchema,
   CAPABILITY_PROFILE_SCHEMA_VERSION,
   CAPABILITY_PROFILE_SETTINGS_SCHEMA_VERSION,
   type CapabilityProfile,
+  type CapabilityProfileRunSnapshot,
   type CapabilityProfileSettings,
   type CapabilityProfileSettingsStatus,
 } from '@ready4vibe/contracts';
@@ -39,6 +41,7 @@ export interface CapabilityProfileSettingsManager {
   status(): CapabilityProfileSettingsStatus;
   patch(input: unknown): CapabilityProfileSettingsStatus;
   reset(expectedRevision?: string): CapabilityProfileSettingsStatus;
+  snapshotForRun(workspaceId: string): CapabilityProfileRunSnapshot;
 }
 
 export class DurableCapabilityProfileSettingsManager implements CapabilityProfileSettingsManager {
@@ -105,6 +108,33 @@ export class DurableCapabilityProfileSettingsManager implements CapabilityProfil
     this.previousRevision = this.settingsValue.profileRevision;
     this.settingsValue = next;
     return this.status();
+  }
+
+  snapshotForRun(workspaceId: string): CapabilityProfileRunSnapshot {
+    const status = this.status();
+    const resolution = status.resolution;
+    if (resolution.effectiveProfile?.workspaceId && resolution.effectiveProfile.workspaceId !== workspaceId) {
+      return CapabilityProfileRunSnapshotSchema.parse({
+        schemaVersion: 'ready4vibe_capability_profile_run_snapshot_v1',
+        profileRevision: status.currentRevision,
+        policyRevision: resolution.policyRevision,
+        status: 'blocked',
+        reasonCode: 'PROFILE_WORKSPACE_MISMATCH',
+        requestedProfile: resolution.requestedProfile,
+        effectiveProfile: null,
+        capturedAt: resolution.evaluatedAt,
+      });
+    }
+    return CapabilityProfileRunSnapshotSchema.parse({
+      schemaVersion: 'ready4vibe_capability_profile_run_snapshot_v1',
+      profileRevision: status.currentRevision,
+      policyRevision: resolution.policyRevision,
+      status: resolution.status,
+      reasonCode: resolution.reasonCode,
+      requestedProfile: resolution.requestedProfile,
+      effectiveProfile: resolution.effectiveProfile,
+      capturedAt: resolution.evaluatedAt,
+    });
   }
 
   private loadSettings(): CapabilityProfileSettings {

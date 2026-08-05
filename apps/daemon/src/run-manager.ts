@@ -6,10 +6,12 @@ import {
   AgentMemoryKnowledgeResultSchema,
   type AgentMemoryKnowledgeToolList,
   AgentMemoryWriteRequestSchema,
+  CapabilityProfileRunSnapshotSchema,
   ModelProviderSnapshotSchema,
   parseRunConfig,
   type AgentMemoryRecallResult,
   type AgentMemoryWriteRequest,
+  type CapabilityProfileRunSnapshot,
   type EventStore,
   type ModelProvider,
   type ModelProviderSnapshot,
@@ -36,6 +38,7 @@ export interface RunSnapshot {
   status: RunStatus;
   config: RunConfig;
   modelSnapshot?: ModelProviderSnapshot;
+  capabilitySnapshot?: CapabilityProfileRunSnapshot;
   lastEventSeq: number;
   output: string;
   approvals: readonly ApprovalRequest[];
@@ -55,8 +58,9 @@ export interface RunManagerOptions {
   modelProvider: ModelProvider;
   modelProviderForRun?: (config: RunConfig) => ModelProvider;
   modelBindingForRun?: (config: RunConfig) => ModelProviderBinding;
+  capabilityProfileForRun?: (config: RunConfig) => CapabilityProfileRunSnapshot;
   toolRuntime?: ToolRuntime;
-  toolRuntimeForRun?: (config: RunConfig) => ToolRuntime | undefined;
+  toolRuntimeForRun?: (config: RunConfig, capabilitySnapshot?: CapabilityProfileRunSnapshot) => ToolRuntime | undefined;
   approvalBroker?: ApprovalBroker;
   scheduler?: Scheduler;
   schedulerPolicy?: SchedulerPolicy;
@@ -67,7 +71,7 @@ export interface RunManagerOptions {
 }
 
 export class RunManagerError extends Error {
-  constructor(readonly code: 'WORKSPACE_NOT_FOUND', message: string) {
+  constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID', message: string) {
     super(message);
     this.name = 'RunManagerError';
   }
@@ -80,7 +84,8 @@ export class RunManager {
   private readonly agentLoop: AgentLoop;
   private readonly modelProviderForRun: (config: RunConfig) => ModelProvider;
   private readonly modelBindingForRun: ((config: RunConfig) => ModelProviderBinding) | undefined;
-  private readonly toolRuntimeForRun: (config: RunConfig) => ToolRuntime | undefined;
+  private readonly capabilityProfileForRun: ((config: RunConfig) => CapabilityProfileRunSnapshot) | undefined;
+  private readonly toolRuntimeForRun: (config: RunConfig, capabilitySnapshot?: CapabilityProfileRunSnapshot) => ToolRuntime | undefined;
   private readonly workspaceExists: (workspaceId: string) => boolean;
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
   private readonly agentMemoryKnowledgeSettings: AgentMemoryKnowledgeSettingsManager | undefined;
@@ -92,6 +97,7 @@ export class RunManager {
     this.eventStore = new ObservableEventStore(options.eventStore);
     this.modelProviderForRun = options.modelProviderForRun ?? (() => options.modelProvider);
     this.modelBindingForRun = options.modelBindingForRun;
+    this.capabilityProfileForRun = options.capabilityProfileForRun;
     this.toolRuntimeForRun = options.toolRuntimeForRun ?? (() => options.toolRuntime);
     this.workspaceExists = options.workspaceExists ?? (() => true);
     this.agentMemorySettings = options.agentMemorySettings;
@@ -117,13 +123,25 @@ export class RunManager {
   async start(input: unknown): Promise<{ runId: string; status: 'queued' }> {
     const config = parseRunConfig(input);
     if (!this.workspaceExists(config.workspaceId)) throw new RunManagerError('WORKSPACE_NOT_FOUND', 'Workspace was not found.');
+    const runId = `run_${uuidv7()}`;
+    let capabilitySnapshot: CapabilityProfileRunSnapshot | undefined;
+    if (this.capabilityProfileForRun) {
+      try {
+        capabilitySnapshot = CapabilityProfileRunSnapshotSchema.parse(this.capabilityProfileForRun(config));
+      } catch {
+        throw new RunManagerError('CAPABILITY_PROFILE_INVALID', 'The capability profile snapshot is invalid.');
+      }
+      if (capabilitySnapshot.status === 'blocked') {
+        throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', `The capability profile is blocked: ${capabilitySnapshot.reasonCode}.`);
+      }
+    }
+    if (capabilitySnapshot) assertRunConfigWithinCapabilityProfile(config, capabilitySnapshot);
     const capturedModelBinding: { provider: ModelProvider; snapshot?: ModelProviderSnapshot } = this.modelBindingForRun
       ? this.modelBindingForRun(config)
       : { provider: this.modelProviderForRun(config) };
-    const runId = `run_${uuidv7()}`;
     const controller = new AbortController();
     this.controllers.set(runId, controller);
-    const capturedToolRuntime = this.toolRuntimeForRun(config);
+    const capturedToolRuntime = this.toolRuntimeForRun(config, capabilitySnapshot);
     const capturedMemory = this.agentMemorySettings?.createRunSnapshot(config.createdBySessionId);
     const capturedKnowledge = this.agentMemoryKnowledgeSettings?.createRunSnapshot();
     const memoryContext = capturedMemory
@@ -138,6 +156,7 @@ export class RunManager {
       signal: controller.signal,
       modelProvider: capturedMemory?.modelProvider ?? capturedModelBinding.provider,
       ...(!capturedMemory?.modelProvider && capturedModelBinding.snapshot ? { modelSnapshot: capturedModelBinding.snapshot } : {}),
+      ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
       ...([...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...memoryContext, ...knowledgeContext] } : {}),
     });
@@ -195,6 +214,7 @@ export class RunManager {
     const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
     if (!config) return undefined;
     const modelSnapshot = readModelSnapshot(created?.payload);
+    const capabilitySnapshot = readCapabilitySnapshot(created?.payload);
     let status: RunStatus = 'created';
     let output = '';
     let final: RunSnapshot['final'];
@@ -225,6 +245,7 @@ export class RunManager {
       status,
       config,
       ...(modelSnapshot ? { modelSnapshot } : {}),
+      ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       lastEventSeq: events.at(-1)?.seq ?? 0,
       output,
       approvals: this.approvalBroker.pending(runId),
@@ -453,6 +474,31 @@ function isTerminal(status: RunStatus): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'timed-out' || status === 'needs-recovery';
 }
 
+function assertRunConfigWithinCapabilityProfile(config: RunConfig, snapshot: CapabilityProfileRunSnapshot): void {
+  const profile = snapshot.effectiveProfile;
+  if (!profile) throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', `The capability profile is blocked: ${snapshot.reasonCode}.`);
+  if (profile.modelMode === 'off') throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', 'The capability profile does not enable a model.');
+  if (profile.networkMode === 'off' && sandboxNetwork(config) === 'enabled') {
+    throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', 'The capability profile does not enable networked tools.');
+  }
+  if (profile.filesystemMode === 'off' && config.sandbox.mode === 'workspace-write') {
+    throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', 'The capability profile does not enable workspace writes.');
+  }
+  if (profile.filesystemMode === 'workspace-read' && config.sandbox.mode === 'workspace-write') {
+    throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', 'The capability profile is read-only for the workspace.');
+  }
+  if (profile.shellMode === 'off' && (config.sandbox.mode === 'external-sandbox' || config.sandbox.mode === 'danger-full-access')) {
+    throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', 'The capability profile does not enable shell execution.');
+  }
+  if (profile.shellMode === 'external-sandbox' && config.sandbox.mode === 'danger-full-access') {
+    throw new RunManagerError('CAPABILITY_PROFILE_BLOCKED', 'The capability profile does not enable host execution.');
+  }
+}
+
+function sandboxNetwork(config: RunConfig): 'restricted' | 'enabled' {
+  return 'network' in config.sandbox ? config.sandbox.network : 'restricted';
+}
+
 function isRunConfigPayload(value: unknown): value is { config: RunConfig } {
   return typeof value === 'object' && value !== null && 'config' in value;
 }
@@ -460,6 +506,12 @@ function isRunConfigPayload(value: unknown): value is { config: RunConfig } {
 function readModelSnapshot(value: unknown): ModelProviderSnapshot | undefined {
   if (typeof value !== 'object' || value === null || !('modelSnapshot' in value)) return undefined;
   const parsed = ModelProviderSnapshotSchema.safeParse(value.modelSnapshot);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function readCapabilitySnapshot(value: unknown): CapabilityProfileRunSnapshot | undefined {
+  if (typeof value !== 'object' || value === null || !('capabilitySnapshot' in value)) return undefined;
+  const parsed = CapabilityProfileRunSnapshotSchema.safeParse(value.capabilitySnapshot);
   return parsed.success ? parsed.data : undefined;
 }
 
