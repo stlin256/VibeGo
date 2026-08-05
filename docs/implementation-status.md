@@ -369,11 +369,13 @@ The following work is documented but not fully implemented yet:
   `ready4vibe_capability_profile_v1` contract is implemented in
   `packages/contracts` with 5 focused tests (71 contract tests total).
   `@ready4vibe/policy` provides the pure resolver with 7 focused tests (24
-  policy tests total). The current R2/R3a slice adds only a versioned,
-  secret-free daemon settings snapshot, optimistic revision checks and an
-  authenticated resolver projection; it does not change default run creation
-  or start any runtime. Profile cards, profile/run snapshot binding and the
-  later Goal/transport/ACME/release gates remain independently planned. The
+  policy tests total). The R2/R3a application slice now adds a versioned,
+  secret-free daemon settings snapshot, optimistic revision checks, stale
+  policy recovery to `preview`, and an authenticated resolver projection with
+  LAN auth coverage. The contracts/daemon focused gate is 74/24/35 tests
+  respectively at this slice. It does not change default run creation or
+  start any runtime. Profile cards, profile/run snapshot binding and the later
+  Goal/transport/ACME/release gates remain independently planned. The
   plan defines preview, workspace-coding, advanced-local and custom profiles,
   progressive capability unlock, contextual blocked-capability guidance,
   profile/run snapshot isolation and Host-first acceptance. Native clients

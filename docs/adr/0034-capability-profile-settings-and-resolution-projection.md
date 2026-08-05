@@ -62,3 +62,17 @@ must not become an authorization engine or persist secrets.
 - Starting or probing all runtimes on PATCH: rejected because settings writes
   must remain low-resource and side-effect free; explicit probes belong to the
   existing per-runtime settings services.
+
+## Implementation evidence (2026-08-05)
+
+`packages/contracts/src/capability-profile-settings.ts` adds strict settings,
+patch and status DTOs and the resolver projection now shares the versioned
+contract reason/status enums. `apps/daemon/src/capability-profile-settings.ts`
+persists the default `preview` snapshot, recovers a stale policy to preview,
+uses `profile-N` optimistic revisions and exposes only bounded status metadata.
+`apps/daemon/src/server.ts` adds authenticated GET/PATCH/reset routes while
+`apps/daemon/src/main.ts` derives policy evidence from the existing transport,
+workspace, model, filesystem, sandbox and MCP managers. Contract, manager and
+server fixtures cover strict privacy, restart, stale/concurrent updates,
+resolver narrowing, reset history and the existing LAN authentication gate.
+No default run or execution authority was changed.

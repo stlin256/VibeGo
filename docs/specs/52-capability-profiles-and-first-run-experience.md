@@ -1,8 +1,8 @@
 # Spec 52: Capability profiles, core harness closure and first-run experience
 
-- Status: R1 strict contract and pure resolver implemented; R2/R3a durable
-  settings projection and authenticated API in progress (no default run-path
-  behavior change)
+- Status: R1 strict contract/resolver and R2/R3a durable settings projection
+  with authenticated API implemented (profile cards and run snapshot binding
+  remain pending; no default run-path behavior change)
 - Date: 2026-08-04
 - Scope: `apps/web`, `apps/daemon`, `packages/goal-control`, settings
   persistence, policy/approval boundaries, transport/certificate adapters,
@@ -503,7 +503,7 @@ path or starts any runtime.
 - Verify that disabled modes make zero provider/process/network calls.
 - Verify that a changed profile never alters an already running run.
 
-#### R2/R3a application-settings slice (2026-08-05)
+#### R2/R3a application-settings slice (2026-08-05, implemented)
 
 The first application-boundary slice persists only the validated,
 secret-free profile intent in the existing `daemon_settings` boundary. The
@@ -520,6 +520,13 @@ This slice deliberately does **not** attach the profile to `RunConfig`, change
 process, call a provider, change Scheduler/Approval/Sandbox authority, or
 modify `run_events`/`goal_events`. Profile/run snapshot binding and contextual
 Web cards remain the next independently tested slice.
+
+The implementation is covered by strict contracts in
+`packages/contracts/src/capability-profile-settings.ts`, the durable daemon
+manager in `apps/daemon/src/capability-profile-settings.ts`, and authenticated
+server fixtures for restart, stale revision, reset, privacy and LAN auth. The
+focused contract suite has 74 tests and the daemon focused settings/API suite
+has 35 tests at this gate.
 
 ### 52-R4: Goal governed admission
 

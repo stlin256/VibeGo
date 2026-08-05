@@ -21,8 +21,29 @@ import { InMemoryGoalEventStore, createGoalEvent } from '@ready4vibe/goal-contro
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
 import { AgentMemoryKnowledgeSettingsManager } from './agent-memory-knowledge-settings.js';
 import { McpSettingsManager } from './mcp-settings.js';
+import { DurableCapabilityProfileSettingsManager } from './capability-profile-settings.js';
+import { type CapabilityProfilePolicy } from '@ready4vibe/policy';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
+
+const capabilityPolicy = (): CapabilityProfilePolicy => ({
+  policyRevision: 'policy-1',
+  transportModes: ['loopback', 'lan-tls', 'tailscale', 'ssh'],
+  modelModes: ['off', 'fake', 'configured'],
+  filesystemModes: ['off', 'workspace-read', 'workspace-write'],
+  shellModes: ['off', 'external-sandbox', 'host-restricted'],
+  networkModes: ['off', 'restricted', 'enabled'],
+  mcpSkillModes: ['off', 'configured'],
+  approvalModes: ['none', 'on-request', 'bounded-auto', 'explicit'],
+  transportHealth: { loopback: 'ready', 'lan-tls': 'missing', tailscale: 'missing', ssh: 'missing' },
+  workspaceHealth: 'ready',
+  modelHealth: 'ready',
+  filesystemHealth: 'ready',
+  externalSandboxHealth: 'ready',
+  hostRunnerHealth: 'missing',
+  networkHealth: 'enabled',
+  mcpSkillHealth: 'ready',
+});
 
 const runConfig = (workspaceId = 'workspace-api') => ({
   workspaceId,
@@ -665,6 +686,55 @@ describe('daemon health server', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: { code: 'INVALID_PROVIDER', message: 'The requested model provider is not configured for this daemon.' } });
     expect(eventStore.listRunIds()).toEqual([]);
+  });
+
+  it('serves authenticated capability profile settings with resolver projection and revision fencing', async () => {
+    const settings = new InMemorySettingsStore();
+    const manager = new DurableCapabilityProfileSettingsManager({ settings, policy: capabilityPolicy, clock: () => new Date('2026-08-05T00:00:00.000Z') });
+    const server = createDaemonServer({ capabilityProfileSettings: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}/api/v1/settings/capability-profile`;
+
+    const initial = await fetch(base);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({
+      schemaVersion: 'ready4vibe_capability_profile_settings_status_v1',
+      settings: { profile: { profileId: 'preview' }, profileRevision: 'profile-1' },
+      resolution: { status: 'ready', reasonCode: 'PROFILE_READY', effectiveProfile: { profileId: 'preview' } },
+    });
+
+    const nextProfile = {
+      schemaVersion: 'ready4vibe_capability_profile_v1', profileId: 'workspace-coding', transportMode: 'loopback', workspaceId: 'repo',
+      modelMode: 'configured', filesystemMode: 'workspace-write', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'on-request',
+      policyRevision: 'policy-1', requiresAcknowledgement: false, updatedAt: '2026-08-05T00:00:00.000Z',
+    } as const;
+    const patched = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: nextProfile, expectedRevision: 'profile-1' }) });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({ currentRevision: 'profile-2', resolution: { status: 'ready', effectiveProfile: { profileId: 'workspace-coding' } } });
+
+    const stale = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: { ...nextProfile, profileId: 'custom' }, expectedRevision: 'profile-1' }) });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toEqual({ error: { code: 'REVISION_CONFLICT', message: 'Capability profile revision is stale.' } });
+
+    const unsafe = await fetch(base, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'secret' }) });
+    expect(unsafe.status).toBe(400);
+    expect(await unsafe.text()).not.toContain('secret');
+
+    const reset = await fetch(`${base}/reset`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedRevision: 'profile-2' }) });
+    expect(reset.status).toBe(200);
+    expect(await reset.json()).toMatchObject({ currentRevision: 'profile-3', previousRevision: 'profile-2', settings: { profile: { profileId: 'preview' } } });
+  });
+
+  it('keeps capability profile settings behind the existing LAN authentication gate', async () => {
+    const authGate = new AuthGate({ mode: 'lan', tlsRequired: false, randomBytes: (() => new Uint8Array(64)) });
+    const manager = new DurableCapabilityProfileSettingsManager({ settings: new InMemorySettingsStore(), policy: capabilityPolicy });
+    const server = createDaemonServer({ host: '0.0.0.0', transportMode: 'lan', authGate, capabilityProfileSettings: manager });
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/settings/capability-profile`);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: 'AUTH_REQUIRED' } });
   });
 
   it('serves durable agent-memory settings and keeps provider secrets/paths out of the API', async () => {
