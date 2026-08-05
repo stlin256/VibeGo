@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   createDeepSeekRunBinding,
+  createHarnessToolRuntime,
   createProvider,
   exitCodeForHarnessSmokeStatus,
   parseHarnessSmokeArgs,
@@ -62,6 +63,14 @@ test('parses the explicit DeepSeek harness provider boundary', () => {
     scenario: 'cancel',
     timeoutMs: 1200,
   });
+  assert.deepEqual(parseHarnessSmokeArgs([
+    '--provider', 'deepseek',
+    '--endpoint', valid.endpoint,
+    '--profile', 'openai-chat-completions',
+    '--model', valid.model,
+    '--secret-env', valid.secretEnv,
+    '--scenario', 'approval',
+  ]).scenario, 'approval');
   assert.throws(() => parseHarnessSmokeArgs([
     '--provider', 'deepseek',
     '--endpoint', 'https://api.example.test/v1/chat/completions',
@@ -76,6 +85,19 @@ test('parses the explicit DeepSeek harness provider boundary', () => {
     '--secret-env', valid.secretEnv,
     '--api-key', 'secret',
   ]), /usage/u);
+});
+
+test('keeps the harness fixture ToolRuntime bounded and approval-aware', async () => {
+  const tool = createHarnessToolRuntime('tool');
+  assert.equal(tool.descriptors[0].risk, 'read');
+  await expectToolResult(tool, { value: 'ready4vibe-tool-smoke' }, { echo: 'ready4vibe-tool-smoke' });
+  await assert.rejects(() => tool.execute({ input: { value: 'sk-' + 'x'.repeat(32) } }), { code: 'TOOL_INPUT_INVALID' });
+
+  const approvalTool = createHarnessToolRuntime('approval');
+  assert.equal(approvalTool.descriptors[0].risk, 'write');
+  await assert.rejects(() => approvalTool.execute({ input: { value: 'approved' } }), { code: 'APPROVAL_REQUIRED' });
+  await approvalTool.approve({});
+  await expectToolResult(approvalTool, { value: 'approved' }, { echo: 'approved' });
 });
 
 test('constructs DeepSeek provider with a secret-free config and no hidden endpoint path', async () => {
@@ -98,6 +120,7 @@ test('constructs DeepSeek provider with a secret-free config and no hidden endpo
   assert.equal(received.config.endpoint, valid.endpoint);
   assert.equal(received.config.endpointProfile, 'openai-chat-completions');
   assert.equal(received.config.authRef, 'secret.deepseek.harness');
+  assert.equal(received.config.toolCalling, 'disabled');
   assert.equal(received.apiKey, 'sk-' + 'x'.repeat(32));
   assert.doesNotMatch(JSON.stringify(received.config), /sk-|apiKey|authorization/iu);
 });
@@ -263,6 +286,33 @@ test('explicit harness cancellation uses the daemon cancel route and never repla
   assert.equal(observed.cancelled, true);
 });
 
+test('tool scenario requires tool evidence and approval scenario completes the bounded broker round-trip', async () => {
+  const toolObserved = { route: undefined, body: undefined };
+  const toolResult = await runHarnessSmoke({ ...valid, scenario: 'tool' }, {
+    secretValue: () => 'sk-' + 't'.repeat(32),
+    provider: providerForToolHarnessEvents(false),
+    runtimeFactory: async () => fakeRuntime({ observed: toolObserved, mode: 'interactive', tool: true }),
+  });
+  assert.equal(toolResult.status, 'healthy');
+  assert.equal(toolResult.eventTypes['tool.requested'], 1);
+  assert.equal(toolResult.eventTypes['tool.completed'], 1);
+  assert.equal(toolResult.toolEvidence.status, 'completed');
+  assert.equal(toolObserved.body.limits.maxTurns, 2);
+  assert.equal(toolObserved.body.approval, 'on-request');
+
+  const approvalObserved = { route: undefined, body: undefined, approvalId: undefined };
+  const approvalResult = await runHarnessSmoke({ ...valid, scenario: 'approval' }, {
+    secretValue: () => 'sk-' + 'a'.repeat(32),
+    provider: providerForToolHarnessEvents(true),
+    runtimeFactory: async () => fakeRuntime({ observed: approvalObserved, mode: 'interactive', tool: true, approval: true }),
+  });
+  assert.equal(approvalResult.status, 'healthy');
+  assert.equal(approvalResult.eventTypes['approval.required'], 1);
+  assert.equal(approvalResult.eventTypes['approval.decided'], 1);
+  assert.equal(approvalResult.toolEvidence.status, 'completed');
+  assert.equal(approvalObserved.approvalId, 'ap_harness0001');
+});
+
 test('exit codes and safe error mapping are stable', () => {
   assert.equal(exitCodeForHarnessSmokeStatus('healthy'), 0);
   assert.equal(exitCodeForHarnessSmokeStatus('blocked'), 2);
@@ -274,7 +324,7 @@ test('exit codes and safe error mapping are stable', () => {
   assert.equal(safeHarnessErrorCode(new Error('secret at C:\\private')), 'HARNESS_FAILED');
 });
 
-function fakeRuntime({ observed, mode, goal = false, failed = false, failedCode = 'MODEL_HTTP_401', delayed = false, delayMs = 1_000 }) {
+function fakeRuntime({ observed, mode, goal = false, failed = false, failedCode = 'MODEL_HTTP_401', delayed = false, delayMs = 1_000, tool = false, approval = false }) {
   observed ??= {};
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -289,6 +339,11 @@ function fakeRuntime({ observed, mode, goal = false, failed = false, failedCode 
     if (request.method === 'POST' && url.pathname === '/api/v1/runs/run_harness0001/cancel') {
       observed.cancelled = true;
       return json(response, 202, { runId: 'run_harness0001', status: 'cancelling' });
+    }
+    if (request.method === 'POST' && url.pathname === '/api/v1/runs/run_harness0001/approve') {
+      const body = JSON.parse(await readBody(request));
+      observed.approvalId = body.approvalId;
+      return json(response, 202, { runId: 'run_harness0001', approvalId: body.approvalId, status: 'accepted' });
     }
     if (url.pathname === '/api/v1/runs/run_harness0001/events') {
       if (delayed) await new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
@@ -305,6 +360,14 @@ function fakeRuntime({ observed, mode, goal = false, failed = false, failedCode 
             deepSeekSnapshot: { providerId: 'deepseek', configRevision: 'harness-deepseek-config', capabilityRevision: 'deepseek-provider-capability-unprobed' },
           } : {}),
         } },
+        ...(tool ? [
+          { type: 'tool.requested', payload: { callId: 'call_harness0001', toolId: 'echo', risk: approval ? 'write' : 'read', argumentBytes: 18 } },
+          ...(approval ? [
+            { type: 'approval.required', payload: { approvalId: 'ap_harness0001', callId: 'call_harness0001', toolId: 'echo', risk: 'write' } },
+            { type: 'approval.decided', payload: { approvalId: 'ap_harness0001', callId: 'call_harness0001', decision: 'allow' } },
+          ] : []),
+          { type: 'tool.completed', payload: { callId: 'call_harness0001', toolId: 'echo', success: true, bytes: 32 } },
+        ] : []),
         { type: 'model.usage', payload: { inputTokens: 4, outputTokens: 2 } },
         terminal,
       ];
@@ -334,6 +397,22 @@ function providerForHarnessEvents() {
       yield { type: 'completed', finishReason: 'stop' };
     },
   };
+}
+
+function providerForToolHarnessEvents(approval) {
+  return {
+    id: 'deepseek',
+    capabilities: { streaming: true, toolCalls: true, structuredOutput: false },
+    async *stream() {
+      yield { type: 'tool-call-delta', callId: 'call_harness0001', name: 'echo', argumentsChunk: JSON.stringify({ value: approval ? 'approved' : 'ready4vibe-tool-smoke' }) };
+      yield { type: 'completed', finishReason: 'tool-calls' };
+    },
+  };
+}
+
+async function expectToolResult(tool, request, expected) {
+  const result = await tool.execute({ input: request });
+  assert.deepEqual(result.output, expected);
 }
 
 function json(response, status, body) {

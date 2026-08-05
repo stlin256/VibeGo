@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
-const USAGE = 'usage: pnpm smoke:harness -- --mode <interactive|governed> --provider <openai-compatible|deepseek> --endpoint <https://provider.example/v1/chat/completions> --model <model-id> --secret-env <ENV_VAR> [--profile <openai-chat-completions|openai-responses|anthropic-messages>] [--thinking <off|auto|high|max>] [--scenario <text|cancel|timeout>] [--timeout-ms <100..30000>]';
+const USAGE = 'usage: pnpm smoke:harness -- --mode <interactive|governed> --provider <openai-compatible|deepseek> --endpoint <https://provider.example/v1/chat/completions> --model <model-id> --secret-env <ENV_VAR> [--profile <openai-chat-completions|openai-responses|anthropic-messages>] [--thinking <off|auto|high|max>] [--scenario <text|tool|approval|cancel|timeout>] [--timeout-ms <100..30000>]';
 const DEFAULT_PROVIDER_ID = 'openai-compatible';
 const DEEPSEEK_PROVIDER_ID = 'deepseek';
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -119,7 +119,7 @@ export async function runHarnessSmoke(options, dependencies = {}) {
     const provider = dependencies.provider ?? await createProvider(options, secretValue, dependencies);
     runtime = dependencies.runtimeFactory
       ? await dependencies.runtimeFactory({ options, provider })
-      : await createDefaultRuntime(options, provider);
+      : await createDefaultRuntime(options, provider, dependencies);
   } catch (error) {
     const providerError = safeHarnessErrorCode(error, 'HARNESS_RUNTIME_INIT');
     return report(options, providerError === 'DEEPSEEK_THINKING_UNSUPPORTED' ? 'blocked' : 'failed', elapsedMs(startedAt, now()), undefined, undefined, undefined, providerError);
@@ -147,27 +147,57 @@ export async function runHarnessSmoke(options, dependencies = {}) {
     }
 
     const runId = started.body.runId;
+    let approvalSubmitted = false;
     const cancelTimer = options.scenario === 'cancel'
       ? setTimeout(() => { void requestJson(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' }, options.timeoutMs).catch(() => undefined); }, Math.min(100, Math.max(10, Math.trunc(options.timeoutMs / 4))))
       : undefined;
-    const events = await readSse(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/events`, options.timeoutMs);
+    const events = await readSse(
+      fetchImpl,
+      `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/events`,
+      options.timeoutMs,
+      options.scenario === 'approval'
+        ? async (event) => {
+          const approvalId = event.type === 'approval.required' ? event.payload?.approvalId : undefined;
+          if (!approvalId) return undefined;
+          if (approvalSubmitted) return 'HARNESS_APPROVAL_REPLAY';
+          approvalSubmitted = true;
+          try {
+            const approval = await requestJson(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}/approve`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ approvalId, decision: 'allow' }),
+            }, options.timeoutMs);
+            return approval.status === 202 ? undefined : 'HARNESS_APPROVAL_FAILED';
+          } catch {
+            return 'HARNESS_APPROVAL_FAILED';
+          }
+        }
+        : undefined,
+    );
     if (cancelTimer !== undefined) clearTimeout(cancelTimer);
     const snapshot = await requestJson(fetchImpl, `${baseUrl}/api/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' }, options.timeoutMs);
     const finalStatus = readRunStatus(snapshot.body, events);
     const goal = options.mode === 'governed'
       ? await waitForGoalOutcome(runtime, options.timeoutMs, now)
       : undefined;
-    const providerError = events.errorCode ?? readSafeRunError(snapshot.body);
+    const providerError = events.errorCode ?? events.approvalErrorCode ?? readSafeRunError(snapshot.body);
     const expectedTerminalEvent = options.scenario === 'cancel' ? 'run.cancelled' : 'run.completed';
     const hasTerminalEvent = events.events.some((event) => event.type === expectedTerminalEvent);
     const expectedStatus = options.scenario === 'cancel' ? 'cancelled' : 'completed';
     const runHealthy = finalStatus === expectedStatus && hasTerminalEvent && providerError === undefined;
     const goalHealthy = options.mode !== 'governed' || goal?.status === 'validated';
+    const toolEvidence = summarizeToolEvidence(events.events);
+    const toolRequired = options.scenario === 'tool' || options.scenario === 'approval';
+    const toolHealthy = !toolRequired || toolEvidence.status === 'completed' && (options.scenario !== 'approval' || toolEvidence.approvalDecided > 0);
+    const reportedToolEvidence = toolRequired || toolEvidence.requested > 0 ? toolEvidence : undefined;
+    const toolError = toolRequired && !toolHealthy
+      ? toolEvidence.status === 'not-used' ? 'HARNESS_TOOL_NOT_USED' : 'HARNESS_TOOL_FAILED'
+      : undefined;
     const terminalStatus = events.timedOut
       ? 'timeout'
       : options.scenario === 'cancel' && finalStatus === 'cancelled'
         ? 'cancelled'
-        : runHealthy && goalHealthy ? 'healthy' : 'failed';
+        : runHealthy && goalHealthy && toolHealthy ? 'healthy' : 'failed';
     return report(
       options,
       terminalStatus,
@@ -175,8 +205,11 @@ export async function runHarnessSmoke(options, dependencies = {}) {
       runId,
       events,
       goal,
-      events.timedOut ? 'HARNESS_SSE_TIMEOUT' : providerError ?? (goalHealthy ? undefined : 'HARNESS_GOAL_VALIDATION_FAILED'),
+      events.timedOut
+        ? 'HARNESS_SSE_TIMEOUT'
+        : providerError ?? (goalHealthy ? undefined : 'HARNESS_GOAL_VALIDATION_FAILED') ?? toolError,
       finalStatus,
+      reportedToolEvidence,
     );
   } catch (error) {
     if (error?.code === 'HARNESS_TIMEOUT') {
@@ -188,8 +221,8 @@ export async function runHarnessSmoke(options, dependencies = {}) {
   }
 }
 
-function report(options, status, elapsed, runId, events, goal, errorCode, finalStatus) {
-    const result = {
+function report(options, status, elapsed, runId, events, goal, errorCode, finalStatus, toolEvidence) {
+  const result = {
     schemaVersion: 'harness-smoke/v1',
     mode: options.mode,
     provider: options.provider ?? DEFAULT_PROVIDER_ID,
@@ -202,6 +235,7 @@ function report(options, status, elapsed, runId, events, goal, errorCode, finalS
     ...(runId ? { runId } : {}),
     ...(finalStatus ? { runStatus: finalStatus } : {}),
     ...(events?.providerSnapshot ? { providerSnapshot: events.providerSnapshot } : {}),
+    ...(toolEvidence ? { toolEvidence } : {}),
     eventTypes: countEventTypes(events?.events ?? []),
     usage: {
       inputTokens: boundedUsage(events?.inputTokens),
@@ -222,19 +256,22 @@ function report(options, status, elapsed, runId, events, goal, errorCode, finalS
 
 function buildRunInput(options, runtime) {
   const provider = options.provider ?? DEFAULT_PROVIDER_ID;
+  const toolScenario = options.scenario === 'tool' || options.scenario === 'approval';
   const config = {
     workspaceId: SMOKE_WORKSPACE_ID,
-    userMessage: 'Reply with exactly the word ready4vibe-harness-smoke.',
+    userMessage: toolScenario
+      ? 'Call the echo tool with the value ready4vibe-tool-smoke, then reply with exactly the word ready4vibe-harness-smoke.'
+      : 'Reply with exactly the word ready4vibe-harness-smoke.',
     model: { provider, name: options.model },
     taskTrust: 'trusted-workspace',
     sandbox: { mode: 'read-only', network: 'restricted' },
     approval: 'on-request',
     limits: {
-      maxTurns: 1,
+      maxTurns: toolScenario ? 2 : 1,
       maxWallTimeMs: options.timeoutMs,
       maxModelInputTokens: 256,
       maxModelOutputTokens: 64,
-      maxToolCalls: 1,
+      maxToolCalls: toolScenario ? 1 : 1,
       maxOutputBytes: 4_096,
       maxContextBytes: 16_384,
     },
@@ -267,7 +304,7 @@ export async function createProvider(options, secretValue, dependencies = {}) {
       model: options.model,
       authRef: 'secret.deepseek.harness',
       thinkingMode: options.thinkingMode ?? DEFAULT_THINKING,
-      toolCalling: 'disabled',
+      toolCalling: options.scenario === 'tool' || options.scenario === 'approval' ? 'enabled' : 'disabled',
       webSearch: 'off',
       reviewer: 'off',
       timeoutMs: options.timeoutMs,
@@ -286,7 +323,46 @@ export async function createProvider(options, secretValue, dependencies = {}) {
   });
 }
 
-export async function createDefaultRuntime(options, provider) {
+/**
+ * A deliberately tiny fixture runtime for the explicit tool/approval smoke
+ * scenarios. It is not a production filesystem, shell or sandbox adapter.
+ */
+export function createHarnessToolRuntime(scenario = 'tool') {
+  if (scenario !== 'tool' && scenario !== 'approval') throw new Error('HARNESS_TOOL_SCENARIO_INVALID');
+  let approved = scenario !== 'approval';
+  const descriptor = Object.freeze({
+    name: 'echo',
+    id: 'harness.echo',
+    version: '1',
+    risk: scenario === 'approval' ? 'write' : 'read',
+    summary: 'Return one bounded value without filesystem or network access.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { value: { type: 'string', maxLength: 128 } },
+      required: ['value'],
+    },
+  });
+  return {
+    descriptors: [descriptor],
+    async execute(request) {
+      if (scenario === 'approval' && !approved) throw Object.assign(new Error('approval required'), { code: 'APPROVAL_REQUIRED' });
+      const value = request?.input?.value;
+      if (typeof value !== 'string' || value.length === 0 || value.length > 128 || /[\r\n\u0000]/u.test(value) || /(?:sk-[A-Za-z0-9]{20,}|api[_-]?key|token|secret|password|authorization|bearer)/iu.test(value)) {
+        throw Object.assign(new Error('tool input invalid'), { code: 'TOOL_INPUT_INVALID' });
+      }
+      return { output: { echo: value } };
+    },
+    async approve() {
+      approved = true;
+    },
+    approvalDetails() {
+      return { summary: 'Allow the bounded harness echo tool once.' };
+    },
+  };
+}
+
+export async function createDefaultRuntime(options, provider, dependencies = {}) {
   const [contracts, storage, schedulerPackage, goalControl, daemon, runManagerPackage, goalAdmissionPackage, goalWritebackPackage] = await Promise.all([
     import('../packages/contracts/dist/index.js'),
     import('../packages/storage/dist/index.js'),
@@ -304,11 +380,14 @@ export async function createDefaultRuntime(options, provider) {
   const modelBindingForRun = options.provider === DEEPSEEK_PROVIDER_ID
     ? () => createDeepSeekRunBinding(options, provider, contracts)
     : undefined;
+  const toolRuntime = dependencies.toolRuntime
+    ?? (options.scenario === 'tool' || options.scenario === 'approval' ? createHarnessToolRuntime(options.scenario) : undefined);
   const runManager = new runManagerPackage.RunManager({
     eventStore,
     scheduler,
     modelProvider: provider,
     ...(modelBindingForRun ? { modelBindingForRun } : {}),
+    ...(toolRuntime ? { toolRuntimeForRun: () => toolRuntime } : {}),
     workspaceExists: (workspaceId) => workspaceId === SMOKE_WORKSPACE_ID,
   });
   const capabilitySnapshot = createCapabilitySnapshot(contracts);
@@ -395,7 +474,7 @@ export function createDeepSeekRunBinding(options, provider, contracts) {
     endpoint,
     model,
     thinkingMode: options.thinkingMode ?? DEFAULT_THINKING,
-    toolCalling: 'disabled',
+    toolCalling: options.scenario === 'tool' || options.scenario === 'approval' ? 'enabled' : 'disabled',
     webSearch: 'off',
     reviewer: 'off',
     configRevision: 'harness-deepseek-config',
@@ -494,7 +573,7 @@ async function waitForGoalOutcome(runtime, timeoutMs, now) {
   return latest ?? { status: 'pending', eventTypes: {} };
 }
 
-async function readSse(fetchImpl, url, timeoutMs) {
+async function readSse(fetchImpl, url, timeoutMs, onEvent) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -509,6 +588,7 @@ async function readSse(fetchImpl, url, timeoutMs) {
     let outputTokens = 0;
     let errorCode;
     let providerSnapshot;
+    let approvalErrorCode;
     try {
       while (true) {
         const next = await reader.read();
@@ -530,6 +610,10 @@ async function readSse(fetchImpl, url, timeoutMs) {
           }
           if (parsed.type === 'run.failed') errorCode = safeEventErrorCode(parsed.payload?.code);
           if (parsed.providerSnapshot) providerSnapshot = parsed.providerSnapshot;
+          if (onEvent) {
+            const callbackCode = await onEvent(parsed);
+            if (callbackCode) approvalErrorCode = callbackCode;
+          }
         }
       }
       buffer += decoder.decode();
@@ -538,7 +622,7 @@ async function readSse(fetchImpl, url, timeoutMs) {
     } finally {
       reader.releaseLock();
     }
-    return { events, timedOut: false, inputTokens, outputTokens, ...(providerSnapshot ? { providerSnapshot } : {}), ...(errorCode ? { errorCode } : {}) };
+    return { events, timedOut: false, inputTokens, outputTokens, ...(providerSnapshot ? { providerSnapshot } : {}), ...(errorCode ? { errorCode } : {}), ...(approvalErrorCode ? { approvalErrorCode } : {}) };
   } catch (error) {
     if (controller.signal.aborted) return { events: [], timedOut: true };
     throw error;
@@ -570,6 +654,9 @@ function parseSseFrame(frame) {
     return { type: eventType, payload: { finishReason: typeof payload?.finishReason === 'string' ? payload.finishReason : undefined } };
   }
   if (eventType === 'run.failed') return { type: eventType, payload: { code: safeEventErrorCode(payload?.code) } };
+  if (eventType === 'approval.required') return { type: eventType, payload: { approvalId: boundedApprovalId(payload?.approvalId) } };
+  if (eventType === 'approval.decided') return { type: eventType, payload: { approvalId: boundedApprovalId(payload?.approvalId), decision: boundedDecision(payload?.decision) } };
+  if (eventType === 'tool.completed') return { type: eventType, payload: { success: payload?.success === true, code: boundedToolCode(payload?.code) } };
   if (eventType === 'run.created') return { type: eventType, providerSnapshot: readProviderSnapshot(payload) };
   if (eventType === 'model.requested') return { type: eventType, providerSnapshot: readProviderSnapshot(payload) };
   return { type: eventType };
@@ -597,6 +684,32 @@ function readProviderSnapshot(payload) {
 
 function boundedRevision(value) {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(value) ? value : undefined;
+}
+
+function boundedApprovalId(value) {
+  return typeof value === 'string' && /^ap_[A-Za-z0-9_-]{8,128}$/u.test(value) ? value : undefined;
+}
+
+function boundedDecision(value) {
+  return value === 'allow' || value === 'deny' || value === 'expired' ? value : undefined;
+}
+
+function boundedToolCode(value) {
+  return typeof value === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/u.test(value) ? value : undefined;
+}
+
+function summarizeToolEvidence(events) {
+  const requested = events.filter((event) => event.type === 'tool.requested').length;
+  const completed = events.filter((event) => event.type === 'tool.completed');
+  const approvalRequired = events.filter((event) => event.type === 'approval.required').length;
+  const approvalDecided = events.filter((event) => event.type === 'approval.decided' && event.payload?.decision === 'allow').length;
+  const lastCompleted = completed.at(-1);
+  const status = lastCompleted?.payload?.success === true
+    ? 'completed'
+    : lastCompleted
+      ? 'failed'
+      : 'not-used';
+  return { status, requested, completed: completed.length, approvalRequired, approvalDecided };
 }
 
 async function requestJson(fetchImpl, url, init, timeoutMs) {
@@ -692,7 +805,7 @@ function validateDeepSeekEndpoint(value, profile) {
 }
 
 function validateHarnessScenario(value) {
-  if (value !== 'text' && value !== 'cancel' && value !== 'timeout') throw new Error('scenario must be text, cancel or timeout');
+  if (value !== 'text' && value !== 'tool' && value !== 'approval' && value !== 'cancel' && value !== 'timeout') throw new Error('scenario must be text, tool, approval, cancel or timeout');
   return value;
 }
 

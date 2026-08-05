@@ -1255,3 +1255,10 @@ an interactive run with the immutable provider snapshot and usage 19/9. The
 redacted evidence is [`spec61-6-live-evidence-2026-08-05.md`](reports/spec61-6-live-evidence-2026-08-05.md).
 This advances only live text/terminal evidence; tool/Approval/Sandbox,
 reviewer/search, reasoning and governed/release gates remain pending.
+
+### Spec 61-6 tool/Approval fixture checkpoint (2026-08-05)
+
+Add explicit `tool` and `approval` harness scenarios. The fixture requires
+bounded tool requested/completed evidence and, for approval, one daemon
+`/approve` broker round-trip. It must not be presented as production
+filesystem/shell/external-sandbox, reviewer/search or governed evidence.

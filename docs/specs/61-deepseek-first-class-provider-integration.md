@@ -349,6 +349,17 @@ latency、event counts、usage 和 stable error code；失败、超时、取消�
 该结果只关闭 text/terminal live gate；tool/Approval/Sandbox、reviewer、search、
 reasoning capability、governed quota 和 release gate 仍未关闭。
 
+下一条 harness fixture gate 可显式选择 `--scenario tool` 或 `--scenario approval`。
+两者都必须把 `toolCalling=enabled` 固定在 provider config，并通过现有
+AgentLoop 的 `ToolRuntime`、Scheduler workspace lease、`ApprovalBroker` 和 daemon
+`/approve` 路由完成；runner 不得直接调用 handler、伪造 approval event 或创建第二套
+policy/scheduler。`approval` 场景只允许对 bounded、trusted-workspace 的 fixture
+write tool 自动提交一次 `allow`，用于验证 broker 往返；任何未知 tool、无效参数、
+重复 approval 或 sandbox 不可用都必须 fail-closed。报告只增加 tool/approval event
+counts 和 stable code，不保存参数、tool output、secret 或绝对路径。该 fixture 结果
+不能宣称生产 filesystem/shell/external-sandbox 已接入；生产 sandbox、reviewer、
+provider-owned search 和 governed evidence 仍是后续 gates。
+
 至少收集以下可重现证据：
 
 1. DeepSeek text streaming：首 token、终态、usage、model snapshot；

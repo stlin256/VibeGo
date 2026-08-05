@@ -1238,6 +1238,16 @@ and explicit daemon cancellation. No new scheduler, event ledger, approval
 authority or sandbox authority was introduced; tool/reviewer/search and live
 provider evidence remain separate gates.
 
+### Spec 61-6 tool/Approval harness fixture checkpoint (2026-08-05)
+
+The explicit harness runner now supports bounded `tool` and `approval` fixture
+scenarios. Both use the existing AgentLoop tool path and require tool event
+evidence; `approval` submits one bounded `allow` through the daemon approval
+route and verifies the broker round-trip. The fixture ToolRuntime rejects
+secret-shaped/oversized values and is explicitly not a filesystem, shell or
+production sandbox adapter. Focused harness coverage is 15/15; production
+sandbox, reviewer/search and governed evidence remain separate gates.
+
 ### Spec 61-6 live evidence checkpoint (2026-08-05)
 
 The bounded live adapter smoke and the explicit DeepSeek harness smoke both
