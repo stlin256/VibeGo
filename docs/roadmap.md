@@ -783,7 +783,7 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
 
-## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0 已完成，Draft）
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0 已完成，58-1 进行中，Draft）
 
 详见 [Spec 58](specs/58-goal-control-and-harness-completion.md) 及其
 [58-0 prerequisite audit](reports/58-0-prerequisite-verification-2026-08-05.md)。当前 Goal Control
@@ -795,6 +795,11 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 58-0 已在当前 `main` 基线重新核对 checkout、workspace graph、Goal/daemon/Web
 focused gate 和完整 `pnpm verify`。审计结论为：现有基础满足 58-1 的合同切片前置条件，
 但不授权接入默认 run；后续必须继续以独立分支、独立提交和 `--no-ff` 合并推进。
+
+58-1 的合同边界已通过 [ADR 0036](adr/0036-goal-control-v1-domain-and-replay-boundary.md)
+冻结：新增 v1 binding/admission/quota-reservation/validation/recovery contracts，
+兼容 v0 replay，并在纯 Goal reducer/write service 中验证幂等、冲突、stale revision、
+quota 状态转移和验证证据门禁；本阶段仍不接入默认 run。
 
 Spec 58 将 Goal 作为第一条“从基础概念到生产闭环”的纵切，同时定义 Model、Context、
 AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability、

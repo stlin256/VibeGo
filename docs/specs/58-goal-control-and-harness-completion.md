@@ -1,6 +1,6 @@
 # Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁
 
-- Status: Draft（58-0 prerequisite audit 已完成；58-1 尚未接入默认运行时）
+- Status: Draft（58-0 已完成；58-1 contract/reducer 边界已冻结，尚未接入默认运行时）
 - Date: 2026-08-05
 - Scope: Goal Control、daemon application service、Web workflow，以及核心 Harness
   的完成度审计和真实运行验收
@@ -15,7 +15,7 @@
   [Spec 55](55-public-deployment-certificates-operations.md)、
   [Spec 57](57-release-publishing-pipeline.md)、
   [ADR 0004](../adr/0004-native-goal-control-and-loopx-interop.md)、
-  [Harness contracts](../harness-contracts.md)
+  [Harness contracts](../harness-contracts.md)；[ADR 0036](../adr/0036-goal-control-v1-domain-and-replay-boundary.md)
 
 ## 1. 目的
 
@@ -182,14 +182,19 @@ conflict。
 必须继续保持交互式无绑定 run、`run_events`、`goal_events`、AgentLoop、RunManager、
 Scheduler、Approval、Sandbox 和 WorkspaceRegistry 的现有权威边界。
 
-### 58-1：Goal domain completion
+### 58-1：Goal domain completion（contract/reducer slice）
 
-- 落地 GoalRunBinding v1、admission decision v1、quota reservation v1 和 validation
-  evidence v1 contracts；
-- 为 v0 event replay 提供向后兼容 projection，不覆盖现有 SQLite 数据；
-- 扩展 reducer 和 GoalWriteService，支持 reservation/release/consume、binding、
+- 依据 [ADR 0036](../adr/0036-goal-control-v1-domain-and-replay-boundary.md) 落地
+  `GoalRunBindingV1`、admission decision v1、quota reservation v1、validation
+  evidence v1 和 recovery record contracts；
+- 为 v0 event replay 提供向后兼容 projection，不覆盖现有 SQLite 数据，也不改变
+  `run_events`；
+- 扩展纯 reducer/Goal write service，支持 reservation/release/consume、binding、
   validation、recovery 和 handoff 的幂等事件；
-- 增加 bounded event migration/replay fixtures，禁止 raw event ingest。
+- 增加 bounded event migration/replay fixtures、stale revision/duplicate
+  transition tests，禁止 raw event ingest；
+- 本阶段不新增 `GoalAdmissionService`，不调用 `RunManager`，不接入默认
+  `POST /api/v1/runs`，不执行任何模型、工具、shell、Git、MCP、Skill 或 sandbox。
 
 ### 58-2：Governed admission application service
 

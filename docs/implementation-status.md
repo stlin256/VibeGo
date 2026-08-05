@@ -552,6 +552,17 @@ This is a documentation-only gate. It authorizes only Spec 58-1 contract and
 pure-reducer work; it does not add `GoalAdmissionService`, quota reservation,
 validation writeback, a Goal-aware default run path, or any second scheduler.
 
+## Spec 58-1 contract/reducer boundary note (2026-08-05)
+
+[ADR 0036](adr/0036-goal-control-v1-domain-and-replay-boundary.md) freezes the
+next additive slice: versioned Goal binding, admission decision, quota
+reservation, validation evidence and recovery records; mixed v0/v1 replay with
+deterministic checksums; and a pure idempotent write/reducer service. The slice
+will keep v0 callers and SQLite `goal_events` compatibility, reject raw or
+secret-shaped payloads, and remain outside `GoalAdmissionService`,
+`RunManager.start`, `run_events`, Scheduler, Approval, Sandbox and Workspace
+authority until the later 58-2 integration gate.
+
 ## Spec 59 planning note (2026-08-05)
 
 `docs/specs/59-permission-profiles-and-low-interruption-approval.md` is a Draft
