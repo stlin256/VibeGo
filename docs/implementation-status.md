@@ -1511,3 +1511,12 @@ The default registry remains empty; no AgentLoop, RunManager,
 Scheduler, Approval, Sandbox, WorkspaceRegistry or event authority changes are
 included. Daemon focused tests cover cooperative and non-cooperative verifiers,
 late results, duplicate terminal notifications and bounded option validation.
+
+### Spec 58-6b Goal verifier run-snapshot fence design checkpoint (2026-08-06)
+
+The next bounded slice is frozen in [ADR 0052](adr/0052-goal-verifier-run-snapshot.md).
+Registry resolution will be captured before a governed run emits events and
+will remain immutable through terminal writeback. A registry update will affect
+only later runs; missing/stale capture remains fail-closed and duplicate
+terminal notifications reuse existing evidence. No runtime authority changes
+are included in this design checkpoint.

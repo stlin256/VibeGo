@@ -1500,3 +1500,13 @@ reservation; Todo completion, quota spend, old tool replay and interactive run
 behavior remain unchanged. Focused daemon coverage includes cooperative abort,
 non-cooperative timeout, late-result disposal, option bounds and duplicate
 terminal notification idempotency.
+
+### Spec 58-6b Goal verifier run-snapshot fence design (2026-08-06)
+
+The next bounded slice is frozen in [ADR 0052](adr/0052-goal-verifier-run-snapshot.md).
+`GoalRunWritebackService` will capture the authoritative task-class registry
+resolution at binding registration, wait for that capture before terminal
+writeback, and never re-resolve a mutable registry for an in-flight run.
+Revision replacement will affect only later runs; capture failure remains
+fail-closed. Focused tests will update a registry after capture and prove that
+the original verifier identity/revision is used exactly once.
