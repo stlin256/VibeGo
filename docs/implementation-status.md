@@ -668,6 +668,25 @@ and must use `/api/v1/runs/governed`. Web permission controls remain Spec 59-4.
 No AgentLoop core-loop, Scheduler, ApprovalBroker, SandboxResolver,
 Goal-control authority, or event-table schema was changed.
 
+## Spec 59-4 design freeze (2026-08-05)
+
+The Web slice is frozen by [ADR 0043](adr/0043-permission-profile-web-low-interruption-ux.md).
+It will use the existing conversation-first Settings Sheet Run tab for the two
+permission profiles and three approval postures, show high-risk full-host
+confirmation/session status/revoke guidance, and render the immutable permission
+snapshot beside the inline approval/timeline state. Browser storage remains
+limited to the existing non-secret run profile; grants, session identity,
+profile revisions and secrets remain daemon-owned. The slice is presentation and
+API glue only and cannot create grants, execute tools or bypass Goal/Scheduler/
+Approval/Sandbox authorities.
+
+Implementation status: design-ready and in progress, not yet accepted. The
+daemon 59-3 routes and immutable run snapshot remain the authority while the
+Web API client, React controls, focused tests and build/typecheck evidence are
+completed. No Web change may create a grant, execute a tool, add a scheduler or
+approval store, expose a session secret/path, or alter AgentLoop, Goal Control,
+existing approval/sandbox authorities or event-table schemas.
+
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 
 The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).

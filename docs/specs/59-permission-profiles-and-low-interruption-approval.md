@@ -352,6 +352,29 @@ host runner is unavailable.
 在现有 conversation-first Settings Sheet 和 approval card 中加入两个 profile、三种
 approval posture、清晰的风险说明、session status、revoke、degraded/block guidance。
 
+#### 59-4 design freeze (2026-08-05)
+
+本阶段使用现有 `SettingsSheet` 的 Run tab，不新建第二套 settings store 或独立权限页：
+
+- UI 展示 `workspace-coding` 与 `full-host` 两个 profile，以及
+  `bounded-auto`、`session-auto`、`explicit` 三种 approval posture；
+  `workspace-coding` 保持默认，full-host 永不默认且必须显示高风险、trusted-only、
+  无 host runner 时不可用和独立 session confirmation 提示。
+- Web 只调用 59-3 的认证 settings/status/confirm/revoke API。profile revision、grant、
+  session id、access token、raw command、host path 与 secret 不写入 localStorage、URL、
+  transcript 或 React persistent state；session identity 由 `ApiClient` 内部绑定。
+- 权限卡显示 requested/effective status、revision、reason、next step、grant expiry 与
+  revoke；`blocked/degraded` 必须给出可操作的安全下一步，不能显示一个无条件的
+  `Auto approve` 开关。
+- 现有 inline `ApprovalCard` 保留 Allow/Deny authority，并增加 bounded 的 frozen
+  permission snapshot 摘要；运行中 settings 修改只影响新 run，不能改变 timeline 中旧 run
+  的 snapshot。
+- 复用 Spec 38 的 ratio-first responsive CSS、键盘 focus 与 44px touch target；窄屏/折叠屏
+  变为单列 card，不增加横向滚动或常驻第二 rail。
+
+本阶段不修改 AgentLoop、RunManager、Goal、Scheduler、ApprovalBroker、SandboxResolver
+或任何事件表；不实现真实 host/full-host smoke（归入 59-5），不把自动审批逻辑复制到 Web。
+
 ### 59-5：真实运行与发布证据
 
 为 workspace-coding/full-host trusted fixture 分别运行 focused、daemon integration、

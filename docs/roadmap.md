@@ -892,6 +892,24 @@ restart loss, full-host capability-unavailable fail-closed behavior, snapshot
 isolation after settings changes and the ordinary-route regression. Web
 permission controls are intentionally deferred to Spec 59-4.
 
+## Spec 59-4 implementation checkpoint: Web low-interruption permission UX
+
+The 59-4 Web boundary is frozen by [ADR 0043](adr/0043-permission-profile-web-low-interruption-ux.md).
+The implementation will reuse the conversation-first Settings Sheet Run tab and
+the existing daemon-owned permission routes. It will expose the safe
+`workspace-coding` default, bounded-auto/session-auto/explicit posture guidance,
+high-risk full-host confirmation and session revoke/expiry status, while showing
+only a bounded summary of the immutable permission snapshot beside approval and
+run timeline state.
+
+This checkpoint is design-ready but not an implementation-complete claim yet:
+the Web API client, React controls, focused Web tests and build/typecheck evidence
+remain to be delivered. The slice cannot create grants, execute tools, add a
+scheduler or approval store, bypass Goal/Scheduler/Approval/Sandbox authorities,
+or change AgentLoop and existing event-table behavior. Until those gates pass,
+the daemon 59-3 behavior and historical interactive run path remain the source
+of truth.
+
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 
 详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程
