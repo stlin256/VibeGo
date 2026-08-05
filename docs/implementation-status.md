@@ -574,6 +574,25 @@ fallback for untrusted content or an unhealthy external sandbox, and never widen
 network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
 No runtime behavior is claimed by this planning note.
 
+## Spec 60 planning note (2026-08-05)
+
+`docs/specs/60-complete-verification-and-release-evidence.md` is the Draft master
+test/acceptance gate. It requires a fresh Spec 01–59 and checkout audit, focused
+module gates followed by full `pnpm verify`, real daemon-to-LLM evidence, Goal
+governed execution, permission/remote/certificate/security negatives, concurrency
+and recovery, and a redacted release evidence bundle. It explicitly allows focused
+tests during exploration but does not accept them as a replacement for the final
+full gate. No new runtime behavior is claimed by this note.
+
+## Spec 61 planning note (2026-08-05)
+
+`docs/specs/61-user-facing-documentation-quality.md` is the Draft documentation
+quality gate. It defines English-first README and synchronized `README-zh.md`,
+brand/banner and architecture presentation, Web-first onboarding, security and
+permission explanations, reproducible Quickstart, truthful maturity labels and
+link/command/privacy/user-review checks. It does not change runtime behavior or
+turn screenshots/marketing copy into implementation evidence.
+
 ## Spec 52-R3 run-snapshot implementation note (2026-08-05)
 
 The R3 application boundary is implemented under
