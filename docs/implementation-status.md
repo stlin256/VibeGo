@@ -515,6 +515,21 @@ implementation commit, the relevant prerequisite matrix must be re-verified on
 the current checkout. New runtime behavior remains opt-in and disabled until its
 focused contracts, failure fixtures and release evidence are accepted.
 
+## Spec 58 planning note (2026-08-05)
+
+`docs/specs/58-goal-control-and-harness-completion.md` is a Draft planning gate.
+It records the known maturity gap: Goal contracts, replay, SQLite persistence,
+bounded mutation and read-only Web projection exist, while governed admission,
+GoalRunBinding application composition, validation writeback, quota reservation /
+exactly-once spend, Goal operation UX and daemon-path real LLM evidence remain
+unimplemented. The same A–G maturity ladder is required for other core modules
+that currently have only contracts, fixtures or fake runtime evidence.
+
+Spec 58 does not change current runtime behavior. Until its explicit phases and
+release evidence are accepted, unbound interactive runs remain outside Goal
+admission and `run_events`, `goal_events`, AgentLoop, RunManager, Scheduler,
+Approval, Sandbox and WorkspaceRegistry retain their existing authority.
+
 ## Spec 49-R4 implementation note (2026-08-04)
 
 The R4 contract is implemented under [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md).

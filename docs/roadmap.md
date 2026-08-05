@@ -758,3 +758,17 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
+
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（Draft）
+
+详见 [Spec 58](specs/58-goal-control-and-harness-completion.md)。当前 Goal Control
+已经有严格 contracts、独立 `goal_events`、projection/replay、bounded mutation API
+和只读 Web projection，但 governed admission、GoalRunBinding 与 RunManager 的应用层
+组合、独立 validation writeback、quota reservation/consume exactly-once、Goal Web
+操作流和真实端到端 Harness 证据仍未完成。
+
+Spec 58 将 Goal 作为第一条“从基础概念到生产闭环”的纵切，同时定义 Model、Context、
+AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability、
+Transport/Certificate 和 Host/Release 的 A–G 成熟度标准。它要求先重新复核此前所有
+Spec，再按 `58-0 → 58-7` 独立提交推进；在完成前，Goal 不得接入默认 interactive run，
+也不得把 fake-only 或 design-only 证据标记为 stable。
