@@ -7,7 +7,7 @@ and records evidence strength separately from release claims.
 ## Gate decision
 
 **62-0 audit: complete; Spec 62 release-documentation gate: constrained.** The
-matrix is current for commit `07daed3`, but it does not authorize claims that
+matrix is current for commit `62af21d`, but it does not authorize claims that
 remain `partial`, `blocked`, or `not-run`. README changes may correct bounded
 status, setup and safety guidance; they must not call the project release-ready
 until Spec 60 and the required runtime/device/release gates are complete.
@@ -16,15 +16,15 @@ until Spec 60 and the required runtime/device/release gates are complete.
 
 | Check | Evidence |
 | --- | --- |
-| Branch / commit | `main` / `07daed3` (`origin/main`); clean worktree at audit start |
+| Branch / commit | `main` / `62af21d` (`origin/main`); clean worktree at audit start |
 | Remote | `origin` points to the public VibeGo repository |
 | Package manager | `pnpm@11.9.0` from `package.json` |
 | Node | bundled validation runtime `v24.14.0` |
 | Workspace graph | `pnpm-workspace.yaml`: `apps/*` and `packages/*`, 22 projects |
 | Lockfile | `pnpm-lock.yaml` present; not changed by this audit |
 | Workflow fixture | `pnpm test:workflow`: **82/82 passed** |
-| Focused current slice | contracts 120/120, model-deepseek 20/20, daemon 269/269; Spec 58-6 verifier-registry and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
-| Full static/unit gate | `pnpm verify` at `07daed3`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
+| Focused current slice | contracts 120/120, model-deepseek 20/20, daemon 272/272; Spec 58-6 verifier-registry/timeout and Spec 63-10 dedicated-reviewer fixtures pass; affected typecheck/build gates pass |
+| Full static/unit gate | `pnpm verify` at `62af21d`: passed typecheck, build, all workspace test jobs, `diff:check` and `git diff --check` |
 | Secret boundary | no provider key, private key, cookie, full environment, or user workspace was read or written |
 
 ## Evidence legend
@@ -35,10 +35,10 @@ until Spec 60 and the required runtime/device/release gates are complete.
 | E2 | Focused package/application tests and typechecks recorded in the implementation status; only affected current slices were rerun |
 | E3 | Explicitly authorized DeepSeek text/governed/cancel/context-limit reports from the preceding live commit; no broad capacity or provider-failure claim |
 | E4 | Existing model, permission, recovery, transport, MCP, container, certificate and performance fixtures; they prove bounded application behavior only |
-| E5 | Current full static/unit `pnpm verify` at `07daed3`; does not cover live/remote/device/release gates |
+| E5 | Current full static/unit `pnpm verify` at `62af21d`; does not cover live/remote/device/release gates |
 | E6 | Required physical devices, public ACME/TLS, Tailscale/SSH, clean-host install, signing/SBOM/attestation and production host-runner evidence |
 | E7 | Spec 63-10 dedicated-reviewer offline fixture and separately authorized redacted DeepSeek adapter smoke; no run/tool/event or release-capacity claim |
-| E8 | Spec 58-6 task-specific verifier registry focused tests; registry is empty in the default daemon and semantic task validation remains open |
+| E8 | Spec 58-6 task-specific verifier registry plus bounded timeout/cancellation tests; registry is empty in the default daemon and semantic task validation remains open |
 
 ## Spec 01–61 matrix
 
@@ -120,7 +120,7 @@ release evidence gaps.
 | Blocker | Return spec | Evidence required |
 | --- | --- | --- |
 | Provider 5xx/timeout and broad failure evidence | 60-4/47 | explicitly authorized bounded live negative smoke, never a fake pass |
-| Task-specific Goal validation/recovery | 58-6/60-3 | bounded verifier timeout/cancellation, independent semantic verifier, crash/retry evidence and no old tool replay |
+| Task-specific Goal validation/recovery | 58-6/60-3 | independent semantic verifier, crash/retry evidence and no old tool replay (bounded timeout/cancellation is now covered) |
 | Host/container/platform parity | 48/59-5 | permission/container cleanup evidence on target platforms |
 | ACME/public/Tailscale/SSH | 55/60-6 | staging-only certificate and explicit remote adapter smoke |
 | Real device/accessibility matrix | 56/62-6 | desktop/portrait/phone/fold/tri-fold/tablet plus screen reader review |
