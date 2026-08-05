@@ -699,6 +699,19 @@ AgentLoop, Goal Control, existing approval/sandbox authorities or event-table
 schemas. Implementation commits are `b3b1463` (API) and `ad3df94` (Web UX),
 preceded by documentation freeze commit `80601d4`.
 
+## Spec 59-5 design freeze (2026-08-05)
+
+Spec 59-5 is the next implementation slice, not a new specification. Before
+any release claim, the repository must add an opt-in `smoke:permissions`
+runner covering the daemon HTTP/AuthGate boundary, workspace-coding safe
+defaults, trusted full-host confirmation, TTL/revoke/session isolation,
+untrusted fail-closed behavior and the injected host-process lifecycle. The
+runner must use only a generated temporary fixture and a fixed harmless argv;
+it must produce bounded redacted output and preserve `blocked`/`not-run`
+semantics. Production daemon startup remains host-runner-missing by default,
+and no fallback to host or external sandbox is permitted. Real LLM, Windows,
+container and release evidence stays partial until the Spec 60 gates run.
+
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 
 The 58-2 application boundary is frozen in [ADR 0037](adr/0037-governed-admission-application-boundary.md).

@@ -398,6 +398,52 @@ unchanged. Real host/full-host smoke remains a later release-evidence task.
 Windows process lifecycle、container/host smoke 和真实 LLM path；更新 Spec 48、52、58
 的实现状态前，不得标记 Spec 59 为 Implemented。
 
+#### 59-5 smoke boundary freeze (2026-08-05)
+
+The first 59-5 evidence slice is an explicit, opt-in permission smoke runner.
+It is invoked as `pnpm smoke:permissions` after the affected packages are
+built; it never runs during daemon startup or the default `pnpm verify` gate.
+The runner owns only fixture setup, HTTP observation and redacted result
+projection. It does not create a second approval broker, scheduler, sandbox
+resolver or event table.
+
+The runner has two independent fixture paths:
+
+1. `workspace-coding` resolves a generated temporary workspace through the
+   existing permission settings boundary. Its captured snapshot must be ready
+   with workspace-only scope, network off and no host process capability. A
+   missing external sandbox remains `blocked` or `degraded`; the fixture never
+   retries by widening to full-host.
+2. `full-host` pairs a synthetic trusted session through the daemon AuthGate,
+   saves a full-host intent, explicitly confirms it, and captures a new
+   immutable run snapshot. The fixture may inject the existing
+   `HostRestrictedProcessRunner` only for this smoke; production daemon startup
+   remains host-runner-missing unless a later separately reviewed adapter is
+   enabled. The command is a fixed harmless argv with a generated temporary
+   workspace, restricted environment and bounded output, followed by exact
+   fixture cleanup.
+
+The smoke must assert through the daemon HTTP boundary where applicable that:
+
+- no confirmation, wrong AuthGate session, expired grant or revoked grant is
+  accepted;
+- `untrusted-content` plus any host/full-host request is rejected before a
+  process starts, and host-runner-unavailable has no external-sandbox or direct
+  host fallback;
+- changing settings after a run starts does not mutate its permission snapshot;
+- Windows cancellation/process-tree termination uses the injected adapter and
+  does not replay a previous command;
+- reports contain only schema version, mode, bounded status/timing, stable
+  reason/error codes and safe event counts. They never contain credentials,
+  environment values, raw argv, transcripts, absolute paths or raw process
+  output.
+
+The runner accepts optional provider configuration for a later real LLM path,
+but missing provider configuration is reported as `blocked`, never replaced by
+a fake provider. A healthy fixture smoke proves only the daemon/permission
+boundary; it is not release evidence for host security, cross-platform support,
+transport certificates or a production LLM. Those claims remain Spec 60 gates.
+
 ## 9. Definition of Done
 
 Spec 59 只有在以下条件全部满足后才能标记 `Implemented`：

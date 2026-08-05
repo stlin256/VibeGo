@@ -921,6 +921,22 @@ The daemon 59-3 behavior and historical interactive run path remain the source
 of truth. Implementation commits are `b3b1463` (API) and `ad3df94` (Web UX),
 preceded by the documentation freeze commit `80601d4`.
 
+## Spec 59-5 design freeze: permission runtime smoke boundary (2026-08-05)
+
+Spec 59-5 continues from the existing 59-1～59-4 implementation; it does not
+introduce another permission authority or a new spec number. The next code
+slice is the opt-in `pnpm smoke:permissions` fixture runner. It exercises the
+daemon AuthGate/settings/snapshot boundary for the safe `workspace-coding`
+path and explicitly confirmed trusted `full-host` path, plus the existing
+injected host-process runner's cancellation and bounded-output behavior.
+
+The runner uses a generated temporary workspace and a fixed harmless argv. It
+never reads the user's workspace or credentials, writes grants to durable
+settings, enables network, or silently falls back from an unavailable host or
+external sandbox. Reports are redacted and `blocked`/`not-run` remain distinct
+from healthy. Real provider, Windows, container and release claims remain
+partial until the Spec 60 evidence matrix is satisfied.
+
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 
 详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程
