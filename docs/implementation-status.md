@@ -547,6 +547,20 @@ fallback for untrusted content or an unhealthy external sandbox, and never widen
 network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
 No runtime behavior is claimed by this planning note.
 
+## Spec 52-R3 run-snapshot design gate (2026-08-05)
+
+The R3 application boundary is frozen in
+`docs/adr/0035-capability-profile-run-snapshot.md` before implementation.
+The planned slice adds a strict, secret-free capability run snapshot and an
+optional `RunManager` capture provider. A blocked resolver result will fail
+closed before provider/tool/sandbox work; a degraded result can only use the
+resolver's narrowed effective profile and never host fallback. The snapshot
+will be immutable for the run, visible as bounded `run.created` metadata and
+read back through `RunSnapshot`; a settings update will affect only later runs.
+Recovery will create a fresh snapshot. Until the implementation commit lands,
+no R3 runtime behavior is claimed and the existing unbound interactive path
+remains unchanged.
+
 ## Spec 49-R4 implementation note (2026-08-04)
 
 The R4 contract is implemented under [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md).

@@ -523,6 +523,39 @@ surface: profile/run snapshot binding is still a separate R3 slice.
 - Verify that disabled modes make zero provider/process/network calls.
 - Verify that a changed profile never alters an already running run.
 
+#### 52-R3 run-snapshot design gate (2026-08-05)
+
+The next R3 slice is intentionally limited to an application-service snapshot
+boundary. Before implementation, the following contract is frozen:
+
+1. `CapabilityProfileRunSnapshot` is a strict, versioned, secret-free value
+   containing the requested profile, the daemon resolver's effective profile
+   (or a bounded blocked result), profile revision, policy revision, resolver
+   status/reason and capture time. It contains ids only; it never contains a
+   workspace path, credential, environment map, raw tool arguments or provider
+   response.
+2. `RunManager` captures this value exactly once for a newly created run from
+   the daemon-owned settings manager. The snapshot is immutable for the run
+   and is included in the existing `run.created` metadata projection. Existing
+   `run_events` remains the event authority; no second event stream is added.
+3. A blocked profile fails closed before model/provider, tool, shell, MCP,
+   network or sandbox work starts. A degraded profile may proceed only with
+   the resolver's effective narrowed profile; it never triggers an implicit
+   host fallback. The existing unbound interactive run remains usable when no
+   capability-profile manager is injected (tests and compatibility callers).
+4. Snapshot capture is an application boundary only. It does not change the
+   AgentLoop state machine, RunManager's scheduler lease, Approval broker,
+   Sandbox resolver, WorkspaceRegistry or Goal admission. A settings update
+   after capture affects only later runs.
+5. Recovery creates a new run and therefore a new snapshot; it never restores
+   an old provider/tool call or silently reuses a prior capability decision.
+
+The implementation must land with focused tests for ready/degraded/blocked
+profiles, zero side effects on blocked capture, snapshot isolation across
+settings changes, event privacy, compatibility without the manager and
+recovery snapshot freshness. The implementation status and roadmap must be
+updated in the same commit as the code and tests.
+
 #### R2/R3a application-settings slice (2026-08-05, implemented)
 
 The first application-boundary slice persists only the validated,

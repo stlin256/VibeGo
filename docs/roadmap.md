@@ -714,6 +714,16 @@ effective/reason/revision guidance 和 reset/conflict handling 均复用现有 S
 Sheet；Web focused gate 为 96 tests。浏览器不决定权限、不存储 credentials/path，
 daemon resolver 仍是唯一权威。随后才在独立变更中绑定 profile/run snapshot。
 
+52-R3 run-snapshot design gate is frozen in
+[ADR 0035](adr/0035-capability-profile-run-snapshot.md). The implementation
+slice will capture one resolver decision at the daemon application boundary
+for each new run, reject blocked profiles before any provider/tool/sandbox
+work, and preserve the existing unbound interactive path when the optional
+manager is absent. The snapshot is metadata-only and is replayed from the
+existing `run.created` event; settings changes affect later runs only. No Goal
+admission, AgentLoop state-machine, Scheduler, Approval, Sandbox,
+WorkspaceRegistry or event-authority changes are part of this gate.
+
 上述 Spec 47–52 是连续但可独立回滚的 Git 小阶段；每个阶段都必须先更新对应
 Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并运行 `pnpm verify`。
 
