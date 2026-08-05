@@ -1237,3 +1237,14 @@ path joining, interactive routing, run metadata, capability-gated high thinking,
 and explicit daemon cancellation. No new scheduler, event ledger, approval
 authority or sandbox authority was introduced; tool/reviewer/search and live
 provider evidence remain separate gates.
+
+### Spec 61-6 live evidence checkpoint (2026-08-05)
+
+The bounded live adapter smoke and the explicit DeepSeek harness smoke both
+completed successfully with `deepseek-v4-flash` over the configured Chat
+Completions profile. Adapter evidence was healthy at 1066 ms with first token
+at 925 ms and usage 16/6; harness evidence was healthy with a completed run,
+the secret-free provider/config snapshot, and usage 19/9. The redacted record is
+[`docs/reports/spec61-6-live-evidence-2026-08-05.md`](reports/spec61-6-live-evidence-2026-08-05.md).
+This is live text/terminal evidence only; tool/Approval/Sandbox, reviewer,
+provider-owned search, reasoning, governed quota, and release gates remain open.

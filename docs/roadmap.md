@@ -1246,3 +1246,12 @@ metadata, capability-gated high thinking, bounded `DEEPSEEK_*` error mapping and
 explicit daemon cancellation.
 Tool/Approval/Sandbox, reviewer/search and live provider evidence remain
 separate gates.
+
+### Spec 61-6 live text evidence checkpoint (2026-08-05)
+
+The first bounded live adapter and explicit DeepSeek harness runs are healthy.
+The adapter recorded first token 925 ms and usage 16/6; the harness completed
+an interactive run with the immutable provider snapshot and usage 19/9. The
+redacted evidence is [`spec61-6-live-evidence-2026-08-05.md`](reports/spec61-6-live-evidence-2026-08-05.md).
+This advances only live text/terminal evidence; tool/Approval/Sandbox,
+reviewer/search, reasoning and governed/release gates remain pending.

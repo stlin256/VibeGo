@@ -332,6 +332,23 @@ model 和 secret-free descriptor revision 捕获到现有 `run.created`/`model.r
 和 context-limit 继续作为独立 evidence gate。报告必须标记 provider、profile、status、
 bounded latency、event counts、usage 和 stable error code，不保存 prompt/raw response。
 
+Live evidence 只允许由操作者在进程环境中提供 secret，例如将
+`READY4VIBE_DEEPSEEK_API_KEY` 绑定到 `--secret-env` 指向的变量；命令行、Git、
+settings response、event ledger 和报告都不接受或保存 key。推荐的最小 live gate
+是先运行 `pnpm smoke:deepseek -- --endpoint <complete-endpoint> --profile
+<profile> --model <model> --secret-env <ENV_VAR> --timeout-ms 10000`，再运行同样
+endpoint/profile/model/secret-env 的 `pnpm smoke:harness -- --provider deepseek
+--mode interactive --thinking off`。输出只保留 bounded status、snapshot revision、
+latency、event counts、usage 和 stable error code；失败、超时、取消和 credential
+缺失必须保持 `blocked`/`timeout`/`cancelled`，不得用 fixture 结果替代 live 结果。
+
+2026-08-05 的首个 live slice 已按此流程完成：adapter text smoke 与
+`--provider deepseek --mode interactive` harness smoke 均为 `healthy`，并保留
+了 bounded latency、usage、event counts 和 secret-free provider snapshot。脱敏
+证据见 [`docs/reports/spec61-6-live-evidence-2026-08-05.md`](../reports/spec61-6-live-evidence-2026-08-05.md)。
+该结果只关闭 text/terminal live gate；tool/Approval/Sandbox、reviewer、search、
+reasoning capability、governed quota 和 release gate 仍未关闭。
+
 至少收集以下可重现证据：
 
 1. DeepSeek text streaming：首 token、终态、usage、model snapshot；
