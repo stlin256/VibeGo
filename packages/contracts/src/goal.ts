@@ -121,7 +121,7 @@ export const GoalHandoffSchema = z.object({
 });
 export type GoalHandoff = z.infer<typeof GoalHandoffSchema>;
 
-export const GoalRunBindingSchema = z.object({
+const GoalRunBindingLegacySchema = z.object({
   bindingId: safeId,
   goalId,
   todoId: todoId.optional(),
@@ -129,6 +129,34 @@ export const GoalRunBindingSchema = z.object({
   mode: z.enum(['interactive', 'governed']),
   controlRevision: z.number().int().nonnegative().optional(),
 }).strict();
+
+/**
+ * The original v0 shape remains accepted for replay and existing callers.
+ * Spec 58-1 adds the strict run-snapshot shape in the additive v1 module; the
+ * union keeps this public parser backwards compatible while allowing callers
+ * that only know the original name to validate a v1 binding as well.
+ */
+const GoalRunBindingV1CompatSchema = z.object({
+  schemaVersion: z.literal('ready4vibe_goal_binding_v1'),
+  bindingId: z.string().regex(/^binding_[A-Za-z0-9_-]{8,128}$/u),
+  runId: z.string().regex(/^run_[A-Za-z0-9_-]{8,128}$/u),
+  goalId: goalId,
+  todoId: todoId.optional(),
+  mode: z.enum(['interactive', 'governed']),
+  goalControlRevision: z.number().int().nonnegative(),
+  policyRevision: z.number().int().nonnegative(),
+  capabilityProfileRevision: z.number().int().nonnegative(),
+  approvalPolicyRevision: z.number().int().nonnegative(),
+  sandboxSnapshotRevision: z.number().int().nonnegative(),
+  workspaceId: z.string().regex(WORKSPACE_ID),
+  admissionId: z.string().regex(/^admission_[A-Za-z0-9_-]{8,128}$/u),
+  createdAt: dateTime,
+  expiresAt: dateTime,
+  attempt: z.number().int().positive(),
+  requestId: safeId,
+}).strict();
+
+export const GoalRunBindingSchema = z.union([GoalRunBindingLegacySchema, GoalRunBindingV1CompatSchema]);
 export type GoalRunBinding = z.infer<typeof GoalRunBindingSchema>;
 
 export const GoalEventTypeSchema = z.enum([

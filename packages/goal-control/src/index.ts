@@ -592,3 +592,4 @@ export function createGoalEvent<TPayload extends Record<string, unknown>>(input:
 export { GoalEventTypeSchema };
 
 export * from './write.js';
+export * from './v1.js';

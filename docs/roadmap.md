@@ -783,18 +783,26 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
 
-## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0 已完成，Draft）
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0、58-1 已完成，58-2 后置，Draft）
 
 详见 [Spec 58](specs/58-goal-control-and-harness-completion.md) 及其
 [58-0 prerequisite audit](reports/58-0-prerequisite-verification-2026-08-05.md)。当前 Goal Control
 已经有严格 contracts、独立 `goal_events`、projection/replay、bounded mutation API
 和只读 Web projection，但 governed admission、GoalRunBinding 与 RunManager 的应用层
-组合、独立 validation writeback、quota reservation/consume exactly-once、Goal Web
-操作流和真实端到端 Harness 证据仍未完成。
+组合、独立 validation writeback、quota consume 的应用层 exactly-once、Goal Web
+操作流和真实端到端 Harness 证据仍未完成；58-1 的 quota reservation 合同和纯
+状态机已经实现。
 
 58-0 已在当前 `main` 基线重新核对 checkout、workspace graph、Goal/daemon/Web
 focused gate 和完整 `pnpm verify`。审计结论为：现有基础满足 58-1 的合同切片前置条件，
 但不授权接入默认 run；后续必须继续以独立分支、独立提交和 `--no-ff` 合并推进。
+
+58-1 已按 [ADR 0036](adr/0036-goal-control-v1-domain-and-replay-boundary.md) 落地：新增
+v1 binding/admission/quota-reservation/validation/recovery contracts，兼容 v0 replay，
+并在纯 Goal reducer/write service 和 SQLite `goal_events` adapter 中验证幂等、冲突、
+stale revision、quota 状态转移和验证证据门禁；本阶段仍不接入默认 run。58-2
+`GoalAdmissionService`、RunManager 组合、Scheduler/Approval/Sandbox readiness 和
+真实 governed smoke 仍后置。
 
 Spec 58 将 Goal 作为第一条“从基础概念到生产闭环”的纵切，同时定义 Model、Context、
 AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability、
@@ -812,3 +820,20 @@ Spec，再按 `58-0 → 58-7` 独立提交推进；在完成前，Goal 不得接
 full-host 不是默认权限，不自动开启网络，不接受 untrusted content，也不能绕过 Goal、
 quota、Scheduler、Approval、Sandbox 或 managed policy。Spec 59 将按
 `59-0 → 59-5` 独立提交推进，并在实现完成前保持当前 run 行为不变。
+
+## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
+
+详见 [Spec 60](specs/60-complete-verification-and-release-evidence.md)。该规格把主线程
+的最终验收固定为：先重新核实 Spec 01–59 和当前 checkout，再按模块 focused gate、
+全仓 `pnpm verify`、daemon integration、真实 LLM、Goal governed execution、
+workspace/full-host 安全、远程/证书、并发/恢复和 release evidence 顺序推进。探索阶段
+允许分模块测试以节约时间，但 focused gate 不能替代最终全量门禁；缺少真实运行证据的
+模块必须保持 `partial` 或 `blocked`。
+
+## Spec 61：用户可见文档质量、README 与开箱即用说明（Draft）
+
+详见 [Spec 61](specs/61-user-facing-documentation-quality.md)。该规格指导英文优先的
+README、`README-zh.md`、docs 索引、Quickstart、安全/权限/远程运维/故障排查和贡献文档
+统一状态与品牌表达，要求配置以 Web onboarding/settings 为主路径、命令可复现、能力
+声明不夸大、中文同步，并通过链接、命令、隐私和真实用户审阅门禁。截图不是硬性验收物；
+若加入截图，必须是脱敏的真实用户界面，而非初始化配置图或巨大 Logo mockup。
