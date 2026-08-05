@@ -1247,6 +1247,7 @@ route and verifies the broker round-trip. The fixture ToolRuntime rejects
 secret-shaped/oversized values and is explicitly not a filesystem, shell or
 production sandbox adapter. Focused harness coverage is 15/15; production
 sandbox, reviewer/search and governed evidence remain separate gates.
+The bounded fixture record is [`docs/reports/spec61-6-tool-approval-fixture-2026-08-05.md`](reports/spec61-6-tool-approval-fixture-2026-08-05.md).
 
 ### Spec 61-6 live evidence checkpoint (2026-08-05)
 

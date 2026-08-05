@@ -1262,3 +1262,4 @@ Add explicit `tool` and `approval` harness scenarios. The fixture requires
 bounded tool requested/completed evidence and, for approval, one daemon
 `/approve` broker round-trip. It must not be presented as production
 filesystem/shell/external-sandbox, reviewer/search or governed evidence.
+The bounded fixture record is [`spec61-6-tool-approval-fixture-2026-08-05.md`](reports/spec61-6-tool-approval-fixture-2026-08-05.md).

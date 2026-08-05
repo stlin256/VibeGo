@@ -359,6 +359,7 @@ write tool 自动提交一次 `allow`，用于验证 broker 往返；任何未�
 counts 和 stable code，不保存参数、tool output、secret 或绝对路径。该 fixture 结果
 不能宣称生产 filesystem/shell/external-sandbox 已接入；生产 sandbox、reviewer、
 provider-owned search 和 governed evidence 仍是后续 gates。
+fixture 记录见 [`docs/reports/spec61-6-tool-approval-fixture-2026-08-05.md`](../reports/spec61-6-tool-approval-fixture-2026-08-05.md)。
 
 至少收集以下可重现证据：
 
