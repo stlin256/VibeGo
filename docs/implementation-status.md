@@ -1142,6 +1142,18 @@ live provider failure was attempted because the current process has no secret
 reference; real-provider timeout/5xx, cancellation/disconnect and context-limit
 evidence remain blocked pending explicit opt-in.
 
+### Spec 60-4/60-5 live harness evidence checkpoint (2026-08-05)
+
+The explicitly authorized DeepSeek governed harness smoke now traverses the
+real daemon HTTP boundary, `RunManager`, `AgentLoop`, `ContextManager`, Goal
+admission and writeback. It completed with `goal.status=validated`,
+`todoStatus=done`, `totalSpent=1`, and bounded usage `19/9`. A separate
+interactive cancellation smoke reached `cancelled` with zero model usage and
+no replayed tool call. Redacted evidence is recorded in
+`reports/spec60-4-live-harness-2026-08-05.md`. Provider timeout/5xx and
+context-budget expected-failure evidence remain open; this does not promote
+Spec 60 to release-ready.
+
 ## Spec 55c certificate rotation controller design freeze (2026-08-05)
 
 The certificate package currently provides file-pair loading, X.509 metadata
@@ -1304,6 +1316,17 @@ the secret-free provider/config snapshot, and usage 19/9. The redacted record is
 [`docs/reports/spec61-6-live-evidence-2026-08-05.md`](reports/spec61-6-live-evidence-2026-08-05.md).
 This is live text/terminal evidence only; tool/Approval/Sandbox, reviewer,
 provider-owned search, reasoning, governed quota, and release gates remain open.
+
+### Spec 61-6 governed/cancel/context-limit live checkpoint (2026-08-05)
+
+The explicitly authorized DeepSeek governed harness run now completes with
+validated Goal/Todo writeback, exactly one quota spend and usage `19/9`. A
+separate interactive cancellation run reaches `cancelled` with zero model
+usage. The harness `context-limit` scenario treats
+`CONTEXT_BUDGET_EXCEEDED` as the declared expected failure and keeps it
+separate from provider failure/success. Redacted combined evidence is in
+`reports/spec60-4-live-harness-2026-08-05.md`; tool/Approval production,
+reviewer/search/reasoning and release gates remain open.
 
 ### Spec 63-4 ApprovalBroker application integration checkpoint (2026-08-05)
 

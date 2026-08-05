@@ -71,6 +71,14 @@ test('parses the explicit DeepSeek harness provider boundary', () => {
     '--secret-env', valid.secretEnv,
     '--scenario', 'approval',
   ]).scenario, 'approval');
+  assert.equal(parseHarnessSmokeArgs([
+    '--provider', 'deepseek',
+    '--endpoint', valid.endpoint,
+    '--profile', 'openai-chat-completions',
+    '--model', valid.model,
+    '--secret-env', valid.secretEnv,
+    '--scenario', 'context-limit',
+  ]).scenario, 'context-limit');
   assert.throws(() => parseHarnessSmokeArgs([
     '--provider', 'deepseek',
     '--endpoint', 'https://api.example.test/v1/chat/completions',
@@ -212,6 +220,19 @@ test('provider/run failure and timeout stay bounded and never expose raw payload
   assert.equal(timedOut.errorCode, 'HARNESS_SSE_TIMEOUT');
 });
 
+test('context-limit is an explicit expected failure and preserves the stable budget code', async () => {
+  const result = await runHarnessSmoke({ ...valid, scenario: 'context-limit' }, {
+    secretValue: () => 'sk-' + 'l'.repeat(32),
+    provider: providerForHarnessEvents(),
+    runtimeFactory: async () => fakeRuntime({ failed: true, failedCode: 'CONTEXT_BUDGET_EXCEEDED', mode: 'interactive' }),
+  });
+  assert.equal(result.status, 'healthy');
+  assert.equal(result.runStatus, 'failed');
+  assert.equal(result.errorCode, 'CONTEXT_BUDGET_EXCEEDED');
+  assert.equal(result.eventTypes['run.failed'], 1);
+  assert.doesNotMatch(JSON.stringify(result), /sk-|raw provider output|C:\\private/iu);
+});
+
 test('DeepSeek provider mode uses the ordinary harness route and preserves snapshot metadata', async () => {
   const observed = { route: undefined, body: undefined };
   const runtime = fakeRuntime({ observed, mode: 'interactive' });
@@ -321,6 +342,7 @@ test('exit codes and safe error mapping are stable', () => {
   assert.equal(exitCodeForHarnessSmokeStatus('failed'), 1);
   assert.equal(safeHarnessErrorCode({ code: 'MODEL_HTTP_429', message: 'secret at C:\\private' }), 'MODEL_HTTP_429');
   assert.equal(safeHarnessErrorCode({ code: 'DEEPSEEK_HTTP_401', message: 'secret at C:\\private' }), 'DEEPSEEK_HTTP_401');
+  assert.equal(safeHarnessErrorCode({ code: 'CONTEXT_BUDGET_EXCEEDED', message: 'secret at C:\\private' }), 'CONTEXT_BUDGET_EXCEEDED');
   assert.equal(safeHarnessErrorCode(new Error('secret at C:\\private')), 'HARNESS_FAILED');
 });
 

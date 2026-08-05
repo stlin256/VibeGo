@@ -1159,6 +1159,18 @@ process has no configured provider secret reference; real-provider timeout/5xx,
 cancellation/disconnect and context-limit evidence remain blocked and must be
 explicitly authorized rather than replaced with a fake pass.
 
+### Spec 60-4/60-5 live harness evidence checkpoint (2026-08-05)
+
+An explicitly authorized DeepSeek governed smoke traversed the real daemon
+HTTP boundary, `RunManager`, `AgentLoop`, `ContextManager`, Goal admission and
+writeback. It reached `completed` with validated Goal/Todo state and exactly
+one bounded quota spend (`usage=19/9`). A separate interactive cancellation
+smoke reached `cancelled` with zero model usage and no replayed tool call.
+Redacted evidence is recorded in
+[`spec60-4-live-harness-2026-08-05.md`](reports/spec60-4-live-harness-2026-08-05.md).
+Provider timeout/5xx and context-budget expected-failure evidence remain open;
+Spec 60 is not release-ready.
+
 ### Spec 55c / 60-6 certificate rotation controller design freeze (2026-08-05)
 
 The next certificate slice is a pure in-memory controller with an injected
@@ -1286,6 +1298,19 @@ an interactive run with the immutable provider snapshot and usage 19/9. The
 redacted evidence is [`spec61-6-live-evidence-2026-08-05.md`](reports/spec61-6-live-evidence-2026-08-05.md).
 This advances only live text/terminal evidence; tool/Approval/Sandbox,
 reviewer/search, reasoning and governed/release gates remain pending.
+
+### Spec 61-6 governed/cancel/context-limit live checkpoint (2026-08-05)
+
+An explicitly authorized DeepSeek governed harness run now completes through
+the daemon HTTP boundary with validated Goal/Todo writeback, exactly one quota
+spend and bounded usage `19/9`. A separate interactive cancellation run reaches
+`cancelled` with zero model usage. The harness also exposes a bounded
+`context-limit` expected-failure scenario that reports `CONTEXT_BUDGET_EXCEEDED`
+only when the declared context budget failure is observed. Redacted evidence
+is recorded in
+[`spec60-4-live-harness-2026-08-05.md`](reports/spec60-4-live-harness-2026-08-05.md).
+Tool/Approval production evidence, reviewer/search/reasoning and release gates
+remain open.
 
 ### Spec 61-6 tool/Approval fixture checkpoint (2026-08-05)
 

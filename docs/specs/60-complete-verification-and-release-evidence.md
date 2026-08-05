@@ -388,6 +388,22 @@ failure request was attempted or claimed; the mandatory real-provider
 timeout/5xx, cancellation/disconnect and context-limit evidence remains
 explicitly blocked until a user-authorized opt-in environment is available.
 
+### 60-4/60-5 live harness evidence checkpoint (2026-08-05)
+
+An explicitly authorized DeepSeek smoke now exercises the real daemon HTTP
+boundary, `RunManager`, `AgentLoop`, `ContextManager`, Goal admission,
+validation/writeback and quota consumption. The governed text run completed
+with `goal.status=validated`, `todoStatus=done`, `totalSpent=1`, and bounded
+usage `19/9`; the redacted result is recorded in
+[`spec60-4-live-harness-2026-08-05.md`](../reports/spec60-4-live-harness-2026-08-05.md).
+
+An independent interactive cancellation run reached `cancelled` with no model
+usage after the daemon cancel route and no tool replay. This closes only the
+successful governed and cancellation slices. Provider timeout/5xx and
+context-budget expected-failure evidence remain separate; the harness runner
+must keep those outcomes explicit `failed`/`blocked` rather than treating them
+as successful text runs.
+
 ### 60-6 certificate lifecycle fixture boundary (2026-08-05)
 
 Spec 55c will be verified with an injected certificate adapter only. The

@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
-const USAGE = 'usage: pnpm smoke:harness -- --mode <interactive|governed> --provider <openai-compatible|deepseek> --endpoint <https://provider.example/v1/chat/completions> --model <model-id> --secret-env <ENV_VAR> [--profile <openai-chat-completions|openai-responses|anthropic-messages>] [--thinking <off|auto|high|max>] [--scenario <text|tool|approval|cancel|timeout>] [--timeout-ms <100..30000>]';
+const USAGE = 'usage: pnpm smoke:harness -- --mode <interactive|governed> --provider <openai-compatible|deepseek> --endpoint <https://provider.example/v1/chat/completions> --model <model-id> --secret-env <ENV_VAR> [--profile <openai-chat-completions|openai-responses|anthropic-messages>] [--thinking <off|auto|high|max>] [--scenario <text|tool|approval|cancel|timeout|context-limit>] [--timeout-ms <100..30000>]';
 const DEFAULT_PROVIDER_ID = 'openai-compatible';
 const DEEPSEEK_PROVIDER_ID = 'deepseek';
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -92,7 +92,7 @@ export function exitCodeForHarnessSmokeStatus(status) {
 
 export function safeHarnessErrorCode(error, fallback = 'HARNESS_FAILED') {
   const code = error && typeof error === 'object' ? error.code : undefined;
-  return typeof code === 'string' && /^(?:DEEPSEEK|HARNESS|MODEL|RUN)_[A-Z0-9_]{1,64}$/u.test(code) ? code : fallback;
+  return typeof code === 'string' && /^(?:CONTEXT|DEEPSEEK|HARNESS|MODEL|RUN)_[A-Z0-9_]{1,64}$/u.test(code) ? code : fallback;
 }
 
 /**
@@ -181,10 +181,17 @@ export async function runHarnessSmoke(options, dependencies = {}) {
       ? await waitForGoalOutcome(runtime, options.timeoutMs, now)
       : undefined;
     const providerError = events.errorCode ?? events.approvalErrorCode ?? readSafeRunError(snapshot.body);
-    const expectedTerminalEvent = options.scenario === 'cancel' ? 'run.cancelled' : 'run.completed';
+    const expectedContextLimit = options.scenario === 'context-limit';
+    const expectedTerminalEvent = options.scenario === 'cancel'
+      ? 'run.cancelled'
+      : expectedContextLimit ? 'run.failed' : 'run.completed';
     const hasTerminalEvent = events.events.some((event) => event.type === expectedTerminalEvent);
-    const expectedStatus = options.scenario === 'cancel' ? 'cancelled' : 'completed';
-    const runHealthy = finalStatus === expectedStatus && hasTerminalEvent && providerError === undefined;
+    const expectedStatus = options.scenario === 'cancel'
+      ? 'cancelled'
+      : expectedContextLimit ? 'failed' : 'completed';
+    const runHealthy = expectedContextLimit
+      ? finalStatus === expectedStatus && hasTerminalEvent && providerError === 'CONTEXT_BUDGET_EXCEEDED'
+      : finalStatus === expectedStatus && hasTerminalEvent && providerError === undefined;
     const goalHealthy = options.mode !== 'governed' || goal?.status === 'validated';
     const toolEvidence = summarizeToolEvidence(events.events);
     const toolRequired = options.scenario === 'tool' || options.scenario === 'approval';
@@ -273,7 +280,7 @@ function buildRunInput(options, runtime) {
       maxModelOutputTokens: 64,
       maxToolCalls: toolScenario ? 1 : 1,
       maxOutputBytes: 4_096,
-      maxContextBytes: 16_384,
+      maxContextBytes: options.scenario === 'context-limit' ? 1 : 16_384,
     },
     createdBySessionId: SMOKE_SESSION_ID,
     clientRequestId: `client_harness_${options.mode}`,
@@ -754,7 +761,7 @@ function safeHttpErrorCode(status, body) {
 }
 
 function safeEventErrorCode(value) {
-  return typeof value === 'string' && /^(?:DEEPSEEK|MODEL|RUN|HARNESS)_[A-Z0-9_]{1,64}$/u.test(value) ? value : 'HARNESS_RUN_FAILED';
+  return typeof value === 'string' && /^(?:CONTEXT|DEEPSEEK|MODEL|RUN|HARNESS)_[A-Z0-9_]{1,64}$/u.test(value) ? value : 'HARNESS_RUN_FAILED';
 }
 
 function countEventTypes(events) {
@@ -805,7 +812,7 @@ function validateDeepSeekEndpoint(value, profile) {
 }
 
 function validateHarnessScenario(value) {
-  if (value !== 'text' && value !== 'tool' && value !== 'approval' && value !== 'cancel' && value !== 'timeout') throw new Error('scenario must be text, tool, approval, cancel or timeout');
+  if (value !== 'text' && value !== 'tool' && value !== 'approval' && value !== 'cancel' && value !== 'timeout' && value !== 'context-limit') throw new Error('scenario must be text, tool, approval, cancel or context-limit');
   return value;
 }
 

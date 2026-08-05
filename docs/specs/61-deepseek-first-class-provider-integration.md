@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint 与 61-5 首个 application/Web settings slice 已完成；61-6/61-7 仍后置；本文件不把规划写成已完成能力）
+- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/governed/cancel/context-limit evidence 已完成；tool/reviewer/search/reasoning/release gates 与 61-7 文档审计仍后置）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -360,6 +360,18 @@ counts 和 stable code，不保存参数、tool output、secret 或绝对路径�
 不能宣称生产 filesystem/shell/external-sandbox 已接入；生产 sandbox、reviewer、
 provider-owned search 和 governed evidence 仍是后续 gates。
 fixture 记录见 [`docs/reports/spec61-6-tool-approval-fixture-2026-08-05.md`](../reports/spec61-6-tool-approval-fixture-2026-08-05.md)。
+
+### 61-6 governed/cancel/context-limit live checkpoint (2026-08-05)
+
+An explicitly authorized DeepSeek governed harness run completed through the
+daemon HTTP boundary with validated Goal/Todo writeback and exactly one quota
+spend; bounded usage was `19/9`. A separate interactive run reached
+`cancelled` through the daemon cancel route with zero model usage. The harness
+now has an explicit `context-limit` expected-failure scenario: the run ends in
+`failed` with `CONTEXT_BUDGET_EXCEEDED`, while the smoke status is healthy only
+because that failure is the declared outcome. No raw provider response,
+prompt, key, header or path is stored. The combined redacted evidence is
+[`spec60-4-live-harness-2026-08-05.md`](../reports/spec60-4-live-harness-2026-08-05.md).
 
 至少收集以下可重现证据：
 
