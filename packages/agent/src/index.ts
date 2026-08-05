@@ -3,6 +3,7 @@ import { ContextBudgetError, ContextManager, type ContextItem } from '@ready4vib
 import {
   assertTransition,
   CapabilityProfileRunSnapshotSchema,
+  DeepSeekRunSnapshotSchema,
   PermissionProfileRunSnapshotSchema,
   ModelProviderSnapshotSchema,
   parseRunConfig,
@@ -11,6 +12,7 @@ import {
   type ModelProvider,
   type ModelProviderSnapshot,
   type CapabilityProfileRunSnapshot,
+  type DeepSeekRunSnapshot,
   type PermissionProfileRunSnapshot,
   type ModelRequest,
   type RunConfig,
@@ -35,6 +37,8 @@ export interface AgentRunRequest {
   toolRuntime?: ToolRuntime;
   /** Secret-free provider/capability snapshot captured by the application service. */
   modelSnapshot?: ModelProviderSnapshot;
+  /** Optional provider-specific snapshot captured by the application service. */
+  deepSeekSnapshot?: DeepSeekRunSnapshot;
   /** Secret-free capability profile decision captured by the application service. */
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
   /** Secret-free permission profile decision captured by the application service. */
@@ -95,6 +99,7 @@ export class AgentLoop {
   async run(request: AgentRunRequest): Promise<AgentRunResult> {
     const config = parseRunConfig(request.config);
     const modelSnapshot = request.modelSnapshot ? ModelProviderSnapshotSchema.parse(request.modelSnapshot) : undefined;
+    const deepSeekSnapshot = request.deepSeekSnapshot ? DeepSeekRunSnapshotSchema.parse(request.deepSeekSnapshot) : undefined;
     const capabilitySnapshot = request.capabilitySnapshot ? CapabilityProfileRunSnapshotSchema.parse(request.capabilitySnapshot) : undefined;
     const permissionSnapshot = request.permissionSnapshot ? deepFreeze(PermissionProfileRunSnapshotSchema.parse(request.permissionSnapshot)) : undefined;
     const modelProvider = request.modelProvider ?? this.options.modelProvider;
@@ -146,6 +151,7 @@ export class AgentLoop {
       await this.append(runId, 'run.created', 'user', correlationId, {
         config,
         ...(modelSnapshot ? { modelSnapshot } : {}),
+        ...(deepSeekSnapshot ? { deepSeekSnapshot } : {}),
         ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
         ...(permissionSnapshot ? { permissionSnapshot } : {}),
       });

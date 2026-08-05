@@ -27,6 +27,7 @@ export const DEEPSEEK_REVIEW_SCHEMA_VERSION = 'deepseek-provider-review/v1' as c
 export const DEEPSEEK_SEARCH_ITEM_SCHEMA_VERSION = 'deepseek-provider-search-item/v1' as const;
 export const DEEPSEEK_SEARCH_SCHEMA_VERSION = 'deepseek-provider-search/v1' as const;
 export const DEEPSEEK_RETRY_SCHEMA_VERSION = 'deepseek-provider-retry/v1' as const;
+export const DEEPSEEK_RUN_SCHEMA_VERSION = 'deepseek-provider-run/v1' as const;
 
 export const DeepSeekEndpointProfileSchema = z.enum([
   'openai-chat-completions',
@@ -106,6 +107,31 @@ export const DeepSeekConfigSchema = z.object({
   addPrivacyIssues(value, context);
 });
 export type DeepSeekConfig = z.infer<typeof DeepSeekConfigSchema>;
+
+/** Secret-free provider/config snapshot captured once for an in-flight run. */
+export const DeepSeekRunSnapshotSchema = z.object({
+  schemaVersion: z.literal(DEEPSEEK_RUN_SCHEMA_VERSION),
+  providerId: z.literal('deepseek'),
+  endpointProfile: DeepSeekEndpointProfileSchema,
+  endpoint,
+  model,
+  thinkingMode: DeepSeekThinkingModeSchema,
+  toolCalling: DeepSeekToolCallingModeSchema,
+  webSearch: DeepSeekWebSearchModeSchema,
+  reviewer: DeepSeekReviewerModeSchema,
+  configRevision: revision,
+  capabilityRevision: revision,
+  capturedAt: timestamp,
+}).strict().superRefine((value, context) => {
+  if (!endpointMatchesProfile(value.endpoint, value.endpointProfile)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['endpoint'], message: 'endpoint path does not match endpointProfile' });
+  }
+  if (value.webSearch === 'provider-owned' && value.endpointProfile !== 'openai-responses') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['webSearch'], message: 'provider-owned search requires the Responses endpoint profile' });
+  }
+  addPrivacyIssues(value, context);
+});
+export type DeepSeekRunSnapshot = z.infer<typeof DeepSeekRunSnapshotSchema>;
 
 export const DeepSeekCapabilitySnapshotSchema = z.object({
   schemaVersion: z.literal(DEEPSEEK_CAPABILITY_SCHEMA_VERSION),

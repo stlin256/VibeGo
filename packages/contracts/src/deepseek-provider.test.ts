@@ -6,6 +6,7 @@ import {
   DeepSeekErrorCodeSchema,
   DeepSeekProbeResultSchema,
   DeepSeekReviewRequestSchema,
+  DeepSeekRunSnapshotSchema,
   DeepSeekSearchItemSchema,
   findDeepSeekPrivacyViolations,
 } from './deepseek-provider.js';
@@ -163,5 +164,37 @@ describe('DeepSeek provider/v1 contracts', () => {
     expect(findDeepSeekPrivacyViolations({ apiKey: 'sk-' + 'a'.repeat(32) }).length).toBeGreaterThan(0);
     expect(findDeepSeekPrivacyViolations({ nested: { workspace: 'C:\\Users\\someone\\repo' } }).length).toBeGreaterThan(0);
     expect(findDeepSeekPrivacyViolations({ authRef: 'secret.deepseek.primary' })).toEqual([]);
+  });
+
+  it('accepts a secret-free immutable run snapshot and rejects credentials in it', () => {
+    expect(DeepSeekRunSnapshotSchema.parse({
+      schemaVersion: 'deepseek-provider-run/v1',
+      providerId: 'deepseek',
+      endpointProfile: 'openai-chat-completions',
+      endpoint: baseConfig.endpoint,
+      model: baseConfig.model,
+      thinkingMode: 'high',
+      toolCalling: 'enabled',
+      webSearch: 'off',
+      reviewer: 'off',
+      configRevision: 'config-1',
+      capabilityRevision: 'probe-1',
+      capturedAt: '2026-08-05T10:00:00.000Z',
+    }).model).toBe(baseConfig.model);
+    expect(() => DeepSeekRunSnapshotSchema.parse({
+      schemaVersion: 'deepseek-provider-run/v1',
+      providerId: 'deepseek',
+      endpointProfile: 'openai-chat-completions',
+      endpoint: baseConfig.endpoint,
+      model: baseConfig.model,
+      thinkingMode: 'auto',
+      toolCalling: 'enabled',
+      webSearch: 'off',
+      reviewer: 'off',
+      configRevision: 'config-1',
+      capabilityRevision: 'probe-1',
+      capturedAt: '2026-08-05T10:00:00.000Z',
+      apiKey: 'sk-' + 'a'.repeat(32),
+    })).toThrow();
   });
 });

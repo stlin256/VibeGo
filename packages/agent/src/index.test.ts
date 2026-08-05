@@ -185,6 +185,31 @@ describe('AgentLoop', () => {
     });
   });
 
+  it('persists an optional DeepSeek run snapshot without changing the loop path', async () => {
+    const provider = new FakeModelProvider({ events: [{ type: 'completed', finishReason: 'stop' }] });
+    const eventStore = new InMemoryEventStore();
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider });
+    const deepSeekSnapshot = {
+      schemaVersion: 'deepseek-provider-run/v1' as const,
+      providerId: 'deepseek' as const,
+      endpointProfile: 'openai-chat-completions' as const,
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      model: 'deepseek-v4-flash',
+      thinkingMode: 'auto' as const,
+      toolCalling: 'enabled' as const,
+      webSearch: 'off' as const,
+      reviewer: 'off' as const,
+      configRevision: 'deepseek-config-environment',
+      capabilityRevision: 'deepseek-capability-unprobed',
+      capturedAt: '2026-08-05T00:00:00.000Z',
+    };
+
+    await expect(loop.run({ runId: 'run_deepseek_snapshot', config: config(), deepSeekSnapshot })).resolves.toMatchObject({ status: 'completed' });
+    const events = await eventStore.read('run_deepseek_snapshot');
+    expect(events[0]?.payload).toMatchObject({ deepSeekSnapshot: { providerId: 'deepseek', configRevision: 'deepseek-config-environment' } });
+    expect(JSON.stringify(events)).not.toContain('apiKey');
+  });
+
   it('turns a provider error into a safe failed run', async () => {
     const provider = new FakeModelProvider({ events: [{ type: 'error', code: 'UPSTREAM', retryable: true, safeMessage: 'provider unavailable' }] });
     const eventStore = new InMemoryEventStore();

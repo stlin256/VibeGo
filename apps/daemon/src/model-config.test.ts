@@ -26,6 +26,28 @@ describe('daemon model configuration', () => {
     expect(JSON.stringify({ id: provider.id, capabilities: provider.capabilities })).not.toContain('test-secret');
   });
 
+  it('creates and binds DeepSeek only when the provider choice is explicit', () => {
+    const env = {
+      READY4VIBE_MODEL_PROVIDER: 'deepseek',
+      READY4VIBE_MODEL_API_KEY: 'test-secret',
+      READY4VIBE_DEEPSEEK_ENDPOINT: 'https://api.deepseek.com/v1/chat/completions',
+      READY4VIBE_MODEL_NAME: 'deepseek-v4-flash',
+    };
+    const provider = createModelProvider(env);
+    expect(provider.id).toBe('deepseek');
+    expect(JSON.stringify({ id: provider.id, capabilities: provider.capabilities })).not.toContain('test-secret');
+    const manager = new InMemoryModelSettingsManager(env, () => new Date('2026-08-05T10:00:00.000Z'));
+    const binding = manager.bindRun({ provider: 'deepseek', name: 'deepseek-v4-flash' });
+    expect(binding.deepSeekSnapshot).toMatchObject({
+      schemaVersion: 'deepseek-provider-run/v1',
+      providerId: 'deepseek',
+      endpointProfile: 'openai-chat-completions',
+      model: 'deepseek-v4-flash',
+      thinkingMode: 'auto',
+    });
+    expect(JSON.stringify(binding.deepSeekSnapshot)).not.toContain('test-secret');
+  });
+
   it('configures and clears a provider through a secret-free status boundary', () => {
     const manager = new InMemoryModelSettingsManager({});
     expect(manager.status()).toEqual({ configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' });

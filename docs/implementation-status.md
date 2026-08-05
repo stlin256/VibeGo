@@ -877,14 +877,27 @@ typecheck/build passing; the existing `model-openai` package remains 19/19. No
 daemon route, AgentLoop branch, run/goal event or default provider binding changed;
 61-3 owns the application snapshot integration.
 
-### Spec 61-3 application binding checkpoint (in progress, 2026-08-05)
+### Spec 61-3 application binding checkpoint (implementation in progress, 2026-08-05)
 
-The integration slice will add an opt-in DeepSeek binding to the existing daemon
-model settings path. An explicit provider selection captures a `DeepSeekProvider`,
-the generic provider snapshot and a secret-free `DeepSeekRunSnapshot` once before
-`run.created`; changing settings later cannot replace the in-flight provider.
-The default unconfigured/OpenAI-compatible path, Goal admission, Scheduler,
-Approval, Sandbox, WorkspaceRegistry and event authorities remain unchanged.
+The integration slice adds an opt-in DeepSeek binding to the existing daemon
+model settings path. `READY4VIBE_MODEL_PROVIDER=deepseek` is the only
+environment selection that can create a `DeepSeekProvider`; its credential is
+read at runtime and is never persisted. A new run captures the provider,
+generic provider snapshot and secret-free `DeepSeekRunSnapshot` exactly once
+before `run.created`. The run projection replays that bounded metadata without
+exposing credentials, while later settings changes cannot replace the
+in-flight provider. The default unconfigured/OpenAI-compatible path, Goal
+admission, Scheduler, Approval, Sandbox, WorkspaceRegistry and event
+authorities remain unchanged.
+
+The application checkpoint is covered by contracts 9/9, DeepSeek adapter 7/7,
+AgentLoop 19/19 and daemon model/run 26/26 focused tests, plus contracts,
+AgentLoop and daemon typechecks. The new binding remains opt-in and does not
+add a provider branch to the AgentLoop state machine; existing context
+budgeting, multi-tool aggregation, approval and scheduler boundaries continue
+to execute through their original authorities. Probe, reviewer/search
+capabilities, Web settings and live DeepSeek evidence remain staged for 61-4
+through 61-7.
 
 ## Spec 62 planning note (2026-08-05)
 

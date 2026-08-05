@@ -973,8 +973,13 @@ contract/capability 实施，仍只记录为 Draft。61-1 checkpoint 已完成 s
 AgentLoop 或默认 run，61-2 显式协议 streaming adapter 已完成；该 adapter 只接受
 complete endpoint、运行时 credential 和冻结 config snapshot，首个可见 delta 后不透明重试，
 三种 profile 与 7/7 focused tests 已验证，当前进入 61-3 的 daemon/AgentLoop/context
-snapshot integration：只通过已有 `modelBindingForRun` seam 捕获 provider/config，默认
-interactive run 路径保持不变。
+snapshot integration：仅当 `READY4VIBE_MODEL_PROVIDER=deepseek` 时通过已有
+`modelBindingForRun` seam 捕获 `DeepSeekProvider`、generic snapshot 与 secret-free
+`DeepSeekRunSnapshot`，并在 `run.created` 中保留一次性快照；默认 interactive run
+路径和后续设置隔离保持不变。该应用 checkpoint 已通过 contracts 9/9、adapter
+7/7、AgentLoop 19/19、daemon model/run 26/26 focused tests 与相关 typecheck；
+Probe、reviewer/search、Web 设置和真实 DeepSeek evidence 仍按 61-4 至 61-7
+后置，不宣称本 checkpoint 已完成完整 provider 发布。
 
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 

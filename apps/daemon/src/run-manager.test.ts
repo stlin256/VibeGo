@@ -380,6 +380,54 @@ describe('RunManager restart recovery', () => {
     expect(second.requests).toHaveLength(0);
     expect((await manager.eventStore.read(started.runId))[0]?.payload).toMatchObject({ modelSnapshot: { descriptorRevision: 'first-rev' } });
   });
+
+  it('freezes the DeepSeek-specific snapshot together with the provider binding', async () => {
+    const first = new FakeModelProvider({ delayMs: 10, events: [{ type: 'text-delta', text: 'first' }, { type: 'completed', finishReason: 'stop' }] });
+    const second = new FakeModelProvider({ events: [{ type: 'text-delta', text: 'second' }, { type: 'completed', finishReason: 'stop' }] });
+    const deepSeekSnapshot = (revision: string) => ({
+      schemaVersion: 'deepseek-provider-run/v1' as const,
+      providerId: 'deepseek' as const,
+      endpointProfile: 'openai-chat-completions' as const,
+      endpoint: 'https://api.deepseek.com/v1/chat/completions',
+      model: 'deepseek-v4-flash',
+      thinkingMode: 'auto' as const,
+      toolCalling: 'enabled' as const,
+      webSearch: 'off' as const,
+      reviewer: 'off' as const,
+      configRevision: revision,
+      capabilityRevision: 'deepseek-capability-unprobed',
+      capturedAt: '2026-08-05T00:00:00.000Z',
+    });
+    const genericSnapshot = (revision: string) => ({
+      schemaVersion: 'ready4vibe_model_provider_snapshot_v1' as const,
+      providerId: 'deepseek',
+      model: 'deepseek-v4-flash',
+      pricingModel: 'deepseek-v4-flash',
+      descriptorRevision: revision,
+      endpointPolicy: { kind: 'explicit-url' as const, baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+      capabilities: { streaming: true, toolCalls: true, structuredOutput: false, reasoning: false, promptCaching: false, audioInput: false, audioOutput: false },
+      capturedAt: '2026-08-05T00:00:00.000Z',
+    });
+    let binding = { provider: first, snapshot: genericSnapshot('first-rev'), deepSeekSnapshot: deepSeekSnapshot('deepseek-first') };
+    const manager = new RunManager({
+      eventStore: new InMemoryEventStore(),
+      scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
+      modelProvider: first,
+      modelBindingForRun: () => binding,
+    });
+
+    const started = await manager.start({ ...config, model: { provider: 'deepseek', name: 'deepseek-v4-flash' } });
+    binding = { provider: second, snapshot: genericSnapshot('second-rev'), deepSeekSnapshot: deepSeekSnapshot('deepseek-second') };
+    await vi.waitFor(() => expect(manager.completion(started.runId)).toBeDefined());
+
+    expect((await manager.eventStore.read(started.runId))[0]?.payload).toMatchObject({
+      modelSnapshot: { descriptorRevision: 'first-rev' },
+      deepSeekSnapshot: { configRevision: 'deepseek-first' },
+    });
+    expect(await manager.snapshot(started.runId)).toMatchObject({ deepSeekSnapshot: { configRevision: 'deepseek-first' } });
+    expect(first.requests).toHaveLength(1);
+    expect(second.requests).toHaveLength(0);
+  });
 });
 
 function responseFromChunks(chunks: readonly string[], status = 200): Response {

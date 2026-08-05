@@ -7,6 +7,7 @@ import {
   type AgentMemoryKnowledgeToolList,
   AgentMemoryWriteRequestSchema,
   CapabilityProfileRunSnapshotSchema,
+  DeepSeekRunSnapshotSchema,
   ModelProviderSnapshotSchema,
   PermissionProfileSchema,
   PermissionProfileRunSnapshotSchema,
@@ -15,6 +16,7 @@ import {
   type AgentMemoryRecallResult,
   type AgentMemoryWriteRequest,
   type CapabilityProfileRunSnapshot,
+  type DeepSeekRunSnapshot,
   type PermissionProfileRunSnapshot,
   type EventStore,
   type ModelProvider,
@@ -44,6 +46,7 @@ export interface RunSnapshot {
   status: RunStatus;
   config: RunConfig;
   modelSnapshot?: ModelProviderSnapshot;
+  deepSeekSnapshot?: DeepSeekRunSnapshot;
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
   permissionSnapshot?: PermissionProfileRunSnapshot;
   lastEventSeq: number;
@@ -197,7 +200,7 @@ export class RunManager {
         throw new RunManagerError('PERMISSION_PROFILE_INVALID', 'The permission profile is invalid.');
       }
     }
-    const capturedModelBinding: { provider: ModelProvider; snapshot?: ModelProviderSnapshot } = this.modelBindingForRun
+    const capturedModelBinding: { provider: ModelProvider; snapshot?: ModelProviderSnapshot; deepSeekSnapshot?: DeepSeekRunSnapshot } = this.modelBindingForRun
       ? this.modelBindingForRun(config)
       : { provider: this.modelProviderForRun(config) };
     const controller = new AbortController();
@@ -217,6 +220,7 @@ export class RunManager {
       signal: controller.signal,
       modelProvider: capturedMemory?.modelProvider ?? capturedModelBinding.provider,
       ...(!capturedMemory?.modelProvider && capturedModelBinding.snapshot ? { modelSnapshot: capturedModelBinding.snapshot } : {}),
+      ...(!capturedMemory?.modelProvider && capturedModelBinding.deepSeekSnapshot ? { deepSeekSnapshot: capturedModelBinding.deepSeekSnapshot } : {}),
       ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       ...(permissionSnapshot ? { permissionSnapshot } : {}),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
@@ -276,6 +280,7 @@ export class RunManager {
     const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
     if (!config) return undefined;
     const modelSnapshot = readModelSnapshot(created?.payload);
+    const deepSeekSnapshot = readDeepSeekSnapshot(created?.payload);
     const capabilitySnapshot = readCapabilitySnapshot(created?.payload);
     const permissionSnapshot = readPermissionSnapshot(created?.payload);
     let status: RunStatus = 'created';
@@ -308,6 +313,7 @@ export class RunManager {
       status,
       config,
       ...(modelSnapshot ? { modelSnapshot } : {}),
+      ...(deepSeekSnapshot ? { deepSeekSnapshot } : {}),
       ...(capabilitySnapshot ? { capabilitySnapshot } : {}),
       ...(permissionSnapshot ? { permissionSnapshot } : {}),
       lastEventSeq: events.at(-1)?.seq ?? 0,
@@ -576,6 +582,12 @@ function readModelSnapshot(value: unknown): ModelProviderSnapshot | undefined {
 function readCapabilitySnapshot(value: unknown): CapabilityProfileRunSnapshot | undefined {
   if (typeof value !== 'object' || value === null || !('capabilitySnapshot' in value)) return undefined;
   const parsed = CapabilityProfileRunSnapshotSchema.safeParse(value.capabilitySnapshot);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function readDeepSeekSnapshot(value: unknown): DeepSeekRunSnapshot | undefined {
+  if (typeof value !== 'object' || value === null || !('deepSeekSnapshot' in value)) return undefined;
+  const parsed = DeepSeekRunSnapshotSchema.safeParse(value.deepSeekSnapshot);
   return parsed.success ? parsed.data : undefined;
 }
 

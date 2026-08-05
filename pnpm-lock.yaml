@@ -41,6 +41,9 @@ importers:
       '@ready4vibe/goal-control':
         specifier: workspace:*
         version: link:../../packages/goal-control
+      '@ready4vibe/model-deepseek':
+        specifier: workspace:*
+        version: link:../../packages/model-deepseek
       '@ready4vibe/model-openai':
         specifier: workspace:*
         version: link:../../packages/model-openai

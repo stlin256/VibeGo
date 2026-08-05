@@ -23,6 +23,7 @@
     "@ready4vibe/contracts": "workspace:*",
     "@ready4vibe/execution": "workspace:*",
     "@ready4vibe/goal-control": "workspace:*",
+    "@ready4vibe/model-deepseek": "workspace:*",
     "@ready4vibe/model-openai": "workspace:*",
     "@ready4vibe/observability": "workspace:*",
     "@ready4vibe/policy": "workspace:*",

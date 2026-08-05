@@ -1,4 +1,20 @@
-import { ModelProviderSnapshotSchema, ModelProbeResultSchema, ModelSettingsProfileSchema, type ModelEvent, type ModelProbeResult, type ModelProvider, type ModelProviderSnapshot, type ModelSettingsProfile } from '@ready4vibe/contracts';
+import {
+  DEEPSEEK_CAPABILITY_SCHEMA_VERSION,
+  DEEPSEEK_PROVIDER_SCHEMA_VERSION,
+  DeepSeekConfigSchema,
+  DeepSeekRunSnapshotSchema,
+  ModelProviderSnapshotSchema,
+  ModelProbeResultSchema,
+  ModelSettingsProfileSchema,
+  type DeepSeekConfig,
+  type DeepSeekRunSnapshot,
+  type ModelEvent,
+  type ModelProbeResult,
+  type ModelProvider,
+  type ModelProviderSnapshot,
+  type ModelSettingsProfile,
+} from '@ready4vibe/contracts';
+import { DeepSeekProvider } from '@ready4vibe/model-deepseek';
 import { OpenAICompatibleProvider, probeOpenAICompatibleModels, type ProbeFetchImplementation } from '@ready4vibe/model-openai';
 import type { SettingsStore } from '@ready4vibe/storage';
 
@@ -32,6 +48,8 @@ export interface ModelRunSelection {
 export interface ModelProviderBinding {
   readonly provider: ModelProvider;
   readonly snapshot: ModelProviderSnapshot;
+  /** Optional provider-specific metadata; never contains runtime credentials. */
+  readonly deepSeekSnapshot?: DeepSeekRunSnapshot;
 }
 
 export interface ModelSettingsManager {
@@ -44,6 +62,11 @@ export interface ModelSettingsManager {
 }
 
 export function createModelProvider(env: NodeJS.ProcessEnv = process.env): ModelProvider {
+  if (env.READY4VIBE_MODEL_PROVIDER === 'deepseek') {
+    const binding = readDeepSeekEnvironmentBinding(env);
+    if (binding) return binding.provider;
+    return createUnconfiguredProvider();
+  }
   const apiKey = env.READY4VIBE_MODEL_API_KEY;
   if (apiKey) {
     return new OpenAICompatibleProvider({
@@ -79,6 +102,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
   private currentStatus: ModelSettingsStatus;
   private currentApiKey: string | undefined;
   private currentModelName: string | null;
+  private deepSeekEnvironment: DeepSeekEnvironmentBinding | undefined;
   private revision = 0;
   private readonly clock: () => Date;
   private readonly probeFetchImpl: ProbeFetchImplementation | undefined;
@@ -86,15 +110,18 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
 
   constructor(env: NodeJS.ProcessEnv = process.env, clock: () => Date = () => new Date(), probeFetchImpl?: ProbeFetchImplementation, settings?: SettingsStore) {
     this.settings = settings;
-    const environmentProvider = createModelProvider(env);
-    const persistedProfile = !env.READY4VIBE_MODEL_API_KEY ? loadDurableProfile(settings) : undefined;
+    this.clock = clock;
+    const environmentBinding = env.READY4VIBE_MODEL_PROVIDER === 'deepseek' ? readDeepSeekEnvironmentBinding(env) : undefined;
+    const environmentProvider = environmentBinding?.provider ?? createModelProvider(env);
+    const hasEnvironmentCredential = Boolean(env.READY4VIBE_MODEL_API_KEY ?? env.READY4VIBE_DEEPSEEK_API_KEY);
+    const persistedProfile = !hasEnvironmentCredential ? loadDurableProfile(settings) : undefined;
     const provider = persistedProfile ? createUnconfiguredProvider() : environmentProvider;
     this.provider = new SwitchingModelProvider(provider);
-    this.currentStatus = persistedProfile ? statusFromDurableProfile(persistedProfile) : statusFromEnvironment(env, provider);
-    this.currentApiKey = env.READY4VIBE_MODEL_API_KEY;
+    this.currentStatus = persistedProfile ? statusFromDurableProfile(persistedProfile) : statusFromEnvironment(env, provider, environmentBinding);
+    this.currentApiKey = env.READY4VIBE_MODEL_API_KEY ?? env.READY4VIBE_DEEPSEEK_API_KEY;
     this.currentModelName = env.READY4VIBE_MODEL_NAME ?? persistedProfile?.modelName ?? null;
+    this.deepSeekEnvironment = persistedProfile ? undefined : environmentBinding;
     this.revision = persistedProfile ? profileRevisionNumber(persistedProfile.profileRevision) : 0;
-    this.clock = clock;
     this.probeFetchImpl = probeFetchImpl;
   }
 
@@ -115,6 +142,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
     this.provider.replace(nextProvider);
     this.currentApiKey = normalized.apiKey;
     this.currentModelName = normalized.model;
+    this.deepSeekEnvironment = undefined;
     this.revision = nextRevision;
     this.currentStatus = {
       configured: true,
@@ -132,6 +160,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
     this.provider.replace(createUnconfiguredProvider());
     this.currentApiKey = undefined;
     this.currentModelName = null;
+    this.deepSeekEnvironment = undefined;
     this.revision += 1;
     this.currentStatus = {
       configured: false,
@@ -177,6 +206,9 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
     if (this.currentStatus.configured && selection.provider !== this.currentStatus.providerId) {
       throw new ModelSettingsError('INVALID_PROVIDER', 'The requested model provider is not configured for this daemon.');
     }
+    if (selection.provider === 'deepseek') {
+      return this.bindDeepSeekRun(selection.name.trim());
+    }
     const provider = this.provider.snapshot();
     let snapshot: ModelProviderSnapshot;
     try {
@@ -204,6 +236,54 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager {
       throw new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.');
     }
     return { provider, snapshot };
+  }
+
+  private bindDeepSeekRun(modelName: string): ModelProviderBinding {
+    const environment = this.deepSeekEnvironment;
+    if (!environment || !this.currentApiKey || this.provider.id !== 'deepseek') {
+      throw new ModelSettingsError('INVALID_PROVIDER', 'The DeepSeek provider is not configured for this daemon.');
+    }
+    try {
+      const capturedAt = this.clock().toISOString();
+      const config = DeepSeekConfigSchema.parse({ ...environment.config, model: modelName });
+      const provider = this.provider.snapshot();
+      const snapshot = ModelProviderSnapshotSchema.parse({
+        schemaVersion: 'ready4vibe_model_provider_snapshot_v1',
+        providerId: 'deepseek',
+        model: modelName,
+        pricingModel: modelName,
+        descriptorRevision: config.revision,
+        endpointPolicy: { kind: 'explicit-url', baseUrl: config.endpoint },
+        capabilities: {
+          streaming: provider.capabilities.streaming,
+          toolCalls: provider.capabilities.toolCalls,
+          structuredOutput: provider.capabilities.structuredOutput,
+          reasoning: false,
+          promptCaching: false,
+          audioInput: false,
+          audioOutput: false,
+        },
+        ...(config.authRef ? { authRef: config.authRef } : {}),
+        capturedAt,
+      });
+      const deepSeekSnapshot = DeepSeekRunSnapshotSchema.parse({
+        schemaVersion: 'deepseek-provider-run/v1',
+        providerId: 'deepseek',
+        endpointProfile: config.endpointProfile,
+        endpoint: config.endpoint,
+        model: modelName,
+        thinkingMode: config.thinkingMode,
+        toolCalling: config.toolCalling,
+        webSearch: config.webSearch,
+        reviewer: config.reviewer,
+        configRevision: config.revision,
+        capabilityRevision: `${DEEPSEEK_CAPABILITY_SCHEMA_VERSION.replace('/v1', '')}-unprobed`,
+        capturedAt,
+      });
+      return { provider, snapshot, deepSeekSnapshot };
+    } catch {
+      throw new ModelSettingsError('INVALID_MODEL', 'The requested model name is invalid.');
+    }
   }
 }
 
@@ -238,12 +318,78 @@ function validateModelSettingsInput(input: ModelSettingsInput): ModelSettingsInp
   return { provider: input.provider, baseUrl, apiKey: input.apiKey, model: input.model.trim() };
 }
 
-function statusFromEnvironment(env: NodeJS.ProcessEnv, provider: ModelProvider): ModelSettingsStatus {
-  const apiKey = env.READY4VIBE_MODEL_API_KEY;
+function statusFromEnvironment(env: NodeJS.ProcessEnv, provider: ModelProvider, deepSeekBinding?: DeepSeekEnvironmentBinding): ModelSettingsStatus {
+  const apiKey = env.READY4VIBE_MODEL_API_KEY ?? env.READY4VIBE_DEEPSEEK_API_KEY;
   if (!apiKey) return { configured: false, providerId: 'unconfigured', baseUrl: null, modelName: null, source: 'unconfigured', credentialState: 'none' };
+  if (env.READY4VIBE_MODEL_PROVIDER === 'deepseek') {
+    return {
+      configured: deepSeekBinding !== undefined && provider.id === 'deepseek',
+      providerId: 'deepseek',
+      baseUrl: deepSeekBinding?.config.endpoint ?? null,
+      modelName: env.READY4VIBE_MODEL_NAME ?? deepSeekBinding?.config.model ?? null,
+      source: 'environment',
+      credentialState: deepSeekBinding ? 'available' : 'required',
+    };
+  }
   let baseUrl: string | null = null;
   try { baseUrl = new URL(env.READY4VIBE_MODEL_BASE_URL ?? 'https://api.deepseek.com').toString().replace(/\/$/u, ''); } catch { /* startup validation is handled by createModelProvider */ }
   return { configured: true, providerId: provider.id, baseUrl, modelName: env.READY4VIBE_MODEL_NAME ?? null, source: 'environment', credentialState: 'available' };
+}
+
+interface DeepSeekEnvironmentBinding {
+  readonly provider: DeepSeekProvider;
+  readonly config: DeepSeekConfig;
+  readonly apiKey: string;
+}
+
+function readDeepSeekEnvironmentBinding(env: NodeJS.ProcessEnv): DeepSeekEnvironmentBinding | undefined {
+  const apiKey = env.READY4VIBE_DEEPSEEK_API_KEY ?? env.READY4VIBE_MODEL_API_KEY;
+  if (!apiKey) return undefined;
+  try {
+    const config = DeepSeekConfigSchema.parse({
+      schemaVersion: DEEPSEEK_PROVIDER_SCHEMA_VERSION,
+      providerId: 'deepseek',
+      endpointProfile: env.READY4VIBE_DEEPSEEK_ENDPOINT_PROFILE ?? 'openai-chat-completions',
+      endpoint: env.READY4VIBE_DEEPSEEK_ENDPOINT ?? defaultDeepSeekEndpoint(env.READY4VIBE_DEEPSEEK_ENDPOINT_PROFILE),
+      model: env.READY4VIBE_MODEL_NAME ?? 'deepseek-v4-flash',
+      authRef: 'secret.deepseek.environment',
+      thinkingMode: env.READY4VIBE_DEEPSEEK_THINKING_MODE ?? 'auto',
+      toolCalling: env.READY4VIBE_DEEPSEEK_TOOL_CALLING ?? 'enabled',
+      webSearch: env.READY4VIBE_DEEPSEEK_WEB_SEARCH ?? 'off',
+      reviewer: env.READY4VIBE_DEEPSEEK_REVIEWER ?? 'off',
+      timeoutMs: parseBoundedEnvironmentInteger(env.READY4VIBE_DEEPSEEK_TIMEOUT_MS, 30_000, 1, 120_000),
+      maxRetries: parseBoundedEnvironmentInteger(env.READY4VIBE_DEEPSEEK_MAX_RETRIES, 2, 0, 5),
+      contextLimit: parseOptionalEnvironmentInteger(env.READY4VIBE_DEEPSEEK_CONTEXT_LIMIT, 'unknown', 1, 10_000_000),
+      maxOutputTokens: parseBoundedEnvironmentInteger(env.READY4VIBE_DEEPSEEK_MAX_OUTPUT_TOKENS, 4_096, 1, 1_000_000),
+      revision: env.READY4VIBE_DEEPSEEK_CONFIG_REVISION ?? 'deepseek-config-environment',
+      updatedAt: new Date().toISOString(),
+    });
+    return {
+      provider: new DeepSeekProvider({ config, apiKey }),
+      config,
+      apiKey,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function defaultDeepSeekEndpoint(profile: string | undefined): string {
+  if (profile === 'openai-responses') return 'https://api.deepseek.com/v1/responses';
+  if (profile === 'anthropic-messages') return 'https://api.deepseek.com/anthropic/v1/messages';
+  return 'https://api.deepseek.com/v1/chat/completions';
+}
+
+function parseBoundedEnvironmentInteger(value: string | undefined, fallback: number, minimum: number, maximum: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) throw new Error('invalid DeepSeek numeric environment value');
+  return parsed;
+}
+
+function parseOptionalEnvironmentInteger(value: string | undefined, fallback: number | 'unknown', minimum: number, maximum: number): number | 'unknown' {
+  if (value === undefined) return fallback;
+  return parseBoundedEnvironmentInteger(value, typeof fallback === 'number' ? fallback : minimum, minimum, maximum);
 }
 
 function statusFromDurableProfile(profile: ModelSettingsProfile): ModelSettingsStatus {
