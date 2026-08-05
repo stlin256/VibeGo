@@ -1436,3 +1436,17 @@ no secret, raw provider data or absolute path. Focused evidence is recorded in
 [`spec63-9-dedicated-profile-resolver-2026-08-06.md`](reports/spec63-9-dedicated-profile-resolver-2026-08-06.md).
 This closes local profile resolution only; dedicated live smoke, upstream
 health and release evidence remain staged.
+
+### Spec 58-6 task-specific Goal verifier registry design freeze (2026-08-06)
+
+The next Spec 58-6 implementation slice adds a strict daemon-owned
+`GoalVerifierRegistry` keyed by authoritative Todo task class. Only
+`advancement`, `monitor` and `blocker` can select an automatic verifier;
+`user_action` and `user_gate` remain fail-closed. Descriptor metadata is
+versioned, bounded, revision-fenced and privacy/path checked. Duplicate,
+missing, malformed, stale or non-ready entries and verifier id/revision
+mismatches all produce bounded `inconclusive` writeback; they cannot complete a
+Todo or spend quota. The registry receives only task class and bounded
+run/event digests and never executes model/tool/shell/Git/MCP/Skill/filesystem or
+sandbox work. The default daemon keeps the registry empty, preserving ordinary
+interactive runs and existing governed fail-closed behavior.

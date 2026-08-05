@@ -549,3 +549,36 @@ of `quota.reserved` and `quota.consumed`. The evidence contains no credential,
 secret reference, prompt, raw response, headers or path. This is live provider
 path evidence, not the final Spec 60 release bundle or task-specific verifier
 acceptance.
+
+## Spec 58-6 task-specific verifier registry design freeze (2026-08-06)
+
+The next bounded module-closure slice adds an explicit daemon-owned registry for
+task-specific Goal validation. A registry entry is a versioned
+`GoalVerifierDescriptorV1` keyed by the authoritative Todo `taskClass`. Only
+`advancement`, `monitor` and `blocker` may select an automatic verifier;
+`user_action` and `user_gate` always remain fail-closed and require an explicit
+user action or gate resolution.
+
+The descriptor is strict and privacy checked. It contains only a bounded
+verifier id, task class, opaque verifier revision, readiness status, privacy
+classification and ISO update time. Secret-shaped fields, credentials,
+environment names/values, absolute paths, unknown fields and non-ready
+descriptors are rejected. A task class has at most one registered descriptor;
+duplicate, malformed, stale or missing entries resolve to the existing
+`FailClosedGoalRunVerifier` behavior.
+
+`GoalRunWritebackService` derives `taskClass` from the replayed authoritative
+Goal projection and passes only that bounded class plus run/event digests to the
+selected verifier. Prompts, transcript, model output, tool arguments, commands,
+paths, environment and secrets never cross the registry port. The returned
+verifier id and revision must exactly match the selected descriptor; mismatch or
+runtime failure produces bounded `inconclusive` evidence and cannot complete a
+Todo or consume quota.
+
+The registry is a pure application port. It does not execute a model, tool,
+shell, Git, MCP, Skill, filesystem operation or sandbox, and it does not add a
+second scheduler or alter the AgentLoop, RunManager default start, Approval,
+Sandbox, WorkspaceRegistry, `run_events` or `goal_events` authorities. The
+default daemon registers no semantic verifier, so existing unbound interactive
+runs and governed fail-closed behavior remain unchanged until a later explicit
+profile supplies a verifier.
