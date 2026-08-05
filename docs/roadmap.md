@@ -902,13 +902,23 @@ high-risk full-host confirmation and session revoke/expiry status, while showing
 only a bounded summary of the immutable permission snapshot beside approval and
 run timeline state.
 
-This checkpoint is design-ready but not an implementation-complete claim yet:
-the Web API client, React controls, focused Web tests and build/typecheck evidence
-remain to be delivered. The slice cannot create grants, execute tools, add a
-scheduler or approval store, bypass Goal/Scheduler/Approval/Sandbox authorities,
-or change AgentLoop and existing event-table behavior. Until those gates pass,
-the daemon 59-3 behavior and historical interactive run path remain the source
-of truth.
+The 59-4 implementation is complete and accepted. `ApiClient` now exposes the
+daemon-owned settings/status/confirm/revoke routes while keeping session
+identity internal and redacting grant identities before React state. The Run
+settings card exposes the safe `workspace-coding` default, three bounded
+approval postures, full-host acknowledgement, expiry/revoke state and blocked
+next steps. The conversation timeline renders only a bounded immutable
+permission snapshot summary; it never displays a grant id, session id, token,
+path or raw command.
+
+Focused Web validation passes 21 files / 104 tests, Web build/typecheck and
+`check:web` pass, the affected daemon permission suite passes 48 tests, and the
+full `pnpm verify` gate passes. The slice still cannot create grants, execute
+tools, add a scheduler or approval store, bypass Goal/Scheduler/Approval/
+Sandbox authorities, or change AgentLoop and existing event-table behavior.
+The daemon 59-3 behavior and historical interactive run path remain the source
+of truth. Implementation commits are `b3b1463` (API) and `ad3df94` (Web UX),
+preceded by the documentation freeze commit `80601d4`.
 
 ## Spec 60：完整测试、真实运行与发布证据主线程验收（Draft）
 

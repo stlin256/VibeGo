@@ -680,12 +680,22 @@ profile revisions and secrets remain daemon-owned. The slice is presentation and
 API glue only and cannot create grants, execute tools or bypass Goal/Scheduler/
 Approval/Sandbox authorities.
 
-Implementation status: design-ready and in progress, not yet accepted. The
-daemon 59-3 routes and immutable run snapshot remain the authority while the
-Web API client, React controls, focused tests and build/typecheck evidence are
-completed. No Web change may create a grant, execute a tool, add a scheduler or
-approval store, expose a session secret/path, or alter AgentLoop, Goal Control,
-existing approval/sandbox authorities or event-table schemas.
+Implementation status: complete and accepted. `ApiClient` now exposes the
+daemon-owned settings/status/confirm/revoke routes while keeping session
+identity internal and redacting grant identities before React state. The Run
+settings card exposes the safe `workspace-coding` default, three bounded
+approval postures, full-host acknowledgement, expiry/revoke state and blocked
+next steps. The conversation timeline renders only a bounded immutable
+permission snapshot summary; it never displays a grant id, session id, token,
+path or raw command.
+
+Focused Web validation passes 21 files / 104 tests, Web build/typecheck and
+`check:web` pass, the affected daemon permission suite passes 48 tests, and the
+full `pnpm verify` gate passes. No Web change creates a grant, executes a tool,
+adds a scheduler or approval store, exposes a session secret/path, or alters
+AgentLoop, Goal Control, existing approval/sandbox authorities or event-table
+schemas. Implementation commits are `b3b1463` (API) and `ad3df94` (Web UX),
+preceded by documentation freeze commit `80601d4`.
 
 ## Spec 58-2 governed admission implementation note (2026-08-05)
 

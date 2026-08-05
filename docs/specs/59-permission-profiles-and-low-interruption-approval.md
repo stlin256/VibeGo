@@ -375,6 +375,23 @@ approval posture、清晰的风险说明、session status、revoke、degraded/bl
 本阶段不修改 AgentLoop、RunManager、Goal、Scheduler、ApprovalBroker、SandboxResolver
 或任何事件表；不实现真实 host/full-host smoke（归入 59-5），不把自动审批逻辑复制到 Web。
 
+#### 59-4 implementation note (2026-08-05)
+
+The Web slice is implemented and accepted. `ApiClient` owns the authenticated
+settings/status/confirm/revoke request boundary and injects session identity
+only in memory; grant session/user identities are removed before permission
+status enters React state. The existing Run settings tab now presents the two
+profiles and three postures, requires an explicit trusted-session acknowledgement
+for full-host, shows bounded expiry/revoke/blocked guidance, and keeps changes
+limited to new runs. The conversation timeline renders a bounded immutable
+snapshot summary while preserving the existing daemon-owned Allow/Deny card.
+
+Focused Web validation passes 21 files / 104 tests, the affected daemon
+permission suite passes 48 tests, `check:web` passes, and the full `pnpm verify`
+gate passes. No grant is created by Web code, no tool or process is executed by
+React, and Goal/Scheduler/Approval/Sandbox/AgentLoop/event-table authorities are
+unchanged. Real host/full-host smoke remains a later release-evidence task.
+
 ### 59-5：真实运行与发布证据
 
 为 workspace-coding/full-host trusted fixture 分别运行 focused、daemon integration、
