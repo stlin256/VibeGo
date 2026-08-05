@@ -58,5 +58,6 @@
 - [Spec 56：多语言、无障碍与真实设备兼容矩阵](specs/56-i18n-accessibility-device-matrix.md)：`en-US`/`zh-CN`、WCAG 2.2 AA、辅助技术、Playwright ratio fixtures 和真实 desktop/mobile/foldable/tablet evidence。
 - [Spec 57：Release 发布流水线](specs/57-release-publishing-pipeline.md)：protected tag/channel、可重复多平台构建、checksum、平台签名、SBOM、provenance、attestation 和 stable promotion。
 - [Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁](specs/58-goal-control-and-harness-completion.md)：把 Goal 从 contracts/replay/mutation 基础推进到 governed admission、验证写回、quota exactly-once、恢复和真实 LLM Harness 证据，并为其他 design-only/fake-only 核心模块定义统一完成标准。
+- [Spec 59：Permission Profiles、低打扰自动审批与 Full-host 模式](specs/59-permission-profiles-and-low-interruption-approval.md)：定义 workspace-coding、显式 full-host、bounded-auto/session-auto 审批姿态、可信任务边界、session grant、撤销和跨平台真实验收。
 - [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)：Node SEA、GitHub Releases/Attestations、Sigstore、Let's Encrypt、SQLite、WCAG、Playwright、Ollama 和 LM Studio 的公开资料与 clean-room 设计判断。
 - [TencentDB 融合实施提示词](prompts/39-tencentdb-agent-memory-implementation.md)：可直接交给另一位开发者或 Agent，按 Contract → MemoryCore → Web Settings → Supervisor → Proxy/Knowledge 顺序实施，并保留 dirty worktree。

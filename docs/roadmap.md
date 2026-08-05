@@ -780,3 +780,14 @@ AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability�
 Transport/Certificate 和 Host/Release 的 A–G 成熟度标准。它要求先重新复核此前所有
 Spec，再按 `58-0 → 58-7` 独立提交推进；在完成前，Goal 不得接入默认 interactive run，
 也不得把 fake-only 或 design-only 证据标记为 stable。
+
+## Spec 59：Permission Profiles、低打扰自动审批与 Full-host 模式（Draft）
+
+详见 [Spec 59](specs/59-permission-profiles-and-low-interruption-approval.md)。该规格
+不修改 Spec 52，而是作为后续权限体验切片补充两个明确模式：推荐的 `workspace-coding`
+只在选定 workspace 内工作并使用 bounded-auto 减少低风险审批打扰；高级 `full-host`
+在一次明确确认后允许主机级文件/进程能力，并可使用可信 session 的 session-auto。
+
+full-host 不是默认权限，不自动开启网络，不接受 untrusted content，也不能绕过 Goal、
+quota、Scheduler、Approval、Sandbox 或 managed policy。Spec 59 将按
+`59-0 → 59-5` 独立提交推进，并在实现完成前保持当前 run 行为不变。

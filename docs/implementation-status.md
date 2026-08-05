@@ -536,6 +536,17 @@ release evidence are accepted, unbound interactive runs remain outside Goal
 admission and `run_events`, `goal_events`, AgentLoop, RunManager, Scheduler,
 Approval, Sandbox and WorkspaceRegistry retain their existing authority.
 
+## Spec 59 planning note (2026-08-05)
+
+`docs/specs/59-permission-profiles-and-low-interruption-approval.md` is a Draft
+follow-up specification. It adds the requested permission ergonomics without
+changing Spec 52: `workspace-coding` is workspace-scoped with bounded automatic
+approval for exact low-risk keys, while `full-host` is an explicit trusted-session
+mode with optional session-auto approval. Full-host is never the default, never a
+fallback for untrusted content or an unhealthy external sandbox, and never widens
+network, Goal, quota, Scheduler, Approval, Sandbox or managed-policy authority.
+No runtime behavior is claimed by this planning note.
+
 ## Spec 49-R4 implementation note (2026-08-04)
 
 The R4 contract is implemented under [ADR 0023](adr/0023-mcp-r4-run-scoped-execution-bridge.md).
