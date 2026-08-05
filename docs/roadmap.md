@@ -783,15 +783,14 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
 并在每个独立 Git 提交中同步对应 Spec、测试结果和已知限制。
 
-## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0、58-1 已完成，58-2 应用切片已实现，后续 58-3 进行中，Draft）
+## Spec 58：Goal Control 完整执行闭环与核心 Harness 完成门禁（58-0、58-1 已完成，58-2 已实现，58-3 已实现，后续验收进行中，Draft）
 
 详见 [Spec 58](specs/58-goal-control-and-harness-completion.md) 及其
 [58-0 prerequisite audit](reports/58-0-prerequisite-verification-2026-08-05.md)。当前 Goal Control
-已经有严格 contracts、独立 `goal_events`、projection/replay、bounded mutation API
-和只读 Web projection，但 governed admission、GoalRunBinding 与 RunManager 的应用层
-组合、独立 validation writeback、quota consume 的应用层 exactly-once、Goal Web
-操作流和真实端到端 Harness 证据仍未完成；58-1 的 quota reservation 合同和纯
-状态机已经实现。
+已经有严格 contracts、独立 `goal_events`、projection/replay、bounded mutation API、
+显式 governed admission、GoalRunBinding、独立 validation writeback 和 quota
+exactly-once 应用层边界；Goal Web 操作流和真实端到端 Harness 证据仍未完成。
+58-1 的 quota reservation 合同和纯状态机已经实现。
 
 58-0 已在当前 `main` 基线重新核对 checkout、workspace graph、Goal/daemon/Web
 focused gate 和完整 `pnpm verify`。审计结论为：现有基础满足 58-1 的合同切片前置条件，
@@ -805,8 +804,17 @@ stale revision、quota 状态转移和验证证据门禁；本阶段仍不接入
 真实 governed smoke 仍后置。58-2 已按 [ADR 0037](adr/0037-governed-admission-application-boundary.md)
 落地：只接受显式 `runMode=governed`，先完成 Goal/capability/readiness preflight，再持久化
 admission 与 binding，最后调用现有 `RunManager.start`；普通 interactive run 不变。v0/v1
-SQLite reader/writer 的混合表兼容和 fail-closed append 顺序也已加入回归测试。后续 58-3
-负责 validation writeback、quota exactly-once 和 crash reconciliation。
+SQLite reader/writer 的混合表兼容和 fail-closed append 顺序也已加入回归测试；这些
+admission 前置行为保持独立，不改变普通 interactive run。
+
+58-3 已按 [ADR 0038](adr/0038-governed-terminal-writeback-and-recovery.md) 落地：
+`GoalRunWritebackService` 在 run 启动前注册 binding，通过现有
+`RunManager.subscribe/readEvents` 观察终态；独立 fail-closed verifier 只返回 bounded
+validation，validated evidence 由 Goal lock 下的原子 Todo/quota 写回消费。启动失败和
+非 validated 终态释放 reservation；restart 只重放持久事件并记录 needs-recovery，
+`governed-retry` 创建新 request/turn/attempt/binding，普通 interactive retry 不变。
+当前仍是 fixture/fail-closed verifier，真实 task-specific verifier 和 LLM governed smoke
+仍后置。
 
 Spec 58 将 Goal 作为第一条“从基础概念到生产闭环”的纵切，同时定义 Model、Context、
 AgentLoop、Approval、Sandbox、Scheduler、MCP/Skill、Memory、Observability、

@@ -4,12 +4,14 @@ import {
   CapabilityProfileRunSnapshotSchema,
   GoalAdmissionDecisionV1Schema,
   GoalControlProjectionV1Schema,
+  GoalQuotaReservationV1Schema,
   GoalRunBindingV1Schema,
   RunConfigSchema,
   type CapabilityProfileRunSnapshot,
   type GoalAdmissionDecisionV1,
   type GoalAdmissionReasonCodeV1,
   type GoalControlProjectionV1,
+  type GoalQuotaReservationV1,
   type GoalRunBindingV1,
   type GoalRevisionToken,
   type RunConfig,
@@ -74,8 +76,19 @@ export interface GoalAdmissionOptions {
   readonly capabilitiesForSnapshot?: (snapshot: CapabilityProfileRunSnapshot, config: RunConfig) => readonly string[];
   readonly writeScopesForSnapshot?: (snapshot: CapabilityProfileRunSnapshot, config: RunConfig) => readonly string[];
   readonly goalControl?: GoalControlV1WriteService;
+  /** Registers the binding before the first run event can be emitted. */
+  readonly registerBinding?: (binding: GoalRunBindingV1) => void;
+  /** Delivery quota is opt-in so existing interactive/admission fixtures and
+   * deployments can migrate without changing their durable event stream. */
+  readonly quotaPolicy?: GoalAdmissionQuotaPolicy;
   readonly clock?: () => Date;
   readonly producer?: string;
+}
+
+export interface GoalAdmissionQuotaPolicy {
+  readonly enabled: boolean;
+  readonly units?: number;
+  readonly reservationTtlMs?: number;
 }
 
 export interface GoalAdmissionResult {
@@ -87,6 +100,7 @@ export interface GoalAdmissionResult {
   readonly attempt: number;
   readonly admission: GoalAdmissionDecisionV1;
   readonly binding: GoalRunBindingV1;
+  readonly reservation?: GoalQuotaReservationV1;
   readonly schedulerDecisionRef: string;
 }
 
@@ -110,6 +124,7 @@ export type GoalAdmissionErrorCode =
   | 'APPROVAL_REQUIRED'
   | 'SANDBOX_UNAVAILABLE'
   | 'BINDING_CONFLICT'
+  | 'QUOTA_RESERVATION_FAILED'
   | 'RUN_ID_CONFLICT'
   | 'RUN_START_FAILED';
 
@@ -168,6 +183,7 @@ export class GoalAdmissionService {
       }
       const existingRun = await this.options.runManager.snapshot(existingBinding.runId);
       if (existingRun) {
+        const existingReservation = projection.quota.reservations.find((candidate) => candidate.bindingId === existingBinding.bindingId);
         return {
           schemaVersion: GOAL_ADMISSION_APPLICATION_SCHEMA_VERSION,
           runId: existingBinding.runId,
@@ -177,10 +193,49 @@ export class GoalAdmissionService {
           attempt: existingBinding.attempt,
           admission: existingAdmission,
           binding: existingBinding,
+          ...(existingReservation ? { reservation: existingReservation } : {}),
           schedulerDecisionRef: existingAdmission.schedulerDecisionRef ?? 'scheduler_replayed',
         };
       }
-      throw new GoalAdmissionError('RUN_START_FAILED', 'The previous governed binding has no recoverable run event yet.');
+      const capabilitySnapshot = this.readCapabilitySnapshot(request);
+      const reservation = await this.ensureReservation(request, existingBinding, projection);
+      if (reservation && reservation.status !== 'reserved') {
+        throw new GoalAdmissionError('QUOTA_RESERVATION_FAILED', 'The previous governed binding no longer has a spendable quota reservation.');
+      }
+      try {
+        this.options.registerBinding?.(existingBinding);
+        await this.options.runManager.start(request.config, { runId: existingBinding.runId, capabilitySnapshot });
+      } catch (error) {
+        if (isRunIdConflict(error) && await this.options.runManager.snapshot(existingBinding.runId)) {
+          return {
+            schemaVersion: GOAL_ADMISSION_APPLICATION_SCHEMA_VERSION,
+            runId: existingBinding.runId,
+            status: 'queued',
+            goalId: request.goalId,
+            todoId: existingBinding.todoId,
+            attempt: existingBinding.attempt,
+            admission: existingAdmission,
+            binding: existingBinding,
+            ...(reservation ? { reservation } : {}),
+            schedulerDecisionRef: existingAdmission.schedulerDecisionRef ?? 'scheduler_replayed',
+          };
+        }
+        await this.releaseAfterStartFailure(request.goalId, reservation).catch(() => undefined);
+        const code = isRunIdConflict(error) ? 'RUN_ID_CONFLICT' : 'RUN_START_FAILED';
+        throw new GoalAdmissionError(code, 'The previous governed binding could not be recovered.', undefined, { cause: error });
+      }
+      return {
+        schemaVersion: GOAL_ADMISSION_APPLICATION_SCHEMA_VERSION,
+        runId: existingBinding.runId,
+        status: 'queued',
+        goalId: request.goalId,
+        todoId: existingBinding.todoId,
+        attempt: existingBinding.attempt,
+        admission: existingAdmission,
+        binding: existingBinding,
+        ...(reservation ? { reservation } : {}),
+        schedulerDecisionRef: existingAdmission.schedulerDecisionRef ?? 'scheduler_replayed',
+      };
     }
     if (projection.controlRevision !== request.expectedControlRevision) {
       throw this.fail(projection, request, 'STALE_REVISION', 'The Goal control revision is stale.', 'retry', 'blocked');
@@ -301,10 +356,29 @@ export class GoalAdmissionService {
       throw new GoalAdmissionError('BINDING_CONFLICT', 'The Goal binding could not be persisted.', undefined, { cause: error });
     }
 
+    const persistedBinding = bindingResult.projection.bindings.find((candidate) => candidate.bindingId === binding.bindingId) ?? binding;
+    const reservation = await this.ensureReservation(request, persistedBinding, bindingResult.projection);
+
     try {
+      this.options.registerBinding?.(persistedBinding);
       await this.options.runManager.start(request.config, { runId, capabilitySnapshot });
     } catch (error) {
-      const code = error instanceof Error && 'code' in error && error.code === 'RUN_ID_CONFLICT' ? 'RUN_ID_CONFLICT' : 'RUN_START_FAILED';
+      if (isRunIdConflict(error) && await this.options.runManager.snapshot(runId)) {
+        return {
+          schemaVersion: GOAL_ADMISSION_APPLICATION_SCHEMA_VERSION,
+          runId,
+          status: 'queued',
+          goalId: request.goalId,
+          todoId: todo.todoId,
+          attempt: request.attempt,
+          admission,
+          binding: persistedBinding,
+          ...(reservation ? { reservation } : {}),
+          schedulerDecisionRef: schedulerDecision.decisionRef,
+        };
+      }
+      await this.releaseAfterStartFailure(request.goalId, reservation).catch(() => undefined);
+      const code = isRunIdConflict(error) ? 'RUN_ID_CONFLICT' : 'RUN_START_FAILED';
       throw new GoalAdmissionError(code, 'The governed run could not be started after its binding was persisted.', undefined, { cause: error });
     }
     return {
@@ -315,9 +389,69 @@ export class GoalAdmissionService {
       todoId: todo.todoId,
       attempt: request.attempt,
       admission,
-      binding: bindingResult.projection.bindings.find((candidate) => candidate.bindingId === binding.bindingId) ?? binding,
+      binding: persistedBinding,
+      ...(reservation ? { reservation } : {}),
       schedulerDecisionRef: schedulerDecision.decisionRef,
     };
+  }
+
+  private readCapabilitySnapshot(request: GovernedRunRequest): CapabilityProfileRunSnapshot {
+    try {
+      return CapabilityProfileRunSnapshotSchema.parse(this.options.capabilitySnapshotForRun(request.config));
+    } catch (error) {
+      throw new GoalAdmissionError('CAPABILITY_MISMATCH', 'The capability snapshot is invalid during governed recovery.', undefined, { cause: error });
+    }
+  }
+
+  private async ensureReservation(
+    request: GovernedRunRequest,
+    binding: GoalRunBindingV1,
+    projection: GoalControlProjectionV1,
+  ): Promise<GoalQuotaReservationV1 | undefined> {
+    const policy = this.options.quotaPolicy;
+    if (!policy?.enabled) return undefined;
+    const existing = projection.quota.reservations.find((candidate) => candidate.bindingId === binding.bindingId && candidate.attempt === binding.attempt);
+    if (existing) return existing;
+    const now = this.now();
+    const reservation = GoalQuotaReservationV1Schema.parse({
+      schemaVersion: 'ready4vibe_goal_quota_reservation_v1',
+      reservationId: stableId('reservation', request.goalId, request.requestId, request.turnKey),
+      bindingId: binding.bindingId,
+      goalId: request.goalId,
+      ...(binding.todoId ? { todoId: binding.todoId } : {}),
+      attempt: binding.attempt,
+      turnKey: request.turnKey,
+      units: policy.units ?? 1,
+      status: 'reserved',
+      createdAt: now,
+      expiresAt: request.expiresAt ?? new Date(Date.parse(now) + Math.min(policy.reservationTtlMs ?? 30 * 60 * 1_000, 30 * 60 * 1_000)).toISOString(),
+      updatedAt: now,
+    });
+    try {
+      const { schemaVersion: _schemaVersion, status: _status, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = reservation;
+      const result = await this.goalControl.reserveQuota(request.goalId, {
+        eventId: stableEventId(request.goalId, request.requestId, 'quota.reserve'),
+        expectedRevision: projection.controlRevision,
+        requestId: request.requestId,
+        reservation: draft,
+      });
+      return result.projection.quota.reservations.find((candidate) => candidate.reservationId === reservation.reservationId) ?? reservation;
+    } catch (error) {
+      throw new GoalAdmissionError('QUOTA_RESERVATION_FAILED', 'The governed quota reservation could not be persisted.', undefined, { cause: error });
+    }
+  }
+
+  private async releaseAfterStartFailure(goalId: string, reservation: GoalQuotaReservationV1 | undefined): Promise<void> {
+    if (!reservation || reservation.status !== 'reserved') return;
+    const events = await this.options.goalStore.read(goalId);
+    const projection = GoalControlProjectionV1Schema.parse(this.builder.build(events));
+    const current = projection.quota.reservations.find((candidate) => candidate.reservationId === reservation.reservationId);
+    if (!current || current.status !== 'reserved') return;
+    await this.goalControl.releaseQuota(goalId, current.reservationId, {
+      eventId: stableEventId(goalId, current.reservationId, 'quota.release'),
+      expectedRevision: projection.controlRevision,
+      reason: 'run-start-failed',
+    });
   }
 
   private assertGoalState(projection: GoalControlProjectionV1, request: GovernedRunRequest): void {
@@ -496,17 +630,21 @@ function schedulerReason(inspection: SchedulerInspection): string {
   return 'The Scheduler accepted the preflight request.';
 }
 
-function stableId(prefix: 'run' | 'admission' | 'binding', ...parts: readonly string[]): string {
+function stableId(prefix: 'run' | 'admission' | 'binding' | 'reservation', ...parts: readonly string[]): string {
   return `${prefix}_${createHash('sha256').update(parts.join('\u0000'), 'utf8').digest('hex').slice(0, 32)}`;
 }
 
-function stableEventId(goalId: string, requestId: string, kind: 'admission' | 'binding'): string {
+function stableEventId(goalId: string, requestId: string, kind: 'admission' | 'binding' | 'quota.reserve' | 'quota.release'): string {
   return `gevt_${createHash('sha256').update(`${goalId}\u0000${requestId}\u0000${kind}`, 'utf8').digest('hex').slice(0, 32)}`;
 }
 
 function boundedReason(value: string): string {
   const normalized = value.replace(/[\r\n\u0000-\u001F\u007F]/gu, ' ').trim();
   return normalized.length > 500 ? `${normalized.slice(0, 497)}...` : normalized || 'Governed admission was blocked.';
+}
+
+function isRunIdConflict(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'RUN_ID_CONFLICT';
 }
 
 function errorCodeForReason(reason: GoalAdmissionReasonCodeV1): GoalAdmissionErrorCode {

@@ -19,6 +19,7 @@ import { AgentMemoryKnowledgeSettingsError, type AgentMemoryKnowledgeSettingsMan
 import { McpSettingsError, type McpSettingsManager } from './mcp-settings.js';
 import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager } from './capability-profile-settings.js';
 import { GoalAdmissionError, GoalAdmissionService } from './goal-admission.js';
+import type { GoalRunWritebackService } from './goal-writeback.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
 import { serveStaticWeb } from './static-web.js';
 
@@ -53,6 +54,7 @@ export interface DaemonServerOptions {
   goalEventStore?: GoalProjectionStore;
   goalWriteService?: GoalWriteService;
   goalAdmissionService?: GoalAdmissionService;
+  goalRunWriteback?: GoalRunWritebackService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
@@ -84,6 +86,7 @@ interface ResolvedDaemonServerOptions {
   goalEventStore?: GoalProjectionStore;
   goalWriteService?: GoalWriteService;
   goalAdmissionService?: GoalAdmissionService;
+  goalRunWriteback?: GoalRunWritebackService;
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   mcpSettings?: McpSettingsManager;
@@ -146,6 +149,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
     ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
     ...(options.goalAdmissionService ? { goalAdmissionService: options.goalAdmissionService } : {}),
+    ...(options.goalRunWriteback ? { goalRunWriteback: options.goalRunWriteback } : {}),
     ...(options.agentMemorySettings ? { agentMemorySettings: options.agentMemorySettings } : {}),
     ...(options.agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings: options.agentMemoryKnowledgeSettings } : {}),
     ...(options.mcpSettings ? { mcpSettings: options.mcpSettings } : {}),
@@ -1067,7 +1071,7 @@ async function handleRequest(
     return;
   }
 
-  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel|retry))?$/.exec(pathname);
+  const runMatch = /^\/api\/v1\/runs\/([^/]+)(?:\/(events|approve|cancel|retry|governed-retry))?$/.exec(pathname);
   if (!runMatch) {
     writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
     return;
@@ -1139,6 +1143,46 @@ async function handleRequest(
     writeJson(response, 202, outcome);
     return;
   }
+  if (subresource === 'governed-retry') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.goalRunWriteback) {
+      writeJson(response, 503, { error: { code: 'GOAL_WRITEBACK_UNAVAILABLE', message: 'Governed recovery is unavailable.' } });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isGovernedRetryInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Explicit governed retry confirmation and agent id are required.' } });
+      return;
+    }
+    try {
+      const outcome = await options.goalRunWriteback.retryGoverned(runId, { agentId: input.agentId });
+      if (outcome === 'not-found') {
+        writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'run not found' } });
+        return;
+      }
+      if (outcome === 'not-recoverable') {
+        writeJson(response, 409, { error: { code: 'RECOVERY_CONFIRMATION_REQUIRED', message: 'Only a terminal governed run can be retried.' } });
+        return;
+      }
+      if (outcome === 'unavailable') {
+        writeJson(response, 503, { error: { code: 'GOAL_WRITEBACK_UNAVAILABLE', message: 'Governed recovery is unavailable.' } });
+        return;
+      }
+      writeJson(response, 202, outcome);
+    } catch (error) {
+      if (error instanceof GoalAdmissionError) {
+        const status = error.code === 'STALE_REVISION' || error.code === 'BINDING_CONFLICT' || error.code === 'RUN_ID_CONFLICT' ? 409
+          : error.code === 'SCHEDULER_UNAVAILABLE' || error.code === 'WORKSPACE_UNAVAILABLE' || error.code === 'SANDBOX_UNAVAILABLE' || error.code === 'PROJECTION_UNAVAILABLE' || error.code === 'QUOTA_RESERVATION_FAILED' ? 503 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message, ...(error.decision ? { decision: error.decision } : {}) } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
     return;
@@ -1208,6 +1252,13 @@ function isApprovalInput(value: unknown): value is { approvalId: string; decisio
 
 function isRetryInput(value: unknown): value is { confirmation: 'retry-as-new-run' } {
   return typeof value === 'object' && value !== null && 'confirmation' in value && value.confirmation === 'retry-as-new-run';
+}
+
+function isGovernedRetryInput(value: unknown): value is { confirmation: 'retry-as-new-governed-run'; agentId: string } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && 'confirmation' in value && value.confirmation === 'retry-as-new-governed-run'
+    && 'agentId' in value && typeof value.agentId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(value.agentId)
+    && Object.keys(value).every((key) => key === 'confirmation' || key === 'agentId');
 }
 
 function isModelSettingsInput(value: unknown): value is ModelSettingsInput {

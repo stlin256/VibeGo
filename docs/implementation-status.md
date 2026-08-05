@@ -629,6 +629,29 @@ scheduler tests and 191 daemon tests. This note does not claim 58-3 validation
 writeback, quota reservation/consume, crash reconciliation or real governed
 LLM smoke.
 
+## Spec 58-3 governed terminal writeback and recovery implementation note (2026-08-05)
+
+The 58-3 boundary is frozen in [ADR 0038](adr/0038-governed-terminal-writeback-and-recovery.md).
+The daemon now contains `GoalRunWritebackService` and an injected fail-closed
+`GoalRunVerifier` around the existing `RunManager.subscribe/readEvents` ports.
+The main composition enables one bounded quota reservation for explicit
+governed admission; start failure and non-validated terminal results release
+that reservation. Only validated evidence enters the atomic Goal-lock
+`todo.completed` + `quota.consumed` operation. Restart reconciliation reads
+durable `run_events`/`goal_events` only, records bounded recovery evidence for
+`needs-recovery`, and never replays a model/tool call. The explicit
+`governed-retry` route creates fresh request/turn/attempt data through the
+governed admission callback; ordinary interactive retry remains unchanged.
+
+Focused evidence is present in `packages/goal-control/src/v1.test.ts`,
+`apps/daemon/src/goal-admission.test.ts`, and
+`apps/daemon/src/goal-writeback.test.ts`: atomic finalize/no-op, reservation
+release, validated and failed terminal paths, duplicate terminal notification,
+subscription-loss reconciliation, needs-recovery no-execution, fresh governed
+retry, and the HTTP retry route. `@ready4vibe/goal-control` typecheck and the
+daemon focused suite pass. This slice still uses fixture/fail-closed verifiers;
+task-specific verification and real governed LLM smoke remain later work.
+
 ## Spec 60 planning note (2026-08-05)
 
 `docs/specs/60-complete-verification-and-release-evidence.md` is the Draft master
