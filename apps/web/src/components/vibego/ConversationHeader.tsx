@@ -42,11 +42,10 @@ export function ConversationHeader({ connected, contextOpen, settingsOpen, local
     <header className="topbar">
       <div className="brand-lockup"><img className="brand-mark" src="/vibego-mark.svg" alt={copy.brandName} /><span>{copy.brandPrefix}<span className="brand-go">{copy.brandSuffix}</span></span></div>
       <div className="topbar-actions">
-        <Button className="topbar-button primary-task-button" aria-keyshortcuts="Control+N Meta+N" onClick={onNewTask}>{copy.newTask}</Button>
-        <Button variant="outline" className="topbar-button context-toggle" aria-expanded={contextOpen} aria-label={contextLabel} onClick={onToggleContext}>{contextLabel}</Button>
+        {connected && <Button variant="outline" className="topbar-button context-toggle" aria-expanded={contextOpen} aria-label={contextLabel} onClick={onToggleContext}>{contextLabel}</Button>}
         <Button variant="outline" className="topbar-button settings-toggle" aria-haspopup="dialog" aria-expanded={settingsOpen} aria-controls="settings-drawer" onClick={(event) => onOpenSettings(event.currentTarget)}>{copy.settings}</Button>
         <Button variant="ghost" size="icon" className="topbar-button theme-toggle" aria-label={copy.themeToggle} title={theme === 'light' ? copy.themeDark : copy.themeLight} onClick={onToggleTheme}>{theme === 'light' ? '☾' : '☀'}</Button>
-        <label className="locale-control"><span>{copy.localeLabel}</span><select aria-label={copy.localeLabel} value={locale} onChange={(event) => onLocaleChange?.(event.target.value as Locale)}><option value="en-US">{copy.localeEnglish}</option><option value="zh-CN">{copy.localeChinese}</option></select></label>
+        <label className="locale-control"><span className="sr-only">{copy.localeLabel}</span><select aria-label={copy.localeLabel} value={locale} onChange={(event) => onLocaleChange?.(event.target.value as Locale)}><option value="en-US">{copy.localeEnglish}</option><option value="zh-CN">{copy.localeChinese}</option></select></label>
         <div className="connection-pill" data-connected={connected}>{connected ? copy.connected : copy.awaitingPairing}</div>
       </div>
     </header>

@@ -17,7 +17,7 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.conversation-column');
     expect(styles).toContain('.context-rail');
     expect(styles).toContain('.settings-panel[data-open="false"]');
-    expect(styles).toContain('grid-template-columns: minmax(176px, 210px) minmax(0, 1fr) minmax(280px, 340px)');
+    expect(styles).toContain('grid-template-columns: minmax(176px, 210px) minmax(0, 1fr)');
     expect(styles).toContain('.goal-panel { overflow: hidden; }');
     expect(styles).toContain('.goal-panel-header { flex-wrap: wrap; }');
     expect(styles).toContain('.conversation-stream');

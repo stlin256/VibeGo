@@ -6,7 +6,7 @@ import { DEFAULT_RUN_PROFILE } from './api.js';
 describe('web console shell', () => {
   it('renders a pairing-first surface with responsive semantic controls', () => {
     const html = renderToStaticMarkup(<App locale="zh-CN" />);
-    expect(html).toContain('输入一次性配对码');
+    expect(html).toContain('配对码');
     expect(html).toContain('pairing-code');
     expect(html).toContain('连接你的本地工作区');
     expect(html).toContain('VibeGo');
@@ -42,7 +42,7 @@ describe('web console shell', () => {
     const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback' as const, tlsRequired: false, boundAddresses: ['127.0.0.1' as const] }, auth: { pairingRequired: false }, storage: { kind: 'memory' as const, status: 'ready' as const }, sandbox: { availableModes: ['read-only' as const], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow' as const, 'prompt' as const, 'forbidden' as const] } };
     const projection = { schemaVersion: 'ready4vibe_goal_api_v0', goals: [{ goal: { goalId: 'goal_12345678', title: 'Goal', objective: 'Objective', status: 'active', controlRevision: 0, createdAt: '2026-08-03T00:00:00.000Z', updatedAt: '2026-08-03T00:00:00.000Z', schemaVersion: 1 }, todos: [], gates: [], evidence: [], handoffs: [], quota: { spentTurnKeys: [], totalSpent: 0 }, lastEventId: null, lastAppendSequence: 0, sourceEventCount: 0, sourceChecksum: 'a'.repeat(64), controlRevision: 0 }] } as never;
     const html = renderToStaticMarkup(<App health={health} goalProjection={projection} onRefreshGoalProjection={() => undefined} />);
-    expect(html).toContain('CONVERSATION');
+    expect(html).toContain('Conversation stream');
     expect(html).toContain('GOAL CONTROL · READ ONLY');
     expect(html).not.toContain('Claim');
     expect(html).not.toContain('Resolve gate');
@@ -56,10 +56,9 @@ describe('web console shell', () => {
     expect(html).toContain('Run context');
     expect(html).toContain('aria-controls="settings-drawer"');
     expect(html).toContain('Close settings');
-    expect(html).toContain('primary-task-button');
+    expect(html).toContain('rail-new-button');
     expect(html).toContain('aria-label="Task input"');
     expect(html).toContain('Conversation stream');
-    expect(html).toContain('NEW MESSAGE');
     expect(html.indexOf('conversation-stream')).toBeLessThan(html.indexOf('composer-panel'));
     expect(html).toContain('Start run');
   });
@@ -81,7 +80,7 @@ describe('web console shell', () => {
 
   it('renders the first-class DeepSeek settings card without exposing the key or raw response', () => {
     const html = renderToStaticMarkup(<App deepSeekSettings={{ schemaVersion: 'ready4vibe_deepseek_settings_status_v1', configured: true, providerId: 'deepseek', source: 'web-memory', credentialState: 'available', profile: { schemaVersion: 'ready4vibe_deepseek_settings_profile_v1', providerId: 'deepseek', endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off', timeoutMs: 30_000, maxRetries: 2, maxOutputTokens: 4_096, profileRevision: 'deepseek-settings-1', updatedAt: '2026-08-05T00:00:00.000Z' }, capability: null, lastProbe: { schemaVersion: 'deepseek-provider-probe/v1', status: 'ready', checkedAt: '2026-08-05T00:00:00.000Z', latencyMs: 42, errorCode: null, capabilities: null } }} onConfigureDeepSeek={() => undefined} onProbeDeepSeek={() => undefined} />);
-    expect(html).toContain('DeepSeek provider');
+    expect(html).toContain('DeepSeek (deep adaptation)');
     expect(html).toContain('Save DeepSeek');
     expect(html).toContain('Paste once; never displayed');
     expect(html).not.toContain('test-secret');

@@ -20,6 +20,7 @@ export interface ConversationCopy {
   readonly conversationTimeline: string;
   readonly runConsole: string;
   readonly waitingOutput: string;
+  readonly runDetails: string;
   readonly cancelRun: string;
   readonly timeline: string;
   readonly metricQueue: string;
@@ -82,14 +83,12 @@ export interface ConversationShellProps {
 export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onCancel, onApprove, onRetry }: ConversationShellProps): JSX.Element {
   return (
     <section className="conversation-column" aria-label={copy.conversationTimeline}>
-      <section className="panel conversation-stream" aria-label={copy.conversationStream}>
-        <div className="conversation-stream-header"><div><div className="eyebrow">{copy.conversationEyebrow}</div><h1>{copy.title}</h1></div><span className="muted conversation-hint">{copy.hint}</span></div>
-        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <div className="empty-state"><span className="empty-icon">⌁</span><h2>{copy.readyTitle}</h2><p className="muted">{copy.readyDescription}</p></div>}
+      <section className="conversation-stream" aria-label={copy.conversationStream}>
+        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div>}
       </section>
       <section className="panel composer-panel">
-        <div className="eyebrow">{copy.newMessage}</div>
         <form onSubmit={onSubmit}>
-          <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} placeholder={copy.inputPlaceholder} rows={3} />
+          <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} placeholder={copy.inputPlaceholder} rows={2} />
           <div className="composer-footer"><span className="muted">{profile.taskTrust === 'untrusted-content' ? copy.untrustedPolicy : copy.trustedPolicy}</span><Button type="submit">{copy.startRun}</Button></div>
         </form>
       </section>
@@ -161,10 +160,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function RunConsole({ run, events, copy, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
-  return <>
-    {run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
-    <RunConsoleContent run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} />
-  </>;
+  return <RunConsoleContent run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} />;
 }
 
 function PermissionSnapshotSummary({ snapshot, copy }: { readonly snapshot: PermissionProfileRunSnapshot; readonly copy: ConversationCopy }): JSX.Element {
@@ -187,7 +183,30 @@ function formatSnapshotTimestamp(value: string): string {
 
 function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
   const streaming = !['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status);
-  return <section className="panel run-panel"><div className="run-header"><div><div className="eyebrow">{copy.runConsole}</div><h2>{run.runId}</h2></div><div className="status-chip" data-status={run.status}>{run.status}</div></div>{run.approvalReviewerSnapshot && <ReviewerRunSummary snapshot={run.approvalReviewerSnapshot} copy={copy} />}<div className="run-metrics"><div><span>{copy.metricQueue}</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>{copy.metricActive}</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>{copy.metricLease}</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>{copy.metricEvents}</span><strong>{run.lastEventSeq}</strong></div></div>{run.status === 'needs-recovery' && <RecoveryCard copy={{ eyebrow: copy.recoveryEyebrow, title: copy.recoveryTitle, description: copy.recoveryDescription, action: copy.recoveryAction }} onRetry={onRetry} />}{run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} copy={{ eyebrow: copy.approvalEyebrow, meta: copy.approvalMeta, sandboxLabel: copy.approvalSandboxLabel, networkLabel: copy.approvalNetworkLabel, imageLabel: copy.approvalImageLabel, allowOnce: copy.approvalAllowOnce, allowAriaLabel: copy.approvalAllowAriaLabel, deny: copy.approvalDeny, sessionNote: copy.approvalSessionNote, reviewReviewedLabel: copy.reviewReviewedLabel, reviewAskedLabel: copy.reviewAskedLabel, reviewDeniedLabel: copy.reviewDeniedLabel, reviewUnavailableLabel: copy.reviewUnavailableLabel, reviewReviewedDescription: copy.reviewReviewedDescription, reviewAskedDescription: copy.reviewAskedDescription, reviewDeniedDescription: copy.reviewDeniedDescription, reviewUnavailableDescription: copy.reviewUnavailableDescription }} />)}<ToolOutputInspector events={events} /><pre className="output-view" aria-busy={streaming}>{run.output || copy.waitingOutput}{streaming && <span className="stream-cursor" aria-hidden="true" />}</pre><div className="event-list" aria-label={copy.timeline}>{events.map((event) => <div className="event-row" data-event-type={event.type} key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{timelineEventLabel(event)}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>{streaming && <Button variant="destructive" className="cancel-button" onClick={onCancel}>{copy.cancelRun}</Button>}</section>;
+  const snapshotBlocked = run.permissionSnapshot !== undefined && run.permissionSnapshot.status !== 'ready';
+  return (
+    <section className="panel run-panel">
+      <div className="run-header">
+        <span className="status-chip" data-status={run.status}>{run.status}</span>
+        <span className="run-id muted" title={run.runId}>{run.runId}</span>
+        {streaming && <Button variant="destructive" className="cancel-button" onClick={onCancel}>{copy.cancelRun}</Button>}
+      </div>
+      {snapshotBlocked && run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
+      {run.status === 'needs-recovery' && <RecoveryCard copy={{ eyebrow: copy.recoveryEyebrow, title: copy.recoveryTitle, description: copy.recoveryDescription, action: copy.recoveryAction }} onRetry={onRetry} />}
+      {run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} copy={{ eyebrow: copy.approvalEyebrow, meta: copy.approvalMeta, sandboxLabel: copy.approvalSandboxLabel, networkLabel: copy.approvalNetworkLabel, imageLabel: copy.approvalImageLabel, allowOnce: copy.approvalAllowOnce, allowAriaLabel: copy.approvalAllowAriaLabel, deny: copy.approvalDeny, sessionNote: copy.approvalSessionNote, reviewReviewedLabel: copy.reviewReviewedLabel, reviewAskedLabel: copy.reviewAskedLabel, reviewDeniedLabel: copy.reviewDeniedLabel, reviewUnavailableLabel: copy.reviewUnavailableLabel, reviewReviewedDescription: copy.reviewReviewedDescription, reviewAskedDescription: copy.reviewAskedDescription, reviewDeniedDescription: copy.reviewDeniedDescription, reviewUnavailableDescription: copy.reviewUnavailableDescription }} />)}
+      <pre className="output-view" aria-busy={streaming}>{run.output || copy.waitingOutput}{streaming && <span className="stream-cursor" aria-hidden="true" />}</pre>
+      <details className="run-details">
+        <summary>{copy.runDetails}</summary>
+        <div className="run-details-body">
+          {!snapshotBlocked && run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
+          {run.approvalReviewerSnapshot && <ReviewerRunSummary snapshot={run.approvalReviewerSnapshot} copy={copy} />}
+          <div className="run-metrics"><div><span>{copy.metricQueue}</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>{copy.metricActive}</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>{copy.metricLease}</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>{copy.metricEvents}</span><strong>{run.lastEventSeq}</strong></div></div>
+          <ToolOutputInspector events={events} />
+          <div className="event-list" aria-label={copy.timeline}>{events.map((event) => <div className="event-row" data-event-type={event.type} key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{timelineEventLabel(event)}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>
+        </div>
+      </details>
+    </section>
+  );
 }
 
 function ReviewerRunSummary({ snapshot, copy }: { readonly snapshot: NonNullable<RunSnapshot['approvalReviewerSnapshot']>; readonly copy: ConversationCopy }): JSX.Element {

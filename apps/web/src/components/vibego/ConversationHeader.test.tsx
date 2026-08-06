@@ -26,7 +26,6 @@ describe('ConversationHeader', () => {
     expect(html).toContain('class="topbar"');
     expect(html).toContain('alt="VibeGo"');
     expect(html).toContain('Vibe<span class="brand-go">Go</span>');
-    expect(html).toContain('aria-keyshortcuts="Control+N Meta+N"');
     expect(html).toContain('aria-label="Hide details"');
     expect(html).toContain('aria-controls="settings-drawer"');
     expect(html).toContain('aria-label="Language"');
@@ -41,7 +40,8 @@ describe('ConversationHeader', () => {
 
   it('keeps awaiting-pairing status and details action explicit without server data', () => {
     const html = renderToStaticMarkup(<ConversationHeader connected={false} contextOpen={false} settingsOpen={false} locale="zh-CN" theme="dark" copy={copy} onNewTask={() => undefined} onToggleContext={() => undefined} onOpenSettings={() => undefined} />);
-    expect(html).toContain('aria-label="Details"');
+    // The review-panel toggle is only offered once connected.
+    expect(html).not.toContain('context-toggle');
     expect(html).toContain('title="Light"');
     expect(html).toContain('☀');
     expect(html).toContain('data-connected="false"');

@@ -90,6 +90,7 @@ export type MessageKey =
   | 'shell.conversationTimeline'
   | 'shell.runConsole'
   | 'shell.waitingOutput'
+  | 'shell.runDetails'
   | 'shell.cancelRun'
   | 'shell.timeline'
   | 'shell.queue'
@@ -251,6 +252,7 @@ const EN_US: Catalog = {
   'shell.conversationTimeline': 'Conversation and run timeline',
   'shell.runConsole': 'RUN CONSOLE',
   'shell.waitingOutput': 'Waiting for model output…',
+  'shell.runDetails': 'Run details',
   'shell.cancelRun': 'Request cancel',
   'shell.timeline': 'Run timeline',
   'shell.queue': 'queue',
@@ -409,6 +411,7 @@ const ZH_CN: Catalog = {
   'shell.conversationTimeline': '对话与运行时间线',
   'shell.runConsole': '运行控制台',
   'shell.waitingOutput': '等待模型输出…',
+  'shell.runDetails': '运行详情',
   'shell.cancelRun': '请求取消',
   'shell.timeline': '运行时间线',
   'shell.queue': '队列',

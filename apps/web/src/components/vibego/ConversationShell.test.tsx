@@ -19,6 +19,7 @@ const copy: ConversationCopy = {
   conversationTimeline: 'Conversation and run timeline',
   runConsole: 'RUN CONSOLE',
   waitingOutput: 'Waiting for model output…',
+  runDetails: 'Run details',
   cancelRun: 'Request cancel',
   timeline: 'Run timeline',
   metricQueue: 'queue',
