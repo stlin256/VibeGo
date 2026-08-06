@@ -32,19 +32,16 @@ export class AdvancementGoalExecutionVerifier implements GoalRunVerifier {
   async verify(input: GoalVerifierInputV1, signal?: AbortSignal): Promise<GoalRunVerifierResult> {
     const refs = { runId: input.run.runId, eventIds: [input.terminal.id] };
     if (signal?.aborted) {
-      return inconclusive(refs, 'Advancement execution evidence was cancelled before evaluation.');
+      return inconclusive(refs, 'cancelled_before_evaluation');
     }
     const hasModelCompletion = input.events.some((event) => event.type === 'model.completed');
     const hasNegativeEvent = input.events.some((event) => NEGATIVE_EVENT_TYPES.has(event.type));
-    const valid = input.taskClass === 'advancement'
-      && input.run.status === 'completed'
-      && input.terminal.type === 'run.completed'
-      && hasModelCompletion
-      && !hasNegativeEvent
-      && input.run.outputBytes > 0;
-    if (!valid) {
-      return inconclusive(refs, 'Bounded advancement execution evidence is incomplete or contradictory.');
-    }
+    if (input.taskClass !== 'advancement') return inconclusive(refs, 'task_class_mismatch');
+    if (input.run.status !== 'completed') return inconclusive(refs, 'run_status_not_completed');
+    if (input.terminal.type !== 'run.completed') return inconclusive(refs, 'terminal_event_mismatch');
+    if (!hasModelCompletion) return inconclusive(refs, 'model_completion_missing');
+    if (hasNegativeEvent) return inconclusive(refs, 'negative_event_present');
+    if (input.run.outputBytes <= 0) return inconclusive(refs, 'output_empty');
     return {
       status: 'validated',
       verifierId: ADVANCEMENT_EXECUTION_VERIFIER_DESCRIPTOR.verifierId,

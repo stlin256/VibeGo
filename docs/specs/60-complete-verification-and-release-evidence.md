@@ -458,3 +458,21 @@ workflow now passes 59/59; the affected `@ready4vibe/observability` package
 passes 66/66. This is deterministic application/resource evidence only and
 does not claim capacity, real-provider, physical-device, cross-platform or
 release readiness.
+
+### 60-4/60-5 current governed ordering checkpoint (2026-08-06)
+
+The current-commit governed smoke exposed and fixed an ordering race in the
+Goal writeback boundary. `RunManager` emits a terminal `run.status` transition
+immediately before the explicit `run.completed` event; writeback now waits for
+the explicit terminal event before invoking a task verifier. A status-only
+transition cannot create validation evidence, complete a Todo or spend quota.
+The daemon suite passes 288/288, the focused Goal writeback file contains
+14/14 passing tests, and the Harness workflow passes 85/85. The redacted
+diagnostic is [`spec58-6e-terminal-event-ordering-2026-08-06.md`](../reports/spec58-6e-terminal-event-ordering-2026-08-06.md).
+
+The same authorized run also produced bounded current-commit evidence for
+DeepSeek text, tool continuation, one approval round-trip and governed Goal
+writeback; see [`spec61-6-live-evidence-2026-08-06.md`](../reports/spec61-6-live-evidence-2026-08-06.md).
+This closes only the exercised application ordering and smoke paths. Real
+provider timeout/5xx, public transport, physical-device, cross-platform and
+signed-release gates remain partial or blocked, and Spec 60 is not release-ready.

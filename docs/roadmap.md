@@ -1564,3 +1564,25 @@ passes 16/16; daemon build/typecheck pass. Incomplete evidence releases quota
 without completing the Todo. This remains execution evidence, not semantic Goal
 proof, and the production daemon registry remains empty. See
 [`spec58-6d-task-execution-verifier-2026-08-06.md`](reports/spec58-6d-task-execution-verifier-2026-08-06.md).
+
+### Spec 58-6e terminal-event ordering checkpoint (2026-08-06)
+
+The governed writeback race is fixed: a terminal `run.status` transition no
+longer invokes the task verifier, and explicit `run.completed`/`run.failed`/
+`run.cancelled`/`run.needs_recovery` events are the only terminal triggers.
+This prevents an inconclusive status-only observation from releasing quota
+before the authoritative terminal event. The daemon suite passes 288/288,
+Goal writeback passes 14/14 and the Harness workflow passes 85/85. The
+redacted evidence is [`spec58-6e-terminal-event-ordering-2026-08-06.md`](reports/spec58-6e-terminal-event-ordering-2026-08-06.md).
+This is an ordering fix, not semantic Goal proof; interactive runs and all
+existing execution/event authorities remain unchanged.
+
+### Spec 61-6 current live evidence checkpoint (2026-08-06)
+
+The authorized current-commit smoke is recorded in
+[`spec61-6-live-evidence-2026-08-06.md`](reports/spec61-6-live-evidence-2026-08-06.md).
+It covers DeepSeek text, bounded tool continuation, one approval round-trip
+and governed Goal writeback. The governed run reached validated/Todo-done with
+one quota spend after the 58-6e fix. It does not close reasoning, live
+provider-owned search, reviewer production wiring, public deployment,
+cross-platform or release gates; Spec 61 remains Draft.

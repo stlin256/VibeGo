@@ -1587,3 +1587,30 @@ and daemon build/typecheck pass. Incomplete evidence is `inconclusive`, quota
 is released and the Todo remains open. The production daemon registry remains
 empty; this is execution evidence rather than semantic Goal proof. Evidence is
 recorded in [`spec58-6d-task-execution-verifier-2026-08-06.md`](reports/spec58-6d-task-execution-verifier-2026-08-06.md).
+
+### Spec 58-6e terminal-event ordering implementation checkpoint (2026-08-06)
+
+The writeback coordinator now treats only explicit `run.completed`,
+`run.failed`, `run.cancelled` and `run.needs_recovery` events as verifier
+triggers. The preceding terminal `run.status` transition is metadata only, so
+it cannot race validation and prematurely release quota. A regression test
+asserts that the verifier receives `run.completed`; the daemon suite passes
+288/288 and the Goal writeback file passes 14/14. Harness diagnostics expose
+only bounded validation status/verifier labels. Evidence is recorded in
+[`spec58-6e-terminal-event-ordering-2026-08-06.md`](reports/spec58-6e-terminal-event-ordering-2026-08-06.md).
+No AgentLoop, RunManager start behavior, Scheduler, Approval, Sandbox,
+WorkspaceRegistry, `run_events` or `goal_events` authority changed; semantic
+Goal validation and the broader 58-6 A–G closure remain staged.
+
+### Spec 61-6 current live evidence checkpoint (2026-08-06)
+
+An explicitly authorized, redacted smoke exercised the current DeepSeek
+adapter and existing daemon path: direct text, interactive text, bounded tool
+continuation, one ApprovalBroker round-trip and governed Goal writeback all
+returned healthy. The governed run reached validated Goal/Todo completion and
+consumed one quota unit after the 58-6e ordering fix. The tool/approval cases
+use the bounded in-memory Harness runtime and are not production host-shell,
+filesystem, container or network capability evidence. The report is
+[`spec61-6-live-evidence-2026-08-06.md`](reports/spec61-6-live-evidence-2026-08-06.md).
+Reasoning, provider-owned search compatibility, reviewer production wiring,
+remote/public deployment, device and release gates remain open.

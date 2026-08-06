@@ -530,9 +530,13 @@ export class GoalRunWritebackService {
 }
 
 function isTerminalEvent(event: StoredEvent): boolean {
-  if (TERMINAL_RUN_TYPES.has(event.type)) return true;
-  if (event.type !== 'run.status' || typeof event.payload !== 'object' || event.payload === null) return false;
-  return 'to' in event.payload && typeof event.payload.to === 'string' && TERMINAL_STATUSES.has(event.payload.to as RunStatus);
+  // RunManager emits the terminal status transition immediately before the
+  // explicit run.completed/run.failed/run.cancelled event. Treating the
+  // status transition as terminal lets writeback race the final event and
+  // permanently record an inconclusive verifier result. The explicit event
+  // is the authoritative validation trigger; restart recovery still emits
+  // run.needs_recovery and is handled through the same path.
+  return TERMINAL_RUN_TYPES.has(event.type);
 }
 
 function findTerminalEvent(events: readonly StoredEvent[]): GoalRunEventDigest | undefined {

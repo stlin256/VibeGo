@@ -194,6 +194,8 @@ test('governed smoke uses explicit admission route and waits for validated quota
   assert.equal(result.goal.status, 'validated');
   assert.equal(result.goal.todoStatus, 'done');
   assert.equal(result.goal.totalSpent, 1);
+  assert.equal(result.goal.validationStatus, undefined);
+  assert.equal(result.goal.validationVerifierId, undefined);
   assert.equal(observed.route, '/api/v1/runs/governed');
   assert.equal(observed.body.runMode, 'governed');
   assert.equal(observed.body.goalId, 'goal_harness01');

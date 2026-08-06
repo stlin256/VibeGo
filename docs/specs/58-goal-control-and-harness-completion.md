@@ -683,3 +683,16 @@ passes 16/16, and daemon build/typecheck pass. Incomplete evidence is
 registry remains empty, so this is execution evidence rather than semantic
 Goal proof; the broader A-G closure remains staged. Evidence is recorded in
 [`spec58-6d-task-execution-verifier-2026-08-06.md`](../reports/spec58-6d-task-execution-verifier-2026-08-06.md).
+
+### Spec 58-6e terminal-event ordering checkpoint (2026-08-06)
+
+The first current-commit governed smoke exposed a race between the terminal
+`run.status` transition and the following explicit `run.completed` event. The
+writeback coordinator now invokes a task verifier only for explicit terminal
+events; a status-only transition cannot create validation evidence or spend
+quota. The regression test passes 14/14 and the bounded Harness workflow passes
+85/85. The live diagnostic and post-fix evidence are recorded in
+[`spec58-6e-terminal-event-ordering-2026-08-06.md`](../reports/spec58-6e-terminal-event-ordering-2026-08-06.md)
+and [`spec61-6-live-evidence-2026-08-06.md`](../reports/spec61-6-live-evidence-2026-08-06.md).
+This closes an application ordering bug only; semantic Goal validation and the
+broader A–G/release gates remain partial.

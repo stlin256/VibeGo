@@ -253,6 +253,9 @@ function report(options, status, elapsed, runId, events, goal, errorCode, finalS
         status: goal.status,
         todoStatus: goal.todoStatus ?? null,
         totalSpent: boundedUsage(goal.totalSpent),
+        ...(goal.validationStatus ? { validationStatus: goal.validationStatus } : {}),
+        ...(goal.validationVerifierId ? { validationVerifierId: goal.validationVerifierId } : {}),
+        ...(goal.validationSummary ? { validationSummary: goal.validationSummary } : {}),
         eventTypes: goal.eventTypes ?? {},
       },
     } : {}),
@@ -555,8 +558,16 @@ async function readGoalOutcome(store, goalControl, goalId, todoId) {
   const projection = new goalControl.GoalControlProjectionBuilder().build(events);
   const eventTypes = countGoalEventTypes(events);
   const todo = projection.todos.find((candidate) => candidate.todoId === todoId);
+  const validation = projection.validationEvidence.at(-1);
   const status = todo?.status === 'done' && projection.quota.totalSpent === 1 ? 'validated' : 'pending';
-  return { status, todoStatus: todo?.status, totalSpent: projection.quota.totalSpent, eventTypes };
+  return {
+    status,
+    todoStatus: todo?.status,
+    totalSpent: projection.quota.totalSpent,
+    ...(validation ? { validationStatus: validation.status, validationVerifierId: validation.verifierId } : {}),
+    ...(validation && typeof validation.summary === 'string' && /^[a-z_]{1,64}$/u.test(validation.summary) ? { validationSummary: validation.summary } : {}),
+    eventTypes,
+  };
 }
 
 async function waitForGoalOutcome(runtime, timeoutMs, now) {

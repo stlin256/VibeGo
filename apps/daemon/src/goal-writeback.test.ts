@@ -187,6 +187,43 @@ describe('GoalRunWritebackService', () => {
     fixture.writeback.close();
   });
 
+  it('waits for the explicit terminal event before invoking a task verifier', async () => {
+    let terminalType: string | undefined;
+    const verifier: GoalRunVerifier = {
+      verify: async (input) => {
+        terminalType = input.terminal.type;
+        return {
+          status: 'validated',
+          verifierId: 'verifier_advancement_v1',
+          verifierRevision: 1,
+          summary: 'Terminal event ordering fixture passed.',
+          refs: {},
+        };
+      },
+    };
+    const registry = new GoalVerifierRegistry();
+    registry.register({
+      schemaVersion: 'ready4vibe_goal_verifier_descriptor_v1',
+      verifierId: 'verifier_advancement_v1',
+      taskClass: 'advancement',
+      verifierRevision: 1,
+      status: 'ready',
+      privacy: 'local_private',
+      updatedAt: at,
+    }, verifier);
+    const fixture = makeFixture(
+      new FakeModelProvider({ delayMs: 20, events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }),
+      verifier,
+      true,
+      registry,
+    );
+    const expectedRevision = await seed(fixture.goalStore);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.consumed')).toBe(true), { timeout: 3_000 });
+    expect(terminalType).toBe('run.completed');
+    fixture.writeback.close();
+  });
+
   it('records failed validation and releases reservation without completing Todo', async () => {
     const fixture = makeFixture(new FakeModelProvider({ events: [{ type: 'error', code: 'MODEL_FAILED', retryable: false, safeMessage: 'provider failed' }] }));
     const expectedRevision = await seed(fixture.goalStore);

@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/governed/cancel/context-limit evidence 已完成；tool/reviewer/search/reasoning/release gates 与 61-7 文档审计仍后置）
+- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/tool/approval/governed/cancel/context-limit evidence 已完成；reviewer/search/reasoning/release gates 与 61-7 文档审计仍后置）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -573,6 +573,17 @@ application boundary and fixture behavior only; a real DeepSeek search smoke,
 provider-specific response compatibility and release evidence remain open.
 The deterministic fixture is recorded in
 [`spec61-9-provider-owned-search-2026-08-06.md`](../reports/spec61-9-provider-owned-search-2026-08-06.md).
+
+#### 61-6 current live text/tool/approval/governed evidence (2026-08-06)
+
+The explicitly authorized current-commit smoke completed the direct DeepSeek
+adapter and the existing daemon → RunManager → AgentLoop path. Text, bounded
+tool continuation, and one approval round-trip were healthy. A governed text
+run completed Goal admission, task execution evidence, Todo writeback and one
+quota consumption after the Spec 58-6e terminal-event ordering fix. The redacted
+record is [`spec61-6-live-evidence-2026-08-06.md`](../reports/spec61-6-live-evidence-2026-08-06.md).
+This is F-level evidence for the exercised paths only; reasoning, provider-owned
+search compatibility, reviewer production wiring and release gates remain open.
 
 ## 13. Definition of Done
 
