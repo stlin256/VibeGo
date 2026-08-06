@@ -52,7 +52,7 @@ export async function buildDeveloperSnapshot(options, dependencies = {}) {
   const snapshotRoot = join(stageRoot, 'vibego-developer-snapshot');
   await ensureEmptyStage(stageRoot, fsApi);
   await mkdir(snapshotRoot, { recursive: true });
-  await copyTree(resolve(options.daemonDeploy), join(snapshotRoot, 'daemon'), fsApi);
+  await copyTree(resolve(options.daemonDeploy), join(snapshotRoot, 'daemon'), fsApi, { runtimeOnly: true });
   await copyTree(resolve(options.webDist), join(snapshotRoot, 'web'), fsApi);
   await copyFileChecked(resolve(options.launcher), join(snapshotRoot, 'launcher', 'host-launcher.mjs'), fsApi);
   for (const name of ['package.json', 'pnpm-lock.yaml', 'README.md', 'README-zh.md']) {
@@ -101,8 +101,9 @@ async function ensureEmptyStage(stageRoot, fsApi) {
   }
 }
 
-async function copyTree(source, destination, fsApi, sourceRoot = source, seen = new Set()) {
+async function copyTree(source, destination, fsApi, options = {}, sourceRoot = source, seen = new Set()) {
   const info = await fsApi.lstat(source).catch(() => { throw new DeveloperSnapshotError('SNAPSHOT_INPUT_MISSING'); });
+  if (options.runtimeOnly && shouldExcludeRuntimePath(source, sourceRoot)) return;
   if (info.isSymbolicLink()) {
     const target = await fsApi.realpath(source).catch(() => { throw new DeveloperSnapshotError('SNAPSHOT_SYMLINK_INVALID'); });
     const escaped = relative(sourceRoot, target).startsWith('..');
@@ -112,19 +113,34 @@ async function copyTree(source, destination, fsApi, sourceRoot = source, seen = 
     if (escaped) throw new DeveloperSnapshotError('SNAPSHOT_SYMLINK_ESCAPE');
     if (seen.has(target)) return;
     seen.add(target);
-    return copyTree(target, destination, fsApi, sourceRoot, seen);
+    return copyTree(target, destination, fsApi, options, sourceRoot, seen);
   }
   if (info.isDirectory()) {
     await fsApi.mkdir(destination, { recursive: true });
     for (const entry of await fsApi.readdir(source, { withFileTypes: true })) {
       if (BANNED_SEGMENT.test(entry.name)) throw new DeveloperSnapshotError('SNAPSHOT_FORBIDDEN_CONTENT');
-      await copyTree(join(source, entry.name), join(destination, entry.name), fsApi, sourceRoot, seen);
+      await copyTree(join(source, entry.name), join(destination, entry.name), fsApi, options, sourceRoot, seen);
     }
     return;
   }
   if (!info.isFile()) throw new DeveloperSnapshotError('SNAPSHOT_INPUT_INVALID');
+  if (options.runtimeOnly && shouldExcludeRuntimePath(source, sourceRoot)) return;
   if (SKIP_FILE.test(basename(source))) return;
   await copyFileChecked(source, destination, fsApi);
+}
+
+/**
+ * A pnpm deploy contains package sources in addition to compiled output. The
+ * snapshot is a runnable artifact, so source-only material is deliberately
+ * excluded before the privacy scan. This also keeps test fixtures and source
+ * maps out of a public developer download.
+ */
+function shouldExcludeRuntimePath(source, sourceRoot) {
+  const rel = relative(sourceRoot, source).replaceAll('\\', '/');
+  if (!rel) return false;
+  if (rel === 'src' || rel.startsWith('src/')) return true;
+  const name = basename(source);
+  return name.toLowerCase() === 'tsconfig.json' || /(?:\.d\.ts|\.tsx?)$/iu.test(name);
 }
 
 function isKnownDaemonSelfLink(source) {

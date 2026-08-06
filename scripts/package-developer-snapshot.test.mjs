@@ -24,10 +24,13 @@ test('packages a bounded runnable-shaped snapshot and emits no absolute paths', 
     const repo = join(root, 'repo');
     const stage = join(root, 'stage');
     await mkdir(join(daemon, 'dist'), { recursive: true });
+    await mkdir(join(daemon, 'src'), { recursive: true });
     await mkdir(web, { recursive: true });
     await mkdir(repo, { recursive: true });
     await writeFile(join(daemon, 'dist', 'main.js'), 'console.log("daemon");\n', 'utf8');
     await writeFile(join(daemon, 'dist', 'fixture.test.js'), 'api_key=sk-never-include-1234567890\n', 'utf8');
+    await writeFile(join(daemon, 'src', 'credentials.ts'), "const apiKey = 'sk-source-fixture-never-pack';\n", 'utf8');
+    await writeFile(join(daemon, 'tsconfig.json'), '{"compilerOptions":{"noEmit":true}}\n', 'utf8');
     await writeFile(join(web, 'index.html'), '<main>VibeGo</main>\n', 'utf8');
     await writeFile(join(repo, 'package.json'), '{"name":"ready4vibe"}\n', 'utf8');
     await writeFile(join(repo, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n', 'utf8');
@@ -41,6 +44,9 @@ test('packages a bounded runnable-shaped snapshot and emits no absolute paths', 
     assert.match(result.digest, /^sha256:[0-9a-f]{64}$/u);
     assert.ok(result.sizeBytes > 0);
     assert.doesNotMatch(JSON.stringify(result), /C:\\|token|secret|sk-/iu);
+    await assert.rejects(() => readFile(join(stage, 'vibego-developer-snapshot', 'daemon', 'src', 'credentials.ts')));
+    await assert.rejects(() => readFile(join(stage, 'vibego-developer-snapshot', 'daemon', 'tsconfig.json')));
+    assert.equal(await readFile(join(stage, 'vibego-developer-snapshot', 'daemon', 'dist', 'main.js'), 'utf8'), 'console.log("daemon");\n');
     assert.match(await readFile(join(stage, 'SHA256SUMS'), 'utf8'), /^sha256:[0-9a-f]{64}  vibego-/u);
     assert.match(await readFile(join(stage, 'release-notes.md'), 'utf8'), /developer nightly snapshot/iu);
   } finally {

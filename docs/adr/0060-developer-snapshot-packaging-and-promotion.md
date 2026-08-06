@@ -27,7 +27,12 @@ Add a bounded `package:developer-snapshot` command that stages:
 The packager rejects symlink escapes (with the known pnpm daemon self-link
 omitted rather than copied), `.env`/credential/private-key material,
 `.research`/`.ready4vibe`/runtime databases, unsafe names and secret-shaped
-content. It creates a gzip tar archive with a deterministic top-level
+content. The daemon deploy is reduced to runtime material only: `dist/`,
+production `node_modules/` and package metadata are retained, while source
+`src/`, TypeScript files (`*.ts`, `*.tsx`, `*.d.ts`) and `tsconfig.json` are
+omitted. This prevents test fixtures and source-only credential references
+from entering a runnable snapshot while preserving the compiled entry point.
+It creates a gzip tar archive with a deterministic top-level
 `vibego-developer-snapshot/` directory and emits only bounded status,
 artifact name, size and digest. The archive is a `nightly` Windows x64
 developer target for this first promotion; the existing release manifest
