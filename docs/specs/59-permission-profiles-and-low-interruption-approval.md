@@ -1,6 +1,6 @@
 # Spec 59：Permission Profiles、低打扰自动审批与 Full-host 模式
 
-- Status: Draft（规划规格；不改变当前运行时）
+- Status: Draft（59-0 复核、59-1 contracts、59-2 wiring、59-3 daemon settings/snapshot、59-4 Web slice 与 59-5 fixture smoke 均已实现并有对应 implementation note；按第 9 节 DoD，真实 runtime、失败/恢复与 Spec 60 release gates 完成前保持 Draft）
 - Date: 2026-08-05
 - Scope: permission/capability profile、ApprovalPolicy、SandboxResolver、daemon
   settings、Web onboarding/settings 和 run snapshot

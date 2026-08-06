@@ -15,7 +15,7 @@ submit and recovery UI remain partial by design. Spec 58-5 now adds the bounded
 Harness runner plus one user-authorized live provider path; broader failure/
 recovery and release evidence remain open.
 
-**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 已实现，签名/SBOM/provenance/stable release-hardening 仍为规划）**
+**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2/42e/42f/42g/42h/42i/42j/42k 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 已实现，签名/SBOM/provenance/stable release-hardening 仍为规划）**
 
 ## 当前实施范围
 
@@ -1680,3 +1680,37 @@ Windows x64 archive is 2,636,099 bytes with SHA-256
 downloaded release assets were re-hashed and the downloaded archive was
 re-tested through the Host launcher. Signing, SBOM/provenance and stable
 approval remain separate.
+
+### Spec 42 Phase 42e–42k frontend design system completion (2026-08-06)
+
+Spec 42 的现代化设计系统后续阶段已全部落地并分段提交（`fdab2d3`→`b175537`）：
+
+- **42e** design tokens v2 与基础 primitive 动效；
+- **42f** Settings drawer backdrop 与 rail motion；
+- **42g** conversation streaming 与 card entrance motion；
+- **42h** Goal progress bar 与 audit outcome timeline；
+- **42i** toast 与 tooltip primitives；
+- **42j** 全局错误经 toast viewport 统一呈现；
+- **42k** context rail tabs 与键盘导航/a11y pass。
+
+各阶段实现说明已记录于 spec 42 正文（Phase 42e–42k implementation update）。
+提交时 Web focused suite 114 tests、`check:web`、typecheck 与 production
+build 全部通过；组件继续只消费注入的 snapshot/callback，不创建
+API/SSE/storage/secret 访问或第二事实源。
+
+### Spec 61 live refresh and release-script portability fix (2026-08-06)
+
+61-10/61-11 的 "live endpoint 从未运行" 缺口已在真实 DeepSeek endpoint 上
+显式关闭：`reasoning`（`--thinking high`/`max`）与 provider-owned search
+live 模式均按 fail-closed 设计保守返回 `blocked`
+（`DEEPSEEK_THINKING_UNSUPPORTED` / `DEEPSEEK_SEARCH_CAPABILITY_REQUIRED`，
+probe 均 `ready`），即模型/账户未暴露相应 capability，而非证据缺失。同时
+复测了 adapter text/cancel/timeout 与 daemon harness 的
+governed/cancel/context-limit/tool/approval 场景，全部符合预期。证据见
+[`spec61-live-provider-refresh-2026-08-06.md`](reports/spec61-live-provider-refresh-2026-08-06.md)；
+spec 61 头部与 61-10/61-11 小节及历史报告 addendum 已同步更新。
+
+另修复 `scripts/package-developer-snapshot.mjs` 的 tar 调用（提交
+`3db45d3`）：GNU tar（MSYS/Git Bash）会把 `-f` 参数中的盘符冒号解释为远程
+主机导致 `SNAPSHOT_ARCHIVE_CREATE_FAILED`，现改为在输出目录内以 basename
+spawn，GNU tar 与 Windows bsdtar 均可通过；focused test 3/3 通过。

@@ -1,8 +1,9 @@
 # Spec 63: LLM-assisted approval and review
 
-- Status: 63-7 event projection, 63-8 dedicated provider injection seam and
-  63-9 daemon-owned profile resolver implemented; live dedicated smoke and
-  full release evidence remain staged
+- Status: 63-7 same-as-run live smoke（2026-08-05）、63-8 dedicated provider
+  injection seam、63-9 daemon-owned profile resolver 与 63-10 dedicated
+  reviewer live smoke（2026-08-06，checkout `408c68b`，`healthy/allow/eligible`）
+  均已完成；full release evidence 仍按 Spec 60 后置
 - Date: 2026-08-05
 - Scope: bounded LLM review for tool-approval decisions, reviewer/provider
   selection, daemon settings, ApprovalBroker integration, Web UX, audit and
