@@ -480,6 +480,27 @@ in addition to the global rule.
 Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean
 with CSS at 9.36 KiB gzip under the 30 KiB budget.
 
+### Phase 42h implementation update (2026-08-06): goal progress and audit timeline
+
+Goal cards now show a Todo completion progress bar (`goal-progress`) under
+the metrics grid: a track with a cyan→lime signal-gradient fill, soft glow
+and a slow `width` transition so completion changes are perceivable. The
+bar is a real `progressbar` role with `aria-valuenow/min/max`, is rendered
+only when the goal has todos, and stays purely presentational — the
+completion ratio derives from the bounded projection already in props.
+Todo list items carry their `status` in `data-status` and show a status
+dot (lime for done, cyan for open/in-progress, amber for deferred/blocked,
+muted otherwise) so progress reads without relying on the status text.
+
+Audit rows in the observability panel became a mini timeline: each row has
+an outcome dot colored by `data-outcome` (success/allowed → lime,
+denied/failed → red, asked/pending → amber) and fades in on mount. Row
+content and the five-event bound are unchanged; no new data leaves the
+bounded telemetry projection.
+
+Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean
+with CSS at 9.59 KiB gzip under the 30 KiB budget.
+
 ## 9. 退出条件
 
 本规格完成后：

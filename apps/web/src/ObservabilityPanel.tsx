@@ -35,7 +35,7 @@ export function ObservabilityPanel({ summary, audit, loading = false, unavailabl
         <div className="observability-meta"><span data-status={summary.status}>{summary.status}</span><span>{summary.range}</span><span>samples {summary.resources.sampleCount}</span><span>cost {formatCost(summary)}</span></div>
         <div className="observability-audit" aria-label="Recent audit events">
           <div className="eyebrow">RECENT AUDIT</div>
-          {audit?.events.length ? audit.events.slice(0, 5).map((event) => <div className="observability-audit-row" key={event.eventId}><span>{event.action}</span><span>{event.outcome}</span></div>) : <p className="muted">No audit events yet.</p>}
+          {audit?.events.length ? audit.events.slice(0, 5).map((event) => <div className="observability-audit-row" key={event.eventId} data-outcome={event.outcome}><span>{event.action}</span><span>{event.outcome}</span></div>) : <p className="muted">No audit events yet.</p>}
         </div>
       </>}
     </section>

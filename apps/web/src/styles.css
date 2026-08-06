@@ -154,10 +154,16 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .goal-metrics div { display: grid; gap: 3px; border: 1px solid #263650; border-radius: 9px; padding: 8px; }
 .goal-metrics span { color: #6f86a7; font-size: 10px; }
 .goal-metrics strong { color: #d7e1ef; font-size: 13px; }
+.goal-progress { height: 6px; border-radius: 999px; background: #17243c; overflow: hidden; }
+.goal-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--vibego-gradient-signal); box-shadow: 0 0 8px rgb(92 225 230 / 35%); transition: width var(--vibego-duration-slow) var(--vibego-ease-out); }
 .goal-subsection { display: grid; gap: 6px; border-top: 1px solid #263650; padding-top: 10px; }
 .goal-subsection h4 { margin: 0; color: #95a9c3; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .goal-item-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .goal-item-list li { display: flex; justify-content: space-between; gap: 10px; border-radius: 8px; padding: 7px 8px; background: rgb(17 31 54 / 60%); }
+.goal-item-list li[data-status]::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; align-self: center; border-radius: 50%; background: #52627d; }
+.goal-item-list li[data-status="done"]::before { background: var(--vibego-signal-lime); box-shadow: 0 0 6px rgb(184 243 108 / 45%); }
+.goal-item-list li[data-status="open"]::before, .goal-item-list li[data-status="in-progress"]::before { background: var(--vibego-signal-cyan); box-shadow: 0 0 6px rgb(92 225 230 / 45%); }
+.goal-item-list li[data-status="deferred"]::before, .goal-item-list li[data-status="blocked"]::before { background: var(--vibego-signal-amber); }
 .goal-item-main { display: grid; gap: 3px; min-width: 0; }
 .goal-item-main strong { color: #cbe4ff; font-size: 12px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
 .goal-item-main .muted { font-size: 11px; }
@@ -205,7 +211,11 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .observability-meta span[data-status="ready"] { color: var(--vibego-cyan); }
 .observability-audit { display: grid; gap: 6px; border-top: 1px solid #263650; padding-top: 10px; }
 .observability-audit p { margin: 0; font-size: 11px; }
-.observability-audit-row { display: flex; justify-content: space-between; gap: 8px; border-radius: 8px; padding: 7px 8px; background: rgb(17 31 54 / 60%); color: #c4d2e5; font-size: 11px; }
+.observability-audit-row { position: relative; display: flex; justify-content: space-between; gap: 8px; border-radius: 8px; padding: 7px 8px 7px 22px; background: rgb(17 31 54 / 60%); color: #c4d2e5; font-size: 11px; animation: ui-fade-in var(--vibego-duration-fast) var(--vibego-ease-out); }
+.observability-audit-row::before { content: ""; position: absolute; left: 9px; top: 50%; width: 6px; height: 6px; border-radius: 50%; background: #52627d; transform: translateY(-50%); }
+.observability-audit-row[data-outcome="success"]::before, .observability-audit-row[data-outcome="allowed"]::before { background: var(--vibego-signal-lime); box-shadow: 0 0 6px rgb(184 243 108 / 45%); }
+.observability-audit-row[data-outcome="denied"]::before, .observability-audit-row[data-outcome="failed"]::before { background: var(--vibego-signal-red); }
+.observability-audit-row[data-outcome="asked"]::before, .observability-audit-row[data-outcome="pending"]::before { background: var(--vibego-signal-amber); }
 .observability-audit-row span:last-child { color: #95a9c3; }
 .observability-state { display: grid; justify-items: center; gap: 7px; min-height: 110px; align-content: center; text-align: center; }
 .observability-state strong { color: #d7e1ef; font-size: 13px; }
