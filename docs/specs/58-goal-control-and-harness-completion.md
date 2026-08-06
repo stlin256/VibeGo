@@ -699,11 +699,14 @@ environment or secret crosses the verifier port.
 
 `GoalRecoveryMonitor` is a daemon application service, not a second scheduler.
 Each serialized tick replays terminal/restart recovery through the existing
-writeback service and evaluates the pure Goal `shouldRun` decision. An
-optional launch callback must delegate to the existing governed admission
-boundary; retries always create a new attempt and never replay old tool calls.
-The default interactive route remains unchanged. Design and boundaries are
-frozen in [ADR 0059](../adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
+writeback service and evaluates the pure Goal `shouldRun` decision. The
+production daemon provides a launch callback only for a due Todo with an
+existing governed binding and a valid claimed agent; missing bindings/claims
+remain observation-only. Retries always create a new attempt and never replay
+old tool calls, while a completed run with inconclusive objective evidence is
+left for explicit operator action to avoid an unbounded loop. The default
+interactive route remains unchanged. Design and boundaries are frozen in
+[ADR 0059](../adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
 
 Implementation evidence is recorded in
 [`spec58-6f-objective-verifier-monitor-2026-08-06.md`](../reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).

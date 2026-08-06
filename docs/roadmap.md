@@ -16,7 +16,7 @@ preflight card. Focused daemon and Web gates pass; this does not claim
 claim/release token UX, governed submission, terminal recovery UI or real
 provider Harness evidence.
 
-**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
+**状态：Accepted（阶段 1–2、认证门禁、Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime 与 guided workspace registry MVP 已落地；Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 已实现，签名/SBOM/provenance/stable release-hardening 仍为规划）**
 
 每个阶段都是一个可回滚的 Git 提交或小提交组。完成条件包含：代码、单元测试、文档更新、验证命令和已知限制。
 
@@ -751,7 +751,7 @@ Spec/ADR/implementation-status，再实现代码、补全单元/集成测试并�
 
 ## Spec 53–57：面向可发布与更广泛用户的 Release hardening（分阶段）
 
-新增规格均为 Proposed planning gate，除 Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 外，暂不改变当前运行时，也不替换既有
+新增规格均为 Proposed planning gate，除 Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 外，暂不改变当前运行时，也不替换既有
 AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 `run_events` 或 `goal_events` 的权威地位：
 
@@ -790,9 +790,11 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
 - [Spec 57](specs/57-release-publishing-pipeline.md)：Phase 57a 已实现严格的
   `release-manifest/v1` 与有序 promotion contract，含 immutable tag/channel、artifact
   checksum/target/evidence refs、stable approval 和 withdrawn 状态；contracts 模块
-  通过 57 个 focused tests、typecheck 与 build。后续接入 tag/channel workflow、可重复多平台
-  构建、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
-  release evidence 和 withdrawn/rollback runtime 流程。
+  通过 57 个 focused tests、typecheck 与 build。Phase 57b 增加了本地 manifest
+  preflight，Phase 57c 增加了 Windows x64 developer snapshot 的 runtime-only
+  materialization、privacy scan、checksum、extract/start smoke 和 GitHub prerelease
+  promotion evidence. 签名、SBOM、provenance、installer、draft→stable promotion 与
+  withdrawn/rollback runtime 流程仍后置。
 
 ### Spec 57b deterministic local release manifest preflight (2026-08-06)
 
@@ -811,6 +813,8 @@ and the [evidence report](reports/spec57b-release-manifest-preflight-2026-08-06.
 The first real release artifact is a nightly Windows x64 developer snapshot:
 materialized daemon deploy, Web dist and Host launcher, with bounded privacy
 scan, checksum, manifest, extract/start smoke and immutable GitHub prerelease.
+The daemon deploy excludes source/TypeScript material and materializes each
+pnpm workspace alias so a clean extraction starts without the source checkout.
 It does not claim platform signing, SBOM/provenance, installer or stable
 approval. See [ADR 0060](adr/0060-developer-snapshot-packaging-and-promotion.md).
 
@@ -1636,7 +1640,10 @@ objective criteria verifier. It binds bounded Goal/Todo metadata to a
 deterministic digest and validates required/forbidden terminal evidence
 without receiving prompts, raw output, tools or paths. A serialized
 `GoalRecoveryMonitor` replays terminal recovery and evaluates `shouldRun`
-through the existing admission/Scheduler boundary; it never replays old tool
-calls or creates a second scheduler. Focused evidence is recorded in
+through the existing admission/Scheduler boundary. Production wiring retries
+only a due Todo with an existing governed binding and claimed agent through
+`retryGoverned`; missing bindings/claims remain observation-only, completed
+runs with inconclusive validation are not looped indefinitely, and old tool
+calls are never replayed. Focused evidence is recorded in
 [`spec58-6f-objective-verifier-monitor-2026-08-06.md`](reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).
 See [ADR 0059](adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).

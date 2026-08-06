@@ -15,9 +15,11 @@ export interface GoalRecoveryMonitorOptions {
   readonly intervalMs?: number;
   readonly capabilitiesForGoal?: (projection: GoalControlProjectionV1) => readonly string[];
   readonly writeScopesForGoal?: (projection: GoalControlProjectionV1) => readonly string[];
+  /** Optional daemon-owned claim identity used by shouldRun for bound Todos. */
+  readonly agentIdForGoal?: (projection: GoalControlProjectionV1) => string | undefined;
   readonly remainingDeliveryQuota?: (projection: GoalControlProjectionV1) => number | undefined;
   /** Optional launcher. It must delegate to GoalAdmissionService. */
-  readonly onEligible?: (decision: GoalShouldRunDecision, projection: GoalControlProjectionV1) => void | Promise<void>;
+  readonly onEligible?: (decision: GoalShouldRunDecision, projection: GoalControlProjectionV1) => void | boolean | Promise<void | boolean>;
 }
 
 export interface GoalRecoveryMonitorResult {
@@ -110,10 +112,12 @@ export class GoalRecoveryMonitor {
         continue;
       }
       try {
+        const agentId = this.options.agentIdForGoal?.(projection);
         const remainingDeliveryQuota = this.options.remainingDeliveryQuota?.(projection);
         const decision = shouldRun({
           projection: projection as never,
           now: now.toISOString(),
+          ...(agentId ? { agentId } : {}),
           ...(this.options.capabilitiesForGoal ? { capabilities: this.options.capabilitiesForGoal(projection) } : {}),
           ...(this.options.writeScopesForGoal ? { writeScopes: this.options.writeScopesForGoal(projection) } : {}),
           ...(remainingDeliveryQuota !== undefined ? { remainingDeliveryQuota } : {}),
@@ -121,8 +125,9 @@ export class GoalRecoveryMonitor {
         decisions.push(decision);
         if (decision.status === 'eligible' && this.options.onEligible) {
           try {
-            await this.options.onEligible(decision, projection);
-            launched += 1;
+            const launchedByCallback = await this.options.onEligible(decision, projection);
+            if (launchedByCallback !== false) launched += 1;
+            else skipped += 1;
           } catch {
             status = 'degraded';
             errorCode ??= 'GOAL_MONITOR_LAUNCH_FAILED';

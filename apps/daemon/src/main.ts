@@ -232,7 +232,32 @@ let goalRecoveryMonitor!: GoalRecoveryMonitor;
 try {
   await runManager.recoverAfterRestart();
   await goalRunWriteback.reconcile();
-  goalRecoveryMonitor = new GoalRecoveryMonitor({ goalStore: goalControlV1EventStore, writeback: goalRunWriteback });
+  goalRecoveryMonitor = new GoalRecoveryMonitor({
+    goalStore: goalControlV1EventStore,
+    writeback: goalRunWriteback,
+    // A monitor tick may only retry a Todo that already has an owned claim;
+    // unclaimed work remains an observation for explicit admission. The
+    // callback below reuses the prior binding's run config but always creates
+    // a new governed attempt through GoalAdmissionService.
+    agentIdForGoal: (projection) => projection.todos
+      .filter((todo) => todo.status === 'open' || todo.status === 'deferred')
+      .filter((todo) => todo.claimedBy !== undefined || todo.boundAgentId !== undefined)
+      .sort((left, right) => left.priority - right.priority || left.todoId.localeCompare(right.todoId))
+      .map((todo) => todo.boundAgentId ?? todo.claimedBy)
+      .find((agentId): agentId is string => agentId !== undefined),
+    onEligible: async (decision, projection) => {
+      if (!decision.todoId) return false;
+      const todo = projection.todos.find((candidate) => candidate.todoId === decision.todoId);
+      const agentId = todo?.boundAgentId ?? todo?.claimedBy;
+      if (!todo || !agentId) return false;
+      const binding = projection.bindings
+        .filter((candidate) => candidate.todoId === todo.todoId)
+        .sort((left, right) => right.attempt - left.attempt || right.createdAt.localeCompare(left.createdAt))[0];
+      if (!binding) return false;
+      const retry = await goalRunWriteback.retryGoverned(binding.runId, { agentId });
+      return typeof retry === 'object' && retry !== null;
+    },
+  });
   goalRecoveryMonitor.start();
   await agentMemorySettings.start();
 } catch (error) {

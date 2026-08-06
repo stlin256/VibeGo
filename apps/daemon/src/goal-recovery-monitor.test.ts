@@ -62,6 +62,31 @@ describe('GoalRecoveryMonitor', () => {
     expect(JSON.stringify(result)).not.toMatch(/private path|C:\\|token|secret/iu);
   });
 
+  it('uses a daemon-owned claim identity and treats a refused retry as skipped', async () => {
+    const store = new InMemoryGoalControlEventStore();
+    const claimedTodo = {
+      ...todo,
+      claimedBy: 'agent_12345678',
+      claimTokenHash: 'a'.repeat(64),
+      claimedAt: at,
+      claimExpiresAt: '2026-08-06T00:30:00.000Z',
+    };
+    store.seedLegacy({ ...createGoalEvent({ eventId: 'gevt_goal_22345678', goalId: goal.goalId, eventType: 'goal.created', recordedAt: at, producer: 'test', privacy: 'local_private', refs: {}, payload: { goal } }), appendSequence: 1 });
+    store.seedLegacy({ ...createGoalEvent({ eventId: 'gevt_todo_22345678', goalId: goal.goalId, eventType: 'todo.added', recordedAt: at, producer: 'test', privacy: 'local_private', refs: { todoId: claimedTodo.todoId }, payload: { todo: claimedTodo } }), appendSequence: 2 });
+    const monitor = new GoalRecoveryMonitor({
+      goalStore: store,
+      writeback: { reconcile: async () => ({ bindings: 0, terminalRuns: 0, recovered: 0, skipped: 0 }) },
+      clock: () => new Date(at),
+      intervalMs: 500,
+      agentIdForGoal: () => 'agent_12345678',
+      onEligible: async () => false,
+    });
+    const result = await monitor.runOnce();
+    expect(result.decisions[0]?.status).toBe('eligible');
+    expect(result.launched).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
   it('starts and stops one timer without owning a scheduler queue', () => {
     const store = new InMemoryGoalControlEventStore();
     const monitor = new GoalRecoveryMonitor({ goalStore: store, writeback: { reconcile: async () => ({ bindings: 0, terminalRuns: 0, recovered: 0, skipped: 0 }) }, intervalMs: 500 });

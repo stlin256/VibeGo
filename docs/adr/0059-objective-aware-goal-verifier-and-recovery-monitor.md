@@ -37,11 +37,14 @@ terminal recovery and blocked gates.
 4. Add `GoalRecoveryMonitor` in the daemon application layer. Its serialized
    bounded tick first replays terminal/restart recovery through
    `GoalRunWritebackService.reconcile()`, then evaluates the existing pure
-   `shouldRun` decision for every Goal. An optional callback may submit a fresh
-   governed attempt, but the callback must route through `GoalAdmissionService`
-   and therefore the existing Scheduler, Approval, Sandbox and Workspace
-   gates. The monitor never replays an old tool call, owns a queue, or creates a
-   second scheduler. Without a callback it remains an observation-only monitor.
+   `shouldRun` decision for every Goal. Production wiring supplies a narrow
+   callback for a due Todo only when an existing governed binding and a valid
+   claimed agent are available; it calls `retryGoverned`, which creates a fresh
+   attempt through `GoalAdmissionService` and therefore the existing Scheduler,
+   Approval, Sandbox, Workspace and quota gates. Missing bindings/claims are
+   observed but not launched. The monitor never retries a successfully
+   completed run whose semantic validation is inconclusive, never replays an
+   old tool call, owns a queue, or creates a second scheduler.
 
 The production registry now contains only this deterministic local verifier;
 ordinary interactive/unbound runs never enter the registry. A governed Todo
@@ -54,7 +57,9 @@ without a verification plan remains fail-closed and cannot consume quota.
 - Criteria remain bounded and testable without exposing raw model/tool output;
   richer provider/LLM semantic review can be added later behind a new port.
 - Recovery is idempotent and monitor ticks cannot overlap. Fresh retries use a
-  new attempt/turn key through the existing admission path.
+  new attempt/turn key through the existing admission path; a completed run
+  with inconclusive objective evidence remains open for explicit operator
+  action rather than causing an unbounded retry loop.
 - No changes are made to AgentLoop core state, RunManager default start,
   Scheduler policy, Approval/Sandbox authorities, WorkspaceRegistry,
   `run_events` or `goal_events` ownership.

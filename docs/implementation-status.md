@@ -15,7 +15,7 @@ submit and recovery UI remain partial by design. Spec 58-5 now adds the bounded
 Harness runner plus one user-authorized live provider path; broader failure/
 recovery and release evidence remain open.
 
-**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a 已实现，其余 release-hardening 阶段仍为规划）**
+**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 已实现，签名/SBOM/provenance/stable release-hardening 仍为规划）**
 
 ## 当前实施范围
 
@@ -101,7 +101,7 @@ bundle 报告只包含 bounded asset size metadata。Playwright、屏幕阅读�
 52. Spec 56 Phase 56c 已实现纯 Web slice：`apps/web/src/device-matrix.ts` 提供八类 ratio/device fixture、严格 `WebCompatibilityReport` parser 和默认 `unverified` factory；`apps/web/src/performance-report.ts` 提供 bounded timing report；CSS 提供可选 safe-area/fold hooks。Web focused suite 66 tests、typecheck 和 production build 均通过；不启动 Playwright、不宣称真实设备通过，也不改变 daemon/run/event authority。
 53. Spec 55 Phase 55a 已实现：`packages/contracts/src/deployment-operations.ts` 提供 `deployment/v1` profile/readiness，将 loopback、LAN、Tailscale、SSH、public-direct、public-proxy 作为显式模式，LAN/public TLS 与 insecure override fail-closed，且不携带 private key、ACME/DNS credential、绝对路径或 raw adapter error；contracts focused suite 52 tests 与 typecheck 通过。本阶段不打开 listener、不接 ACME/forwarder，也不改变 AuthGate/daemon runtime。
 54. Spec 55 Phase 55b 已实现：复用现有 AuthGate 暴露只读 `GET /api/v1/deployment/readiness`，Web Settings drawer 显示 bounded mode/status/reason/next-step；缺失 projection 返回稳定 `DEPLOYMENT_READINESS_UNAVAILABLE` 并 fail-soft，不改变 pairing、interactive run、AgentLoop、run_events 或 transport listener，也不接受任何 deployment mutation。daemon focused suite 156 tests、Web focused suite 68 tests、daemon/Web typecheck 与 Web build 通过。
-55. Spec 57 Phase 57a 纯合约已实现：`packages/contracts/src/release-publishing.ts` 提供严格的 `release-manifest/v1` 与 ordered promotion state，校验 immutable tag/channel、source commit、artifact digest、target、signature/attestation/SBOM refs、compatibility range 和 rollback target；`artifactId=latest`、tag/version 不一致、secret/query/path reference 和未知字段均 fail-closed。stable 需要显式 approval，published 只能 withdraw。contracts focused suite 57 tests、typecheck 和 build 通过。本阶段不创建 GitHub workflow/release、不上传/签名 artifact，也不读取 credential、workspace 或运行时事实源。Phase 57b 已实现：`scripts/release-preflight.mjs` 与 `pnpm release:manifest` 对显式 staging artifact 流式计算 SHA-256/size，拒绝缺失、遍历、symlink、unsafe basename 和隐私泄露，并复用 release contract；focused fixture 5 tests 通过。见 [`spec57b-release-manifest-preflight-2026-08-06.md`](reports/spec57b-release-manifest-preflight-2026-08-06.md)。GitHub workflow/release、签名、SBOM、installer 与运行时发布仍未实现。
+55. Spec 57 Phase 57a 纯合约已实现：`packages/contracts/src/release-publishing.ts` 提供严格的 `release-manifest/v1` 与 ordered promotion state，校验 immutable tag/channel、source commit、artifact digest、target、signature/attestation/SBOM refs、compatibility range 和 rollback target；`artifactId=latest`、tag/version 不一致、secret/query/path reference 和未知字段均 fail-closed。stable 需要显式 approval，published 只能 withdraw。contracts focused suite 57 tests、typecheck 和 build 通过。Phase 57b 已实现：`scripts/release-preflight.mjs` 与 `pnpm release:manifest` 对显式 staging artifact 流式计算 SHA-256/size，拒绝缺失、遍历、symlink、unsafe basename 和隐私泄露，并复用 release contract；focused fixture 5 tests 通过。Phase 57c 已实现：`scripts/package-developer-snapshot.mjs` 生成 runtime-only daemon/Web/Host nightly snapshot，materialize pnpm workspace aliases，扫描 secret/path/runtime data，输出 checksum、release notes 和 manifest，并通过 clean extraction launcher smoke；GitHub prerelease promotion、签名、SBOM、installer 与 stable approval 仍是显式发布门禁。见 [`spec57b-release-manifest-preflight-2026-08-06.md`](reports/spec57b-release-manifest-preflight-2026-08-06.md) 与后续 57c evidence。
 
 47a. `docs/specs/44-provider-usage-management-and-upstream-reuse.md`、`docs/adr/0013-upstream-research-and-provider-management-boundary.md`、`docs/prompts/44-provider-usage-management-implementation.md` 和 `docs/research/upstream-provider-usage.md` 已完成 Spec 44-R0：CC Switch、AxonHub、LiteLLM、Langfuse、OpenTelemetry 的 canonical URL、默认分支、pinned commit、LICENSE/NOTICE 边界、相关文件路径和语义摘要均已记录，所有复用决定均为 clean-room。没有复制上游源码、schema、UI、session 或 runtime，也未新增依赖；R1/R2/R3 的实现状态见下列条目。
 47b. Spec 44-R1 provider/usage contract slice 已完成：`packages/contracts/src/provider-usage.ts` 提供严格版本化 `ProviderDescriptor`、`ProviderCapabilitySnapshot`、`ProviderUsageObservation`、secret/path fail-closed 校验和 token 维度向后兼容扩展；`packages/observability/src/provider-usage.ts` 提供 immutable in-memory `ProviderRegistry`、capability snapshot 与纯 `normalizeProviderUsageObservation`，现有 run-event replay projection 显式保留 `dataSource`/input token semantics。测试覆盖 strictness、privacy、快照隔离、cache-inclusive/fresh、unknown counters 和幂等输入；仍不接入 AgentLoop、RunManager、daemon API 或默认 run。
@@ -1654,14 +1654,22 @@ The objective-aware verifier and serialized recovery monitor are implemented
 under [ADR 0059](adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
 The production registry validates automatic advancement/monitor/blocker lanes
 against an explicit Todo plan; the bounded execution verifier remains as an
-explicit Harness fixture. Existing interactive behavior and all runtime/event
-authorities remain unchanged. Evidence is recorded in
+explicit Harness fixture. The daemon monitor now has a bounded production
+retry callback for due Todos with an existing binding and claimed agent; it
+delegates to `retryGoverned` and the existing admission/Scheduler/Approval/
+Sandbox/Workspace/quota authorities. Missing bindings/claims remain observed,
+completed runs with inconclusive validation are not retried indefinitely, and
+existing interactive behavior and all runtime/event authorities remain
+unchanged. Evidence is recorded in
 [`spec58-6f-objective-verifier-monitor-2026-08-06.md`](reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).
 
 ### Spec 57c developer snapshot packaging (2026-08-06)
 
 The actual nightly developer snapshot packaging and promotion boundary is
 frozen in [ADR 0060](adr/0060-developer-snapshot-packaging-and-promotion.md).
-The artifact will be built from the materialized daemon deploy, Web dist and
-Host launcher, then extracted and smoke-tested before an immutable GitHub
-prerelease. Signing, SBOM/provenance and stable approval remain separate.
+The artifact is built from a runtime-only materialized daemon deploy, Web dist
+and Host launcher; source/TypeScript material is omitted, dependency aliases
+are materialized per destination, and secret/path/runtime scans run before
+archive creation. It is extracted and smoke-tested through the Host launcher
+before an immutable GitHub prerelease. Signing, SBOM/provenance and stable
+approval remain separate.
