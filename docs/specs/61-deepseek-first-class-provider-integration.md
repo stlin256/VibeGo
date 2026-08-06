@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/tool/approval/governed/cancel/context-limit evidence 已完成；61-10 live search smoke runner 与 61-11 live reasoning smoke boundary 已完成但 live endpoint 仍待显式运行；reviewer/release gates 与 61-7 文档审计仍后置）
+- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/tool/approval/governed/cancel/context-limit evidence 已完成；61-10 live search 与 61-11 live reasoning 已于 2026-08-06 在真实 endpoint 显式运行，两者均按 fail-closed 设计保守返回 `blocked`（模型未暴露 reasoning/webSearch capability），见 [live refresh 报告](../reports/spec61-live-provider-refresh-2026-08-06.md)；reviewer/release gates 与 61-7 文档审计仍后置）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -596,9 +596,15 @@ sent through the existing `DeepSeekProvider` and
 `DeepSeekApplicationCapabilityService` with the explicit network/approval gate.
 Reports contain only bounded status, probe/latency metadata, item/context
 counts and stable errors. The runner never creates a daemon, generic network
-tool, scheduler, approval store or event ledger. Live provider compatibility is
-not claimed until the operator explicitly runs the live mode and records its
-redacted result.
+tool, scheduler, approval store or event ledger.
+
+2026-08-06 live run (second session): an operator ran the authorized live mode
+against the real DeepSeek Responses endpoint with `deepseek-v4-flash`. The
+probe returned `ready` (737 ms) and the run failed closed as
+`blocked`/`DEEPSEEK_SEARCH_CAPABILITY_REQUIRED`: the model/profile does not
+expose a `webSearch` capability. Provider-owned search compatibility therefore
+remains unproven by design; the redacted record is
+[`spec61-live-provider-refresh-2026-08-06.md`](../reports/spec61-live-provider-refresh-2026-08-06.md).
 
 #### 61-11 explicit live reasoning smoke boundary (2026-08-06)
 
@@ -620,8 +626,16 @@ endpoint, headers and credential are not returned, persisted or sent to Web.
 The runner remains direct adapter evidence only: it does not modify AgentLoop,
 RunManager, Scheduler, Approval, Sandbox, WorkspaceRegistry,
 `run_events`/`goal_events`, or the existing `text`/`cancel`/`timeout` scenarios.
-Live reasoning compatibility remains open until an operator explicitly runs
-the authorized scenario and records a redacted report.
+
+2026-08-06 live run (second session): an operator ran the authorized
+`reasoning` scenario against the real DeepSeek chat completions endpoint with
+`deepseek-v4-flash` at both `--thinking high` and `--thinking max`. Both runs
+probed `ready` (766 ms / 599 ms) and failed closed as
+`blocked`/`DEEPSEEK_THINKING_UNSUPPORTED`: the model does not expose a
+reasoning capability descriptor. Live reasoning compatibility therefore
+remains unproven by conservative metadata, not by absence of evidence; the
+redacted record is
+[`spec61-live-provider-refresh-2026-08-06.md`](../reports/spec61-live-provider-refresh-2026-08-06.md).
 
 ## 13. Definition of Done
 

@@ -31,3 +31,13 @@ against a provider endpoint that returns the required versioned capability
 descriptor. Missing or conservative capability metadata remains `blocked`; a
 fixture result cannot be promoted to live provider compatibility or release
 evidence.
+
+## Addendum (2026-08-06, second session)
+
+The live gate above was executed on the same day against the real DeepSeek
+Responses endpoint with `deepseek-v4-flash`. The probe returned `ready`
+(737 ms) and the run failed closed as
+`blocked`/`DEEPSEEK_SEARCH_CAPABILITY_REQUIRED`: the model/profile does not
+expose a `webSearch` capability descriptor. Search compatibility remains
+unproven by conservative metadata, not by absence of a live run. Redacted
+record: [`spec61-live-provider-refresh-2026-08-06.md`](spec61-live-provider-refresh-2026-08-06.md).

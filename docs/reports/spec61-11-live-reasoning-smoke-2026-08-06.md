@@ -36,3 +36,14 @@ An operator must explicitly provide a runtime-only credential and run the
 `reasoning` scenario against a complete HTTPS endpoint that returns the strict
 versioned capability descriptor. Missing or conservative metadata remains
 `blocked`; a fixture cannot be promoted to live provider or release evidence.
+
+## Addendum (2026-08-06, second session)
+
+The remaining gate above was executed on the same day against the real
+DeepSeek chat completions endpoint with `deepseek-v4-flash`, at both
+`--thinking high` and `--thinking max`. Both runs probed `ready` (766 ms /
+599 ms) and failed closed as `blocked`/`DEEPSEEK_THINKING_UNSUPPORTED`: the
+model does not expose a reasoning capability descriptor. Reasoning
+compatibility remains unproven by conservative metadata, not by absence of a
+live run. Redacted record:
+[`spec61-live-provider-refresh-2026-08-06.md`](spec61-live-provider-refresh-2026-08-06.md).
