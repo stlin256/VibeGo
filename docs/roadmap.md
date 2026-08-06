@@ -806,6 +806,14 @@ release-identity evidence only; workflow, packaging, SBOM/signing, attestation
 and preview promotion remain separate gates. See [ADR 0058](adr/0058-deterministic-release-manifest-preflight.md)
 and the [evidence report](reports/spec57b-release-manifest-preflight-2026-08-06.md).
 
+### Spec 57c developer snapshot packaging and promotion (2026-08-06)
+
+The first real release artifact is a nightly Windows x64 developer snapshot:
+materialized daemon deploy, Web dist and Host launcher, with bounded privacy
+scan, checksum, manifest, extract/start smoke and immutable GitHub prerelease.
+It does not claim platform signing, SBOM/provenance, installer or stable
+approval. See [ADR 0060](adr/0060-developer-snapshot-packaging-and-promotion.md).
+
 推荐实施顺序为 `53 → 54 → 56 → 55 → 57`；Spec 57 的 stable gate 必须汇总前四项的
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，

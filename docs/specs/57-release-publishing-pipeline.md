@@ -230,3 +230,14 @@ installer, generate SBOM/provenance or alter runtime authorities.
 
 Implementation evidence is recorded in
 [`spec57b-release-manifest-preflight-2026-08-06.md`](../reports/spec57b-release-manifest-preflight-2026-08-06.md).
+
+## 14. Phase 57c developer snapshot packaging and promotion
+
+The first actual release slice is a nightly Windows x64 developer snapshot
+under [ADR 0060](../adr/0060-developer-snapshot-packaging-and-promotion.md).
+`pnpm package:developer-snapshot` stages the materialized daemon deploy,
+built Web assets and Host launcher, rejects runtime/user/research/credential
+content, writes bounded metadata/checksum/release notes and creates a gzip tar
+archive. The same archive must be extracted and started through the Host
+launcher before an immutable GitHub prerelease is created. This slice is not a
+signed installer, SBOM/provenance attestation or stable release.

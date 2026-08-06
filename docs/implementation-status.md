@@ -1657,3 +1657,11 @@ against an explicit Todo plan; the bounded execution verifier remains as an
 explicit Harness fixture. Existing interactive behavior and all runtime/event
 authorities remain unchanged. Evidence is recorded in
 [`spec58-6f-objective-verifier-monitor-2026-08-06.md`](reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).
+
+### Spec 57c developer snapshot packaging (2026-08-06)
+
+The actual nightly developer snapshot packaging and promotion boundary is
+frozen in [ADR 0060](adr/0060-developer-snapshot-packaging-and-promotion.md).
+The artifact will be built from the materialized daemon deploy, Web dist and
+Host launcher, then extracted and smoke-tested before an immutable GitHub
+prerelease. Signing, SBOM/provenance and stable approval remain separate.
