@@ -157,7 +157,7 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .goal-metrics span { color: var(--vibego-text-tertiary); font-size: 10px; }
 .goal-metrics strong { color: var(--vibego-text-primary); font-size: 13px; }
 .goal-progress { height: 6px; border-radius: 999px; background: var(--vibego-bg-active); overflow: hidden; }
-.goal-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--vibego-signal-cyan); transition: width var(--vibego-duration-slow) var(--vibego-ease-out); }
+.goal-progress > span { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--vibego-signal-cyan); transform-origin: left center; transition: transform var(--vibego-duration-slow) var(--vibego-ease-out); will-change: transform; }
 .goal-subsection { display: grid; gap: 6px; border-top: 1px solid var(--vibego-border-default); padding-top: 10px; }
 .goal-subsection h4 { margin: 0; color: var(--vibego-text-tertiary); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .goal-item-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }

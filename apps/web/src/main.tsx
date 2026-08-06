@@ -4,6 +4,7 @@ import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRu
 import { App } from './App.js';
 import { applyLocaleToDocument, loadLocale, saveLocale, type Locale } from './locale.js';
 import { applyThemeToDocument, loadTheme, saveTheme, type Theme } from './theme.js';
+import { createStreamBuffer, type StreamBuffer } from './streamBuffer.js';
 
 const client = new ApiClient(import.meta.env.VITE_READY4VIBE_API_BASE_URL ?? '');
 
@@ -328,15 +329,29 @@ function RuntimeApp(): JSX.Element {
     } catch (reason) { setError(safeError(reason)); }
   };
 
+  const streamBufferRef = useRef<StreamBuffer | undefined>(undefined);
+  const getStreamBuffer = (): StreamBuffer => {
+    streamBufferRef.current ??= createStreamBuffer((batch) => {
+      if (batch.events.length > 0) setEvents((current) => {
+        const seen = new Set(current.map((item) => item.seq));
+        const fresh = batch.events.filter((item) => !seen.has(item.seq));
+        return fresh.length > 0 ? [...current, ...fresh] : current;
+      });
+      setRun((current) => current ? { ...current, output: batch.text ? `${current.output}${batch.text}` : current.output, lastEventSeq: batch.lastEventSeq > current.lastEventSeq ? batch.lastEventSeq : current.lastEventSeq } : current);
+    });
+    return streamBufferRef.current;
+  };
+
   const watchRun = async (runId: string, initial: RunSnapshot): Promise<void> => {
     setRun(initial);
     setEvents([]);
+    const buffer = getStreamBuffer();
+    buffer.reset();
     for await (const event of client.streamEvents(runId, initial.lastEventSeq)) {
-      setEvents((current) => current.some((item) => item.seq === event.seq) ? current : [...current, event]);
-      if (event.type === 'model.delta') setRun((current) => current ? { ...current, output: `${current.output}${readTextDelta(event.payload)}`, lastEventSeq: event.seq } : current);
-      else setRun((current) => current ? { ...current, lastEventSeq: event.seq } : current);
-      if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') setRun(await client.getRun(runId));
+      buffer.push(event, event.type === 'model.delta' ? readTextDelta(event.payload) : '');
+      if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') { buffer.flush(); setRun(await client.getRun(runId)); }
     }
+    buffer.flush();
     await refreshGoalProjection();
     await refreshAgentMemoryOperations();
     await refreshObservability();
