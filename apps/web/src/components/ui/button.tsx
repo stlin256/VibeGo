@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn, type ClassValue } from '../../lib/cn.js';
 import { variantClass } from '../../lib/variants.js';
 
-export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'glow';
+export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive';
 export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
 
 const buttonVariantClasses: Record<ButtonVariant, string> = {
@@ -11,7 +11,6 @@ const buttonVariantClasses: Record<ButtonVariant, string> = {
   outline: 'ui-button--outline',
   ghost: 'ui-button--ghost',
   destructive: 'ui-button--destructive',
-  glow: 'ui-button--glow',
 };
 
 const buttonSizeClasses: Record<ButtonSize, string> = {

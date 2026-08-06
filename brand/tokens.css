@@ -15,69 +15,17 @@
   --vibego-on-dark-muted: #afc2e8;
   --vibego-gradient: linear-gradient(135deg, #5ce1e6 0%, #6b8cff 52%, #9a6bff 100%);
   --vibego-gradient-dark: linear-gradient(135deg, #080d1c 0%, #101a38 54%, #241750 100%);
+  --vibego-radius-xs: 8px;
   --vibego-radius-sm: 10px;
   --vibego-radius-md: 16px;
   --vibego-radius-lg: 24px;
+  --vibego-radius-xl: 32px;
   --vibego-radius-pill: 999px;
   --vibego-shadow-card: 0 18px 50px rgb(11 16 32 / 12%);
   --vibego-font-sans: Manrope, Inter, "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --vibego-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
-  /* === Extended design tokens (v2) === */
-
-  /* Backgrounds */
-  --vibego-bg-canvas: #0b1020;
-  --vibego-bg-canvas-gradient: radial-gradient(circle at 15% -10%, rgb(92 225 230 / 14%) 0, transparent 40%),
-    linear-gradient(135deg, #080d1c 0%, #101a38 54%, #241750 100%);
-  --vibego-bg-surface: rgb(11 16 32 / 72%);
-  --vibego-bg-surface-solid: #101829;
-  --vibego-bg-elevated: rgb(13 24 42 / 88%);
-  --vibego-bg-input: #0c1728;
-  --vibego-bg-hover: rgb(255 255 255 / 4%);
-  --vibego-bg-active: rgb(255 255 255 / 7%);
-
-  /* Borders */
-  --vibego-border-subtle: rgb(175 194 232 / 14%);
-  --vibego-border-default: rgb(175 194 232 / 18%);
-  --vibego-border-strong: rgb(175 194 232 / 26%);
-  --vibego-border-active: rgb(92 225 230 / 36%);
-  --vibego-border-lime: rgb(184 243 108 / 45%);
-  --vibego-border-amber: rgb(255 190 92 / 55%);
-  --vibego-border-red: rgb(189 102 90 / 60%);
-
-  /* Signals */
-  --vibego-signal-cyan: #5ce1e6;
-  --vibego-signal-blue: #6b8cff;
-  --vibego-signal-violet: #9a6bff;
-  --vibego-signal-lime: #b8f36c;
-  --vibego-signal-lime-hover: #d0f79b;
-  --vibego-signal-amber: #ffbe5c;
-  --vibego-signal-amber-soft: #ffcf81;
-  --vibego-signal-red: #bd665a;
-  --vibego-signal-red-soft: #ffd0c9;
-
-  /* Gradients */
-  --vibego-gradient-brand: linear-gradient(135deg, #5ce1e6 0%, #6b8cff 52%, #9a6bff 100%);
-  --vibego-gradient-signal: linear-gradient(90deg, #5ce1e6 0%, #b8f36c 100%);
-  --vibego-gradient-border: linear-gradient(135deg, rgb(92 225 230 / 55%), rgb(107 140 255 / 45%), rgb(154 107 255 / 55%));
-
-  /* Text */
-  --vibego-text-primary: #f7faff;
-  --vibego-text-secondary: #afc2e8;
-  --vibego-text-tertiary: #6f86a7;
-  --vibego-text-link: #8ec7ff;
-
-  /* Shadows */
-  --vibego-shadow-surface: 0 18px 50px rgb(5 9 20 / 28%);
-  --vibego-shadow-elevated: 0 28px 90px rgb(0 0 0 / 42%);
-  --vibego-shadow-glow-cyan: 0 0 24px rgb(92 225 230 / 22%);
-  --vibego-shadow-glow-lime: 0 0 24px rgb(184 243 108 / 22%);
-  --vibego-shadow-glow-amber: 0 0 24px rgb(255 190 92 / 18%);
-  --vibego-shadow-glow-red: 0 0 24px rgb(189 102 90 / 18%);
-
-  /* Radius */
-  --vibego-radius-xs: 8px;
-  --vibego-radius-xl: 32px;
+  /* === Theme-independent design tokens (v3) === */
 
   /* Spacing (4px base grid) */
   --vibego-space-1: 4px;
@@ -102,17 +50,148 @@
   --vibego-text-2xl: 24px;
   --vibego-text-3xl: 28px;
 
-  /* Motion */
-  --vibego-duration-instant: 100ms;
-  --vibego-duration-fast: 150ms;
-  --vibego-duration-normal: 250ms;
-  --vibego-duration-slow: 400ms;
+  /* Motion: fast, compositor-friendly only */
+  --vibego-duration-instant: 80ms;
+  --vibego-duration-fast: 120ms;
+  --vibego-duration-normal: 180ms;
+  --vibego-duration-slow: 240ms;
   --vibego-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --vibego-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --vibego-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Backdrop blur */
-  --vibego-blur-sm: 8px;
-  --vibego-blur-md: 12px;
-  --vibego-blur-lg: 18px;
+  /* === Light theme (default, shadcn-style neutral zinc) === */
+
+  /* Backgrounds */
+  --vibego-bg-canvas: #fafafa;
+  --vibego-bg-canvas-gradient: #fafafa;
+  --vibego-bg-surface: #ffffff;
+  --vibego-bg-surface-solid: #f4f4f5;
+  --vibego-bg-elevated: #ffffff;
+  --vibego-bg-input: #ffffff;
+  --vibego-bg-sunken: #f4f4f5;
+  --vibego-bg-hover: rgb(9 9 11 / 4%);
+  --vibego-bg-active: rgb(9 9 11 / 7%);
+  --vibego-bg-selected: rgb(37 99 235 / 8%);
+  --vibego-bg-success: rgb(22 163 74 / 8%);
+  --vibego-bg-warning: rgb(217 119 6 / 10%);
+  --vibego-bg-danger: rgb(220 38 38 / 8%);
+
+  /* Borders */
+  --vibego-border-subtle: rgb(9 9 11 / 8%);
+  --vibego-border-default: rgb(9 9 11 / 12%);
+  --vibego-border-strong: rgb(9 9 11 / 20%);
+  --vibego-border-active: rgb(37 99 235 / 45%);
+  --vibego-border-lime: rgb(22 163 74 / 45%);
+  --vibego-border-amber: rgb(217 119 6 / 55%);
+  --vibego-border-red: rgb(220 38 38 / 60%);
+
+  /* Signals: one accent hue plus muted status colors */
+  --vibego-primary: #18181b;
+  --vibego-primary-hover: #27272a;
+  --vibego-secondary: #f4f4f5;
+  --vibego-secondary-hover: #e4e4e7;
+  --vibego-signal-cyan: #2563eb;
+  --vibego-signal-blue: #2563eb;
+  --vibego-signal-violet: #1d4ed8;
+  --vibego-signal-lime: #16a34a;
+  --vibego-signal-lime-hover: #15803d;
+  --vibego-signal-amber: #d97706;
+  --vibego-signal-amber-soft: #b45309;
+  --vibego-signal-red: #dc2626;
+  --vibego-signal-red-soft: #b91c1c;
+
+  /* Gradients: kept as flat aliases; no chromatic gradients in the app */
+  --vibego-gradient-brand: #2563eb;
+  --vibego-gradient-signal: #2563eb;
+  --vibego-gradient-border: rgb(9 9 11 / 12%);
+
+  /* Text */
+  --vibego-text-primary: #09090b;
+  --vibego-text-secondary: #52525b;
+  --vibego-text-tertiary: #a1a1aa;
+  --vibego-text-link: #2563eb;
+
+  /* Foreground on a filled primary surface */
+  --vibego-on-primary: #fafafa;
+
+  /* Shadows: subtle, static */
+  --vibego-shadow-surface: 0 1px 2px rgb(9 9 11 / 5%);
+  --vibego-shadow-elevated: 0 8px 30px rgb(9 9 11 / 12%);
+  --vibego-shadow-glow-cyan: none;
+  --vibego-shadow-glow-lime: none;
+  --vibego-shadow-glow-amber: none;
+  --vibego-shadow-glow-red: none;
+
+  /* Focus ring and modal backdrop */
+  --vibego-ring-accent: rgb(37 99 235 / 35%);
+  --vibego-backdrop: rgb(9 9 11 / 40%);
+}
+
+[data-theme="dark"] {
+  /* === Dark theme (neutral zinc, never pure black) === */
+
+  /* Backgrounds */
+  --vibego-bg-canvas: #09090b;
+  --vibego-bg-canvas-gradient: #09090b;
+  --vibego-bg-surface: #141416;
+  --vibego-bg-surface-solid: #1c1c1f;
+  --vibego-bg-elevated: #1c1c1f;
+  --vibego-bg-input: #101012;
+  --vibego-bg-sunken: #101012;
+  --vibego-bg-hover: rgb(250 250 250 / 5%);
+  --vibego-bg-active: rgb(250 250 250 / 8%);
+  --vibego-bg-selected: rgb(96 165 250 / 14%);
+  --vibego-bg-success: rgb(74 222 128 / 10%);
+  --vibego-bg-warning: rgb(251 191 36 / 12%);
+  --vibego-bg-danger: rgb(248 113 113 / 12%);
+
+  /* Borders */
+  --vibego-border-subtle: rgb(250 250 250 / 8%);
+  --vibego-border-default: rgb(250 250 250 / 12%);
+  --vibego-border-strong: rgb(250 250 250 / 20%);
+  --vibego-border-active: rgb(96 165 250 / 45%);
+  --vibego-border-lime: rgb(74 222 128 / 45%);
+  --vibego-border-amber: rgb(251 191 36 / 55%);
+  --vibego-border-red: rgb(248 113 113 / 60%);
+
+  /* Signals */
+  --vibego-primary: #fafafa;
+  --vibego-primary-hover: #e4e4e7;
+  --vibego-secondary: #27272a;
+  --vibego-secondary-hover: #3f3f46;
+  --vibego-signal-cyan: #60a5fa;
+  --vibego-signal-blue: #60a5fa;
+  --vibego-signal-violet: #3b82f6;
+  --vibego-signal-lime: #4ade80;
+  --vibego-signal-lime-hover: #22c55e;
+  --vibego-signal-amber: #fbbf24;
+  --vibego-signal-amber-soft: #fcd34d;
+  --vibego-signal-red: #f87171;
+  --vibego-signal-red-soft: #fca5a5;
+
+  /* Gradients: flat aliases */
+  --vibego-gradient-brand: #60a5fa;
+  --vibego-gradient-signal: #60a5fa;
+  --vibego-gradient-border: rgb(250 250 250 / 12%);
+
+  /* Text */
+  --vibego-text-primary: #fafafa;
+  --vibego-text-secondary: #a1a1aa;
+  --vibego-text-tertiary: #71717a;
+  --vibego-text-link: #60a5fa;
+
+  /* Foreground on a filled primary surface */
+  --vibego-on-primary: #18181b;
+
+  /* Shadows */
+  --vibego-shadow-surface: 0 1px 2px rgb(0 0 0 / 40%);
+  --vibego-shadow-elevated: 0 8px 30px rgb(0 0 0 / 55%);
+  --vibego-shadow-glow-cyan: none;
+  --vibego-shadow-glow-lime: none;
+  --vibego-shadow-glow-amber: none;
+  --vibego-shadow-glow-red: none;
+
+  /* Focus ring and modal backdrop */
+  --vibego-ring-accent: rgb(96 165 250 / 40%);
+  --vibego-backdrop: rgb(0 0 0 / 60%);
 }

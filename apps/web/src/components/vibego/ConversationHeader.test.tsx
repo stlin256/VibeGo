@@ -13,13 +13,16 @@ const copy: ConversationHeaderCopy = {
   localeLabel: 'Language',
   localeEnglish: 'English',
   localeChinese: '简体中文',
+  themeToggle: 'Toggle theme',
+  themeLight: 'Light',
+  themeDark: 'Dark',
   connected: 'Connected',
   awaitingPairing: 'Awaiting pairing',
 };
 
 describe('ConversationHeader', () => {
   it('renders the connected brand, actions, locale control and context state through typed props', () => {
-    const html = renderToStaticMarkup(<ConversationHeader connected contextOpen settingsOpen locale="en-US" copy={copy} onNewTask={() => undefined} onToggleContext={() => undefined} onOpenSettings={() => undefined} onLocaleChange={() => undefined} />);
+    const html = renderToStaticMarkup(<ConversationHeader connected contextOpen settingsOpen locale="en-US" theme="light" copy={copy} onNewTask={() => undefined} onToggleContext={() => undefined} onOpenSettings={() => undefined} onLocaleChange={() => undefined} onToggleTheme={() => undefined} />);
     expect(html).toContain('class="topbar"');
     expect(html).toContain('alt="VibeGo"');
     expect(html).toContain('Vibe<span class="brand-go">Go</span>');
@@ -27,6 +30,9 @@ describe('ConversationHeader', () => {
     expect(html).toContain('aria-label="Hide details"');
     expect(html).toContain('aria-controls="settings-drawer"');
     expect(html).toContain('aria-label="Language"');
+    expect(html).toContain('aria-label="Toggle theme"');
+    expect(html).toContain('title="Dark"');
+    expect(html).toContain('☾');
     expect(html).toContain('data-connected="true"');
     expect(html).toContain('Connected');
     expect(html).toContain('ui-button');
@@ -34,8 +40,10 @@ describe('ConversationHeader', () => {
   });
 
   it('keeps awaiting-pairing status and details action explicit without server data', () => {
-    const html = renderToStaticMarkup(<ConversationHeader connected={false} contextOpen={false} settingsOpen={false} locale="zh-CN" copy={copy} onNewTask={() => undefined} onToggleContext={() => undefined} onOpenSettings={() => undefined} />);
+    const html = renderToStaticMarkup(<ConversationHeader connected={false} contextOpen={false} settingsOpen={false} locale="zh-CN" theme="dark" copy={copy} onNewTask={() => undefined} onToggleContext={() => undefined} onOpenSettings={() => undefined} />);
     expect(html).toContain('aria-label="Details"');
+    expect(html).toContain('title="Light"');
+    expect(html).toContain('☀');
     expect(html).toContain('data-connected="false"');
     expect(html).toContain('Awaiting pairing');
     expect(html).toContain('value="zh-CN"');

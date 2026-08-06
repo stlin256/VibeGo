@@ -71,6 +71,9 @@ export type MessageKey =
   | 'locale.label'
   | 'locale.english'
   | 'locale.chinese'
+  | 'theme.toggle'
+  | 'theme.light'
+  | 'theme.dark'
   | 'accessibility.statusLabel';
 
 type Catalog = Readonly<Record<MessageKey, string>>;
@@ -136,6 +139,9 @@ const EN_US: Catalog = {
   'locale.label': 'Language',
   'locale.english': 'English',
   'locale.chinese': '简体中文',
+  'theme.toggle': 'Toggle theme',
+  'theme.light': 'Light',
+  'theme.dark': 'Dark',
   'accessibility.statusLabel': 'Live status',
 };
 
@@ -198,6 +204,9 @@ const ZH_CN: Catalog = {
   'guardrails.approval': '写入与命令按策略请求审批',
   'guardrails.sse': '事件流可按序号断线续传',
   'locale.label': '语言',
+  'theme.toggle': '切换主题',
+  'theme.light': '亮色',
+  'theme.dark': '暗色',
   'accessibility.statusLabel': '实时状态',
 };
 

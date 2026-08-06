@@ -57,9 +57,9 @@ describe('ratio-first responsive layout contract', () => {
   });
 
   it('keeps the Phase 42a semantic token and primitive contracts brand-aware', () => {
-    expect(styles).toContain('--background: var(--vibego-ink)');
-    expect(styles).toContain('--primary: var(--vibego-cyan)');
-    expect(styles).toContain('--destructive: #bd665a');
+    expect(styles).toContain('--background: var(--vibego-bg-canvas)');
+    expect(styles).toContain('--primary: var(--vibego-primary)');
+    expect(styles).toContain('--destructive: var(--vibego-signal-red)');
     expect(styles).toContain('.ui-button--size-icon { width: 44px;');
     expect(styles).toContain('.ui-card {');
     expect(styles).toContain('.ui-skeleton {');
