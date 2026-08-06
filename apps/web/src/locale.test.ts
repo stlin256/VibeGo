@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyLocaleToDocument, createTranslator, DEFAULT_LOCALE, LOCALE_STORAGE_KEY, loadLocale, localeFromLanguage, resetLocale, resolveLocale, saveLocale, type LocaleStorage } from './locale.js';
+import { applyLocaleToDocument, createTranslator, DEFAULT_LOCALE, LOCALE_STORAGE_KEY, loadLocale, localeFromLanguage, messageKeys, resetLocale, resolveLocale, saveLocale, type LocaleStorage } from './locale.js';
 
 function storage(initial: Record<string, string> = {}): LocaleStorage & { values: Map<string, string> } {
   const values = new Map(Object.entries(initial));
@@ -54,5 +54,28 @@ describe('Web locale adapter', () => {
     expect(target.documentElement.lang).toBe('zh-CN');
     applyLocaleToDocument('en-US', target);
     expect(target.documentElement.lang).toBe('en-US');
+  });
+
+  it('interpolates named params and leaves unknown placeholders intact', () => {
+    const translate = createTranslator('zh-CN');
+    expect(translate('error.requestFailedWithCode', { code: 'RUN_FAILED' })).toBe('请求失败：RUN_FAILED');
+    expect(translate('snapshot.blocked', { reason: 'policy-denied' })).toBe('原因：policy-denied。daemon 不会静默放宽本次运行。');
+    expect(createTranslator('en-US')('error.requestFailedWithCode', { code: 'PAIRING_EXPIRED' })).toBe('Request failed: PAIRING_EXPIRED');
+    expect(translate('error.requestFailedWithCode')).toBe('请求失败：{code}');
+  });
+
+  it('resolves every catalog key in both locales without falling back to the placeholder', () => {
+    for (const key of messageKeys()) {
+      expect(createTranslator('en-US')(key)).not.toBe('Unavailable');
+      expect(createTranslator('zh-CN')(key)).not.toBe('Unavailable');
+    }
+  });
+
+  it('keeps Chinese copy out of the English catalog for the main flow', () => {
+    const translate = createTranslator('en-US');
+    for (const key of messageKeys()) {
+      if (key === 'locale.chinese') continue; // language names stay in their own script
+      expect(translate(key)).not.toMatch(/[\u4e00-\u9fff]/u);
+    }
   });
 });

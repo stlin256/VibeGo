@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type GoalProjectionListResponse, type GovernedPreflightInput, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionConfirmationInput, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type PermissionRevokeInput, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent, type RunConfigInput, type GoalMutationResponse, type GoalPreflightResult } from './api.js';
 import { App } from './App.js';
-import { applyLocaleToDocument, loadLocale, saveLocale, type Locale } from './locale.js';
+import { applyLocaleToDocument, createTranslator, loadLocale, saveLocale, type Locale, type Translator } from './locale.js';
 import { applyThemeToDocument, loadTheme, saveTheme, type Theme } from './theme.js';
 import { createStreamBuffer, type StreamBuffer } from './streamBuffer.js';
 
@@ -16,6 +16,7 @@ function RuntimeApp(): JSX.Element {
   const [profile, setProfile] = useState<RunProfile>(() => loadRunProfile());
   const [locale, setLocale] = useState<Locale>(() => loadLocale());
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
+  const t = createTranslator(locale);
   const [certificateStatus, setCertificateStatus] = useState<CertificateStatus>();
   const [certificateStatusUnavailable, setCertificateStatusUnavailable] = useState(false);
   const [deploymentReadiness, setDeploymentReadiness] = useState<DeploymentReadinessStatus>();
@@ -301,7 +302,7 @@ function RuntimeApp(): JSX.Element {
         void refreshGoalProjection();
         void refreshObservability();
       }
-    }).catch((reason: unknown) => setError(safeError(reason)));
+    }).catch((reason: unknown) => setError(safeError(reason, t)));
   }, []);
 
   const pair = async (code: string): Promise<void> => {
@@ -326,7 +327,7 @@ function RuntimeApp(): JSX.Element {
       await refreshWorkspaces();
       await refreshGoalProjection();
       await refreshObservability();
-    } catch (reason) { setError(safeError(reason)); }
+    } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const streamBufferRef = useRef<StreamBuffer | undefined>(undefined);
@@ -364,7 +365,7 @@ function RuntimeApp(): JSX.Element {
       };
       const started = await client.createRun(config);
       await watchRun(started.runId, await client.getRun(started.runId));
-    } catch (reason) { setError(safeError(reason)); }
+    } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const retry = async (): Promise<void> => {
@@ -372,17 +373,17 @@ function RuntimeApp(): JSX.Element {
     try {
       const started = await client.retryRun(run.runId);
       await watchRun(started.runId, await client.getRun(started.runId));
-    } catch (reason) { setError(safeError(reason)); }
+    } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const cancel = async (): Promise<void> => {
     if (!run) return;
-    try { await client.cancel(run.runId); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
+    try { await client.cancel(run.runId); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const approve = async (approvalId: string, decision: 'allow' | 'deny'): Promise<void> => {
     if (!run) return;
-    try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason)); }
+    try { await client.approveRun(run.runId, approvalId, decision); setRun(await client.getRun(run.runId)); } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const configureModel = async (input: ModelSettingsInput): Promise<void> => {
@@ -392,7 +393,7 @@ function RuntimeApp(): JSX.Element {
       setModelSettingsUnavailable(false);
       setProfile((current) => ({ ...current, model: { provider: input.provider, name: input.model } }));
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const patchCapabilityProfileSettings = async (input: CapabilityProfileSettingsPatchInput): Promise<void> => {
@@ -400,7 +401,7 @@ function RuntimeApp(): JSX.Element {
       setCapabilityProfileSettings(await client.patchCapabilityProfileSettings(input));
       setCapabilityProfileSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const resetCapabilityProfileSettings = async (expectedRevision?: string): Promise<void> => {
@@ -408,7 +409,7 @@ function RuntimeApp(): JSX.Element {
       setCapabilityProfileSettings(await client.resetCapabilityProfileSettings(expectedRevision));
       setCapabilityProfileSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const patchPermissionSettings = async (input: PermissionProfileSettingsPatchInput): Promise<void> => {
@@ -417,7 +418,7 @@ function RuntimeApp(): JSX.Element {
       setPermissionSettingsUnavailable(false);
       await refreshPermissionStatus();
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const confirmFullHost = async (input: PermissionConfirmationInput): Promise<void> => {
@@ -425,7 +426,7 @@ function RuntimeApp(): JSX.Element {
       setPermissionStatus(await client.confirmFullHost(input));
       setPermissionSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const revokePermission = async (input: PermissionRevokeInput): Promise<void> => {
@@ -433,7 +434,7 @@ function RuntimeApp(): JSX.Element {
       await client.revokePermission(input);
       await refreshPermissionStatus();
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const patchApprovalReviewSettings = async (input: ApprovalReviewSettingsPatchInput): Promise<void> => {
@@ -441,7 +442,7 @@ function RuntimeApp(): JSX.Element {
       setApprovalReviewSettings(await client.patchApprovalReviewSettings(input));
       setApprovalReviewSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const probeApprovalReview = async (): Promise<void> => {
@@ -449,7 +450,7 @@ function RuntimeApp(): JSX.Element {
       setApprovalReviewSettings(await client.probeApprovalReview());
       setApprovalReviewSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const clearModelSettings = async (): Promise<void> => {
@@ -458,7 +459,7 @@ function RuntimeApp(): JSX.Element {
       setModelSettings(status);
       setModelSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); }
+    } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const probeModel = async (endpoint: string): Promise<void> => {
@@ -467,7 +468,7 @@ function RuntimeApp(): JSX.Element {
       setError(undefined);
     } catch (reason) {
       setModelProbe(undefined);
-      setError(safeError(reason));
+      setError(safeError(reason, t));
       throw reason;
     }
   };
@@ -478,17 +479,17 @@ function RuntimeApp(): JSX.Element {
       setDeepSeekSettingsUnavailable(false);
       setProfile((current) => ({ ...current, model: { provider: 'deepseek', name: input.model } }));
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const clearDeepSeekSettings = async (): Promise<void> => {
     try { setDeepSeekSettings(await client.clearDeepSeekSettings()); setDeepSeekProbe(undefined); setError(undefined); }
-    catch (reason) { setError(safeError(reason)); }
+    catch (reason) { setError(safeError(reason, t)); }
   };
 
   const probeDeepSeek = async (): Promise<void> => {
     try { setDeepSeekProbe(await client.probeDeepSeek()); setError(undefined); }
-    catch (reason) { setDeepSeekProbe(undefined); setError(safeError(reason)); throw reason; }
+    catch (reason) { setDeepSeekProbe(undefined); setError(safeError(reason, t)); throw reason; }
   };
 
   const refreshDeploymentReadiness = async (): Promise<void> => {
@@ -507,7 +508,7 @@ function RuntimeApp(): JSX.Element {
       setAgentMemorySettingsUnavailable(false);
       await refreshAgentMemoryOperations();
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const probeAgentMemory = async (): Promise<void> => {
@@ -516,7 +517,7 @@ function RuntimeApp(): JSX.Element {
       setAgentMemorySettingsUnavailable(false);
       await refreshAgentMemoryOperations();
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const updateAgentMemory = async (): Promise<void> => {
@@ -525,7 +526,7 @@ function RuntimeApp(): JSX.Element {
       setAgentMemorySettingsUnavailable(false);
       await refreshAgentMemoryOperations();
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const rollbackAgentMemory = async (): Promise<void> => {
@@ -534,7 +535,7 @@ function RuntimeApp(): JSX.Element {
       setAgentMemorySettingsUnavailable(false);
       await refreshAgentMemoryOperations();
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const patchAgentMemoryKnowledgeSettings = async (input: AgentMemoryKnowledgeSettingsPatchInput): Promise<void> => {
@@ -542,7 +543,7 @@ function RuntimeApp(): JSX.Element {
       setAgentMemoryKnowledgeSettings(await client.patchAgentMemoryKnowledgeSettings(input));
       setAgentMemoryKnowledgeSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const probeAgentMemoryKnowledge = async (): Promise<void> => {
@@ -550,7 +551,7 @@ function RuntimeApp(): JSX.Element {
       setAgentMemoryKnowledgeSettings(await client.probeAgentMemoryKnowledge());
       setAgentMemoryKnowledgeSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const patchMcpSettings = async (input: McpSettingsPatchInput): Promise<void> => {
@@ -558,7 +559,7 @@ function RuntimeApp(): JSX.Element {
       setMcpSettings(await client.patchMcpSettings(input));
       setMcpSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const probeMcp = async (): Promise<void> => {
@@ -566,7 +567,7 @@ function RuntimeApp(): JSX.Element {
       setMcpSettings(await client.probeMcp());
       setMcpSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const setFilesystemToolsEnabled = async (enabled: boolean): Promise<void> => {
@@ -574,7 +575,7 @@ function RuntimeApp(): JSX.Element {
       setToolSettings(await client.setFilesystemToolsEnabled(enabled));
       setToolSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const setGitToolsEnabled = async (enabled: boolean): Promise<void> => {
@@ -582,7 +583,7 @@ function RuntimeApp(): JSX.Element {
       setGitSettings(await client.setGitToolsEnabled(enabled));
       setGitSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const probeSandbox = async (provider: 'docker' | 'podman'): Promise<void> => {
@@ -590,7 +591,7 @@ function RuntimeApp(): JSX.Element {
       setSandboxSettings(await client.probeSandbox(provider));
       setSandboxSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const setSandboxSettingsFromWeb = async (input: { provider: 'docker' | 'podman'; imageDigest: string; network: 'restricted' | 'enabled'; resources: SandboxSettingsStatus['resources']; enabled: boolean }): Promise<void> => {
@@ -598,7 +599,7 @@ function RuntimeApp(): JSX.Element {
       setSandboxSettings(await client.setSandboxSettings(input));
       setSandboxSettingsUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const addWorkspace = async (input: { id: string; path: string; label?: string }): Promise<void> => {
@@ -606,7 +607,7 @@ function RuntimeApp(): JSX.Element {
       setWorkspaces(await client.addWorkspace(input));
       setWorkspacesUnavailable(false);
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const removeWorkspace = async (workspaceId: string): Promise<void> => {
@@ -619,7 +620,7 @@ function RuntimeApp(): JSX.Element {
         if (fallback) setProfile((current) => ({ ...current, workspaceId: fallback.id }));
       }
       setError(undefined);
-    } catch (reason) { setError(safeError(reason)); throw reason; }
+    } catch (reason) { setError(safeError(reason, t)); throw reason; }
   };
 
   const resetProfile = (): void => {
@@ -634,9 +635,9 @@ function readTextDelta(payload: unknown): string {
   return typeof payload === 'object' && payload !== null && 'text' in payload && typeof payload.text === 'string' ? payload.text : '';
 }
 
-function safeError(reason: unknown): string {
-  if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') return `请求失败：${reason.code}`;
-  return '请求失败，请检查 daemon 连接。';
+function safeError(reason: unknown, t: Translator): string {
+  if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') return t('error.requestFailedWithCode', { code: reason.code });
+  return t('error.requestFailed');
 }
 
 function isCertificateStatusUnavailable(reason: unknown): boolean {

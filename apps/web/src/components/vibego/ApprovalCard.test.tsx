@@ -1,7 +1,26 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ApprovalCard } from './ApprovalCard.js';
+import { ApprovalCard, type ApprovalCardCopy } from './ApprovalCard.js';
 
+const copy: ApprovalCardCopy = {
+  eyebrow: 'APPROVAL REQUIRED',
+  meta: '{risk} · {bytes} bytes · expires {time}',
+  sandboxLabel: 'sandbox',
+  networkLabel: 'network',
+  imageLabel: 'image',
+  allowOnce: 'Allow once',
+  allowAriaLabel: 'Allow this approval once',
+  deny: 'Deny',
+  sessionNote: 'Session-wide grants are managed in Permission settings.',
+  reviewReviewedLabel: 'REVIEWED',
+  reviewAskedLabel: 'ASKED',
+  reviewDeniedLabel: 'DENIED',
+  reviewUnavailableLabel: 'REVIEW UNAVAILABLE',
+  reviewReviewedDescription: 'The bounded reviewer matched this exact low-risk key; the daemon policy still controls the one-time action.',
+  reviewAskedDescription: 'The reviewer kept this request on the user approval path.',
+  reviewDeniedDescription: 'The reviewer denied this request; no capability is widened.',
+  reviewUnavailableDescription: 'The review could not complete; the normal deterministic approval gate remains active.',
+};
 const approval = {
   approvalId: 'ap_card',
   runId: 'run_card',
@@ -31,7 +50,7 @@ const approvalWithoutDetails = {
 
 describe('ApprovalCard', () => {
   it('renders bounded approval metadata and preserves destructive deny semantics', () => {
-    const html = renderToStaticMarkup(<ApprovalCard approval={approval} sandboxMode="external-sandbox" onApprove={() => undefined} />);
+    const html = renderToStaticMarkup(<ApprovalCard approval={approval} sandboxMode="external-sandbox" copy={copy} onApprove={() => undefined} />);
     expect(html).toContain('class="approval-card"');
     expect(html).toContain('APPROVAL REQUIRED');
     expect(html).toContain('filesystem.write@1.0.0');
@@ -44,14 +63,14 @@ describe('ApprovalCard', () => {
   });
 
   it('does not invent sandbox details when the bounded projection omits them', () => {
-    const html = renderToStaticMarkup(<ApprovalCard approval={approvalWithoutDetails} sandboxMode="read-only" />);
+    const html = renderToStaticMarkup(<ApprovalCard approval={approvalWithoutDetails} sandboxMode="read-only" copy={copy} />);
     expect(html).toContain('filesystem.write@1.0.0');
     expect(html).not.toContain('sandbox:');
     expect(html).not.toContain('sha256:demo');
   });
 
   it('explains a bounded reviewer outcome while keeping the one-time user action', () => {
-    const html = renderToStaticMarkup(<ApprovalCard approval={approval} sandboxMode="workspace-write" reviewStatus={{ state: 'review-unavailable', reasonCode: 'timeout', latencyMs: 1_500 }} onApprove={() => undefined} />);
+    const html = renderToStaticMarkup(<ApprovalCard approval={approval} sandboxMode="workspace-write" reviewStatus={{ state: 'review-unavailable', reasonCode: 'timeout', latencyMs: 1_500 }} copy={copy} onApprove={() => undefined} />);
     expect(html).toContain('REVIEW UNAVAILABLE');
     expect(html).toContain('timeout');
     expect(html).toContain('Allow once');

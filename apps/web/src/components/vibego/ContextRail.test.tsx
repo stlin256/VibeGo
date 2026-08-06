@@ -7,6 +7,7 @@ const copy = {
   connectionEyebrow: 'CONNECTION',
   connectionTitle: 'Connected workspace',
   description: 'Bounded local session',
+  readingDaemon: 'Reading daemon status…',
   transport: 'transport',
   tls: 'TLS',
   sandbox: 'sandbox',

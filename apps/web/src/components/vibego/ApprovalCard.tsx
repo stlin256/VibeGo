@@ -7,6 +7,27 @@ export interface ApprovalCardProps {
   readonly sandboxMode: RunConfigInput['sandbox']['mode'];
   readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined;
   readonly reviewStatus?: ApprovalReviewPresentation | undefined;
+  readonly copy: ApprovalCardCopy;
+}
+
+export interface ApprovalCardCopy {
+  readonly eyebrow: string;
+  readonly meta: string;
+  readonly sandboxLabel: string;
+  readonly networkLabel: string;
+  readonly imageLabel: string;
+  readonly allowOnce: string;
+  readonly allowAriaLabel: string;
+  readonly deny: string;
+  readonly sessionNote: string;
+  readonly reviewReviewedLabel: string;
+  readonly reviewAskedLabel: string;
+  readonly reviewDeniedLabel: string;
+  readonly reviewUnavailableLabel: string;
+  readonly reviewReviewedDescription: string;
+  readonly reviewAskedDescription: string;
+  readonly reviewDeniedDescription: string;
+  readonly reviewUnavailableDescription: string;
 }
 
 export type ApprovalReviewPresentationState = 'reviewed' | 'asked' | 'denied' | 'review-unavailable';
@@ -18,39 +39,46 @@ export interface ApprovalReviewPresentation {
 }
 
 /** Bounded approval presentation; the parent owns the authenticated decision. */
-export function ApprovalCard({ approval, sandboxMode, onApprove, reviewStatus }: ApprovalCardProps): JSX.Element {
+export function ApprovalCard({ approval, sandboxMode, onApprove, reviewStatus, copy }: ApprovalCardProps): JSX.Element {
   return (
     <div className="approval-card">
       <div>
-        <div className="eyebrow">APPROVAL REQUIRED</div>
+        <div className="eyebrow">{copy.eyebrow}</div>
         <strong>{approval.toolId}@{approval.toolVersion}</strong>
-        <p className="muted">{approval.risk} · {approval.argumentBytes} bytes · expires {new Date(approval.expiresAt).toLocaleTimeString()}</p>
-        {approval.details && <p className="muted">sandbox: {approval.details.sandboxProvider ?? sandboxMode}{approval.details.network ? ` · network: ${approval.details.network}` : ''}{approval.details.sandboxImageDigest ? ` · image: ${approval.details.sandboxImageDigest}` : ''}</p>}
-        {reviewStatus && <div className="approval-review-summary" data-review-status={reviewStatus.state} role="status" aria-live="polite"><strong>{reviewLabel(reviewStatus.state)}</strong><span>{reviewDescription(reviewStatus.state)}{reviewStatus.reasonCode ? ` · ${reviewStatus.reasonCode}` : ''}{reviewStatus.latencyMs === undefined ? '' : ` · ${reviewStatus.latencyMs} ms`}</span></div>}
+        <p className="muted">{formatApprovalMeta(copy.meta, approval)}</p>
+        {approval.details && <p className="muted">{copy.sandboxLabel}: {approval.details.sandboxProvider ?? sandboxMode}{approval.details.network ? ` · ${copy.networkLabel}: ${approval.details.network}` : ''}{approval.details.sandboxImageDigest ? ` · ${copy.imageLabel}: ${approval.details.sandboxImageDigest}` : ''}</p>}
+        {reviewStatus && <div className="approval-review-summary" data-review-status={reviewStatus.state} role="status" aria-live="polite"><strong>{reviewLabel(copy, reviewStatus.state)}</strong><span>{reviewDescription(copy, reviewStatus.state)}{reviewStatus.reasonCode ? ` · ${reviewStatus.reasonCode}` : ''}{reviewStatus.latencyMs === undefined ? '' : ` · ${reviewStatus.latencyMs} ms`}</span></div>}
       </div>
       <div className="approval-actions">
-        <Button aria-label="Allow this approval once" onClick={() => onApprove?.(approval.approvalId, 'allow')}>Allow once</Button>
-        <Button variant="destructive" className="cancel-button" onClick={() => onApprove?.(approval.approvalId, 'deny')}>Deny</Button>
+        <Button aria-label={copy.allowAriaLabel} onClick={() => onApprove?.(approval.approvalId, 'allow')}>{copy.allowOnce}</Button>
+        <Button variant="destructive" className="cancel-button" onClick={() => onApprove?.(approval.approvalId, 'deny')}>{copy.deny}</Button>
       </div>
-      <p className="approval-session-note">Session-wide grants are managed in Permission settings.</p>
+      <p className="approval-session-note">{copy.sessionNote}</p>
     </div>
   );
 }
 
-function reviewLabel(state: ApprovalReviewPresentationState): string {
+function formatApprovalMeta(template: string, approval: ApprovalSummary): string {
+  return template
+    .replace('{risk}', approval.risk)
+    .replace('{bytes}', String(approval.argumentBytes))
+    .replace('{time}', new Date(approval.expiresAt).toLocaleTimeString());
+}
+
+function reviewLabel(copy: ApprovalCardCopy, state: ApprovalReviewPresentationState): string {
   switch (state) {
-    case 'reviewed': return 'REVIEWED';
-    case 'asked': return 'ASKED';
-    case 'denied': return 'DENIED';
-    case 'review-unavailable': return 'REVIEW UNAVAILABLE';
+    case 'reviewed': return copy.reviewReviewedLabel;
+    case 'asked': return copy.reviewAskedLabel;
+    case 'denied': return copy.reviewDeniedLabel;
+    case 'review-unavailable': return copy.reviewUnavailableLabel;
   }
 }
 
-function reviewDescription(state: ApprovalReviewPresentationState): string {
+function reviewDescription(copy: ApprovalCardCopy, state: ApprovalReviewPresentationState): string {
   switch (state) {
-    case 'reviewed': return 'The bounded reviewer matched this exact low-risk key; the daemon policy still controls the one-time action.';
-    case 'asked': return 'The reviewer kept this request on the user approval path.';
-    case 'denied': return 'The reviewer denied this request; no capability is widened.';
-    case 'review-unavailable': return 'The review could not complete; the normal deterministic approval gate remains active.';
+    case 'reviewed': return copy.reviewReviewedDescription;
+    case 'asked': return copy.reviewAskedDescription;
+    case 'denied': return copy.reviewDeniedDescription;
+    case 'review-unavailable': return copy.reviewUnavailableDescription;
   }
 }

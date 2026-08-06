@@ -4,7 +4,7 @@ import { RecoveryCard } from './RecoveryCard.js';
 
 describe('RecoveryCard', () => {
   it('keeps retry explicitly scoped to a new run and remains path/secret free', () => {
-    const html = renderToStaticMarkup(<RecoveryCard onRetry={() => undefined} />);
+    const html = renderToStaticMarkup(<RecoveryCard copy={{ eyebrow: 'RECOVERY REQUIRED', title: 'This run stopped safely after a daemon restart.', description: 'Retry creates a new run from the original safety policy; interrupted tool calls are never replayed.', action: 'Retry as new run' }} onRetry={() => undefined} />);
     expect(html).toContain('class="recovery-card"');
     expect(html).toContain('RECOVERY REQUIRED');
     expect(html).toContain('Retry creates a new run');

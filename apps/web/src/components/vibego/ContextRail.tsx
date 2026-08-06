@@ -10,6 +10,7 @@ export interface ContextRailCopy {
   readonly connectionEyebrow: string;
   readonly connectionTitle: string;
   readonly description: string;
+  readonly readingDaemon: string;
   readonly transport: string;
   readonly tls: string;
   readonly sandbox: string;
@@ -79,7 +80,7 @@ export function ContextRail({ goalProjection, goalProjectionLoading, goalProject
           <div className="eyebrow">{copy.connectionEyebrow}</div>
           <h2>{copy.connectionTitle}</h2>
           <p className="muted">{copy.description}</p>
-          {health ? <dl className="summary-list"><div><dt>{copy.transport}</dt><dd>{health.transport.kind}</dd></div><div><dt>{copy.tls}</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>{copy.sandbox}</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">正在读取 daemon 状态…</p>}
+          {health ? <dl className="summary-list"><div><dt>{copy.transport}</dt><dd>{health.transport.kind}</dd></div><div><dt>{copy.tls}</dt><dd>{health.transport.tlsRequired ? 'required' : 'off'}</dd></div><div><dt>{copy.sandbox}</dt><dd>{health.sandbox.availableModes.join(' · ')}</dd></div></dl> : <p className="muted">{copy.readingDaemon}</p>}
         </Card>
         <Card className="panel safety-panel"><div className="eyebrow">{copy.safetyTitle}</div><ul>{copy.guardrails.map((item) => <li key={item}>{item}</li>)}</ul></Card>
       </div>
