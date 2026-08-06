@@ -152,6 +152,13 @@ export type MessageKey =
   | 'setup.stepDone'
   | 'setup.providerTitle'
   | 'setup.providerDescription'
+  | 'setup.providerPickerAriaLabel'
+  | 'setup.providerDeepSeekLabel'
+  | 'setup.providerDeepSeekDescription'
+  | 'setup.providerRecommendedBadge'
+  | 'setup.providerCustomLabel'
+  | 'setup.providerCustomDescription'
+  | 'setup.baseUrl'
   | 'setup.endpointProfile'
   | 'setup.endpoint'
   | 'setup.model'
@@ -614,7 +621,14 @@ const EN_US: Catalog = {
   'setup.stepWorkspace': 'Workspace',
   'setup.stepDone': 'Done',
   'setup.providerTitle': 'Connect a model provider',
-  'setup.providerDescription': 'DeepSeek is the default adapter. The key is sent to the daemon once and is never stored in the browser.',
+  'setup.providerDescription': 'Pick a provider preset; the key is sent to the daemon once and is never stored in the browser.',
+  'setup.providerPickerAriaLabel': 'Model provider presets',
+  'setup.providerDeepSeekLabel': 'DeepSeek',
+  'setup.providerDeepSeekDescription': 'Deep adaptation: thinking modes, tool calling and connection probe.',
+  'setup.providerRecommendedBadge': 'Recommended',
+  'setup.providerCustomLabel': 'OpenAI-compatible endpoint',
+  'setup.providerCustomDescription': 'Any OpenAI-compatible service with a custom base URL and model.',
+  'setup.baseUrl': 'Base URL',
   'setup.endpointProfile': 'Endpoint profile',
   'setup.endpoint': 'Endpoint',
   'setup.model': 'Model',
@@ -1074,7 +1088,14 @@ const ZH_CN: Catalog = {
   'setup.stepWorkspace': '工作区',
   'setup.stepDone': '完成',
   'setup.providerTitle': '连接模型提供方',
-  'setup.providerDescription': '默认使用 DeepSeek 适配器。API key 只发送一次给 daemon，不会保存在浏览器中。',
+  'setup.providerDescription': '选择一个提供方预设；API key 只发送一次给 daemon，不会保存在浏览器中。',
+  'setup.providerPickerAriaLabel': '模型提供方预设',
+  'setup.providerDeepSeekLabel': 'DeepSeek',
+  'setup.providerDeepSeekDescription': '深度适配：思考模式、工具调用与连接探测。',
+  'setup.providerRecommendedBadge': '推荐',
+  'setup.providerCustomLabel': 'OpenAI 兼容端点',
+  'setup.providerCustomDescription': '任意 OpenAI 兼容服务，自定义 Base URL 与模型。',
+  'setup.baseUrl': 'Base URL',
   'setup.endpointProfile': 'Endpoint 类型',
   'setup.endpoint': 'Endpoint',
   'setup.model': '模型',

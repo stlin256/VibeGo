@@ -9,6 +9,13 @@ const copy: SetupWizardCopy = {
   stepDone: 'Done',
   providerTitle: 'Connect a model provider',
   providerDescription: 'The key goes to the daemon once.',
+  providerPickerAriaLabel: 'Model provider presets',
+  providerDeepSeekLabel: 'DeepSeek',
+  providerDeepSeekDescription: 'Deep adaptation: thinking modes, tool calling and connection probe.',
+  providerRecommendedBadge: 'Recommended',
+  providerCustomLabel: 'OpenAI-compatible endpoint',
+  providerCustomDescription: 'Any OpenAI-compatible service with a custom base URL and model.',
+  baseUrl: 'Base URL',
   endpointProfile: 'Endpoint profile',
   endpoint: 'Endpoint',
   model: 'Model',
@@ -33,9 +40,21 @@ describe('SetupWizard', () => {
     expect(html).toContain('Set up VibeGo');
     expect(html).toContain('data-active="true"');
     expect(html).toContain('Connect a model provider');
+    expect(html).toContain('setup-provider-grid');
+    expect(html).toContain('DeepSeek');
+    expect(html).toContain('Recommended');
+    expect(html).toContain('OpenAI-compatible endpoint');
     expect(html).toContain('type="password"');
     expect(html).toContain('Save and continue');
     expect(html).not.toMatch(/sk-[a-z0-9]{10,}/iu);
+  });
+
+  it('shows the custom endpoint form when the OpenAI-compatible preset is selectable', () => {
+    const html = renderToStaticMarkup(<SetupWizard open activeWorkspaceId="default" copy={copy} onConfigureDeepSeek={() => undefined} onConfigureModel={() => undefined} onSelectWorkspace={() => undefined} onClose={() => undefined} />);
+    expect(html).toContain('setup-provider-grid');
+    expect(html).toContain('OpenAI Chat Completions');
+    expect(html).not.toContain('>Base URL<');
+    expect(html).not.toMatch(/api[_-]?key\s*[:=]/iu);
   });
 
   it('renders nothing while closed and keeps the key out of markup', () => {
