@@ -8,7 +8,7 @@
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1），以及模型 onboarding contracts、显式 OpenAI-compatible model probe、authenticated daemon probe route（Spec 54 Phase 0/1/2）、DeepSeek capability/snapshot、有界 provider-owned search application port 和显式 live smoke 边界（Spec 61-7/61-10）已经实现并通过测试。真实 DeepSeek search/reasoning 兼容性、签名发行包、ACME/系统证书自动化、系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1），以及模型 onboarding contracts、显式 OpenAI-compatible model probe、authenticated daemon probe route（Spec 54 Phase 0/1/2）、DeepSeek capability/snapshot、有界 provider-owned search application port 和显式 live smoke 边界（Spec 61-7/61-10/61-11）已经实现并通过测试。真实 DeepSeek search/reasoning 兼容性、签名发行包、ACME/系统证书自动化、系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -98,6 +98,17 @@ pnpm smoke:deepseek-search -- --mode live --authorize --endpoint https://api.dee
 live runner 不属于 `pnpm verify`，只输出有界状态/延迟/数量摘要；如果精确的 Responses
 endpoint 没有声明版本化的 provider-owned search capability，就保持 blocked。key、endpoint、
 query 和原始响应不会写入仓库。
+
+还可以对真实 endpoint 显式运行 reasoning smoke，但必须使用 `high` 或 `max`，并先通过
+严格 capability probe；没有声明 `reasoning=true` 时 fail-closed：
+
+```powershell
+$env:READY4VIBE_DEEPSEEK_API_KEY = '<out-of-band-key>'
+pnpm smoke:deepseek -- --endpoint https://api.deepseek.com/v1/responses --profile openai-responses --model deepseek-v4-flash --secret-env READY4VIBE_DEEPSEEK_API_KEY --scenario reasoning --thinking high
+```
+
+该 direct adapter smoke 不属于 `pnpm verify`，报告不会包含私有 reasoning 文本、endpoint、
+prompt、headers、原始响应或凭据；healthy 结果也不等同于 daemon/AgentLoop 或发行就绪证据。
 
 默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。构建 `apps/web/dist`
 后，daemon 会在同一个 Host URL 托管编译后的 Web、API 和 SSE；`READY4VIBE_WEB_DIST_DIR`

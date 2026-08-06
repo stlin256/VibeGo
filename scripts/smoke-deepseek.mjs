@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
-const USAGE = 'usage: pnpm smoke:deepseek -- --endpoint <https://provider.example/v1/chat/completions> --profile <openai-chat-completions|openai-responses|anthropic-messages> --model <model-id> --secret-env <ENV_VAR> [--scenario <text|cancel|timeout>] [--thinking <off|auto|high|max>] [--timeout-ms <100..30000>]';
+const USAGE = 'usage: pnpm smoke:deepseek -- --endpoint <https://provider.example/v1/chat/completions> --profile <openai-chat-completions|openai-responses|anthropic-messages> --model <model-id> --secret-env <ENV_VAR> [--scenario <text|reasoning|cancel|timeout>] [--thinking <off|auto|high|max>] [--timeout-ms <100..30000>]';
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_PROFILE = 'openai-chat-completions';
 const DEFAULT_MODEL = 'deepseek-v4-flash';
@@ -45,6 +45,9 @@ export function parseDeepSeekSmokeArgs(argv, environment = process.env) {
 
   if (typeof endpoint !== 'string' || endpoint.length === 0) throw new Error('endpoint is required');
   if (typeof secretEnv !== 'string' || secretEnv.length === 0) throw new Error('secret-env is required');
+  if (scenario === 'reasoning' && thinkingMode !== 'high' && thinkingMode !== 'max') {
+    throw new Error('reasoning scenario requires --thinking high or --thinking max');
+  }
   return Object.freeze({
     endpoint: validateEndpoint(endpoint, endpointProfile),
     endpointProfile: validateProfile(endpointProfile),
@@ -82,18 +85,40 @@ export async function runDeepSeekSmoke(options, dependencies = {}) {
     return report(options, 'blocked', elapsedMs(startedAt, now()), undefined, undefined, 'DEEPSEEK_CREDENTIAL_REQUIRED');
   }
 
+  const config = buildConfig(options);
+  let modelDeepSeek;
+  let probe;
+  if (options.scenario === 'reasoning') {
+    try {
+      probe = dependencies.probe
+        ? await dependencies.probe({ config, apiKey: secretValue, timeoutMs: options.timeoutMs })
+        : await (modelDeepSeek ??= await import('../packages/model-deepseek/dist/index.js')).probeDeepSeek({
+            config,
+            apiKey: secretValue,
+            timeoutMs: options.timeoutMs,
+            ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}),
+          });
+    } catch (error) {
+      const code = safeDeepSeekSmokeErrorCode(error, error?.message === 'DEEPSEEK_THINKING_UNSUPPORTED' ? 'DEEPSEEK_THINKING_UNSUPPORTED' : 'DEEPSEEK_SMOKE_PROBE_FAILED');
+      return report(options, statusForProbeError(code), elapsedMs(startedAt, now()), undefined, undefined, code, probe);
+    }
+    if (!hasReadyReasoningCapability(probe, options)) {
+      const code = probe?.status === 'ready' ? 'DEEPSEEK_THINKING_UNSUPPORTED' : safeDeepSeekProbeErrorCode(probe, 'DEEPSEEK_THINKING_UNSUPPORTED');
+      return report(options, statusForProbeError(code), elapsedMs(startedAt, now()), undefined, undefined, code, probe);
+    }
+  }
+
   let provider;
   try {
     if (dependencies.provider) provider = dependencies.provider;
-    else if (dependencies.providerFactory) provider = await dependencies.providerFactory({ options, secretValue });
+    else if (dependencies.providerFactory) provider = await dependencies.providerFactory({ options, config, capability: probe?.capabilities, secretValue });
     else {
-      const modelDeepSeek = dependencies.modelDeepSeek ?? await import('../packages/model-deepseek/dist/index.js');
-      const config = buildConfig(options);
-      provider = new modelDeepSeek.DeepSeekProvider({ config, apiKey: secretValue, ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}) });
+      modelDeepSeek ??= await import('../packages/model-deepseek/dist/index.js');
+      provider = new modelDeepSeek.DeepSeekProvider({ config, capability: probe?.capabilities, apiKey: secretValue, ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}) });
     }
   } catch (error) {
     const code = safeDeepSeekSmokeErrorCode(error, error?.message === 'DEEPSEEK_THINKING_UNSUPPORTED' ? 'DEEPSEEK_THINKING_UNSUPPORTED' : 'DEEPSEEK_SMOKE_PROVIDER_INIT');
-    return report(options, code === 'DEEPSEEK_THINKING_UNSUPPORTED' ? 'blocked' : 'failed', elapsedMs(startedAt, now()), undefined, undefined, code);
+    return report(options, code === 'DEEPSEEK_THINKING_UNSUPPORTED' ? 'blocked' : 'failed', elapsedMs(startedAt, now()), undefined, undefined, code, probe);
   }
 
   const controller = new AbortController();
@@ -118,22 +143,23 @@ export async function runDeepSeekSmoke(options, dependencies = {}) {
       metadata: { runId: 'deepseek-smoke-run', turnId: 'deepseek-smoke-turn', requestId: 'deepseek-smoke-request' },
     };
     for await (const event of provider.stream(request, controller.signal)) {
+      if (isPrivateReasoningEvent(event)) continue;
       if (event?.type === 'text-delta' || event?.type === 'tool-call-delta') firstTokenMs ??= elapsedMs(startedAt, now());
       events.push(event);
       if (event?.type === 'error') {
         const code = safeDeepSeekSmokeErrorCode(event, 'DEEPSEEK_SMOKE_FAILED');
-        return report(options, statusForError(code), elapsedMs(startedAt, now()), firstTokenMs, events, code);
+        return report(options, statusForError(code), elapsedMs(startedAt, now()), firstTokenMs, events, code, probe);
       }
     }
-    if (timedOut) return report(options, 'timeout', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_TIMEOUT');
-    if (cancelled) return report(options, 'cancelled', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_CANCELLED');
+    if (timedOut) return report(options, 'timeout', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_TIMEOUT', probe);
+    if (cancelled) return report(options, 'cancelled', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_CANCELLED', probe);
     const completed = events.find((event) => event?.type === 'completed');
-    if (!completed) return report(options, 'failed', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_STREAM_DISCONNECTED');
-    return report(options, 'healthy', elapsedMs(startedAt, now()), firstTokenMs, events);
+    if (!completed) return report(options, 'failed', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_STREAM_DISCONNECTED', probe);
+    return report(options, 'healthy', elapsedMs(startedAt, now()), firstTokenMs, events, undefined, probe);
   } catch (error) {
-    if (timedOut) return report(options, 'timeout', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_TIMEOUT');
-    if (cancelled) return report(options, 'cancelled', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_CANCELLED');
-    return report(options, 'failed', elapsedMs(startedAt, now()), firstTokenMs, events, safeDeepSeekSmokeErrorCode(error));
+    if (timedOut) return report(options, 'timeout', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_TIMEOUT', probe);
+    if (cancelled) return report(options, 'cancelled', elapsedMs(startedAt, now()), firstTokenMs, events, 'DEEPSEEK_CANCELLED', probe);
+    return report(options, 'failed', elapsedMs(startedAt, now()), firstTokenMs, events, safeDeepSeekSmokeErrorCode(error), probe);
   } finally {
     clearTimeout(timeoutTimer);
     if (cancelTimer !== undefined) clearTimeout(cancelTimer);
@@ -160,7 +186,7 @@ function buildConfig(options) {
   };
 }
 
-function report(options, status, elapsed, firstTokenMs, events = [], errorCode) {
+function report(options, status, elapsed, firstTokenMs, events = [], errorCode, probe) {
   const usage = events.filter((event) => event?.type === 'usage').at(-1);
   const completed = events.find((event) => event?.type === 'completed');
   const result = {
@@ -180,6 +206,10 @@ function report(options, status, elapsed, firstTokenMs, events = [], errorCode) 
       outputTokens: boundedUsage(usage?.outputTokens),
     },
   };
+  if (options.scenario === 'reasoning') {
+    result.probeStatus = probe?.status === 'ready' || probe?.status === 'degraded' || probe?.status === 'blocked' ? probe.status : null;
+    result.probeLatencyMs = boundedMetric(probe?.latencyMs);
+  }
   if (errorCode) result.errorCode = errorCode;
   return Object.freeze(result);
 }
@@ -193,6 +223,10 @@ function countEventTypes(events) {
   return counts;
 }
 
+function isPrivateReasoningEvent(event) {
+  return typeof event?.type === 'string' && /(?:reasoning|thought)/iu.test(event.type);
+}
+
 function boundedUsage(value) {
   return Number.isSafeInteger(value) && value >= 0 && value <= 10_000_000 ? value : null;
 }
@@ -202,6 +236,31 @@ function statusForError(code) {
   if (code === 'DEEPSEEK_CANCELLED') return 'cancelled';
   if (code === 'DEEPSEEK_CREDENTIAL_REQUIRED' || code === 'DEEPSEEK_THINKING_UNSUPPORTED') return 'blocked';
   return 'failed';
+}
+
+function statusForProbeError(code) {
+  if (code === 'DEEPSEEK_TIMEOUT') return 'timeout';
+  if (code === 'DEEPSEEK_CANCELLED') return 'cancelled';
+  return 'blocked';
+}
+
+function safeDeepSeekProbeErrorCode(probe, fallback) {
+  const code = probe && typeof probe === 'object' ? probe.errorCode : undefined;
+  return typeof code === 'string' && /^DEEPSEEK_[A-Z0-9_]{1,64}$/u.test(code) ? code : fallback;
+}
+
+function hasReadyReasoningCapability(probe, options) {
+  const capability = probe?.capabilities;
+  return probe?.status === 'ready'
+    && capability?.status === 'ready'
+    && capability.providerId === 'deepseek'
+    && capability.endpointProfile === options.endpointProfile
+    && capability.model === options.model
+    && capability.reasoning === true;
+}
+
+function boundedMetric(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= 120_000 ? value : null;
 }
 
 function validateEndpoint(value, profile) {
@@ -232,7 +291,7 @@ function validateSecretEnv(value) {
 }
 
 function validateScenario(value) {
-  if (value !== 'text' && value !== 'cancel' && value !== 'timeout') throw new Error('scenario is invalid');
+  if (value !== 'text' && value !== 'reasoning' && value !== 'cancel' && value !== 'timeout') throw new Error('scenario is invalid');
   return value;
 }
 

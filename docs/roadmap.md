@@ -1597,3 +1597,14 @@ and never creates a daemon, generic network tool or event ledger. The focused
 script gate passes 6/6; live provider compatibility was not run in this
 checkpoint and remains open. See [ADR 0056](adr/0056-deepseek-live-search-smoke-boundary.md)
 and [`spec61-10-live-search-smoke-2026-08-06.md`](reports/spec61-10-live-search-smoke-2026-08-06.md).
+
+### Spec 61-11 explicit live reasoning smoke checkpoint (2026-08-06)
+
+`smoke:deepseek -- --scenario reasoning` now requires explicit `high`/`max`
+thinking and performs a strict endpoint capability probe before one bounded
+stream. It fails closed unless the matching versioned capability declares
+`reasoning=true`; private reasoning deltas are not included in events or the
+report. The focused gate passes 9/9, but the authorized live endpoint was not
+run, so provider reasoning compatibility and release evidence remain open.
+See [ADR 0057](adr/0057-deepseek-live-reasoning-smoke-boundary.md) and
+[`spec61-11-live-reasoning-smoke-2026-08-06.md`](reports/spec61-11-live-reasoning-smoke-2026-08-06.md).

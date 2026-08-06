@@ -1629,3 +1629,21 @@ run in this checkpoint, so search compatibility remains blocked until a user
 explicitly runs the opt-in command. Evidence is recorded in
 [`spec61-10-live-search-smoke-2026-08-06.md`](reports/spec61-10-live-search-smoke-2026-08-06.md)
 and the boundary is frozen in [ADR 0056](adr/0056-deepseek-live-search-smoke-boundary.md).
+
+### Spec 61-11 explicit live reasoning smoke checkpoint (2026-08-06)
+
+The existing `smoke:deepseek` runner now accepts a `reasoning` scenario only
+with `--thinking high` or `--thinking max`. It probes the exact endpoint before
+constructing the provider and requires a matching ready capability snapshot
+with `reasoning=true`; missing, malformed, degraded or non-reasoning metadata
+remains blocked with a stable error and no model stream. The provider receives
+the immutable capability snapshot, while private reasoning event payloads are
+suppressed from the bounded report.
+
+The focused script gate passes 9/9. The report contains only mode,
+probe/status latency, bounded timing, event type counts, usage and stable
+errors; it excludes reasoning text, endpoint, prompt, headers, raw response,
+credential and paths. The authorized live endpoint was not run in this
+checkpoint, so real reasoning compatibility remains open. Evidence is
+recorded in [`spec61-11-live-reasoning-smoke-2026-08-06.md`](reports/spec61-11-live-reasoning-smoke-2026-08-06.md)
+and the boundary is frozen in [ADR 0057](adr/0057-deepseek-live-reasoning-smoke-boundary.md).
