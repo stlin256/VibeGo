@@ -32,6 +32,9 @@ production `node_modules/` and package metadata are retained, while source
 `src/`, TypeScript files (`*.ts`, `*.tsx`, `*.d.ts`) and `tsconfig.json` are
 omitted. This prevents test fixtures and source-only credential references
 from entering a runnable snapshot while preserving the compiled entry point.
+Dependency symlinks are materialized per destination so pnpm workspace aliases
+remain resolvable after extraction; only targets on the current recursive path
+are skipped to prevent cycles.
 The privacy scan rejects concrete token-shaped values and quoted credential
 assignments, but does not treat executable references such as
 `apiKey: normalized.apiKey` as leaked values. It creates a gzip tar archive

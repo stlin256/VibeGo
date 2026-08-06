@@ -111,9 +111,16 @@ async function copyTree(source, destination, fsApi, options = {}, sourceRoot = s
     // needed at runtime and is omitted rather than copying a workspace path.
     if (escaped && isKnownDaemonSelfLink(source)) return;
     if (escaped) throw new DeveloperSnapshotError('SNAPSHOT_SYMLINK_ESCAPE');
+    // A pnpm deploy has several aliases to the same workspace package. Those
+    // aliases must each be materialized at their destination after extraction;
+    // use the set only as a recursion-path guard so dependency cycles terminate.
     if (seen.has(target)) return;
     seen.add(target);
-    return copyTree(target, destination, fsApi, options, sourceRoot, seen);
+    try {
+      return await copyTree(target, destination, fsApi, options, sourceRoot, seen);
+    } finally {
+      seen.delete(target);
+    }
   }
   if (info.isDirectory()) {
     await fsApi.mkdir(destination, { recursive: true });

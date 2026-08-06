@@ -243,7 +243,9 @@ scan. The privacy scan rejects concrete token-shaped values and quoted
 credential assignments while allowing runtime code to reference an injected
 secret without embedding its value. It rejects runtime/user/research/
 credential content, writes bounded metadata/checksum/release notes and creates
-a gzip tar archive. The same
+a gzip tar archive. Workspace dependency aliases are materialized at each
+destination so the extracted daemon can resolve every production package
+without the source checkout. The same
 archive must be extracted and started through the Host launcher before an
 immutable GitHub prerelease is created. This slice is not a signed installer,
 SBOM/provenance attestation or stable release.
