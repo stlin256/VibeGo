@@ -11,6 +11,8 @@ import { Label } from './label.js';
 import { Separator } from './separator.js';
 import { Skeleton } from './skeleton.js';
 import { Textarea } from './textarea.js';
+import { Toast, ToastViewport } from './toast.js';
+import { Tooltip } from './tooltip.js';
 
 const uiDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +46,23 @@ describe('VibeGo local UI primitives', () => {
     expect(html).toContain('ui-badge ui-badge--outline');
     expect(html).toContain('role="separator" aria-orientation="vertical"');
     expect(html).toContain('role="status" aria-label="Loading run"');
+  });
+
+  it('renders toast variants in a live viewport and tooltip bubble semantics', () => {
+    const html = renderToStaticMarkup(
+      <ToastViewport>
+        <Toast variant="success" title="Run completed" description="Bounded output stored" onDismiss={() => undefined} />
+        <Toast variant="error" title="Run failed" />
+      </ToastViewport>,
+    );
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('ui-toast ui-toast--success');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('aria-label="Dismiss notification"');
+    const tip = renderToStaticMarkup(<Tooltip content="Bounded hint"><span>Hover target</span></Tooltip>);
+    expect(tip).toContain('role="tooltip"');
+    expect(tip).toContain('ui-tooltip__bubble');
   });
 
   it('keeps primitives isolated from API, storage and credential access', () => {

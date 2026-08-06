@@ -501,6 +501,26 @@ bounded telemetry projection.
 Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean
 with CSS at 9.59 KiB gzip under the 30 KiB budget.
 
+### Phase 42i implementation update (2026-08-06): toast and tooltip primitives
+
+Two overlay primitives joined the source-owned `components/ui` set.
+`Tooltip` renders a trigger slot plus a `role="tooltip"` bubble whose
+visibility is pure CSS (hover/focus-within) with a fast opacity+translate
+transition and a `top`/`bottom` side variant — no JS positioning, no
+timers. `Toast` is a presentational notification with `info`/`success`/
+`warning`/`error` variants mapped to the signal border-and-glow system;
+`warning`/`error` use `role="alert"`, the rest `role="status"`, and the
+optional dismiss button is a plain callback. `ToastViewport` is a fixed
+polite live region anchored bottom-right (full-width on phones, safe-area
+aware) where entries slide in from the right. Both honor
+`prefers-reduced-motion`, hold no state, and keep the primitive isolation
+contract — visibility, timers and dismissal stay with the caller, and the
+ui directory still passes the no-API/no-storage/no-credential scan.
+
+Validation: 113 Web tests passed, `tsc --noEmit` clean, `vite build` clean
+with CSS at 9.97 KiB gzip under the 30 KiB budget. Wiring the primitives
+into App-level error/status surfaces remains a follow-up step.
+
 ## 9. 退出条件
 
 本规格完成后：
