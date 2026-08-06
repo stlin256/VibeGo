@@ -24,41 +24,68 @@ export interface PermissionProfileCardProps {
   readonly confirmBusy?: boolean;
   readonly onRevoke?: (() => void) | undefined;
   readonly revokeBusy?: boolean;
+  readonly copy: PermissionProfileCardCopy;
 }
 
-const PROFILE_OPTIONS: readonly {
-  readonly id: 'workspace-coding' | 'full-host';
-  readonly label: string;
-  readonly description: string;
-}[] = [
-  {
-    id: 'workspace-coding',
-    label: 'Workspace coding',
-    description: 'Workspace-only files, network off, and bounded approvals for routine work.',
-  },
-  {
-    id: 'full-host',
-    label: 'Full host',
-    description: 'High risk: host files and processes. Trusted sessions only; never a default.',
-  },
-];
-
-const POSTURE_OPTIONS: readonly {
-  readonly id: 'bounded-auto' | 'session-auto' | 'explicit';
-  readonly label: string;
-  readonly description: string;
-}[] = [
-  { id: 'bounded-auto', label: 'Bounded auto', description: 'Routine exact-key workspace operations can proceed without repeated prompts.' },
-  { id: 'session-auto', label: 'Session auto', description: 'A confirmed trusted session may reuse a bounded host grant.' },
-  { id: 'explicit', label: 'Ask every time', description: 'Keep the inline Allow/Deny decision visible for each approval.' },
-];
+export interface PermissionProfileCardCopy {
+  readonly eyebrow: string;
+  readonly ariaLabel: string;
+  readonly unavailableNote: string;
+  readonly unpairedNote: string;
+  readonly profilesAriaLabel: string;
+  readonly workspaceCodingLabel: string;
+  readonly workspaceCodingDescription: string;
+  readonly fullHostLabel: string;
+  readonly fullHostDescription: string;
+  readonly safeBadge: string;
+  readonly riskBadge: string;
+  readonly postureAriaLabel: string;
+  readonly postureEyebrow: string;
+  readonly boundedAutoLabel: string;
+  readonly boundedAutoDescription: string;
+  readonly sessionAutoLabel: string;
+  readonly sessionAutoDescription: string;
+  readonly explicitLabel: string;
+  readonly explicitDescription: string;
+  readonly fullHostPostureHint: string;
+  readonly statusLabel: string;
+  readonly revisionLabel: string;
+  readonly requestedLabel: string;
+  readonly effectiveLabel: string;
+  readonly blockedValue: string;
+  readonly statusUnavailable: string;
+  readonly statusLoading: string;
+  readonly statusNotPaired: string;
+  readonly reasonLine: string;
+  readonly nextLine: string;
+  readonly effectiveScopeLine: string;
+  readonly fullHostWarningTitle: string;
+  readonly fullHostWarningBody: string;
+  readonly fullHostAckLabel: string;
+  readonly fullHostSaveFirst: string;
+  readonly confirming: string;
+  readonly fullHostConfirmed: string;
+  readonly confirmFullHost: string;
+  readonly grantTitle: string;
+  readonly grantMeta: string;
+  readonly revoking: string;
+  readonly revoke: string;
+  readonly blockedSafely: string;
+  readonly degradedSafely: string;
+  readonly sessionInactive: string;
+  readonly nextStepFallback: string;
+  readonly saving: string;
+  readonly save: string;
+  readonly saveNote: string;
+  readonly notSet: string;
+}
 
 /**
  * Presentation-only permission controls. The daemon remains the authority for
  * profile resolution, grants and approval decisions; this component never
  * receives or persists bearer/session credentials.
  */
-export function PermissionProfileCard({ settings, status, unavailable = false, selectedProfileId, selectedApprovalPosture, onProfileChange, onApprovalPostureChange, onSave, saveBusy = false, fullHostAcknowledged, onFullHostAcknowledgedChange, onConfirmFullHost, confirmBusy = false, onRevoke, revokeBusy = false }: PermissionProfileCardProps): JSX.Element {
+export function PermissionProfileCard({ settings, status, unavailable = false, selectedProfileId, selectedApprovalPosture, onProfileChange, onApprovalPostureChange, onSave, saveBusy = false, fullHostAcknowledged, onFullHostAcknowledgedChange, onConfirmFullHost, confirmBusy = false, onRevoke, revokeBusy = false, copy }: PermissionProfileCardProps): JSX.Element {
   const resolution = settings?.resolution;
   const requestedProfile = status?.requestedProfile ?? resolution?.requestedProfile ?? settings?.settings.profile;
   const effectiveProfile = status?.effectiveProfile ?? resolution?.effectiveProfile ?? null;
@@ -72,56 +99,69 @@ export function PermissionProfileCard({ settings, status, unavailable = false, s
     ? (effectiveProfile?.profileId === 'full-host' && Boolean(grant || status?.effectiveScope))
     : false;
   const canConfirm = fullHostSelected && savedFullHost && fullHostAcknowledged && Boolean(onConfirmFullHost) && !confirmBusy;
-  const statusLabel = statusValue ? statusValue : unavailable ? 'unavailable' : settings ? 'loading' : 'not paired';
+  const statusLabel = statusValue ? statusValue : unavailable ? copy.statusUnavailable : settings ? copy.statusLoading : copy.statusNotPaired;
+  const profileOptions = [
+    { id: 'workspace-coding', label: copy.workspaceCodingLabel, description: copy.workspaceCodingDescription },
+    { id: 'full-host', label: copy.fullHostLabel, description: copy.fullHostDescription },
+  ] as const;
+  const postureOptions = [
+    { id: 'bounded-auto', label: copy.boundedAutoLabel, description: copy.boundedAutoDescription },
+    { id: 'session-auto', label: copy.sessionAutoLabel, description: copy.sessionAutoDescription },
+    { id: 'explicit', label: copy.explicitLabel, description: copy.explicitDescription },
+  ] as const;
 
   return (
-    <div className="permission-profile-setup" aria-label="Permission profile settings">
-      <div className="eyebrow">PERMISSION PROFILE</div>
-      {unavailable ? <p className="muted">Permission settings are unavailable; existing run controls remain fail-closed and unchanged.</p> : !settings ? <p className="muted">Pair with the daemon to review permission profiles. Workspace coding remains the safe default.</p> : <>
-        <div className="permission-profile-options" role="radiogroup" aria-label="Permission profiles">
-          {PROFILE_OPTIONS.map((option) => <button key={option.id} type="button" className="permission-profile-option" data-selected={selectedProfileId === option.id ? 'true' : 'false'} data-risk={option.id === 'full-host' ? 'high' : 'bounded'} role="radio" aria-checked={selectedProfileId === option.id} disabled={saveBusy || confirmBusy} onClick={() => onProfileChange(option.id)}>
-            <span className="permission-profile-option-heading"><strong>{option.label}</strong>{option.id === 'workspace-coding' ? <span className="permission-safe-badge">SAFE DEFAULT</span> : <span className="permission-risk-badge">HIGH RISK</span>}</span>
+    <div className="permission-profile-setup" aria-label={copy.ariaLabel}>
+      <div className="eyebrow">{copy.eyebrow}</div>
+      {unavailable ? <p className="muted">{copy.unavailableNote}</p> : !settings ? <p className="muted">{copy.unpairedNote}</p> : <>
+        <div className="permission-profile-options" role="radiogroup" aria-label={copy.profilesAriaLabel}>
+          {profileOptions.map((option) => <button key={option.id} type="button" className="permission-profile-option" data-selected={selectedProfileId === option.id ? 'true' : 'false'} data-risk={option.id === 'full-host' ? 'high' : 'bounded'} role="radio" aria-checked={selectedProfileId === option.id} disabled={saveBusy || confirmBusy} onClick={() => onProfileChange(option.id)}>
+            <span className="permission-profile-option-heading"><strong>{option.label}</strong>{option.id === 'workspace-coding' ? <span className="permission-safe-badge">{copy.safeBadge}</span> : <span className="permission-risk-badge">{copy.riskBadge}</span>}</span>
             <span>{option.description}</span>
           </button>)}
         </div>
-        <div className="permission-posture-options" role="radiogroup" aria-label="Approval posture">
-          <div className="eyebrow">APPROVAL POSTURE</div>
-          {POSTURE_OPTIONS.map((option) => {
+        <div className="permission-posture-options" role="radiogroup" aria-label={copy.postureAriaLabel}>
+          <div className="eyebrow">{copy.postureEyebrow}</div>
+          {postureOptions.map((option) => {
             const disabled = fullHostSelected && option.id === 'bounded-auto';
-            return <button key={option.id} type="button" className="permission-posture-option" data-selected={selectedApprovalPosture === option.id ? 'true' : 'false'} disabled={disabled || saveBusy || confirmBusy} role="radio" aria-checked={selectedApprovalPosture === option.id} onClick={() => onApprovalPostureChange(option.id)} title={disabled ? 'Full host requires explicit or session-scoped approval.' : undefined}><strong>{option.label}</strong><span>{option.description}</span></button>;
+            return <button key={option.id} type="button" className="permission-posture-option" data-selected={selectedApprovalPosture === option.id ? 'true' : 'false'} disabled={disabled || saveBusy || confirmBusy} role="radio" aria-checked={selectedApprovalPosture === option.id} onClick={() => onApprovalPostureChange(option.id)} title={disabled ? copy.fullHostPostureHint : undefined}><strong>{option.label}</strong><span>{option.description}</span></button>;
           })}
         </div>
         <div className="permission-status-grid" data-status={statusValue ?? 'unknown'}>
-          <div><span>Status</span><strong>{statusLabel}</strong></div>
-          <div><span>Revision</span><strong>{status?.currentRevision ?? settings.currentRevision ?? '—'}</strong></div>
-          <div><span>Requested</span><strong>{requestedProfile?.profileId ?? selectedProfileId}</strong></div>
-          <div><span>Effective</span><strong>{effectiveProfile?.profileId ?? 'blocked'}</strong></div>
+          <div><span>{copy.statusLabel}</span><strong>{statusLabel}</strong></div>
+          <div><span>{copy.revisionLabel}</span><strong>{status?.currentRevision ?? settings.currentRevision ?? '—'}</strong></div>
+          <div><span>{copy.requestedLabel}</span><strong>{requestedProfile?.profileId ?? selectedProfileId}</strong></div>
+          <div><span>{copy.effectiveLabel}</span><strong>{effectiveProfile?.profileId ?? copy.blockedValue}</strong></div>
         </div>
-        <p className="muted permission-guidance">Reason: {reasonCode ?? 'not_evaluated'}{nextStep ? ` · Next: ${nextStep}` : ''}</p>
-        {effectiveProfile && <p className="muted permission-effective-summary">Effective scope: {effectiveProfile.filesystemScope} · process {effectiveProfile.processScope} · network {effectiveProfile.networkMode} · posture {effectiveProfile.approvalPosture}</p>}
+        <p className="muted permission-guidance">{fill(copy.reasonLine, { reason: reasonCode ?? 'not_evaluated' })}{nextStep ? fill(copy.nextLine, { next: nextStep }) : ''}</p>
+        {effectiveProfile && <p className="muted permission-effective-summary">{fill(copy.effectiveScopeLine, { filesystem: effectiveProfile.filesystemScope, process: effectiveProfile.processScope, network: effectiveProfile.networkMode, posture: effectiveProfile.approvalPosture })}</p>}
         {fullHostSelected && <div className="permission-full-host-warning" role="alert">
-          <strong>Full host access is trusted-only and never automatic.</strong>
-          <p>It may expose host files and processes. It does not enable network, MCP, Skill, Goal, Scheduler, Approval, or Sandbox bypass. Untrusted tasks remain blocked.</p>
-          <label className="toggle-row"><input type="checkbox" checked={fullHostAcknowledged} disabled={confirmBusy || saveBusy} onChange={(event) => onFullHostAcknowledgedChange(event.target.checked)} /><span>I understand the full-host risk for this trusted session.</span></label>
-          {!savedFullHost && <p className="muted">Save the full-host profile first, then confirm this session.</p>}
-          <Button type="button" disabled={!canConfirm} onClick={onConfirmFullHost}>{confirmBusy ? 'Confirming…' : fullHostConfirmed ? 'Full-host session confirmed' : 'Confirm full-host session'}</Button>
+          <strong>{copy.fullHostWarningTitle}</strong>
+          <p>{copy.fullHostWarningBody}</p>
+          <label className="toggle-row"><input type="checkbox" checked={fullHostAcknowledged} disabled={confirmBusy || saveBusy} onChange={(event) => onFullHostAcknowledgedChange(event.target.checked)} /><span>{copy.fullHostAckLabel}</span></label>
+          {!savedFullHost && <p className="muted">{copy.fullHostSaveFirst}</p>}
+          <Button type="button" disabled={!canConfirm} onClick={onConfirmFullHost}>{confirmBusy ? copy.confirming : fullHostConfirmed ? copy.fullHostConfirmed : copy.confirmFullHost}</Button>
         </div>}
         {grant && <div className="permission-grant-summary" data-status={grant.status}>
-          <div><strong>Trusted session grant</strong><span>{grant.status}</span></div>
-          <p className="muted">Expires {formatTimestamp(status?.grantExpiresAt ?? grant.expiresAt)} · Uses {grant.usedUses}/{grant.maxUses}</p>
-          {onRevoke && <Button type="button" variant="destructive" className="cancel-button" disabled={revokeBusy || grant.status === 'revoked'} onClick={onRevoke}>{revokeBusy ? 'Revoking…' : 'Revoke full-host session'}</Button>}
+          <div><strong>{copy.grantTitle}</strong><span>{grant.status}</span></div>
+          <p className="muted">{fill(copy.grantMeta, { time: formatTimestamp(status?.grantExpiresAt ?? grant.expiresAt, copy.notSet), used: String(grant.usedUses), max: String(grant.maxUses) })}</p>
+          {onRevoke && <Button type="button" variant="destructive" className="cancel-button" disabled={revokeBusy || grant.status === 'revoked'} onClick={onRevoke}>{revokeBusy ? copy.revoking : copy.revoke}</Button>}
         </div>}
-        {(statusValue === 'blocked' || statusValue === 'degraded' || statusValue === 'revoked' || statusValue === 'expired') && <p className="permission-next-step" data-status={statusValue}><strong>{statusValue === 'blocked' ? 'Blocked safely.' : statusValue === 'degraded' ? 'Degraded safely.' : 'Session access is no longer active.'}</strong> {nextStep ?? 'Review the daemon status and choose the safer workspace profile.'}</p>}
-        <div className="inline-actions permission-actions"><Button type="button" disabled={saveBusy || !onSave} onClick={onSave}>{saveBusy ? 'Saving…' : 'Save permission profile'}</Button><span className="muted permission-save-note">Changes apply to new runs only.</span></div>
+        {(statusValue === 'blocked' || statusValue === 'degraded' || statusValue === 'revoked' || statusValue === 'expired') && <p className="permission-next-step" data-status={statusValue}><strong>{statusValue === 'blocked' ? copy.blockedSafely : statusValue === 'degraded' ? copy.degradedSafely : copy.sessionInactive}</strong> {nextStep ?? copy.nextStepFallback}</p>}
+        <div className="inline-actions permission-actions"><Button type="button" disabled={saveBusy || !onSave} onClick={onSave}>{saveBusy ? copy.saving : copy.save}</Button><span className="muted permission-save-note">{copy.saveNote}</span></div>
       </>}
     </div>
   );
 }
 
-function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return 'not set';
+function fill(template: string, params: Readonly<Record<string, string>>): string {
+  return template.replace(/\{([a-zA-Z]+)\}/g, (match: string, name: string) => (name in params ? params[name] ?? match : match));
+}
+
+function formatTimestamp(value: string | null | undefined, notSet: string): string {
+  if (!value) return notSet;
   const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : 'not set';
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : notSet;
 }
 
 // Keep these references in this module so contract aliases remain part of the

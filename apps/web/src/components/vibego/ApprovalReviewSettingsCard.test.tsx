@@ -1,6 +1,46 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ApprovalReviewSettingsCard } from './ApprovalReviewSettingsCard.js';
+import type { ApprovalReviewSettingsCardCopy } from './ApprovalReviewSettingsCard.js';
+
+const copy: ApprovalReviewSettingsCardCopy = {
+  eyebrow: 'LLM APPROVAL REVIEW',
+  ariaLabel: 'Approval review settings',
+  unavailableNote: 'Approval review settings are unavailable. Existing deterministic approval remains unchanged.',
+  unpairedNote: 'Pair with the daemon to configure bounded approval review.',
+  enableLabel: 'Enable bounded approval review',
+  note: 'When enabled, a bounded model call may review exact low-risk requests. It can add latency and provider cost; it never grants capabilities or replaces the user for high-risk work.',
+  reviewerSourceLabel: 'Reviewer source',
+  sourceSameAsRun: 'Use current run model',
+  sourceDedicated: 'Dedicated reviewer (degraded until configured)',
+  dedicatedProfileLabel: 'Dedicated profile ID',
+  dedicatedHelp: 'Only a non-secret daemon profile ID is accepted. Credentials and endpoints stay in the daemon.',
+  postureAriaLabel: 'Approval review posture',
+  postureOffLabel: 'Off',
+  postureOffDescription: 'Keep every approval on the normal user path.',
+  postureAdvisoryLabel: 'Advisory',
+  postureAdvisoryDescription: 'Explain low-risk requests; you still choose Allow once.',
+  postureBoundedAutoLabel: 'Bounded auto',
+  postureBoundedAutoDescription: 'Only exact trusted low-risk keys may be auto-resolved through the existing ApprovalBroker.',
+  statusLabel: 'Status',
+  revisionLabel: 'Revision',
+  policyLabel: 'Policy',
+  lastLatencyLabel: 'Last latency',
+  statusUnavailable: 'Unavailable',
+  statusNotConfigured: 'Not configured',
+  notMeasured: 'not measured',
+  lastErrorPrefix: 'Last safe error: {code}. ',
+  limitsAriaLabel: 'Bounded reviewer limits',
+  maxLatencyLabel: 'Max latency (ms)',
+  maxRequestBytesLabel: 'Max request bytes',
+  maxResponseBytesLabel: 'Max response bytes',
+  cacheTtlLabel: 'Cache TTL (ms)',
+  scopeNote: 'Always asks you for destructive, network, full-host, untrusted, ambiguous or unavailable-sandbox requests. Session-wide grants are managed in Permission settings.',
+  saving: 'Saving…',
+  save: 'Save approval review',
+  probeHealth: 'Probe health',
+  saveNote: 'Changes apply to new runs only.',
+};
 
 const settings = {
   schemaVersion: 'llm-approval/v1' as const,
@@ -39,6 +79,7 @@ const props = {
   onCacheTtlMsChange: () => undefined,
   onSave: () => undefined,
   onProbe: () => undefined,
+  copy,
 };
 
 describe('ApprovalReviewSettingsCard', () => {
