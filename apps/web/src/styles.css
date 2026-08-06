@@ -470,6 +470,20 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .context-rail[data-open="true"] { animation: ui-slide-in-right var(--vibego-duration-normal) var(--vibego-ease-out); }
 @media (prefers-reduced-motion: reduce) { .settings-backdrop[data-open="true"], .settings-panel[data-open="true"], .context-rail[data-open="true"] { animation: none; } }
 
+/* === Conversation live motion (Spec 42g) === */
+/* Streaming caret: gradient bar that blinks at the end of the live output. */
+.stream-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: text-bottom; border-radius: 1px; background: var(--vibego-gradient-signal); box-shadow: 0 0 8px rgb(92 225 230 / 45%); animation: ui-stream-cursor 1.1s var(--vibego-ease-in-out) infinite; }
+/* Timeline rows fade in once when their DOM node first mounts; stable React
+   keys keep existing rows from replaying the animation on re-render. */
+.event-row { animation: ui-fade-in var(--vibego-duration-fast) var(--vibego-ease-out); }
+/* Approval and recovery cards enter with bounded motion so a new decision
+   point is visible without relying on color alone. */
+.approval-card { animation: ui-slide-up var(--vibego-duration-normal) var(--vibego-ease-out); }
+.recovery-card { animation: ui-slide-up var(--vibego-duration-normal) var(--vibego-ease-out), ui-shake var(--vibego-duration-slow) var(--vibego-ease-in-out); }
+@keyframes ui-shake { 0%, 100% { translate: 0 0; } 20% { translate: -3px 0; } 40% { translate: 3px 0; } 60% { translate: -2px 0; } 80% { translate: 2px 0; } }
+.tool-output-card[open] pre { animation: ui-fade-in var(--vibego-duration-fast) var(--vibego-ease-out); }
+@media (prefers-reduced-motion: reduce) { .stream-cursor, .event-row, .approval-card, .recovery-card, .tool-output-card[open] pre { animation: none; } }
+
 /* Spec 38: conversation-first shell. The existing settings form remains a
    semantic component, but it is a dismissible drawer rather than the default
    reading surface. */

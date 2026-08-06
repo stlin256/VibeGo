@@ -457,6 +457,29 @@ plus an explicit rule for the new entrance animations.
 
 Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean.
 
+### Phase 42g implementation update (2026-08-06): conversation live motion
+
+The run console now communicates live state with bounded motion. While a
+run is in a non-terminal status, the output view renders a streaming caret
+(`stream-cursor`): a 2px bar using the cyan→lime signal gradient with a
+soft glow that blinks on the shared `ui-stream-cursor` keyframe. The caret
+is `aria-hidden` and disappears for terminal statuses, so completion is
+visible even with color perception limitations. The cancel affordance
+condition now reuses the same terminal-status set as the caret instead of
+duplicating the list inline.
+
+Timeline event rows play a one-shot fade when their DOM node mounts; stable
+React keys (`runId` + `seq`) keep existing rows from replaying the
+animation when new events append. Approval cards slide up on entrance and
+recovery cards combine the same slide with a short `ui-shake` keyframe so
+the recovery decision point is noticeable without color. Expanded tool
+output `<pre>` blocks fade in when their `<details>` opens. Every new
+animation is disabled under `prefers-reduced-motion` via an explicit guard
+in addition to the global rule.
+
+Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean
+with CSS at 9.36 KiB gzip under the 30 KiB budget.
+
 ## 9. 退出条件
 
 本规格完成后：
