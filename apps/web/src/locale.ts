@@ -142,6 +142,31 @@ export type MessageKey =
   | 'reviewer.eyebrow'
   | 'reviewer.off'
   | 'reviewer.frozen'
+  | 'connection.pairingAuto'
+  | 'connection.pairingAutoHint'
+  | 'connection.pairingManualDivider'
+  | 'setup.title'
+  | 'setup.stepProvider'
+  | 'setup.stepWorkspace'
+  | 'setup.stepDone'
+  | 'setup.providerTitle'
+  | 'setup.providerDescription'
+  | 'setup.endpointProfile'
+  | 'setup.endpoint'
+  | 'setup.model'
+  | 'setup.apiKey'
+  | 'setup.probe'
+  | 'setup.saveAndContinue'
+  | 'setup.continueLabel'
+  | 'setup.skip'
+  | 'setup.workspaceTitle'
+  | 'setup.workspaceDescription'
+  | 'setup.doneTitle'
+  | 'setup.doneDescription'
+  | 'setup.startTask'
+  | 'setup.bannerText'
+  | 'setup.bannerAction'
+  | 'setup.close'
   | 'accessibility.statusLabel';
 
 type Catalog = Readonly<Record<MessageKey, string>>;
@@ -278,6 +303,31 @@ const EN_US: Catalog = {
   'reviewer.eyebrow': 'APPROVAL REVIEW SNAPSHOT',
   'reviewer.off': 'off',
   'reviewer.frozen': 'revision {rev} · policy {policy} · frozen for this run',
+  'connection.pairingAuto': 'Connect automatically',
+  'connection.pairingAutoHint': 'Reads a one-time code from the local daemon — nothing to type.',
+  'connection.pairingManualDivider': 'or enter a pairing code',
+  'setup.title': 'Set up VibeGo',
+  'setup.stepProvider': 'Model',
+  'setup.stepWorkspace': 'Workspace',
+  'setup.stepDone': 'Done',
+  'setup.providerTitle': 'Connect a model provider',
+  'setup.providerDescription': 'DeepSeek is the default adapter. The key is sent to the daemon once and is never stored in the browser.',
+  'setup.endpointProfile': 'Endpoint profile',
+  'setup.endpoint': 'Endpoint',
+  'setup.model': 'Model',
+  'setup.apiKey': 'API key',
+  'setup.probe': 'Probe',
+  'setup.saveAndContinue': 'Save and continue',
+  'setup.continueLabel': 'Continue',
+  'setup.skip': 'Skip for now',
+  'setup.workspaceTitle': 'Choose a workspace',
+  'setup.workspaceDescription': 'Runs stay inside this folder; you can change it later in Settings.',
+  'setup.doneTitle': 'All set',
+  'setup.doneDescription': 'Model and workspace are configured. Describe your first task to get started.',
+  'setup.startTask': 'Start first task',
+  'setup.bannerText': 'No model configured yet — runs need a saved provider.',
+  'setup.bannerAction': 'Set up now',
+  'setup.close': 'Close setup',
   'accessibility.statusLabel': 'Live status',
 };
 
@@ -411,6 +461,31 @@ const ZH_CN: Catalog = {
   'reviewer.eyebrow': '审批评审快照',
   'reviewer.off': '关闭',
   'reviewer.frozen': '版本 {rev} · 策略 {policy} · 本次运行已冻结',
+  'connection.pairingAuto': '一键连接',
+  'connection.pairingAutoHint': '自动从本机 daemon 读取一次性配对码，无需输入。',
+  'connection.pairingManualDivider': '或手动输入配对码',
+  'setup.title': '初始设置',
+  'setup.stepProvider': '模型',
+  'setup.stepWorkspace': '工作区',
+  'setup.stepDone': '完成',
+  'setup.providerTitle': '连接模型提供方',
+  'setup.providerDescription': '默认使用 DeepSeek 适配器。API key 只发送一次给 daemon，不会保存在浏览器中。',
+  'setup.endpointProfile': 'Endpoint 类型',
+  'setup.endpoint': 'Endpoint',
+  'setup.model': '模型',
+  'setup.apiKey': 'API key',
+  'setup.probe': '探测',
+  'setup.saveAndContinue': '保存并继续',
+  'setup.continueLabel': '继续',
+  'setup.skip': '暂时跳过',
+  'setup.workspaceTitle': '选择工作区',
+  'setup.workspaceDescription': '运行只会在这个文件夹内进行，之后可在设置中更改。',
+  'setup.doneTitle': '一切就绪',
+  'setup.doneDescription': '模型和工作区已配置完成。描述你的第一个任务即可开始。',
+  'setup.startTask': '开始第一个任务',
+  'setup.bannerText': '尚未配置模型——保存提供方后才能开始运行。',
+  'setup.bannerAction': '立即设置',
+  'setup.close': '关闭设置',
   'accessibility.statusLabel': '实时状态',
 };
 

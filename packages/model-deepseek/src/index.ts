@@ -337,7 +337,9 @@ export function translateDeepSeekChatChunk(input: unknown, state: DeepSeekTransl
     const choice = asRecord(choiceValue);
     const delta = asRecord(choice?.delta);
     if (!choice || !delta) return [malformedEvent()];
-    if (delta.content !== undefined) {
+    // DeepSeek reasoning models stream `content: null` while only `reasoning_content`
+    // is populated; treat null like an absent field instead of failing closed.
+    if (delta.content !== undefined && delta.content !== null) {
       if (typeof delta.content !== 'string') return [malformedEvent()];
       if (delta.content.length > 256 * 1024) return [malformedEvent()];
       if (delta.content.length > 0) events.push({ type: 'text-delta', text: delta.content });

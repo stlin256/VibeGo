@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDeploymentReadiness, createDeploymentProfile, DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
-import { AuthGate } from '@ready4vibe/auth';
+import { AuthGate, defaultLoopbackOrigins } from '@ready4vibe/auth';
 import { buildCertificateReadiness, inspectTlsCertificate, loadTlsCredentials } from '@ready4vibe/certificates';
 import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
@@ -44,14 +44,16 @@ const certificateReadiness = buildCertificateReadiness(certificateStatus, { tlsR
 const deploymentReadiness = buildDeploymentReadiness(createDeploymentProfile(transportMode), {
   certificate: certificateReadiness.status === 'ready' ? 'ready' : certificateReadiness.status === 'degraded' ? 'degraded' : 'blocked',
 });
+const port = parsePort(process.env.READY4VIBE_PORT ?? '8787');
 const allowedOrigins = process.env.READY4VIBE_ALLOWED_ORIGINS?.split(',').map((value) => value.trim()).filter(Boolean);
+// Same-origin browser writes carry an Origin header; loopback defaults keep the hosted UI usable out of the box while LAN stays fail-closed on explicit origins.
+const effectiveAllowedOrigins = allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : transportMode === 'loopback' ? [...defaultLoopbackOrigins(port, tlsEnabled)] : undefined;
 const authGate = new AuthGate({
   mode: transportMode,
   authRequired: process.env.READY4VIBE_AUTH_REQUIRED !== '0',
   tlsRequired,
-  ...(allowedOrigins && allowedOrigins.length > 0 ? { allowedOrigins } : {}),
+  ...(effectiveAllowedOrigins ? { allowedOrigins: effectiveAllowedOrigins } : {}),
 });
-const port = parsePort(process.env.READY4VIBE_PORT ?? '8787');
 const dataDir = process.env.READY4VIBE_DATA_DIR ?? '.ready4vibe';
 mkdirSync(dataDir, { recursive: true });
 const eventStore = new SqliteEventStore(join(dataDir, 'events.sqlite'));

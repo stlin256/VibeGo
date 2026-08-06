@@ -8,4 +8,5 @@ export * from './RecoveryCard.js';
 export * from './SettingsSheet.js';
 export * from './SettingsSection.js';
 export * from './SettingsTabs.js';
+export * from './SetupWizard.js';
 export * from './WorkspaceRail.js';

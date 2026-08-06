@@ -66,6 +66,43 @@ describe('ApiClient', () => {
     expect(client.hasSession()).toBe(false);
   });
 
+  it('drops the session and notifies on daemon auth rejection', async () => {
+    const fetcher: FetchLike = async (input) => {
+      if (String(input).endsWith('/pairing/complete')) return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 2_000 });
+      return response({ error: { code: 'INVALID_TOKEN', message: 'expired' } }, 401);
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    let notified = 0;
+    client.onAuthFailure = () => { notified += 1; };
+    await client.completePairing('PAIR');
+    expect(client.hasSession()).toBe(true);
+    await expect(client.createRun({} as never)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(client.hasSession()).toBe(false);
+    expect(notified).toBe(1);
+    // Without a stored session the request still carries no bearer; the daemon
+    // rejects again and the client keeps notifying so the UI returns to pairing.
+    await expect(client.createRun({} as never)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(notified).toBe(2);
+  });
+
+  it('starts loopback pairing without a session and never persists the code', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      if (input.endsWith('/pairing/start')) return response({ code: 'PAIR-CODE', expiresAt: 2_000 });
+      return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 3_000 });
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    const started = await client.startPairing();
+    expect(started.code).toBe('PAIR-CODE');
+    expect(client.hasSession()).toBe(false);
+    expect(calls[0]?.input).toBe('http://daemon/api/v1/pairing/start');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(JSON.stringify(calls[0]?.init?.headers ?? {})).not.toMatch(/Authorization|CSRF/iu);
+    await client.completePairing(started.code);
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ code: 'PAIR-CODE' }));
+  });
+
   it('reads the bounded Goal projection with the existing authenticated headers', async () => {
     const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
     const fetcher: FetchLike = async (input, init) => {

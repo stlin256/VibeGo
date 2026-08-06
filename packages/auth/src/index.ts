@@ -245,3 +245,16 @@ export function isLoopbackAddress(value: string | undefined): boolean {
   const normalized = value.toLowerCase().replace(/^::ffff:/u, '');
   return normalized === '::1' || normalized.startsWith('127.');
 }
+
+/**
+ * Same-origin allowlist for the daemon-hosted Web UI on loopback. Browsers
+ * always send an Origin header on fetch POSTs, so without these defaults
+ * every authenticated browser write failed closed with ORIGIN_FORBIDDEN even
+ * though the page was served by the daemon itself. LAN/public modes must set
+ * READY4VIBE_ALLOWED_ORIGINS explicitly; this helper is only for loopback.
+ */
+export function defaultLoopbackOrigins(port: number, secure = false): readonly string[] {
+  if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) throw new Error('port must be a valid TCP port');
+  const scheme = secure ? 'https' : 'http';
+  return [`${scheme}://127.0.0.1:${port}`, `${scheme}://localhost:${port}`, `${scheme}://[::1]:${port}`];
+}

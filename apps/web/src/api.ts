@@ -372,6 +372,11 @@ export interface GovernedPreflightInput extends RunConfigInput {
   readonly expiresAt?: string;
 }
 
+export interface PairingStartResult {
+  code: string;
+  expiresAt: number;
+}
+
 export interface PairingResult {
   accessToken: string;
   csrfToken: string;
@@ -389,6 +394,8 @@ export class ApiError extends Error {
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export class ApiClient {
+  /** Invoked when the daemon rejects or the client lacks a session; listeners should return to pairing. */
+  onAuthFailure?: () => void;
   private session: PairingResult | undefined;
   private readonly fetcher: FetchLike;
   private readonly baseUrl: string;
@@ -690,6 +697,10 @@ export class ApiClient {
     return this.request<SandboxSettingsStatus>('/api/v1/settings/sandbox', { method: 'POST', body: JSON.stringify(input) });
   }
 
+  async startPairing(): Promise<PairingStartResult> {
+    return this.request<PairingStartResult>('/api/v1/pairing/start', { method: 'POST' }, false);
+  }
+
   async completePairing(code: string): Promise<PairingResult> {
     const result = await this.request<PairingResult>('/api/v1/pairing/complete', {
       method: 'POST',
@@ -758,7 +769,10 @@ export class ApiClient {
   }
 
   private requireSession(): PairingResult {
-    if (!this.session) throw new ApiError(401, 'AUTH_REQUIRED', 'Authentication required.');
+    if (!this.session) {
+      this.onAuthFailure?.();
+      throw new ApiError(401, 'AUTH_REQUIRED', 'Authentication required.');
+    }
     return this.session;
   }
 
@@ -788,7 +802,12 @@ export class ApiClient {
   private async toApiError(response: Response): Promise<ApiError> {
     try {
       const body = await response.json() as { error?: { code?: string; message?: string } };
-      return new ApiError(response.status, body.error?.code ?? 'HTTP_ERROR', body.error?.message ?? 'Request failed.');
+      const code = body.error?.code ?? 'HTTP_ERROR';
+      if (code === 'AUTH_REQUIRED' || code === 'INVALID_TOKEN') {
+        this.session = undefined;
+        this.onAuthFailure?.();
+      }
+      return new ApiError(response.status, code, body.error?.message ?? 'Request failed.');
     } catch {
       return new ApiError(response.status, 'HTTP_ERROR');
     }

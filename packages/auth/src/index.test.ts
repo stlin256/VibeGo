@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AuthGate, AuthGateError, isLoopbackAddress } from './index.js';
+import { AuthGate, AuthGateError, defaultLoopbackOrigins, isLoopbackAddress } from './index.js';
 
 function deterministicRandom(): (size: number) => Uint8Array {
   let value = 0;
@@ -62,5 +62,22 @@ describe('AuthGate', () => {
     expect(gate.authorize({ method: 'GET', path: '/api/v1/runs/run_1', remoteAddress: '192.168.1.5', secure: false })).toMatchObject({ allowed: true });
     expect(isLoopbackAddress('::ffff:127.0.0.1')).toBe(true);
     expect(isLoopbackAddress('192.168.1.5')).toBe(false);
+  });
+});
+
+describe('defaultLoopbackOrigins', () => {
+  it('covers the loopback host variants for the daemon-hosted UI', () => {
+    expect(defaultLoopbackOrigins(61562)).toEqual(['http://127.0.0.1:61562', 'http://localhost:61562', 'http://[::1]:61562']);
+    expect(defaultLoopbackOrigins(443, true)).toEqual(['https://127.0.0.1:443', 'https://localhost:443', 'https://[::1]:443']);
+  });
+
+  it('rejects invalid ports and keeps browser writes authorized for the hosted origin', () => {
+    expect(() => defaultLoopbackOrigins(0)).toThrow();
+    expect(() => defaultLoopbackOrigins(70000)).toThrow();
+    const gate = new AuthGate({ mode: 'loopback', authRequired: true, randomBytes: deterministicRandom(), allowedOrigins: [...defaultLoopbackOrigins(8787)] });
+    const session = gate.completePairing(gate.startPairing().code);
+    const write = { method: 'POST', path: '/api/v1/settings/deepseek', remoteAddress: '127.0.0.1', secure: false, authorization: `Bearer ${session.accessToken}`, origin: 'http://localhost:8787', csrfToken: session.csrfToken };
+    expect(gate.authorize(write)).toMatchObject({ allowed: true });
+    expect(gate.authorize({ ...write, origin: 'https://evil.example' })).toMatchObject({ allowed: false, failureCode: 'ORIGIN_FORBIDDEN' });
   });
 });

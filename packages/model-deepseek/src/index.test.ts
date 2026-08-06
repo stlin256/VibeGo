@@ -79,6 +79,12 @@ describe('DeepSeek protocol translators', () => {
     ]);
   });
 
+  it('tolerates reasoning-model chunks with null content', () => {
+    expect(translateDeepSeekChatChunk({ choices: [{ index: 0, delta: { role: 'assistant', content: null, reasoning_content: '' } }] })).toEqual([]);
+    expect(translateDeepSeekChatChunk({ choices: [{ index: 0, delta: { content: null, reasoning_content: 'think' } }] })).toEqual([]);
+    expect(translateDeepSeekChatChunk({ choices: [{ index: 0, delta: { content: 'hello', reasoning_content: null } }] })).toEqual([{ type: 'text-delta', text: 'hello' }]);
+  });
+
   it('fails closed on malformed protocol events and maps HTTP retry semantics', () => {
     expect(translateDeepSeekChatChunk({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 42 } }] } }] })[0]).toMatchObject({ type: 'error', code: 'DEEPSEEK_MALFORMED_EVENT', retryable: false });
     expect(translateDeepSeekResponsesEvent({ type: 'unknown.provider.event', value: true })[0]).toMatchObject({ type: 'error', code: 'DEEPSEEK_MALFORMED_EVENT', retryable: false });
