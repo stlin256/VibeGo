@@ -56,6 +56,14 @@ No credential is read by the packager. GitHub authentication is supplied only
 to the explicit `gh release create` command by the operator environment and is
 never written to a file, argument, artifact or release note.
 
+The first promotion following this decision is
+[v0.1.0-nightly.20260806.ca16fa6](https://github.com/stlin256/VibeGo/releases/tag/v0.1.0-nightly.20260806.ca16fa6)
+from commit `ca16fa6b0960a8240fef4627a4da4b0fb1808658`. The Windows x64
+archive is 2,636,099 bytes with SHA-256
+`bd291af4b812556119ebe6311f35c726165b10fc0d8e366cd3982d58ae8ec3fb`; the
+uploaded assets and downloaded archive were verified before publication was
+recorded.
+
 The daemon declares every runtime import, including `zod`, directly in its
 package boundary so the materialized deploy is buildable without relying on a
 hoisted root dependency.

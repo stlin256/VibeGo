@@ -253,3 +253,9 @@ SBOM/provenance attestation or stable release.
 
 The local implementation and extracted-launcher evidence are recorded in
 [`spec57c-developer-snapshot-2026-08-06.md`](../reports/spec57c-developer-snapshot-2026-08-06.md).
+The first immutable promotion is
+[v0.1.0-nightly.20260806.ca16fa6](https://github.com/stlin256/VibeGo/releases/tag/v0.1.0-nightly.20260806.ca16fa6),
+bound to commit `ca16fa6b0960a8240fef4627a4da4b0fb1808658`. Its Windows x64
+archive is 2,636,099 bytes with SHA-256
+`bd291af4b812556119ebe6311f35c726165b10fc0d8e366cd3982d58ae8ec3fb`; the
+uploaded assets were downloaded and verified before this evidence was recorded.

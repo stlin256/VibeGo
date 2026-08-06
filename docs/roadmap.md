@@ -819,6 +819,10 @@ It does not claim platform signing, SBOM/provenance, installer or stable
 approval. See [ADR 0060](adr/0060-developer-snapshot-packaging-and-promotion.md).
 Local build and extracted-launcher evidence is recorded in
 [`spec57c-developer-snapshot-2026-08-06.md`](reports/spec57c-developer-snapshot-2026-08-06.md).
+The immutable prerelease
+[v0.1.0-nightly.20260806.ca16fa6](https://github.com/stlin256/VibeGo/releases/tag/v0.1.0-nightly.20260806.ca16fa6)
+is bound to commit `ca16fa6b0960a8240fef4627a4da4b0fb1808658`; its downloaded
+Windows x64 archive was re-hashed and re-run through the launcher smoke.
 
 推荐实施顺序为 `53 → 54 → 56 → 55 → 57`；Spec 57 的 stable gate 必须汇总前四项的
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读

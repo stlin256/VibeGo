@@ -120,7 +120,7 @@ release evidence gaps.
 | Blocker | Return spec | Evidence required |
 | --- | --- | --- |
 | Provider 5xx/timeout and broad failure evidence | 60-4/47 | explicitly authorized bounded live negative smoke, never a fake pass |
-| Task-specific Goal validation/recovery | 58-6/60-3 | independent semantic verifier, crash/retry evidence and no old tool replay (bounded timeout/cancellation is now covered) |
+| Task-specific Goal validation/recovery | 58-6/60-3 | the bounded structured semantic verifier, serialized monitor, reservation release and no-old-tool-replay evidence are now present; broader crash/remote recovery and richer objective review remain separate gates |
 | Host/container/platform parity | 48/59-5 | permission/container cleanup evidence on target platforms |
 | ACME/public/Tailscale/SSH | 55/60-6 | staging-only certificate and explicit remote adapter smoke |
 | Real device/accessibility matrix | 56/62-6 | desktop/portrait/phone/fold/tri-fold/tablet plus screen reader review |
@@ -143,3 +143,22 @@ This audit remains intentionally anchored to commit `6f05ad7` as a historical
 ordering fix and the Spec 61-10 explicit live-search smoke boundary; a future
 62-0 refresh must rerun the matrix against that newer checkout rather than
 silently treating this report as current release evidence.
+
+## Post-audit follow-up (2026-08-06)
+
+The newer `main` commit `ca16fa6b0960a8240fef4627a4da4b0fb1808658` closes the
+bounded Spec 58-6f structured objective-aware verifier/recovery slice and
+publishes the first Spec 57c Windows x64 developer snapshot. The immutable
+prerelease is
+[v0.1.0-nightly.20260806.ca16fa6](https://github.com/stlin256/VibeGo/releases/tag/v0.1.0-nightly.20260806.ca16fa6);
+the archive digest is
+`sha256:bd291af4b812556119ebe6311f35c726165b10fc0d8e366cd3982d58ae8ec3fb`.
+This follow-up does not promote the historical matrix to release-ready:
+signing/SBOM/provenance, stable install/upgrade, public ACME/Tailscale/SSH,
+cross-platform and physical-device evidence remain separate gates.
+
+For the current `main`, the historical matrix rows should therefore be read as
+follows: Spec 57 is `partial` with a published unsigned developer snapshot
+(stable/signing/SBOM/provenance gates remain blocked), and Spec 58 is `partial`
+with the bounded structured semantic/recovery closure implemented while the
+broader 58-7/module/release gates remain open.

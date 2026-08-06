@@ -1261,18 +1261,17 @@ The fresh audit for the post-Spec-61 checkout is recorded in
 At `6f05ad7` on `main`, the bounded workflow fixture is 82/82 and the current
 capability slice passes contracts 124/124, model-deepseek 20/20 and daemon
 275/275 focused suites. Spec 58-6 task-specific verifier-registry/runtime
-contract and Spec 63-10
-dedicated-reviewer fixtures are included in these current gates. The current full
-`pnpm verify` also passes typecheck, build, all workspace test jobs and both diff checks. The audit still marks Spec 62 as
+contract and Spec 63-10 dedicated-reviewer fixtures are included in those
+historical gates. The post-audit `ca16fa6` implementation adds the structured
+objective-aware semantic verifier and serialized recovery monitor; its focused
+contracts/daemon evidence and current release gates are recorded in the
+Spec 58-6f and Spec 57c reports. The audit still marks Spec 62 as
 documentation-constrained rather than release-ready: real-device,
 public-certificate, Tailscale/SSH, installer/signing/SBOM, cross-platform host
 and complete Spec 60 evidence remain partial or blocked. Spec 61 remains
-partial for provider-owned search/reasoning, production tool/reviewer evidence
-and its documentation handoff. Spec 63-10 has bounded dedicated-reviewer live
-adapter evidence, but it is not run/tool/release evidence. Spec 58-6 has an
-explicit registry boundary; verifier timeout/cancellation is now bounded and
-semantic task validation remains open. The report is the current prerequisite matrix;
-the 2026-08-05 report remains historical.
+partial for provider-owned search/reasoning and production tool/reviewer
+evidence. The 2026-08-05 report remains historical; the current release
+evidence is the immutable VibeGo nightly prerelease documented below.
 
 ## Verification follow-up: deterministic observability window fixture (2026-08-05)
 
@@ -1673,5 +1672,11 @@ The artifact is built from a runtime-only materialized daemon deploy, Web dist
 and Host launcher; source/TypeScript material is omitted, dependency aliases
 are materialized per destination, and secret/path/runtime scans run before
 archive creation. It is extracted and smoke-tested through the Host launcher
-before an immutable GitHub prerelease. Signing, SBOM/provenance and stable
+and has now been promoted as the immutable prerelease
+[v0.1.0-nightly.20260806.ca16fa6](https://github.com/stlin256/VibeGo/releases/tag/v0.1.0-nightly.20260806.ca16fa6)
+from source commit `ca16fa6b0960a8240fef4627a4da4b0fb1808658`. The published
+Windows x64 archive is 2,636,099 bytes with SHA-256
+`bd291af4b812556119ebe6311f35c726165b10fc0d8e366cd3982d58ae8ec3fb`; all four
+downloaded release assets were re-hashed and the downloaded archive was
+re-tested through the Host launcher. Signing, SBOM/provenance and stable
 approval remain separate.
