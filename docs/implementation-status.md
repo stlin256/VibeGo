@@ -1762,3 +1762,31 @@ Web 前端体验重塑在本轮分段落地：
 
 端到端验证：CDP 自动化在真实 DeepSeek endpoint 上走通 一键连接→三步向导
 →真实运行 completed（中文输出），并产出亮色/暗色 × 中/英四态截图矩阵。
+
+### Spec 42 Phase 42n：极简布局重构与模型提供方合并 (2026-08-06)
+
+Web 控制台表面对齐 ChatGPT/Kimi 官网的简洁度，并提供 Codex 式可召出
+审阅面板：
+
+- **居中对话列**：对话列限宽 840px 居中，空态只保留标题加一行说明，
+  composer 改为无边框圆角面板；配对页改为居中卡片，guardrails 收敛为
+  一行小字；
+- **安静的轨道**：workspace rail 去掉 eyebrow/localSession/noOtherRuns
+  文案（copy 接口瘦身为 5 字段）；会话头部去掉重复的新任务按钮
+  （快捷键提示移至 rail 按钮 aria-keyshortcuts），locale label 改为
+  sr-only，context toggle 仅在连接后显示；
+- **可召出审阅面板**：右侧 ContextRail 改为 fixed 滑出面板
+  （translateX + visibility 过渡），默认关闭，内容网格不再预留第三列；
+- **run 详情折叠**：run 头部收敛为 status chip + 单行 runId；权限快照、
+  指标、工具输出与事件流折叠进 `run-details` disclosure（blocked 快照
+  仍外显），locale 新增 `shell.runDetails`；
+- **动效**：empty-state/run-panel/pairing-card 的 fade-up 入场、composer
+  focus 与主题色过渡，并提供 prefers-reduced-motion 兜底；
+- **模型提供方合并**：设置抽屉原并列的通用 "Model provider" 与
+  "DeepSeek provider" 两个区块合并为单一 "Model provider" 区块——
+  DeepSeek 作为默认的深度适配预设，OpenAI 兼容端点作为同一表面的另一
+  预设，通过分段控件切换；初始预设跟随已配置状态。
+
+端到端验证：CDP 截图矩阵覆盖配对卡片、空态、审阅面板打开、暗色主题、
+真实运行、run 详情折叠与合并提供方区块（双预设 × 双主题），web 测试
+135/135 通过，typecheck 与构建干净。

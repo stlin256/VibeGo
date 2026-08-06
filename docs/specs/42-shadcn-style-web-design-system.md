@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1、42d-2 与 42e–42m 已实现；其余 42d 验收仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1、42d-2 与 42e–42n 已实现；其余 42d 验收仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -576,6 +576,47 @@ module coalesces deltas into 50 ms batches with a synchronous `flush()` before
 approval/completion transitions and `reset()` between runs; event-list appends
 are deduplicated per batch. The goal progress bar now animates
 `transform: scaleX` instead of `width` so updates stay on the compositor.
+
+### Phase 42n implementation update (2026-08-06): minimal layout, summonable review rail, unified model provider
+
+The console surface was reshaped toward a ChatGPT/Kimi-grade calm layout
+with a Codex-style on-demand review surface:
+
+- **Centered conversation column**: the dialogue column is capped at
+  840 px and centered; the empty state keeps only a title plus one muted
+  line; the composer becomes a borderless rounded textarea panel.
+- **Pairing stage**: pairing renders as a centered card on a quiet
+  stage; guardrail copy collapses into a single muted line.
+- **Quieter rails**: the workspace rail drops the eyebrow, local-session
+  and no-other-runs copy (its copy interface narrows to five fields);
+  the conversation header drops the duplicate new-task button (the
+  shortcut hint moves to the rail button via `aria-keyshortcuts`), the
+  locale label becomes screen-reader-only, and the context toggle only
+  renders while connected.
+- **Summonable context rail**: the right rail becomes a fixed panel that
+  slides in (`translateX` + visibility transition) on demand and stays
+  closed by default; the content grid no longer reserves a third column.
+- **Folded run details**: the run header condenses to a status chip plus
+  a single-line run id; permission snapshot, metrics, tool output and
+  the event stream fold into a `<details className="run-details">`
+  disclosure (blocked snapshots remain visible). Locale gains
+  `shell.runDetails`.
+- **Motion**: fade-up entrances on the empty state, run panel and
+  pairing card; composer focus and theme color transitions; a
+  `prefers-reduced-motion` fallback disables them.
+- **Unified model provider section**: the Settings drawer previously
+  exposed two parallel sections (generic "Model provider" and "DeepSeek
+  provider"). They merge into a single section where DeepSeek is the
+  default deeply adapted preset and the OpenAI-compatible endpoint form
+  is an alternative preset of the same surface, chosen via a segmented
+  control (`.provider-preset`, reusing the context-tab styles). The
+  initial preset follows what is already configured: a configured
+  DeepSeek profile selects the DeepSeek preset; an existing generic
+  model settings/probe surface selects the OpenAI-compatible preset.
+
+Visual verification: CDP screenshot matrices cover the pairing card,
+empty state, open review panel, dark theme, live run, run details and
+the merged provider section in both presets and both themes.
 
 ## 9. 退出条件
 
