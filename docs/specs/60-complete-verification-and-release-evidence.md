@@ -476,3 +476,12 @@ writeback; see [`spec61-6-live-evidence-2026-08-06.md`](../reports/spec61-6-live
 This closes only the exercised application ordering and smoke paths. Real
 provider timeout/5xx, public transport, physical-device, cross-platform and
 signed-release gates remain partial or blocked, and Spec 60 is not release-ready.
+
+### 60-4/60-5 DeepSeek search smoke boundary checkpoint (2026-08-06)
+
+Spec 61-10 now provides an explicit, opt-in live search runner. Its default is
+the no-network fixture; live mode first probes a complete Responses endpoint
+and remains blocked unless the strict versioned capability declares
+provider-owned search. The runner reports bounded status/latency/count data and
+does not promote fixture output to release evidence. The live endpoint was not
+run in this checkpoint, so the Spec 60 real-provider search gate remains open.

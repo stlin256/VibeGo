@@ -1,6 +1,6 @@
 # Spec 61：DeepSeek 一等 Provider、思考模式与低打扰 Agent Loop
 
-- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/tool/approval/governed/cancel/context-limit evidence 已完成；reviewer/search/reasoning/release gates 与 61-7 文档审计仍后置）
+- Status: Draft（61-0/61-1/61-2/61-3/61-4 adapter checkpoint、61-5 settings slice 与 61-6 text/tool/approval/governed/cancel/context-limit evidence 已完成；61-10 live search smoke runner 已完成但 live endpoint 仍待显式运行；reviewer/reasoning/release gates 与 61-7 文档审计仍后置）
 - Date: 2026-08-05
 - Scope: DeepSeek provider adapter、流式协议、tool calling、thinking/reasoning
   模式、可选 provider-owned web search、bounded reviewer、Web 配置、真实 LLM
@@ -584,6 +584,21 @@ quota consumption after the Spec 58-6e terminal-event ordering fix. The redacted
 record is [`spec61-6-live-evidence-2026-08-06.md`](../reports/spec61-6-live-evidence-2026-08-06.md).
 This is F-level evidence for the exercised paths only; reasoning, provider-owned
 search compatibility, reviewer production wiring and release gates remain open.
+
+#### 61-10 explicit live provider-owned search smoke boundary (2026-08-06)
+
+The search smoke now has an explicit `live` mode behind [ADR 0056](../adr/0056-deepseek-live-search-smoke-boundary.md).
+The default remains the offline fixture. Live mode requires `--authorize`, a
+complete HTTPS Responses endpoint, a bounded model and a secret environment
+reference; it probes the exact endpoint first and refuses to execute unless a
+strict matching capability descriptor declares `webSearch`. One fixed query is
+sent through the existing `DeepSeekProvider` and
+`DeepSeekApplicationCapabilityService` with the explicit network/approval gate.
+Reports contain only bounded status, probe/latency metadata, item/context
+counts and stable errors. The runner never creates a daemon, generic network
+tool, scheduler, approval store or event ledger. Live provider compatibility is
+not claimed until the operator explicitly runs the live mode and records its
+redacted result.
 
 ## 13. Definition of Done
 

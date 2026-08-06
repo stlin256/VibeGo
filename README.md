@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), model onboarding contracts, explicit OpenAI-compatible model probe, authenticated daemon probe route (Spec 54 Phase 0/1/2), and the DeepSeek capability/snapshot plus bounded provider-owned search application port (Spec 61-7/61-9) are implemented and tested. Live DeepSeek search/reasoning compatibility, the signed release bundle, ACME/OS certificate automation, OS keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), model onboarding contracts, explicit OpenAI-compatible model probe, authenticated daemon probe route (Spec 54 Phase 0/1/2), and the DeepSeek capability/snapshot plus bounded provider-owned search application port and explicit live-smoke boundary (Spec 61-7/61-10) are implemented and tested. Live DeepSeek search/reasoning compatibility, the signed release bundle, ACME/OS certificate automation, OS keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -91,7 +91,18 @@ pnpm smoke:deepseek-search
 ```
 
 This fixture is not live-provider evidence; real DeepSeek `web_search`
-compatibility remains a separately gated milestone.
+compatibility remains a separately gated milestone. An explicit live attempt can
+be requested only with a capability probe and a process-only credential:
+
+```powershell
+$env:READY4VIBE_DEEPSEEK_API_KEY = '<out-of-band-key>'
+pnpm smoke:deepseek-search -- --mode live --authorize --endpoint https://api.deepseek.com/v1/responses --model deepseek-v4-flash --secret-env READY4VIBE_DEEPSEEK_API_KEY
+```
+
+The live runner is opt-in, does not belong to `pnpm verify`, and reports only
+bounded status/latency/count metadata. It remains blocked unless the exact
+Responses endpoint declares the versioned provider-owned search capability;
+the key, endpoint, query and raw response are never written to the repository.
 
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
 path. When `pnpm build` has produced `apps/web/dist`, the daemon serves the compiled Web,

@@ -1586,3 +1586,14 @@ and governed Goal writeback. The governed run reached validated/Todo-done with
 one quota spend after the 58-6e fix. It does not close reasoning, live
 provider-owned search, reviewer production wiring, public deployment,
 cross-platform or release gates; Spec 61 remains Draft.
+
+### Spec 61-10 explicit live provider-owned search smoke checkpoint (2026-08-06)
+
+The search smoke runner now has an offline fixture default plus an explicitly
+authorized live mode. Live mode probes the complete Responses endpoint and
+requires a matching versioned `webSearch` capability before one bounded
+provider-owned retrieval. It reports only redacted status/latency/count data
+and never creates a daemon, generic network tool or event ledger. The focused
+script gate passes 6/6; live provider compatibility was not run in this
+checkpoint and remains open. See [ADR 0056](adr/0056-deepseek-live-search-smoke-boundary.md)
+and [`spec61-10-live-search-smoke-2026-08-06.md`](reports/spec61-10-live-search-smoke-2026-08-06.md).

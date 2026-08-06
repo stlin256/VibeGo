@@ -1614,3 +1614,18 @@ filesystem, container or network capability evidence. The report is
 [`spec61-6-live-evidence-2026-08-06.md`](reports/spec61-6-live-evidence-2026-08-06.md).
 Reasoning, provider-owned search compatibility, reviewer production wiring,
 remote/public deployment, device and release gates remain open.
+
+### Spec 61-10 explicit live provider-owned search smoke checkpoint (2026-08-06)
+
+The `smoke:deepseek-search` runner now keeps the offline fixture as its default
+and adds an explicit `--mode live --authorize` path. Live mode accepts only a
+complete HTTPS Responses endpoint, bounded model id and secret-env reference;
+it probes the exact endpoint first and requires a matching strict
+`webSearch` capability before issuing one fixed bounded retrieval through the
+existing `DeepSeekProvider` and `DeepSeekApplicationCapabilityService`.
+Reports contain only bounded provider/profile/model/status/latency/count fields
+and stable errors. The six-test script gate passes; the live endpoint was not
+run in this checkpoint, so search compatibility remains blocked until a user
+explicitly runs the opt-in command. Evidence is recorded in
+[`spec61-10-live-search-smoke-2026-08-06.md`](reports/spec61-10-live-search-smoke-2026-08-06.md)
+and the boundary is frozen in [ADR 0056](adr/0056-deepseek-live-search-smoke-boundary.md).

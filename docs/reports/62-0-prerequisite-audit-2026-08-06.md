@@ -135,3 +135,11 @@ interactive route. No secret, raw transcript, raw tool output, absolute path or
 complete environment value is stored in this report. Until the blockers are
 closed, Spec 62 must keep user documentation accurate and bounded rather than
 promoting the repository to `release-ready`.
+
+## Supersession note
+
+This audit remains intentionally anchored to commit `6f05ad7` as a historical
+62-0 prerequisite record. Subsequent commits added the Spec 58-6e terminal-event
+ordering fix and the Spec 61-10 explicit live-search smoke boundary; a future
+62-0 refresh must rerun the matrix against that newer checkout rather than
+silently treating this report as current release evidence.
