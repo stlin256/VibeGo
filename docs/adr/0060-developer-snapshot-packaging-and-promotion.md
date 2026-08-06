@@ -32,7 +32,10 @@ production `node_modules/` and package metadata are retained, while source
 `src/`, TypeScript files (`*.ts`, `*.tsx`, `*.d.ts`) and `tsconfig.json` are
 omitted. This prevents test fixtures and source-only credential references
 from entering a runnable snapshot while preserving the compiled entry point.
-It creates a gzip tar archive with a deterministic top-level
+The privacy scan rejects concrete token-shaped values and quoted credential
+assignments, but does not treat executable references such as
+`apiKey: normalized.apiKey` as leaked values. It creates a gzip tar archive
+with a deterministic top-level
 `vibego-developer-snapshot/` directory and emits only bounded status,
 artifact name, size and digest. The archive is a `nightly` Windows x64
 developer target for this first promotion; the existing release manifest

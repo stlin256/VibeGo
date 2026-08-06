@@ -239,8 +239,11 @@ under [ADR 0060](../adr/0060-developer-snapshot-packaging-and-promotion.md).
 built Web assets and Host launcher. The daemon staging step keeps only
 compiled runtime output, production dependencies and package metadata; source
 `src/`, TypeScript files and `tsconfig.json` are excluded before the privacy
-scan. It rejects runtime/user/research/credential content, writes bounded
-metadata/checksum/release notes and creates a gzip tar archive. The same
+scan. The privacy scan rejects concrete token-shaped values and quoted
+credential assignments while allowing runtime code to reference an injected
+secret without embedding its value. It rejects runtime/user/research/
+credential content, writes bounded metadata/checksum/release notes and creates
+a gzip tar archive. The same
 archive must be extracted and started through the Host launcher before an
 immutable GitHub prerelease is created. This slice is not a signed installer,
 SBOM/provenance attestation or stable release.

@@ -9,7 +9,7 @@ const PREVIEW_SCHEMA_VERSION = 'developer-snapshot/v1';
 const SAFE_VERSION = /^\d+\.\d+\.\d+-nightly(?:\.[0-9A-Za-z.-]+)?$/u;
 const SAFE_COMMIT = /^[0-9a-f]{40,64}$/u;
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
-const SECRET_VALUE = /\b(?:sk|rk|pk)-[A-Za-z0-9_-]{16,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token)\s*[:=]\s*['"]?[A-Za-z0-9._-]{16,}/iu;
+const SECRET_VALUE = /\b(?:sk|rk|pk)-[A-Za-z0-9_-]{16,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token)\s*[:=]\s*(?:['"][A-Za-z0-9._-]{16,}['"]|(?:sk|rk|pk)-[A-Za-z0-9_-]{16,}|[A-Za-z0-9_-]{32,})/iu;
 const ABSOLUTE_USER_PATH = /(?:[A-Za-z]:\\Users\\|\/Users\/|\/home\/|C:\\private\\)/iu;
 const TEXT_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.json', '.html', '.css', '.svg', '.txt', '.md', '.yaml', '.yml', '.ts', '.tsx', '.d.ts']);
 const SKIP_FILE = /(?:\.map$|\.test\.(?:js|mjs|cjs|d\.ts)$|\.spec\.(?:js|mjs|cjs|d\.ts)$)/u;
