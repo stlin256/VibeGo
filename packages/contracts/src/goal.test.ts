@@ -4,6 +4,7 @@ import {
   GoalHandoffSchema,
   GoalRecordSchema,
   GoalRunBindingSchema,
+  GoalVerificationPlanSchema,
   NewGoalEventSchema,
   StoredGoalEventSchema,
   findGoalPrivacyViolations,
@@ -35,6 +36,18 @@ const event = {
 };
 
 describe('goal contracts', () => {
+  it('accepts bounded objective verification plans and rejects overlap/unknown fields', () => {
+    const plan = {
+      schemaVersion: 'ready4vibe_goal_verification_plan_v1' as const,
+      requiredEventTypes: ['model.completed', 'run.completed'],
+      forbiddenEventTypes: ['model.error'],
+      minimumOutputBytes: 1,
+    };
+    expect(GoalVerificationPlanSchema.parse(plan)).toEqual(plan);
+    expect(() => GoalVerificationPlanSchema.parse({ ...plan, forbiddenEventTypes: ['run.completed'] })).toThrow(/overlap/iu);
+    expect(() => GoalVerificationPlanSchema.parse({ ...plan, extra: true })).toThrow();
+  });
+
   it('accepts versioned goal records and rejects a missing revision', () => {
     expect(GoalRecordSchema.parse(goal)).toEqual(goal);
     const { controlRevision: _revision, ...withoutRevision } = goal;

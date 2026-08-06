@@ -684,6 +684,30 @@ registry remains empty, so this is execution evidence rather than semantic
 Goal proof; the broader A-G closure remains staged. Evidence is recorded in
 [`spec58-6d-task-execution-verifier-2026-08-06.md`](../reports/spec58-6d-task-execution-verifier-2026-08-06.md).
 
+## Spec 58-6f: objective-aware semantic validation and recovery monitor
+
+The bounded execution predicate is replaced for production governed lanes by a
+deterministic objective criteria verifier. A Todo may carry a strict
+`ready4vibe_goal_verification_plan_v1` containing required/forbidden event
+types and a minimum output threshold. The writeback boundary adds a
+privacy-checked objective snapshot with the authoritative Goal/Todo identity,
+bounded objective/title, deterministic digest and frozen plan. The verifier
+returns `validated` only when the completed run satisfies that plan; missing or
+contradictory criteria remain `inconclusive`, release quota and leave the Todo
+open. No prompt, transcript, raw model output, tool argument, command, path,
+environment or secret crosses the verifier port.
+
+`GoalRecoveryMonitor` is a daemon application service, not a second scheduler.
+Each serialized tick replays terminal/restart recovery through the existing
+writeback service and evaluates the pure Goal `shouldRun` decision. An
+optional launch callback must delegate to the existing governed admission
+boundary; retries always create a new attempt and never replay old tool calls.
+The default interactive route remains unchanged. Design and boundaries are
+frozen in [ADR 0059](../adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
+
+Implementation evidence is recorded in
+[`spec58-6f-objective-verifier-monitor-2026-08-06.md`](../reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).
+
 ### Spec 58-6e terminal-event ordering checkpoint (2026-08-06)
 
 The first current-commit governed smoke exposed a race between the terminal

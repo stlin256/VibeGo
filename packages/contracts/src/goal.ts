@@ -44,6 +44,32 @@ export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 export const TodoTaskClassSchema = z.enum(['advancement', 'monitor', 'user_gate', 'user_action', 'blocker']);
 export type TodoTaskClass = z.infer<typeof TodoTaskClassSchema>;
 
+export const GOAL_VERIFICATION_PLAN_SCHEMA_VERSION = 'ready4vibe_goal_verification_plan_v1' as const;
+const verificationEventType = boundedText(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u);
+
+/**
+ * Explicit, replayable acceptance criteria for automatic Todo validation.
+ * This is deliberately event-shaped and never stores prompts, commands,
+ * paths, raw output or provider credentials.
+ */
+export const GoalVerificationPlanSchema = z.object({
+  schemaVersion: z.literal(GOAL_VERIFICATION_PLAN_SCHEMA_VERSION),
+  requiredEventTypes: z.array(verificationEventType).max(32),
+  forbiddenEventTypes: z.array(verificationEventType).max(32),
+  minimumOutputBytes: z.number().int().nonnegative().max(50 * 1024 * 1024),
+}).strict().superRefine((value, context) => {
+  if (new Set(value.requiredEventTypes).size !== value.requiredEventTypes.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['requiredEventTypes'], message: 'required event types must be unique' });
+  }
+  if (new Set(value.forbiddenEventTypes).size !== value.forbiddenEventTypes.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['forbiddenEventTypes'], message: 'forbidden event types must be unique' });
+  }
+  if (value.requiredEventTypes.some((eventType) => value.forbiddenEventTypes.includes(eventType))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'required and forbidden event types must not overlap' });
+  }
+});
+export type GoalVerificationPlan = z.infer<typeof GoalVerificationPlanSchema>;
+
 export const GoalTodoSchema = z.object({
   todoId,
   goalId,
@@ -64,6 +90,7 @@ export const GoalTodoSchema = z.object({
   blockedByGateId: gateId.optional(),
   nextDueAt: dateTime.optional(),
   completedAt: dateTime.optional(),
+  verificationPlan: GoalVerificationPlanSchema.optional(),
 }).strict();
 export type GoalTodo = z.infer<typeof GoalTodoSchema>;
 

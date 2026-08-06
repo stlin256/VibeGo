@@ -8,6 +8,7 @@ import {
   GoalVerifierDescriptorV1Schema,
   GoalVerifierEventDigestV1Schema,
   GoalVerifierInputV1Schema,
+  GoalObjectiveSnapshotV1Schema,
   GoalVerifierResultV1Schema,
   findGoalVerifierPrivacyViolations,
   parseGoalVerifierDescriptorV1,
@@ -104,6 +105,26 @@ describe('GoalVerifierInputV1 and GoalVerifierResultV1', () => {
     expect(GoalVerifierInputV1Schema.parse(verifierInput)).toEqual(verifierInput);
     expect(GoalVerifierResultV1Schema.parse(verifierResult)).toEqual(verifierResult);
     expect(GoalVerifierEventDigestV1Schema.parse(digest)).toEqual(digest);
+  });
+
+  it('accepts an objective snapshot only with a deterministic digest and plan', () => {
+    const objective = {
+      schemaVersion: 'ready4vibe_goal_objective_snapshot_v1' as const,
+      goalId: binding.goalId,
+      todoId: binding.todoId,
+      objective: 'Produce a tested change.',
+      todoTitle: 'Implement the change',
+      objectiveDigest: 'a'.repeat(64),
+      verificationPlan: {
+        schemaVersion: 'ready4vibe_goal_verification_plan_v1' as const,
+        requiredEventTypes: ['model.completed', 'run.completed'],
+        forbiddenEventTypes: ['model.error'],
+        minimumOutputBytes: 1,
+      },
+    };
+    expect(GoalObjectiveSnapshotV1Schema.parse(objective)).toEqual(objective);
+    expect(() => GoalObjectiveSnapshotV1Schema.parse({ ...objective, objectiveDigest: 'bad' })).toThrow();
+    expect(() => GoalVerifierInputV1Schema.parse({ ...verifierInput, objective: { ...objective, objective: 'api_key=sk-12345678901234567890' } })).toThrow(/secret/iu);
   });
 
   it('rejects unknown, secret-shaped and absolute-path input fields', () => {

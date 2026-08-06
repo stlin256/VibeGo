@@ -62,6 +62,7 @@ export const AddTodoInputSchema = z.object({
   requiredWriteScopes: z.array(boundedText(256)).max(32).optional(),
   blockedByGateId: z.string().regex(GATE_ID).optional(),
   nextDueAt: z.string().datetime({ offset: true }).optional(),
+  verificationPlan: GoalTodoSchema.shape.verificationPlan,
 }).strict();
 export type AddTodoInput = z.infer<typeof AddTodoInputSchema>;
 
@@ -232,6 +233,7 @@ export class GoalWriteService {
         ...(parsed.requiredWriteScopes ? { requiredWriteScopes: parsed.requiredWriteScopes } : {}),
         ...(parsed.blockedByGateId ? { blockedByGateId: parsed.blockedByGateId } : {}),
         ...(parsed.nextDueAt ? { nextDueAt: parsed.nextDueAt } : {}),
+        ...(parsed.verificationPlan ? { verificationPlan: parsed.verificationPlan } : {}),
       });
       const candidate = createGoalEvent({
         eventId: parsed.eventId,

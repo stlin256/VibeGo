@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { GoalEvidenceRefsSchema, TodoTaskClassSchema } from './goal.js';
+import { GoalEvidenceRefsSchema, GoalVerificationPlanSchema, TodoTaskClassSchema } from './goal.js';
 import { GoalRunBindingV1Schema, GoalValidationStatusV1Schema } from './goal-control-v1.js';
 
 export const GOAL_VERIFIER_DESCRIPTOR_SCHEMA_VERSION = 'ready4vibe_goal_verifier_descriptor_v1' as const;
 export const GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION = 'ready4vibe_goal_verifier_event_digest_v1' as const;
 export const GOAL_VERIFIER_INPUT_SCHEMA_VERSION = 'ready4vibe_goal_verifier_input_v1' as const;
 export const GOAL_VERIFIER_RESULT_SCHEMA_VERSION = 'ready4vibe_goal_verifier_result_v1' as const;
+export const GOAL_OBJECTIVE_SNAPSHOT_SCHEMA_VERSION = 'ready4vibe_goal_objective_snapshot_v1' as const;
 
 /** Server-owned limits; Web/Goal payloads cannot enlarge verifier input. */
 export const GOAL_VERIFIER_MAX_EVENT_DIGESTS = 512;
@@ -41,6 +42,9 @@ const VerifierRunStatusSchema = z.enum([
   'needs-recovery',
 ]);
 const BoundedSummarySchema = z.string().min(1).max(2_000).regex(CONTROL_TEXT);
+const ObjectiveDigestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
+const GoalIdSchema = z.string().regex(/^goal_[A-Za-z0-9_-]{8,128}$/u);
+const TodoIdSchema = z.string().regex(/^todo_[A-Za-z0-9_-]{8,128}$/u);
 
 /** Only these Todo classes can ever select an automatic verifier. */
 export const GoalVerifierTaskClassSchema = z.enum(['advancement', 'monitor', 'blocker']);
@@ -52,6 +56,18 @@ export type GoalVerifierDescriptorStatus = z.infer<typeof GoalVerifierDescriptor
 /** Verifier implementation metadata is never public-safe by default. */
 export const GoalVerifierPrivacySchema = z.enum(['local_private', 'private_pointer']);
 export type GoalVerifierPrivacy = z.infer<typeof GoalVerifierPrivacySchema>;
+
+/** Frozen objective context derived from the authoritative Goal projection. */
+export const GoalObjectiveSnapshotV1Schema = z.object({
+  schemaVersion: z.literal(GOAL_OBJECTIVE_SNAPSHOT_SCHEMA_VERSION),
+  goalId: GoalIdSchema,
+  todoId: TodoIdSchema,
+  objective: z.string().min(4).max(4_000).regex(CONTROL_TEXT),
+  todoTitle: z.string().min(1).max(400).regex(CONTROL_TEXT),
+  objectiveDigest: ObjectiveDigestSchema,
+  verificationPlan: GoalVerificationPlanSchema.optional(),
+}).strict();
+export type GoalObjectiveSnapshotV1 = z.infer<typeof GoalObjectiveSnapshotV1Schema>;
 
 const GoalVerifierDescriptorObjectSchema = z.object({
   schemaVersion: z.literal(GOAL_VERIFIER_DESCRIPTOR_SCHEMA_VERSION),
@@ -104,6 +120,7 @@ export const GoalVerifierInputV1Schema = z.object({
   run: GoalVerifierRunMetadataV1Schema,
   terminal: GoalVerifierEventDigestV1Schema,
   events: z.array(GoalVerifierEventDigestV1Schema).max(GOAL_VERIFIER_MAX_EVENT_DIGESTS),
+  objective: GoalObjectiveSnapshotV1Schema.optional(),
 }).strict().superRefine((value, context) => {
   if (value.binding.runId !== value.run.runId) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['run', 'runId'], message: 'verifier run id must match its binding' });

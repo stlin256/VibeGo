@@ -8,6 +8,7 @@ import {
   GoalVerifierInputV1Schema,
   GoalVerifierResultV1Schema,
   GoalValidationEvidenceV1Schema,
+  GoalObjectiveSnapshotV1Schema,
   GoalRunBindingV1Schema,
   type GoalControlProjectionV1,
   type GoalRecoveryStatusV1,
@@ -282,6 +283,19 @@ export class GoalRunWritebackService {
       };
     }
     const taskClass = projection.todos.find((todo) => todo.todoId === binding.todoId)?.taskClass ?? null;
+    const todo = projection.todos.find((candidate) => candidate.todoId === binding.todoId);
+    const objectiveBase = projection.goal && todo ? {
+      schemaVersion: 'ready4vibe_goal_objective_snapshot_v1' as const,
+      goalId: projection.goal.goalId,
+      todoId: todo.todoId,
+      objective: projection.goal.objective,
+      todoTitle: todo.title,
+      ...(todo.verificationPlan ? { verificationPlan: todo.verificationPlan } : {}),
+    } : undefined;
+    const objective = objectiveBase ? GoalObjectiveSnapshotV1Schema.parse({
+      ...objectiveBase,
+      objectiveDigest: hashJson(objectiveBase),
+    }) : undefined;
     let input: GoalRunVerifierInput;
     try {
       input = GoalVerifierInputV1Schema.parse({
@@ -291,6 +305,7 @@ export class GoalRunWritebackService {
         run: { runId: snapshot.runId, status: snapshot.status, lastEventSeq: snapshot.lastEventSeq, outputBytes: Buffer.byteLength(snapshot.output, 'utf8') },
         terminal: { schemaVersion: GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION, ...terminal },
         events: events.map((event) => ({ schemaVersion: GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION, ...digestEvent(event) })),
+        ...(objective ? { objective } : {}),
       });
     } catch {
       return {

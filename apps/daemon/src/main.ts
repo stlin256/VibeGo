@@ -30,6 +30,8 @@ import { GoalControlV1WriteService, GoalWriteService } from '@ready4vibe/goal-co
 import { GoalAdmissionService } from './goal-admission.js';
 import { GoalRunWritebackService } from './goal-writeback.js';
 import { ProviderUsageLifecycleAdapter, RunUsageObserver } from '@ready4vibe/observability';
+import { createProductionGoalVerifierRegistry } from './goal-execution-verifier.js';
+import { GoalRecoveryMonitor } from './goal-recovery-monitor.js';
 
 const transport = resolveDaemonTransport();
 const { host, transportMode, tlsRequired, tlsEnabled, certificatePaths } = transport;
@@ -190,6 +192,7 @@ const goalRunWriteback = new GoalRunWritebackService({
   runManager,
   goalControl: goalControlV1WriteService,
   admitGoverned: (input, runOptions) => goalAdmissionService.admit(input, runOptions),
+  verifierRegistry: createProductionGoalVerifierRegistry(),
 });
 goalAdmissionService = new GoalAdmissionService({
   goalStore: goalControlV1EventStore,
@@ -225,9 +228,12 @@ goalAdmissionService = new GoalAdmissionService({
     return { ready: true, revision: 'sandbox-1' };
   },
 });
+let goalRecoveryMonitor!: GoalRecoveryMonitor;
 try {
   await runManager.recoverAfterRestart();
   await goalRunWriteback.reconcile();
+  goalRecoveryMonitor = new GoalRecoveryMonitor({ goalStore: goalControlV1EventStore, writeback: goalRunWriteback });
+  goalRecoveryMonitor.start();
   await agentMemorySettings.start();
 } catch (error) {
   await mcpRuntimeBinding.close();
@@ -281,6 +287,7 @@ const shutdown = (): void => {
   server.close(() => {
     void (async () => {
       goalRunWriteback.close();
+      goalRecoveryMonitor.stop();
       await mcpRuntimeBinding.close();
       await agentMemorySettings.close();
       await agentMemoryKnowledgeSettings.close();

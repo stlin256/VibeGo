@@ -1647,3 +1647,13 @@ credential and paths. The authorized live endpoint was not run in this
 checkpoint, so real reasoning compatibility remains open. Evidence is
 recorded in [`spec61-11-live-reasoning-smoke-2026-08-06.md`](reports/spec61-11-live-reasoning-smoke-2026-08-06.md)
 and the boundary is frozen in [ADR 0057](adr/0057-deepseek-live-reasoning-smoke-boundary.md).
+
+### Spec 58-6f objective-aware verifier and recovery monitor (2026-08-06)
+
+The objective-aware verifier and serialized recovery monitor are implemented
+under [ADR 0059](adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
+The production registry validates automatic advancement/monitor/blocker lanes
+against an explicit Todo plan; the bounded execution verifier remains as an
+explicit Harness fixture. Existing interactive behavior and all runtime/event
+authorities remain unchanged. Evidence is recorded in
+[`spec58-6f-objective-verifier-monitor-2026-08-06.md`](reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).

@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import { createGoalEvent, InMemoryGoalControlEventStore, GoalControlProjectionBuilder } from '@ready4vibe/goal-control';
+import type { GoalControlProjectionV1 } from '@ready4vibe/contracts';
+import { GoalRecoveryMonitor } from './goal-recovery-monitor.js';
+
+const at = '2026-08-06T00:00:00.000Z';
+const goal = {
+  goalId: 'goal_12345678', title: 'Ship objective', objective: 'Produce a tested change.',
+  status: 'active' as const, controlRevision: 0, createdAt: at, updatedAt: at, schemaVersion: 1 as const,
+};
+const todo = {
+  todoId: 'todo_12345678', goalId: goal.goalId, role: 'agent' as const, status: 'open' as const,
+  taskClass: 'advancement' as const, title: 'Implement change', priority: 1,
+  verificationPlan: {
+    schemaVersion: 'ready4vibe_goal_verification_plan_v1' as const,
+    requiredEventTypes: ['model.completed', 'run.completed'], forbiddenEventTypes: ['model.error'], minimumOutputBytes: 1,
+  },
+};
+
+async function fixture() {
+  const store = new InMemoryGoalControlEventStore();
+  const builder = new GoalControlProjectionBuilder();
+  store.seedLegacy({ ...createGoalEvent({ eventId: 'gevt_goal_12345678', goalId: goal.goalId, eventType: 'goal.created', recordedAt: at, producer: 'test', privacy: 'local_private', refs: {}, payload: { goal } }), appendSequence: 1 });
+  store.seedLegacy({ ...createGoalEvent({ eventId: 'gevt_todo_12345678', goalId: goal.goalId, eventType: 'todo.added', recordedAt: at, producer: 'test', privacy: 'local_private', refs: { todoId: todo.todoId }, payload: { todo } }), appendSequence: 2 });
+  return { store, projection: builder.build(await store.read(goal.goalId)) };
+}
+
+describe('GoalRecoveryMonitor', () => {
+  it('reconciles first, evaluates due Todos and serializes overlapping ticks', async () => {
+    const { store, projection } = await fixture();
+    let reconcileCalls = 0;
+    let launchCalls = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const monitor = new GoalRecoveryMonitor({
+      goalStore: store,
+      writeback: { reconcile: async () => { reconcileCalls += 1; await gate; return { bindings: 0, terminalRuns: 0, recovered: 0, skipped: 0 }; } },
+      clock: () => new Date(at),
+      intervalMs: 500,
+      onEligible: async () => { launchCalls += 1; },
+    });
+    const first = monitor.runOnce();
+    const second = monitor.runOnce();
+    expect(first).toBe(second);
+    release();
+    const result = await first;
+    expect(result.status).toBe('healthy');
+    expect(result.projectedGoals).toBe(1);
+    expect(result.decisions[0]?.status).toBe('eligible');
+    expect(result.launched).toBe(1);
+    expect(reconcileCalls).toBe(1);
+    expect(launchCalls).toBe(1);
+    expect(projection.goal?.goalId).toBe(goal.goalId);
+  });
+
+  it('keeps reconcile/projection failures bounded and never starts a run itself', async () => {
+    const { store } = await fixture();
+    const monitor = new GoalRecoveryMonitor({ goalStore: store, writeback: { reconcile: async () => { throw new Error('private path'); } }, intervalMs: 500 });
+    const result = await monitor.runOnce();
+    expect(result.status).toBe('degraded');
+    expect(result.errorCode).toBe('GOAL_MONITOR_RECONCILE_FAILED');
+    expect(JSON.stringify(result)).not.toMatch(/private path|C:\\|token|secret/iu);
+  });
+
+  it('starts and stops one timer without owning a scheduler queue', () => {
+    const store = new InMemoryGoalControlEventStore();
+    const monitor = new GoalRecoveryMonitor({ goalStore: store, writeback: { reconcile: async () => ({ bindings: 0, terminalRuns: 0, recovered: 0, skipped: 0 }) }, intervalMs: 500 });
+    monitor.start();
+    monitor.start();
+    expect(monitor.isRunning()).toBe(true);
+    monitor.stop();
+    expect(monitor.isRunning()).toBe(false);
+  });
+});

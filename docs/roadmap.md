@@ -1620,3 +1620,15 @@ report. The focused gate passes 9/9, but the authorized live endpoint was not
 run, so provider reasoning compatibility and release evidence remain open.
 See [ADR 0057](adr/0057-deepseek-live-reasoning-smoke-boundary.md) and
 [`spec61-11-live-reasoning-smoke-2026-08-06.md`](reports/spec61-11-live-reasoning-smoke-2026-08-06.md).
+
+### Spec 58-6f objective-aware verifier and recovery monitor (2026-08-06)
+
+The implementation adds a strict Todo verification plan and a daemon-owned
+objective criteria verifier. It binds bounded Goal/Todo metadata to a
+deterministic digest and validates required/forbidden terminal evidence
+without receiving prompts, raw output, tools or paths. A serialized
+`GoalRecoveryMonitor` replays terminal recovery and evaluates `shouldRun`
+through the existing admission/Scheduler boundary; it never replays old tool
+calls or creates a second scheduler. Focused evidence is recorded in
+[`spec58-6f-objective-verifier-monitor-2026-08-06.md`](reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).
+See [ADR 0059](adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).

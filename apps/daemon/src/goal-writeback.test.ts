@@ -14,7 +14,7 @@ import {
   type GoalRunWritebackOptions,
 } from './goal-writeback.js';
 import { GoalVerifierRegistry } from './goal-verifier-registry.js';
-import { createHarnessGoalVerifierRegistry } from './goal-execution-verifier.js';
+import { createHarnessGoalVerifierRegistry, createProductionGoalVerifierRegistry } from './goal-execution-verifier.js';
 import { RunManager } from './run-manager.js';
 import { createDaemonServer } from './server.js';
 
@@ -71,7 +71,7 @@ function capabilitySnapshot(): CapabilityProfileRunSnapshot {
   };
 }
 
-function fixtureEvents(): NewGoalEvent[] {
+function fixtureEvents(withVerificationPlan = false): NewGoalEvent[] {
   const goal: GoalRecord = {
     goalId,
     title: 'Writeback fixture',
@@ -91,6 +91,12 @@ function fixtureEvents(): NewGoalEvent[] {
     taskClass: 'advancement',
     title: 'Run validation',
     priority: 1,
+    ...(withVerificationPlan ? { verificationPlan: {
+      schemaVersion: 'ready4vibe_goal_verification_plan_v1' as const,
+      requiredEventTypes: ['model.completed', 'run.completed'],
+      forbiddenEventTypes: ['model.error'],
+      minimumOutputBytes: 1,
+    } } : {}),
   };
   return [
     createGoalEvent({ eventId: 'gevt_00000001', goalId, eventType: 'goal.created', recordedAt: at, producer: 'fixture', privacy: 'local_private', refs: {}, payload: { goal } }),
@@ -115,9 +121,9 @@ function governedInput(expectedControlRevision: number): Record<string, unknown>
   };
 }
 
-async function seed(store: InMemoryGoalControlEventStore): Promise<number> {
-  for (const [index, event] of fixtureEvents().entries()) store.seedLegacy({ ...event, appendSequence: index + 1 });
-  return fixtureEvents().length;
+async function seed(store: InMemoryGoalControlEventStore, withVerificationPlan = false): Promise<number> {
+  for (const [index, event] of fixtureEvents(withVerificationPlan).entries()) store.seedLegacy({ ...event, appendSequence: index + 1 });
+  return fixtureEvents(withVerificationPlan).length;
 }
 
 function makeVerifier(status: 'validated' | 'inconclusive' = 'validated'): GoalRunVerifier {
@@ -162,6 +168,22 @@ function makeFixture(
 }
 
 describe('GoalRunWritebackService', () => {
+  it('uses objective criteria to validate and complete a governed Todo', async () => {
+    const fixture = makeFixture(
+      new FakeModelProvider({ events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }),
+      makeVerifier(),
+      true,
+      createProductionGoalVerifierRegistry(),
+    );
+    const expectedRevision = await seed(fixture.goalStore, true);
+    await fixture.admission.admit(governedInput(expectedRevision));
+    await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.consumed')).toBe(true));
+    const projection = new GoalControlProjectionBuilder().build(await fixture.goalStore.read(goalId));
+    expect(projection.todos[0]?.status).toBe('done');
+    expect(projection.validationEvidence[0]).toMatchObject({ verifierId: 'verifier_advancement_objective_v1', status: 'validated' });
+    fixture.writeback.close();
+  });
+
   it('validates a completed governed run and atomically completes Todo plus quota', async () => {
     const fixture = makeFixture(new FakeModelProvider({ events: [{ type: 'text-delta', text: 'done' }, { type: 'completed', finishReason: 'stop' }] }));
     const expectedRevision = await seed(fixture.goalStore);
@@ -375,11 +397,13 @@ describe('GoalRunWritebackService', () => {
     await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.consumed')).toBe(true));
     expect(seenInput).toBeDefined();
     expect(seenInput).toMatchObject({ taskClass: 'advancement' });
-    expect(Object.keys(seenInput ?? {}).sort()).toEqual(['binding', 'events', 'run', 'schemaVersion', 'taskClass', 'terminal']);
+    expect(Object.keys(seenInput ?? {}).sort()).toEqual(['binding', 'events', 'objective', 'run', 'schemaVersion', 'taskClass', 'terminal']);
     expect((seenInput?.events as Array<Record<string, unknown>>)[0]).toMatchObject({ schemaVersion: 'ready4vibe_goal_verifier_event_digest_v1' });
     expect(seenInput).not.toHaveProperty('prompt');
     expect(seenInput).not.toHaveProperty('transcript');
     expect(seenInput).not.toHaveProperty('output');
+    expect(seenInput).toHaveProperty('objective.objectiveDigest');
+    expect(seenInput).not.toHaveProperty('objective.verificationPlan');
     fixture.writeback.close();
   });
 
