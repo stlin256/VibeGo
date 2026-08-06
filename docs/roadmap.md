@@ -817,6 +817,8 @@ The daemon deploy excludes source/TypeScript material and materializes each
 pnpm workspace alias so a clean extraction starts without the source checkout.
 It does not claim platform signing, SBOM/provenance, installer or stable
 approval. See [ADR 0060](adr/0060-developer-snapshot-packaging-and-promotion.md).
+Local build and extracted-launcher evidence is recorded in
+[`spec57c-developer-snapshot-2026-08-06.md`](reports/spec57c-developer-snapshot-2026-08-06.md).
 
 推荐实施顺序为 `53 → 54 → 56 → 55 → 57`；Spec 57 的 stable gate 必须汇总前四项的
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读

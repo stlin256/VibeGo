@@ -249,3 +249,6 @@ without the source checkout. The same
 archive must be extracted and started through the Host launcher before an
 immutable GitHub prerelease is created. This slice is not a signed installer,
 SBOM/provenance attestation or stable release.
+
+The local implementation and extracted-launcher evidence are recorded in
+[`spec57c-developer-snapshot-2026-08-06.md`](../reports/spec57c-developer-snapshot-2026-08-06.md).
