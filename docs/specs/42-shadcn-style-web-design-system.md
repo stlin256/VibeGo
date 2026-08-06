@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1、42d-2 与 42e–42n 已实现；其余 42d 验收仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1、42d-2 与 42e–42o 已实现；其余 42d 验收仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -617,6 +617,39 @@ with a Codex-style on-demand review surface:
 Visual verification: CDP screenshot matrices cover the pairing card,
 empty state, open review panel, dark theme, live run, run details and
 the merged provider section in both presets and both themes.
+
+### Phase 42o implementation update (2026-08-06): composer quick controls, button density and settings i18n
+
+Three refinement passes on the calm console surface:
+
+- **Composer quick controls**: the composer footer carries pill-style
+  chips for the per-run profile — approval posture, sandbox mode and
+  model name (common DeepSeek presets plus the current custom value) —
+  editing the local draft through the existing `onProfileChange` path.
+  The static policy caption is dropped because the chips convey the
+  same state. New `.composer-chip` styling (rounded pills, hover and
+  focus-within borders) works in both themes; locale gains
+  `composer.*` keys.
+- **Button density**: sizing moves to shadcn-grade scale — default
+  36px, small 32px, large 40px, icon 36px — with tighter padding and
+  600 weight; rail, tab, topbar and raw buttons follow the same scale.
+  The style contract tests were updated to the new literals.
+- **Settings drawer i18n**: every user-visible string in the drawer
+  (section eyebrows, titles, descriptions, status labels, form labels,
+  buttons, option text, guidance paragraphs and dynamic status lines
+  across the run/tools/access tabs) is extracted into the catalogs —
+  324 `settings.*` keys, each with an explicit zh-CN translation
+  instead of the en fallback. The shared "Unavailable" status reads
+  "Not available" in English to keep the locale sentinel guard intact;
+  technical identifiers stay verbatim. The first-run wizard also gains
+  cc-switch-style provider preset cards (DeepSeek Recommended vs
+  OpenAI-compatible custom form, spec 52 second pass) with new
+  `setup.*` keys in both catalogs.
+
+Verified: web tests 137/137, typecheck and build clean, CDP matrices
+for the composer chips (light/dark), the translated drawer (all three
+tabs) and the wizard picker, plus a real DeepSeek run reaching
+`completed` after restoring the key through the wizard.
 
 ## 9. 退出条件
 

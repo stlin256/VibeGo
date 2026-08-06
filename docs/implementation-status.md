@@ -1790,3 +1790,23 @@ Web 控制台表面对齐 ChatGPT/Kimi 官网的简洁度，并提供 Codex 式�
 端到端验证：CDP 截图矩阵覆盖配对卡片、空态、审阅面板打开、暗色主题、
 真实运行、run 详情折叠与合并提供方区块（双预设 × 双主题），web 测试
 135/135 通过，typecheck 与构建干净。
+
+### Spec 42 Phase 42o：composer 快捷控制、按钮密度与设置抽屉全量 i18n (2026-08-06)
+
+- **composer 快捷控制**：输入栏下方新增 pill 式 chips——审批姿态、
+  沙箱模式与模型名（DeepSeek 常用预设 + 当前自定义值），通过既有
+  `onProfileChange` 编辑本地 run profile 草稿，无 daemon 契约变更；
+  原静态策略说明文字移除（chips 已表达同等信息）；
+- **按钮密度**：全部按钮收敛到 shadcn 尺度（默认 36px / 小 32px /
+  大 40px / 图标 36px），rail、tab、topbar 与原生按钮同步；
+- **设置抽屉全量 i18n**：抽屉内所有用户可见文案（三个标签页的区块
+  标题/描述/状态、表单标签、按钮、选项、说明段落与动态状态行）提取
+  为 324 个 `settings.*` 键，zh-CN 全部显式翻译，不再回退英文；
+  专有名词与技术枚举值保持原文；
+- **首配向导供应商选择**（spec 52 二轮）：模型步骤改为 cc-switch 式
+  预设卡片——DeepSeek（推荐徽标 + 深度适配说明）与 OpenAI 兼容端点
+  （自定义 Base URL + 模型 + key，走通用 model settings 适配器）。
+
+端到端验证：web 测试 137/137，typecheck/构建干净；CDP 截图覆盖
+composer chips（亮/暗）、中文化抽屉（三个标签页）、向导双预设卡片；
+真实 DeepSeek key 经向导恢复后跑通一次 completed 运行。

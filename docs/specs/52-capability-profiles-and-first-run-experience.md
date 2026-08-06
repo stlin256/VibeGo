@@ -628,6 +628,19 @@ The full path was verified against a real DeepSeek endpoint via CDP end-to-end
 automation: one-click pairing, wizard completion and a bounded run reaching
 `completed` with live model output.
 
+#### 52-R3 wizard provider picker implementation update (2026-08-06, second pass)
+
+The wizard's model step now opens with cc-switch-style provider preset cards:
+DeepSeek carries a Recommended badge and the deep adaptation description,
+while the OpenAI-compatible card reveals a custom Base URL + model + key form
+that saves through the existing generic model settings adapter
+(`POST /api/v1/settings/model`). The DeepSeek path and the workspace/done
+steps are unchanged, and the custom card is disabled when the daemon does not
+expose the generic adapter. Verified end-to-end against the live daemon:
+setup banner -> wizard -> both presets -> save -> workspace -> done, with a
+real API key restored through the wizard itself and a follow-up run reaching
+`completed`.
+
 ### 52-R4: Goal governed admission
 
 - Add the explicit governed run mode and `GoalRunBinding` application-service
