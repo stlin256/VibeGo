@@ -24,7 +24,8 @@ Add a bounded `package:developer-snapshot` command that stages:
   snapshot instructions;
 - a snapshot metadata file, SHA-256 checksum and release notes.
 
-The packager rejects symlink escapes, `.env`/credential/private-key material,
+The packager rejects symlink escapes (with the known pnpm daemon self-link
+omitted rather than copied), `.env`/credential/private-key material,
 `.research`/`.ready4vibe`/runtime databases, unsafe names and secret-shaped
 content. It creates a gzip tar archive with a deterministic top-level
 `vibego-developer-snapshot/` directory and emits only bounded status,

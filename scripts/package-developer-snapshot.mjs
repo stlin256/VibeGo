@@ -106,6 +106,9 @@ async function copyTree(source, destination, fsApi, sourceRoot = source, seen = 
   if (info.isSymbolicLink()) {
     const target = await fsApi.realpath(source).catch(() => { throw new DeveloperSnapshotError('SNAPSHOT_SYMLINK_INVALID'); });
     const escaped = relative(sourceRoot, target).startsWith('..');
+    // pnpm deploy leaves one self-reference for the daemon package. It is not
+    // needed at runtime and is omitted rather than copying a workspace path.
+    if (escaped && isKnownDaemonSelfLink(source)) return;
     if (escaped) throw new DeveloperSnapshotError('SNAPSHOT_SYMLINK_ESCAPE');
     if (seen.has(target)) return;
     seen.add(target);
@@ -122,6 +125,10 @@ async function copyTree(source, destination, fsApi, sourceRoot = source, seen = 
   if (!info.isFile()) throw new DeveloperSnapshotError('SNAPSHOT_INPUT_INVALID');
   if (SKIP_FILE.test(basename(source))) return;
   await copyFileChecked(source, destination, fsApi);
+}
+
+function isKnownDaemonSelfLink(source) {
+  return /node_modules[\\/](?:\.pnpm[\\/].*)?node_modules[\\/]@ready4vibe[\\/]daemon$/iu.test(source);
 }
 
 async function copyFileChecked(source, destination, fsApi) {
