@@ -406,6 +406,37 @@ The gate is a repeatable build/test contract, not visual or physical-device
 evidence. Playwright, screen-reader/manual review, and real-device reports
 remain later acceptance work.
 
+### Phase 42e implementation update (2026-08-06): design tokens v2 and primitive motion
+
+The design token layer now has a v2 semantic system in `brand/tokens.css`.
+Alongside the stable brand primitives it defines semantic backgrounds
+(canvas/surface/elevated/input/hover/active), border strengths, signal colors
+(cyan/lime/amber/red), brand and signal gradients, glow shadows, a 4px spacing
+grid, a 9-step type scale, shared motion durations/easings
+(`ease-out-expo`, spring) and backdrop blur tiers. `apps/web/src/styles.css`
+imports the token source via a relative `@import`, keeping `brand/tokens.css`
+the single brand token authority while the semantic shadcn-style aliases stay
+co-located with the app styles.
+
+Utility animations and helpers are source-owned: `ui-fade-in`, `ui-slide-up`,
+`ui-slide-in-right`, `ui-glow-pulse`, `ui-stream-cursor` keyframes plus
+`.ui-animate-*`, `.ui-glow-*`, `.ui-gradient-border` and `.ui-backdrop-blur`
+classes. The `.panel` surface now uses the semantic surface token with
+backdrop blur for the glass layering called for by the brand depth rules.
+
+Base primitives gained bounded variants without breaking existing contracts:
+`Button` adds a `glow` variant (lime signal with lime glow), hover glow and
+press scale; `Card` adds `surface`/`elevated`/`ghost` variants, `interactive`
+hover elevation and `CardFooter`/`CardMedia` composition slots; `Input` and
+`Textarea` add cyan focus glow and hover border strengthening; `Label` adds a
+`required` marker; `Badge` adds `amber`/`lime` variants and `dot`/`pulse`
+indicators; `Skeleton` adds `card`/`circle`/`text`/`title` variants. All
+motion honors `prefers-reduced-motion` through the existing global guard.
+
+Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean
+with the token import inlined, and `check:web` completed with JS 90.89 KiB
+and CSS 8.78 KiB gzip under the 110/30 KiB budgets.
+
 ## 9. 退出条件
 
 本规格完成后：

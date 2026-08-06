@@ -1,4 +1,5 @@
 :root {
+  /* === VibeGo brand primitives (stable, do not rename) === */
   --vibego-ink: #0b1020;
   --vibego-ink-strong: #050914;
   --vibego-surface: #f6f8fc;
@@ -21,4 +22,97 @@
   --vibego-shadow-card: 0 18px 50px rgb(11 16 32 / 12%);
   --vibego-font-sans: Manrope, Inter, "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --vibego-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* === Extended design tokens (v2) === */
+
+  /* Backgrounds */
+  --vibego-bg-canvas: #0b1020;
+  --vibego-bg-canvas-gradient: radial-gradient(circle at 15% -10%, rgb(92 225 230 / 14%) 0, transparent 40%),
+    linear-gradient(135deg, #080d1c 0%, #101a38 54%, #241750 100%);
+  --vibego-bg-surface: rgb(11 16 32 / 72%);
+  --vibego-bg-surface-solid: #101829;
+  --vibego-bg-elevated: rgb(13 24 42 / 88%);
+  --vibego-bg-input: #0c1728;
+  --vibego-bg-hover: rgb(255 255 255 / 4%);
+  --vibego-bg-active: rgb(255 255 255 / 7%);
+
+  /* Borders */
+  --vibego-border-subtle: rgb(175 194 232 / 14%);
+  --vibego-border-default: rgb(175 194 232 / 18%);
+  --vibego-border-strong: rgb(175 194 232 / 26%);
+  --vibego-border-active: rgb(92 225 230 / 36%);
+  --vibego-border-lime: rgb(184 243 108 / 45%);
+  --vibego-border-amber: rgb(255 190 92 / 55%);
+  --vibego-border-red: rgb(189 102 90 / 60%);
+
+  /* Signals */
+  --vibego-signal-cyan: #5ce1e6;
+  --vibego-signal-blue: #6b8cff;
+  --vibego-signal-violet: #9a6bff;
+  --vibego-signal-lime: #b8f36c;
+  --vibego-signal-lime-hover: #d0f79b;
+  --vibego-signal-amber: #ffbe5c;
+  --vibego-signal-amber-soft: #ffcf81;
+  --vibego-signal-red: #bd665a;
+  --vibego-signal-red-soft: #ffd0c9;
+
+  /* Gradients */
+  --vibego-gradient-brand: linear-gradient(135deg, #5ce1e6 0%, #6b8cff 52%, #9a6bff 100%);
+  --vibego-gradient-signal: linear-gradient(90deg, #5ce1e6 0%, #b8f36c 100%);
+  --vibego-gradient-border: linear-gradient(135deg, rgb(92 225 230 / 55%), rgb(107 140 255 / 45%), rgb(154 107 255 / 55%));
+
+  /* Text */
+  --vibego-text-primary: #f7faff;
+  --vibego-text-secondary: #afc2e8;
+  --vibego-text-tertiary: #6f86a7;
+  --vibego-text-link: #8ec7ff;
+
+  /* Shadows */
+  --vibego-shadow-surface: 0 18px 50px rgb(5 9 20 / 28%);
+  --vibego-shadow-elevated: 0 28px 90px rgb(0 0 0 / 42%);
+  --vibego-shadow-glow-cyan: 0 0 24px rgb(92 225 230 / 22%);
+  --vibego-shadow-glow-lime: 0 0 24px rgb(184 243 108 / 22%);
+  --vibego-shadow-glow-amber: 0 0 24px rgb(255 190 92 / 18%);
+  --vibego-shadow-glow-red: 0 0 24px rgb(189 102 90 / 18%);
+
+  /* Radius */
+  --vibego-radius-xs: 8px;
+  --vibego-radius-xl: 32px;
+
+  /* Spacing (4px base grid) */
+  --vibego-space-1: 4px;
+  --vibego-space-2: 8px;
+  --vibego-space-3: 12px;
+  --vibego-space-4: 16px;
+  --vibego-space-5: 20px;
+  --vibego-space-6: 24px;
+  --vibego-space-8: 32px;
+  --vibego-space-10: 40px;
+  --vibego-space-12: 48px;
+  --vibego-space-16: 64px;
+  --vibego-space-20: 80px;
+
+  /* Typography sizes */
+  --vibego-text-2xs: 10px;
+  --vibego-text-xs: 12px;
+  --vibego-text-sm: 13px;
+  --vibego-text-base: 14px;
+  --vibego-text-lg: 16px;
+  --vibego-text-xl: 20px;
+  --vibego-text-2xl: 24px;
+  --vibego-text-3xl: 28px;
+
+  /* Motion */
+  --vibego-duration-instant: 100ms;
+  --vibego-duration-fast: 150ms;
+  --vibego-duration-normal: 250ms;
+  --vibego-duration-slow: 400ms;
+  --vibego-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --vibego-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --vibego-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Backdrop blur */
+  --vibego-blur-sm: 8px;
+  --vibego-blur-md: 12px;
+  --vibego-blur-lg: 18px;
 }
