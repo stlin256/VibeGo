@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { GoalEvidenceRefsSchema, GoalVerificationPlanSchema, TodoTaskClassSchema } from './goal.js';
+import { GoalEvidenceRefsSchema, GoalVerificationFactSchema, GoalVerificationPlanSchema, TodoTaskClassSchema } from './goal.js';
 import { GoalRunBindingV1Schema, GoalValidationStatusV1Schema } from './goal-control-v1.js';
 
 export const GOAL_VERIFIER_DESCRIPTOR_SCHEMA_VERSION = 'ready4vibe_goal_verifier_descriptor_v1' as const;
@@ -7,6 +7,7 @@ export const GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION = 'ready4vibe_goal_verifi
 export const GOAL_VERIFIER_INPUT_SCHEMA_VERSION = 'ready4vibe_goal_verifier_input_v1' as const;
 export const GOAL_VERIFIER_RESULT_SCHEMA_VERSION = 'ready4vibe_goal_verifier_result_v1' as const;
 export const GOAL_OBJECTIVE_SNAPSHOT_SCHEMA_VERSION = 'ready4vibe_goal_objective_snapshot_v1' as const;
+export const GOAL_VERIFIER_OBSERVATION_SCHEMA_VERSION = 'ready4vibe_goal_verifier_observation_v1' as const;
 
 /** Server-owned limits; Web/Goal payloads cannot enlarge verifier input. */
 export const GOAL_VERIFIER_MAX_EVENT_DIGESTS = 512;
@@ -45,6 +46,12 @@ const BoundedSummarySchema = z.string().min(1).max(2_000).regex(CONTROL_TEXT);
 const ObjectiveDigestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 const GoalIdSchema = z.string().regex(/^goal_[A-Za-z0-9_-]{8,128}$/u);
 const TodoIdSchema = z.string().regex(/^todo_[A-Za-z0-9_-]{8,128}$/u);
+const ObservationSelectorSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u);
+const ObservationValueSchema = z.union([
+  z.string().max(256).regex(CONTROL_TEXT),
+  z.number().int().nonnegative().max(GOAL_VERIFIER_MAX_OUTPUT_BYTES),
+  z.boolean(),
+]);
 
 /** Only these Todo classes can ever select an automatic verifier. */
 export const GoalVerifierTaskClassSchema = z.enum(['advancement', 'monitor', 'blocker']);
@@ -68,6 +75,20 @@ export const GoalObjectiveSnapshotV1Schema = z.object({
   verificationPlan: GoalVerificationPlanSchema.optional(),
 }).strict();
 export type GoalObjectiveSnapshotV1 = z.infer<typeof GoalObjectiveSnapshotV1Schema>;
+
+/** Safe, server-derived facts used by structured semantic verifiers. */
+export const GoalVerifierObservationV1Schema = z.object({
+  schemaVersion: z.literal(GOAL_VERIFIER_OBSERVATION_SCHEMA_VERSION),
+  eventId: EventIdSchema,
+  fact: GoalVerificationFactSchema,
+  value: ObservationValueSchema,
+  selector: ObservationSelectorSchema.optional(),
+}).strict().superRefine((value, context) => {
+  for (const violation of findGoalVerifierPrivacyViolations(value)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: violation });
+  }
+});
+export type GoalVerifierObservationV1 = z.infer<typeof GoalVerifierObservationV1Schema>;
 
 const GoalVerifierDescriptorObjectSchema = z.object({
   schemaVersion: z.literal(GOAL_VERIFIER_DESCRIPTOR_SCHEMA_VERSION),
@@ -120,6 +141,7 @@ export const GoalVerifierInputV1Schema = z.object({
   run: GoalVerifierRunMetadataV1Schema,
   terminal: GoalVerifierEventDigestV1Schema,
   events: z.array(GoalVerifierEventDigestV1Schema).max(GOAL_VERIFIER_MAX_EVENT_DIGESTS),
+  observations: z.array(GoalVerifierObservationV1Schema).max(GOAL_VERIFIER_MAX_EVENT_DIGESTS).optional(),
   objective: GoalObjectiveSnapshotV1Schema.optional(),
 }).strict().superRefine((value, context) => {
   if (value.binding.runId !== value.run.runId) {

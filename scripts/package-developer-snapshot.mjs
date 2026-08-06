@@ -53,7 +53,10 @@ export async function buildDeveloperSnapshot(options, dependencies = {}) {
   await ensureEmptyStage(stageRoot, fsApi);
   await mkdir(snapshotRoot, { recursive: true });
   await copyTree(resolve(options.daemonDeploy), join(snapshotRoot, 'daemon'), fsApi, { runtimeOnly: true });
-  await copyTree(resolve(options.webDist), join(snapshotRoot, 'web'), fsApi);
+  // Match the daemon's production fallback (`apps/web/dist`) so an extracted
+  // snapshot starts through the Host launcher without a source checkout or
+  // an environment override.
+  await copyTree(resolve(options.webDist), join(snapshotRoot, 'apps', 'web', 'dist'), fsApi);
   await copyFileChecked(resolve(options.launcher), join(snapshotRoot, 'launcher', 'host-launcher.mjs'), fsApi);
   for (const name of ['package.json', 'pnpm-lock.yaml', 'README.md', 'README-zh.md']) {
     await copyFileChecked(join(resolve(options.repoRoot), name), join(snapshotRoot, 'meta', name), fsApi);

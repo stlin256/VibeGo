@@ -96,6 +96,7 @@ function fixtureEvents(withVerificationPlan = false): NewGoalEvent[] {
       requiredEventTypes: ['model.completed', 'run.completed'],
       forbiddenEventTypes: ['model.error'],
       minimumOutputBytes: 1,
+      semanticAssertions: [{ assertionId: 'assert_exit_reason_1', fact: 'run.exitReason', operator: 'equals', expected: 'model-completed' }],
     } } : {}),
   };
   return [
@@ -356,7 +357,14 @@ describe('GoalRunWritebackService', () => {
     await eventStore.append({ runId: 'run_recovery12345678', type: 'run.created', source: 'user', correlationId: 'corr_recovery', payload: { config: runConfig } });
     await eventStore.append({ runId: 'run_recovery12345678', type: 'run.status', source: 'system', correlationId: 'corr_recovery', payload: { from: 'created', to: 'queued' } });
     await runManager.recoverAfterRestart();
-    const writeback = new GoalRunWritebackService({ goalStore, runManager, goalControl, verifier: makeVerifier(), clock: () => new Date(at) });
+    const writeback = new GoalRunWritebackService({
+      goalStore,
+      runManager,
+      goalControl,
+      verifier: makeVerifier(),
+      admitGoverned: async () => ({ runId: 'run_recovery_new12345678', status: 'queued' }),
+      clock: () => new Date(at),
+    });
     const result = await writeback.reconcile();
     expect(result.terminalRuns).toBe(1);
     const projection = new GoalControlProjectionBuilder().build(await goalStore.read(goalId));
@@ -364,6 +372,10 @@ describe('GoalRunWritebackService', () => {
     expect(projection.recoveries[0]).toMatchObject({ status: 'needs_recovery', runId: 'run_recovery12345678' });
     expect(projection.quota.reservations[0]).toMatchObject({ status: 'reserved' });
     expect(model.requests).toHaveLength(0);
+    await expect(writeback.retryGoverned('run_recovery12345678', { agentId: 'agent_12345678' })).resolves.toMatchObject({ runId: 'run_recovery_new12345678' });
+    const retried = new GoalControlProjectionBuilder().build(await goalStore.read(goalId));
+    expect(retried.quota.reservations[0]).toMatchObject({ status: 'released' });
+    expect(retried.recoveries.some((entry) => entry.status === 'retry_created' && entry.previousRunId === 'run_recovery12345678')).toBe(true);
     writeback.close();
   });
 
@@ -397,11 +409,13 @@ describe('GoalRunWritebackService', () => {
     await vi.waitFor(async () => expect((await fixture.goalStore.read(goalId)).some((event) => event.eventType === 'quota.consumed')).toBe(true));
     expect(seenInput).toBeDefined();
     expect(seenInput).toMatchObject({ taskClass: 'advancement' });
-    expect(Object.keys(seenInput ?? {}).sort()).toEqual(['binding', 'events', 'objective', 'run', 'schemaVersion', 'taskClass', 'terminal']);
+    expect(Object.keys(seenInput ?? {}).sort()).toEqual(['binding', 'events', 'objective', 'observations', 'run', 'schemaVersion', 'taskClass', 'terminal']);
     expect((seenInput?.events as Array<Record<string, unknown>>)[0]).toMatchObject({ schemaVersion: 'ready4vibe_goal_verifier_event_digest_v1' });
     expect(seenInput).not.toHaveProperty('prompt');
     expect(seenInput).not.toHaveProperty('transcript');
     expect(seenInput).not.toHaveProperty('output');
+    expect(seenInput?.observations).toBeInstanceOf(Array);
+    expect(JSON.stringify(seenInput?.observations)).not.toMatch(/done|prompt|transcript|secret|path/iu);
     expect(seenInput).toHaveProperty('objective.objectiveDigest');
     expect(seenInput).not.toHaveProperty('objective.verificationPlan');
     fixture.writeback.close();

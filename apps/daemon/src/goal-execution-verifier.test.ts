@@ -44,6 +44,10 @@ function input(overrides: Record<string, unknown> = {}): GoalVerifierInputV1 {
     run: { runId: binding.runId, status: 'completed', lastEventSeq: 3, outputBytes: 4 },
     terminal: events[2]!,
     events,
+    observations: [
+      { schemaVersion: 'ready4vibe_goal_verifier_observation_v1' as const, eventId: 'evt_12345680', fact: 'run.status' as const, value: 'completed' },
+      { schemaVersion: 'ready4vibe_goal_verifier_observation_v1' as const, eventId: 'evt_12345680', fact: 'run.exitReason' as const, value: 'model-completed' },
+    ],
     ...overrides,
   } as GoalVerifierInputV1;
 }
@@ -107,6 +111,7 @@ describe('ObjectiveAwareGoalVerifier', () => {
         requiredEventTypes: ['model.completed', 'run.completed'],
         forbiddenEventTypes: ['model.error'],
         minimumOutputBytes: 1,
+        semanticAssertions: [{ assertionId: 'assert_exit_reason_1', fact: 'run.exitReason' as const, operator: 'equals' as const, expected: 'model-completed' }],
       },
     };
     const objective = { ...snapshotBase, objectiveDigest: hashGoalObjectiveSnapshot(snapshotBase) };
@@ -143,5 +148,13 @@ describe('ObjectiveAwareGoalVerifier', () => {
       OBJECTIVE_GOAL_VERIFIER_DESCRIPTORS.blocker,
       OBJECTIVE_GOAL_VERIFIER_DESCRIPTORS.monitor,
     ]);
+  });
+
+  it('fails closed when a structured semantic assertion is not satisfied', async () => {
+    const result = await new ObjectiveAwareGoalVerifier().verify(objectiveInput({
+      observations: [{ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: 'evt_12345680', fact: 'run.exitReason', value: 'different' }],
+    }));
+    expect(result.status).toBe('inconclusive');
+    expect(result.summary).toContain('semantic_assertion_failed');
   });
 });

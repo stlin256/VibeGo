@@ -245,6 +245,15 @@ try {
       .sort((left, right) => left.priority - right.priority || left.todoId.localeCompare(right.todoId))
       .map((todo) => todo.boundAgentId ?? todo.claimedBy)
       .find((agentId): agentId is string => agentId !== undefined),
+    remainingDeliveryQuota: (projection) => {
+      const latestBinding = projection.bindings
+        .filter((binding) => binding.mode === 'governed')
+        .sort((left, right) => right.attempt - left.attempt || right.createdAt.localeCompare(left.createdAt))[0];
+      const recovering = latestBinding !== undefined && projection.recoveries.some((recovery) => recovery.bindingId === latestBinding.bindingId && recovery.status === 'needs_recovery');
+      return recovering || !projection.quota.reservations.some((reservation) => reservation.status === 'reserved') ? 1 : 0;
+    },
+    runStatusForBinding: async (binding) => (await runManager.snapshot(binding.runId))?.status,
+    maxAutoRetriesPerTodo: 3,
     onEligible: async (decision, projection) => {
       if (!decision.todoId) return false;
       const todo = projection.todos.find((candidate) => candidate.todoId === decision.todoId);

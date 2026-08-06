@@ -3,7 +3,7 @@ import {
   shouldRun,
   type GoalControlEventStoreV1,
 } from '@ready4vibe/goal-control';
-import type { GoalControlProjectionV1, GoalShouldRunDecision } from '@ready4vibe/contracts';
+import type { GoalControlProjectionV1, GoalRunBindingV1, GoalShouldRunDecision, RunStatus } from '@ready4vibe/contracts';
 import type { GoalRunWritebackReconciliationResult, GoalRunWritebackService } from './goal-writeback.js';
 
 export type GoalRecoveryMonitorStatus = 'healthy' | 'degraded';
@@ -18,6 +18,10 @@ export interface GoalRecoveryMonitorOptions {
   /** Optional daemon-owned claim identity used by shouldRun for bound Todos. */
   readonly agentIdForGoal?: (projection: GoalControlProjectionV1) => string | undefined;
   readonly remainingDeliveryQuota?: (projection: GoalControlProjectionV1) => number | undefined;
+  /** Optional run snapshot probe used to make production retries idempotent. */
+  readonly runStatusForBinding?: (binding: GoalRunBindingV1) => RunStatus | undefined | Promise<RunStatus | undefined>;
+  /** Maximum fresh attempts the monitor may create for one Todo. */
+  readonly maxAutoRetriesPerTodo?: number;
   /** Optional launcher. It must delegate to GoalAdmissionService. */
   readonly onEligible?: (decision: GoalShouldRunDecision, projection: GoalControlProjectionV1) => void | boolean | Promise<void | boolean>;
 }
@@ -45,6 +49,7 @@ export class GoalRecoveryMonitor {
   private readonly builder = new GoalControlProjectionBuilder();
   private readonly clock: () => Date;
   private readonly intervalMs: number;
+  private readonly maxAutoRetriesPerTodo: number;
   private running = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private tickPromise: Promise<GoalRecoveryMonitorResult> | undefined;
@@ -54,6 +59,10 @@ export class GoalRecoveryMonitor {
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     if (!Number.isSafeInteger(this.intervalMs) || this.intervalMs < MIN_INTERVAL_MS || this.intervalMs > MAX_INTERVAL_MS) {
       throw new Error(`Goal recovery monitor interval must be ${MIN_INTERVAL_MS}-${MAX_INTERVAL_MS} ms.`);
+    }
+    this.maxAutoRetriesPerTodo = options.maxAutoRetriesPerTodo ?? 3;
+    if (!Number.isSafeInteger(this.maxAutoRetriesPerTodo) || this.maxAutoRetriesPerTodo < 1 || this.maxAutoRetriesPerTodo > 8) {
+      throw new Error('Goal recovery monitor retry limit must be 1-8.');
     }
   }
 
@@ -124,6 +133,11 @@ export class GoalRecoveryMonitor {
         });
         decisions.push(decision);
         if (decision.status === 'eligible' && this.options.onEligible) {
+          const launchable = await this.isLaunchable(decision, projection);
+          if (!launchable) {
+            skipped += 1;
+            continue;
+          }
           try {
             const launchedByCallback = await this.options.onEligible(decision, projection);
             if (launchedByCallback !== false) launched += 1;
@@ -150,6 +164,33 @@ export class GoalRecoveryMonitor {
       skipped,
       ...(errorCode ? { errorCode } : {}),
     };
+  }
+
+  /**
+   * Production-only guard. The pure shouldRun decision remains unchanged, but
+   * an application monitor must not create a second attempt while a prior run
+   * is active, after semantic inconclusive evidence, or beyond its retry cap.
+   */
+  private async isLaunchable(decision: GoalShouldRunDecision, projection: GoalControlProjectionV1): Promise<boolean> {
+    if (!this.options.runStatusForBinding || !decision.todoId) return true;
+    const bindings = projection.bindings
+      .filter((binding) => binding.mode === 'governed' && binding.todoId === decision.todoId)
+      .sort((left, right) => right.attempt - left.attempt || right.createdAt.localeCompare(left.createdAt));
+    const latest = bindings[0];
+    if (!latest || bindings.length >= this.maxAutoRetriesPerTodo) return false;
+    let status: RunStatus | undefined;
+    try {
+      status = await this.options.runStatusForBinding(latest);
+    } catch {
+      return false;
+    }
+    if (status && new Set<RunStatus>(['created', 'queued', 'planning', 'executing', 'waiting-approval', 'cancelling']).has(status)) return false;
+    const evidence = projection.validationEvidence
+      .filter((candidate) => candidate.bindingId === latest.bindingId)
+      .sort((left, right) => right.attempt - left.attempt)[0];
+    if (evidence?.status === 'validated' || evidence?.status === 'inconclusive' || evidence?.status === 'stale') return false;
+    if (status && !new Set<RunStatus>(['failed', 'cancelled', 'timed-out', 'needs-recovery']).has(status)) return false;
+    return true;
   }
 
   private schedule(): void {

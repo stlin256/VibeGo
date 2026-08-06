@@ -119,6 +119,18 @@ export class ObjectiveAwareGoalVerifier implements GoalRunVerifier {
     if (input.run.outputBytes < objective.verificationPlan.minimumOutputBytes) {
       return semanticInconclusive(refs, 'objective_output_threshold_not_met', input.taskClass);
     }
+    const assertions = objective.verificationPlan.semanticAssertions ?? [];
+    if (assertions.length === 0) return semanticInconclusive(refs, 'semantic_assertions_missing', input.taskClass);
+    const observations = input.observations ?? [];
+    const assertionEventIds: string[] = [];
+    for (const assertion of assertions) {
+      const matches = observations.filter((observation) => observation.fact === assertion.fact
+        && (assertion.selector === undefined || observation.selector === assertion.selector));
+      if (!evaluateAssertion(assertion.operator, assertion.expected, matches.map((observation) => observation.value))) {
+        return semanticInconclusive(refs, `semantic_assertion_failed:${assertion.assertionId}`, input.taskClass);
+      }
+      assertionEventIds.push(...matches.map((observation) => observation.eventId));
+    }
     const evidenceEventIds = input.events
       .filter((event) => objective.verificationPlan?.requiredEventTypes.includes(event.type))
       .map((event) => event.id)
@@ -127,10 +139,24 @@ export class ObjectiveAwareGoalVerifier implements GoalRunVerifier {
       status: 'validated',
       verifierId: `verifier_${input.taskClass}_objective_v1`,
       verifierRevision: 1,
-      summary: 'Objective acceptance criteria satisfied by bounded run evidence.',
-      refs: { runId: input.run.runId, eventIds: [...new Set([terminalId, ...evidenceEventIds])].slice(0, 64) },
+      summary: 'Objective semantic assertions satisfied by server-derived run facts.',
+      refs: { runId: input.run.runId, eventIds: [...new Set([terminalId, ...evidenceEventIds, ...assertionEventIds])].slice(0, 64) },
     };
   }
+}
+
+function evaluateAssertion(
+  operator: 'equals' | 'not_equals' | 'at_least' | 'at_most' | 'exists',
+  expected: string | number | boolean | undefined,
+  values: readonly (string | number | boolean)[],
+): boolean {
+  if (operator === 'exists') return values.length > 0;
+  if (values.length === 0 || expected === undefined) return false;
+  if (operator === 'equals') return values.every((value) => value === expected);
+  if (operator === 'not_equals') return values.every((value) => value !== expected);
+  if (typeof expected !== 'number') return false;
+  if (operator === 'at_least') return values.every((value) => typeof value === 'number' && value >= expected);
+  return values.every((value) => typeof value === 'number' && value <= expected);
 }
 
 /** Stable digest used by the application snapshot builder and verifier. */

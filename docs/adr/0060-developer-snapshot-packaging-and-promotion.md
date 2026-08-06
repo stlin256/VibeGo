@@ -11,7 +11,8 @@
 Spec 57a/57b provide the release contract and offline manifest preflight, but
 there is no repeatable artifact that can be downloaded and started. The first
 public release must remain a developer snapshot: it should exercise the real
-Host launcher, daemon and built Web shell without pretending to be a signed
+Host launcher, daemon and built Web shell (materialized at `apps/web/dist` so
+the daemon fallback works after extraction) without pretending to be a signed
 installer or stable cross-platform release.
 
 ## Decision
@@ -19,7 +20,8 @@ installer or stable cross-platform release.
 Add a bounded `package:developer-snapshot` command that stages:
 
 - the daemon production deploy output with workspace dependencies materialized;
-- the built React Web directory;
+- the built React Web directory at `apps/web/dist`, matching the daemon's
+  production-relative static asset lookup;
 - the Host launcher, package metadata, lockfile and bounded English/Chinese
   snapshot instructions;
 - a snapshot metadata file, SHA-256 checksum and release notes.

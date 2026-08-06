@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGoalEvent, InMemoryGoalControlEventStore, GoalControlProjectionBuilder } from '@ready4vibe/goal-control';
+import { createGoalControlEventV1, createGoalEvent, InMemoryGoalControlEventStore, GoalControlProjectionBuilder } from '@ready4vibe/goal-control';
 import type { GoalControlProjectionV1 } from '@ready4vibe/contracts';
 import { GoalRecoveryMonitor } from './goal-recovery-monitor.js';
 
@@ -95,5 +95,39 @@ describe('GoalRecoveryMonitor', () => {
     expect(monitor.isRunning()).toBe(true);
     monitor.stop();
     expect(monitor.isRunning()).toBe(false);
+  });
+
+  it('does not launch a second attempt while the latest governed run is active', async () => {
+    const { store } = await fixture();
+    await store.append(createGoalControlEventV1({
+      eventId: 'gevt_binding_12345678',
+      goalId: goal.goalId,
+      eventType: 'binding.created',
+      controlRevision: 3,
+      recordedAt: at,
+      producer: 'monitor_test',
+      privacy: 'local_private',
+      refs: { bindingId: 'binding_12345678', todoId: todo.todoId, runId: 'run_12345678' },
+      payload: { binding: {
+        schemaVersion: 'ready4vibe_goal_binding_v1', bindingId: 'binding_12345678', runId: 'run_12345678', goalId: goal.goalId, todoId: todo.todoId,
+        mode: 'governed', goalControlRevision: 2, policyRevision: 'policy-1', capabilityProfileRevision: 'profile-1', approvalPolicyRevision: 'approval-1',
+        sandboxSnapshotRevision: 'sandbox-1', workspaceId: 'workspace_main', admissionId: 'admission_12345678', createdAt: at, expiresAt: '2026-08-06T01:00:00.000Z',
+        attempt: 1, requestId: 'request_12345678',
+      } },
+    }));
+    let launchCalls = 0;
+    const monitor = new GoalRecoveryMonitor({
+      goalStore: store,
+      writeback: { reconcile: async () => ({ bindings: 1, terminalRuns: 0, recovered: 0, skipped: 0 }) },
+      clock: () => new Date(at),
+      intervalMs: 500,
+      runStatusForBinding: async () => 'executing' as const,
+      onEligible: async () => { launchCalls += 1; },
+    });
+    const result = await monitor.runOnce();
+    expect(result.decisions[0]?.status).toBe('eligible');
+    expect(result.launched).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(launchCalls).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import {
   GoalVerifierDescriptorV1Schema,
   GoalVerifierEventDigestV1Schema,
   GoalVerifierInputV1Schema,
+  GoalVerifierObservationV1Schema,
   GoalObjectiveSnapshotV1Schema,
   GoalVerifierResultV1Schema,
   findGoalVerifierPrivacyViolations,
@@ -105,6 +106,8 @@ describe('GoalVerifierInputV1 and GoalVerifierResultV1', () => {
     expect(GoalVerifierInputV1Schema.parse(verifierInput)).toEqual(verifierInput);
     expect(GoalVerifierResultV1Schema.parse(verifierResult)).toEqual(verifierResult);
     expect(GoalVerifierEventDigestV1Schema.parse(digest)).toEqual(digest);
+    expect(GoalVerifierObservationV1Schema.parse({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: digest.id, fact: 'run.outputBytes', value: 12 })).toMatchObject({ fact: 'run.outputBytes' });
+    expect(() => GoalVerifierObservationV1Schema.parse({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: digest.id, fact: 'run.outputBytes', value: 'C:\\workspace' })).toThrow(/path|invalid/iu);
   });
 
   it('accepts an objective snapshot only with a deterministic digest and plan', () => {
@@ -120,6 +123,7 @@ describe('GoalVerifierInputV1 and GoalVerifierResultV1', () => {
         requiredEventTypes: ['model.completed', 'run.completed'],
         forbiddenEventTypes: ['model.error'],
         minimumOutputBytes: 1,
+        semanticAssertions: [{ assertionId: 'assert_exit_12345678', fact: 'run.exitReason', operator: 'equals', expected: 'model-completed' }],
       },
     };
     expect(GoalObjectiveSnapshotV1Schema.parse(objective)).toEqual(objective);

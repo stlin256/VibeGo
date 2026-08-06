@@ -687,25 +687,30 @@ Goal proof; the broader A-G closure remains staged. Evidence is recorded in
 ## Spec 58-6f: objective-aware semantic validation and recovery monitor
 
 The bounded execution predicate is replaced for production governed lanes by a
-deterministic objective criteria verifier. A Todo may carry a strict
+deterministic objective-aware semantic verifier. A Todo may carry a strict
 `ready4vibe_goal_verification_plan_v1` containing required/forbidden event
-types and a minimum output threshold. The writeback boundary adds a
+types, a minimum output threshold and fixed semantic assertions over
+server-derived facts such as run exit reason, model finish reason, tool success
+and bytes, approval decisions and turn counters. The writeback boundary adds a
 privacy-checked objective snapshot with the authoritative Goal/Todo identity,
-bounded objective/title, deterministic digest and frozen plan. The verifier
-returns `validated` only when the completed run satisfies that plan; missing or
-contradictory criteria remain `inconclusive`, release quota and leave the Todo
-open. No prompt, transcript, raw model output, tool argument, command, path,
-environment or secret crosses the verifier port.
+bounded objective/title, deterministic digest and frozen plan, plus bounded
+fact observations; raw model/tool output is discarded. The verifier returns
+`validated` only when the completed run satisfies every declared criterion;
+missing plans/assertions or contradictory facts remain `inconclusive`, release
+quota and leave the Todo open. No prompt, transcript, raw model output, tool
+argument, command, path, environment or secret crosses the verifier port.
 
 `GoalRecoveryMonitor` is a daemon application service, not a second scheduler.
 Each serialized tick replays terminal/restart recovery through the existing
 writeback service and evaluates the pure Goal `shouldRun` decision. The
 production daemon provides a launch callback only for a due Todo with an
-existing governed binding and a valid claimed agent; missing bindings/claims
-remain observation-only. Retries always create a new attempt and never replay
-old tool calls, while a completed run with inconclusive objective evidence is
-left for explicit operator action to avoid an unbounded loop. The default
-interactive route remains unchanged. Design and boundaries are frozen in
+existing governed binding and a valid claimed agent; active runs, missing
+bindings/claims, validated/inconclusive evidence and retry-cap exhaustion are
+not launched. Retries always create a new attempt, release the interrupted
+reservation, record `retry_created` and never replay old tool calls, while a
+completed run with inconclusive objective evidence is left for explicit
+operator action. The default interactive route remains unchanged. Design and
+boundaries are frozen in
 [ADR 0059](../adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
 
 Implementation evidence is recorded in

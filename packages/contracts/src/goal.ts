@@ -46,6 +46,53 @@ export type TodoTaskClass = z.infer<typeof TodoTaskClassSchema>;
 
 export const GOAL_VERIFICATION_PLAN_SCHEMA_VERSION = 'ready4vibe_goal_verification_plan_v1' as const;
 const verificationEventType = boundedText(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u);
+const verificationFact = z.enum([
+  'run.status',
+  'run.exitReason',
+  'run.outputBytes',
+  'model.finishReason',
+  'tool.success',
+  'tool.bytes',
+  'tool.truncated',
+  'approval.decision',
+  'turn.outputBytes',
+  'turn.toolCallCount',
+]);
+export const GoalVerificationFactSchema = verificationFact;
+export type GoalVerificationFact = z.infer<typeof GoalVerificationFactSchema>;
+export const GoalVerificationAssertionOperatorSchema = z.enum(['equals', 'not_equals', 'at_least', 'at_most', 'exists']);
+export type GoalVerificationAssertionOperator = z.infer<typeof GoalVerificationAssertionOperatorSchema>;
+const assertionId = z.string().regex(/^assert_[A-Za-z0-9_-]{8,128}$/u);
+const assertionSelector = boundedText(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u);
+const assertionExpected = z.union([
+  boundedText(256),
+  z.number().int().nonnegative().max(50 * 1024 * 1024),
+  z.boolean(),
+]);
+
+/**
+ * Structured semantic acceptance facts. A verifier may only evaluate these
+ * fixed, server-derived facts; it must never interpret model prose or receive
+ * raw tool output, commands, paths or environment values.
+ */
+export const GoalVerificationAssertionSchema = z.object({
+  assertionId,
+  fact: verificationFact,
+  operator: GoalVerificationAssertionOperatorSchema,
+  expected: assertionExpected.optional(),
+  selector: assertionSelector.optional(),
+}).strict().superRefine((value, context) => {
+  if (value.operator !== 'exists' && value.expected === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['expected'], message: 'expected is required for this assertion operator' });
+  }
+  if (value.operator === 'exists' && value.expected !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['expected'], message: 'exists assertions must not provide expected' });
+  }
+  if ((value.operator === 'at_least' || value.operator === 'at_most') && typeof value.expected !== 'number') {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['expected'], message: 'numeric assertion operators require a number' });
+  }
+});
+export type GoalVerificationAssertion = z.infer<typeof GoalVerificationAssertionSchema>;
 
 /**
  * Explicit, replayable acceptance criteria for automatic Todo validation.
@@ -57,6 +104,7 @@ export const GoalVerificationPlanSchema = z.object({
   requiredEventTypes: z.array(verificationEventType).max(32),
   forbiddenEventTypes: z.array(verificationEventType).max(32),
   minimumOutputBytes: z.number().int().nonnegative().max(50 * 1024 * 1024),
+  semanticAssertions: z.array(GoalVerificationAssertionSchema).max(32).optional(),
 }).strict().superRefine((value, context) => {
   if (new Set(value.requiredEventTypes).size !== value.requiredEventTypes.length) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['requiredEventTypes'], message: 'required event types must be unique' });
@@ -66,6 +114,10 @@ export const GoalVerificationPlanSchema = z.object({
   }
   if (value.requiredEventTypes.some((eventType) => value.forbiddenEventTypes.includes(eventType))) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'required and forbidden event types must not overlap' });
+  }
+  const assertionIds = (value.semanticAssertions ?? []).map((assertion) => assertion.assertionId);
+  if (new Set(assertionIds).size !== assertionIds.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['semanticAssertions'], message: 'semantic assertion ids must be unique' });
   }
 });
 export type GoalVerificationPlan = z.infer<typeof GoalVerificationPlanSchema>;

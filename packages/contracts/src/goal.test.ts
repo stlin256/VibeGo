@@ -46,6 +46,8 @@ describe('goal contracts', () => {
     expect(GoalVerificationPlanSchema.parse(plan)).toEqual(plan);
     expect(() => GoalVerificationPlanSchema.parse({ ...plan, forbiddenEventTypes: ['run.completed'] })).toThrow(/overlap/iu);
     expect(() => GoalVerificationPlanSchema.parse({ ...plan, extra: true })).toThrow();
+    expect(GoalVerificationPlanSchema.parse({ ...plan, semanticAssertions: [{ assertionId: 'assert_exit_12345678', fact: 'run.exitReason', operator: 'equals', expected: 'model-completed' }] })).toMatchObject({ semanticAssertions: [{ fact: 'run.exitReason' }] });
+    expect(() => GoalVerificationPlanSchema.parse({ ...plan, semanticAssertions: [{ assertionId: 'assert_bad_12345678', fact: 'run.outputBytes', operator: 'at_least' }] })).toThrow(/expected/iu);
   });
 
   it('accepts versioned goal records and rejects a missing revision', () => {

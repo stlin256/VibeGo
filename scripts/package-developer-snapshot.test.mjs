@@ -47,6 +47,7 @@ test('packages a bounded runnable-shaped snapshot and emits no absolute paths', 
     await assert.rejects(() => readFile(join(stage, 'vibego-developer-snapshot', 'daemon', 'src', 'credentials.ts')));
     await assert.rejects(() => readFile(join(stage, 'vibego-developer-snapshot', 'daemon', 'tsconfig.json')));
     assert.equal(await readFile(join(stage, 'vibego-developer-snapshot', 'daemon', 'dist', 'main.js'), 'utf8'), 'const injected = { apiKey: normalized.apiKey }; console.log("daemon", injected);\n');
+    assert.equal(await readFile(join(stage, 'vibego-developer-snapshot', 'apps', 'web', 'dist', 'index.html'), 'utf8'), '<main>VibeGo</main>\n');
     assert.match(await readFile(join(stage, 'SHA256SUMS'), 'utf8'), /^sha256:[0-9a-f]{64}  vibego-/u);
     assert.match(await readFile(join(stage, 'release-notes.md'), 'utf8'), /developer nightly snapshot/iu);
   } finally {

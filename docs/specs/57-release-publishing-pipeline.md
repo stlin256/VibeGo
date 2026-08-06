@@ -236,7 +236,8 @@ Implementation evidence is recorded in
 The first actual release slice is a nightly Windows x64 developer snapshot
 under [ADR 0060](../adr/0060-developer-snapshot-packaging-and-promotion.md).
 `pnpm package:developer-snapshot` stages the materialized daemon deploy,
-built Web assets and Host launcher. The daemon staging step keeps only
+built Web assets at the daemon's production-relative `apps/web/dist` path,
+and the Host launcher. The daemon staging step keeps only
 compiled runtime output, production dependencies and package metadata; source
 `src/`, TypeScript files and `tsconfig.json` are excluded before the privacy
 scan. The privacy scan rejects concrete token-shaped values and quoted

@@ -31,7 +31,8 @@ no runtime toolchain change is committed.
 offline release run) stages:
 
 - compiled daemon `dist/`, production dependencies and package metadata;
-- built React Web assets;
+- built React Web assets materialized at `apps/web/dist`, matching the daemon
+  production-relative static asset lookup;
 - the dependency-free Host launcher;
 - snapshot metadata, SHA-256 checksum and bounded release notes.
 

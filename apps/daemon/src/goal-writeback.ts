@@ -7,6 +7,7 @@ import {
   GOAL_VERIFIER_RESULT_SCHEMA_VERSION,
   GoalVerifierInputV1Schema,
   GoalVerifierResultV1Schema,
+  GoalVerifierObservationV1Schema,
   GoalValidationEvidenceV1Schema,
   GoalObjectiveSnapshotV1Schema,
   GoalRunBindingV1Schema,
@@ -17,6 +18,7 @@ import {
   type GoalValidationEvidenceV1,
   type GoalVerifierInputV1,
   type GoalVerifierResultV1,
+  type GoalVerifierObservationV1,
   type PermissionProfileRunSnapshot,
   type RunStatus,
   type StoredEvent,
@@ -191,16 +193,27 @@ export class GoalRunWritebackService {
   /** Create a fresh governed attempt; the old run and tool calls are never replayed. */
   async retryGoverned(runId: string, input: { agentId: string }, runOptions: { readonly permissionSnapshot?: PermissionProfileRunSnapshot } = {}): Promise<unknown | 'not-found' | 'not-recoverable' | 'unavailable'> {
     if (!RUN_ID.test(runId) || !SAFE_ID.test(input.agentId)) return 'not-recoverable';
+    return this.withRunLock(runId, () => this.retryGovernedUnlocked(runId, input, runOptions));
+  }
+
+  private async retryGovernedUnlocked(runId: string, input: { agentId: string }, runOptions: { readonly permissionSnapshot?: PermissionProfileRunSnapshot }): Promise<unknown | 'not-found' | 'not-recoverable' | 'unavailable'> {
     const snapshot = await this.options.runManager.snapshot(runId);
     if (!snapshot) return 'not-found';
     if (snapshot.status === 'completed' || !TERMINAL_STATUSES.has(snapshot.status)) return 'not-recoverable';
     const binding = this.registrations.get(runId)?.binding ?? await this.findBinding(runId);
     if (!binding || !this.options.admitGoverned) return 'unavailable';
+    // A fresh attempt owns a new reservation. Release the interrupted
+    // attempt first so recovery cannot silently accumulate quota holds.
+    try {
+      await this.releaseReservation(binding, 'governed-retry-new-attempt');
+    } catch {
+      return 'unavailable';
+    }
     const events = await this.options.goalStore.read(binding.goalId);
     const projection = this.builder.build(events);
     const requestId = `request_recovery_${uuidv7()}`;
     const turnKey = `turn_recovery_${uuidv7()}`;
-    return this.options.admitGoverned({
+    const admitted = await this.options.admitGoverned({
       ...snapshot.config,
       runMode: 'governed',
       goalId: binding.goalId,
@@ -212,6 +225,11 @@ export class GoalRunWritebackService {
       requestId,
       clientRequestId: `client_${uuidv7()}`,
     }, runOptions);
+    const nextRunId = readAdmissionRunId(admitted);
+    if (nextRunId && nextRunId !== binding.runId) {
+      await this.recordRetryCreated(binding, nextRunId, binding.attempt + 1).catch(() => undefined);
+    }
+    return admitted;
   }
 
   close(): void {
@@ -305,6 +323,7 @@ export class GoalRunWritebackService {
         run: { runId: snapshot.runId, status: snapshot.status, lastEventSeq: snapshot.lastEventSeq, outputBytes: Buffer.byteLength(snapshot.output, 'utf8') },
         terminal: { schemaVersion: GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION, ...terminal },
         events: events.map((event) => ({ schemaVersion: GOAL_VERIFIER_EVENT_DIGEST_SCHEMA_VERSION, ...digestEvent(event) })),
+        observations: deriveGoalVerifierObservations(events, snapshot, terminal),
         ...(objective ? { objective } : {}),
       });
     } catch {
@@ -514,6 +533,27 @@ export class GoalRunWritebackService {
     });
   }
 
+  private async recordRetryCreated(binding: GoalRunBindingV1, nextRunId: string, nextAttempt: number): Promise<void> {
+    const projection = this.builder.build(await this.options.goalStore.read(binding.goalId));
+    const recoveryId = stableId('recovery', binding.goalId, binding.bindingId, nextRunId, String(nextAttempt));
+    if (projection.recoveries.some((candidate) => candidate.recoveryId === recoveryId)) return;
+    await this.goalControl.recordRecovery(binding.goalId, {
+      eventId: stableEventId(binding.goalId, binding.bindingId, 'recovery.retry', nextRunId),
+      expectedRevision: projection.controlRevision,
+      recovery: {
+        recoveryId,
+        goalId: binding.goalId,
+        bindingId: binding.bindingId,
+        runId: nextRunId,
+        previousRunId: binding.runId,
+        attempt: nextAttempt,
+        status: 'retry_created',
+        reason: boundedSummary(`Fresh governed recovery attempt ${nextAttempt} created.`),
+        requestId: binding.requestId,
+      },
+    });
+  }
+
   private async findBinding(runId: string): Promise<GoalRunBindingV1 | undefined> {
     for (const goalId of this.options.goalStore.listGoalIds()) {
       const projection = this.builder.build(await this.options.goalStore.read(goalId));
@@ -561,6 +601,63 @@ function findTerminalEvent(events: readonly StoredEvent[]): GoalRunEventDigest |
 
 function digestEvent(event: StoredEvent): GoalRunEventDigest {
   return { id: event.id, seq: event.seq, type: event.type, at: event.at };
+}
+
+/**
+ * Project only fixed, server-owned facts into the verifier boundary. Raw
+ * payload strings (including model/tool output, prompts and summaries) are
+ * intentionally ignored; malformed facts are omitted and therefore fail a
+ * semantic assertion closed.
+ */
+function deriveGoalVerifierObservations(
+  events: readonly StoredEvent[],
+  snapshot: RunSnapshot,
+  terminal: GoalRunEventDigest,
+): readonly GoalVerifierObservationV1[] {
+  const observations: GoalVerifierObservationV1[] = [];
+  const append = (candidate: unknown): void => {
+    const parsed = GoalVerifierObservationV1Schema.safeParse(candidate);
+    if (parsed.success) observations.push(parsed.data);
+  };
+  append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: terminal.id, fact: 'run.status', value: snapshot.status });
+  append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: terminal.id, fact: 'run.outputBytes', value: Buffer.byteLength(snapshot.output, 'utf8') });
+  for (const event of events) {
+    const payload = asRecord(event.payload);
+    if (!payload) continue;
+    if (event.type === 'run.completed' && isSafeFactString(payload.exitReason)) {
+      append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'run.exitReason', value: payload.exitReason });
+    }
+    if (event.type === 'model.completed' && isSafeFactString(payload.finishReason)) {
+      append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'model.finishReason', value: payload.finishReason });
+    }
+    if (event.type === 'tool.completed') {
+      const selector = isSafeFactString(payload.toolId) ? payload.toolId : undefined;
+      if (typeof payload.success === 'boolean') append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'tool.success', value: payload.success, ...(selector ? { selector } : {}) });
+      if (isSafeFactNumber(payload.bytes)) append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'tool.bytes', value: payload.bytes, ...(selector ? { selector } : {}) });
+      if (typeof payload.truncated === 'boolean') append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'tool.truncated', value: payload.truncated, ...(selector ? { selector } : {}) });
+    }
+    if (event.type === 'approval.decided' && isSafeFactString(payload.decision)) {
+      append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'approval.decision', value: payload.decision });
+    }
+    if (event.type === 'turn.completed') {
+      if (isSafeFactNumber(payload.outputBytes)) append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'turn.outputBytes', value: payload.outputBytes });
+      if (isSafeFactNumber(payload.toolCallCount)) append({ schemaVersion: 'ready4vibe_goal_verifier_observation_v1', eventId: event.id, fact: 'turn.toolCallCount', value: payload.toolCallCount });
+    }
+  }
+
+  return observations.slice(0, 512);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function isSafeFactString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256 && /^[^\u0000-\u001F\u007F\r\n]*$/u.test(value) && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value);
+}
+
+function isSafeFactNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 50 * 1024 * 1024;
 }
 
 function normalizeVerifierResult(value: GoalRunVerifierResult, terminalEventId: string, runId: string): GoalRunVerifierResult {
@@ -613,8 +710,14 @@ function stableId(prefix: 'evidence' | 'recovery', ...parts: readonly string[]):
   return `${prefix}_${createHash('sha256').update(parts.join('\u0000'), 'utf8').digest('hex').slice(0, 32)}`;
 }
 
-function stableEventId(goalId: string, bindingId: string, phase: 'validation' | 'recovery' | 'todo.complete' | 'quota.consume' | 'quota.release'): string {
-  return `gevt_${createHash('sha256').update(`${goalId}\u0000${bindingId}\u0000${phase}`, 'utf8').digest('hex').slice(0, 32)}`;
+function stableEventId(goalId: string, bindingId: string, phase: 'validation' | 'recovery' | 'recovery.retry' | 'todo.complete' | 'quota.consume' | 'quota.release', suffix = ''): string {
+  return `gevt_${createHash('sha256').update(`${goalId}\u0000${bindingId}\u0000${phase}\u0000${suffix}`, 'utf8').digest('hex').slice(0, 32)}`;
+}
+
+function readAdmissionRunId(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const runId = (value as Record<string, unknown>).runId;
+  return typeof runId === 'string' && RUN_ID.test(runId) ? runId : undefined;
 }
 
 function hashJson(value: unknown): string {

@@ -1653,14 +1653,16 @@ and the boundary is frozen in [ADR 0057](adr/0057-deepseek-live-reasoning-smoke-
 The objective-aware verifier and serialized recovery monitor are implemented
 under [ADR 0059](adr/0059-objective-aware-goal-verifier-and-recovery-monitor.md).
 The production registry validates automatic advancement/monitor/blocker lanes
-against an explicit Todo plan; the bounded execution verifier remains as an
+against an explicit Todo plan with fixed semantic assertions over
+server-derived run facts; the bounded execution verifier remains as an
 explicit Harness fixture. The daemon monitor now has a bounded production
 retry callback for due Todos with an existing binding and claimed agent; it
 delegates to `retryGoverned` and the existing admission/Scheduler/Approval/
-Sandbox/Workspace/quota authorities. Missing bindings/claims remain observed,
-completed runs with inconclusive validation are not retried indefinitely, and
-existing interactive behavior and all runtime/event authorities remain
-unchanged. Evidence is recorded in
+Sandbox/Workspace/quota authorities, releases the interrupted reservation,
+records `retry_created`, skips active/validated/inconclusive attempts and caps
+automatic retries. Missing bindings/claims remain observed, and existing
+interactive behavior and all runtime/event authorities remain unchanged.
+Evidence is recorded in
 [`spec58-6f-objective-verifier-monitor-2026-08-06.md`](reports/spec58-6f-objective-verifier-monitor-2026-08-06.md).
 
 ### Spec 57c developer snapshot packaging (2026-08-06)
