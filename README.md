@@ -90,7 +90,17 @@ in parallel.
 
 ## Get started
 
-### Source checkout (current development path)
+### One-click start (Windows)
+
+Double-click **`start-vibego.bat`** in the repository root. It finds a Node.js
+runtime — a portable copy under `.ready4vibe/runtime`, one already installed
+on `PATH`, or an official Node.js LTS zip it downloads into
+`.ready4vibe/runtime` — then installs dependencies, builds the workspace when
+needed, starts the Host and opens the console. Nothing is installed
+system-wide and all state stays inside the repository. `Ctrl+C` stops the
+Host. The same flow is available on any platform as `pnpm launch`.
+
+### Source checkout (manual path)
 
 Requirements: Node.js `>=22.12.0` and pnpm `11.9.0`.
 

@@ -1714,3 +1714,24 @@ spec 61 头部与 61-10/61-11 小节及历史报告 addendum 已同步更新。
 `3db45d3`）：GNU tar（MSYS/Git Bash）会把 `-f` 参数中的盘符冒号解释为远程
 主机导致 `SNAPSHOT_ARCHIVE_CREATE_FAILED`，现改为在输出目录内以 basename
 spawn，GNU tar 与 Windows bsdtar 均可通过；focused test 3/3 通过。
+
+### One-click local launch and portable runtime (2026-08-06)
+
+新增双击即用入口，边界冻结于 [ADR 0061](adr/0061-one-click-local-launch-and-portable-runtime.md)：
+
+- 仓库根目录 `start-vibego.bat`（Windows 双击）：按 便携运行时
+  `.ready4vibe/runtime/node` → PATH 中 Node.js `>=22` → 下载官方 Node.js
+  LTS zip 到 `.ready4vibe/runtime` 的顺序解析运行时；不做任何系统级安装
+  或环境变量修改；
+- `scripts/launch-local.mjs`（`pnpm launch`）：解析 PATH 上的 pnpm 或经
+  corepack 激活 `packageManager` 锁定版本，仅在 marker 缺失时执行
+  `pnpm install --frozen-lockfile` / `pnpm build`，然后委托既有 Host
+  launcher（`--open`）启动；Windows 的 `.cmd` shim 通过
+  `ComSpec /d /s /c` 包装（与 `verification-evidence.mjs` 同款引用），其余
+  子进程保持无 shell argv；
+- focused tests 6/6 通过；`pnpm launch --no-open` 真实启动 Host 并验证
+  HTTP 200；`start-vibego.bat` 在无 Node 的干净 PATH 下完成便携运行时
+  下载、解压并成功启动 Host（见 ADR 与提交说明）。
+
+便携运行时只是便利层；签名安装包与捆绑运行时发行仍为 Spec 57/60 的独立
+门禁。POSIX shell 等价入口留作后续独立评审切片。

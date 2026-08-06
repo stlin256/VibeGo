@@ -86,7 +86,16 @@ VibeGo 正在持续完善首个可安装版本。现在已经可以体验本地�
 
 ## 快速开始
 
-### 当前源码路径
+### 一键启动（Windows）
+
+双击仓库根目录的 **`start-vibego.bat`**。它会自动找到 Node.js 运行时——
+优先使用 `.ready4vibe/runtime` 下的便携副本，其次是 PATH 中已安装的
+Node.js，都没有则自动下载官方 Node.js LTS 压缩包到 `.ready4vibe/runtime`
+——随后按需安装依赖、构建工作区，启动 Host 并打开控制台。全程不向系统
+安装任何东西，所有状态都留在仓库目录内。按 `Ctrl+C` 停止 Host。其他
+平台可用 `pnpm launch` 完成同样流程。
+
+### 手动源码路径
 
 要求：Node.js `>=22.12.0` 和 pnpm `11.9.0`。
 
