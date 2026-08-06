@@ -200,7 +200,11 @@ function buildReleaseNotes(metadata, files) {
 
 function createArchive(stageRoot, directoryName, output) {
   return new Promise((resolvePromise, reject) => {
-    nodeExecFile('tar', ['-czf', output, '-C', stageRoot, directoryName], { windowsHide: true }, (error, _stdout, _stderr) => {
+    // GNU tar (MSYS/Git Bash) treats a drive-letter colon in the -f archive
+    // name as a remote host ("Cannot connect to C:"). Spawn from the output
+    // directory and pass only the basename so both GNU tar and Windows bsdtar
+    // accept the path.
+    nodeExecFile('tar', ['-czf', basename(output), '-C', stageRoot, directoryName], { cwd: dirname(output), windowsHide: true }, (error, _stdout, _stderr) => {
       if (error) reject(new DeveloperSnapshotError('SNAPSHOT_ARCHIVE_CREATE_FAILED'));
       else resolvePromise();
     });
