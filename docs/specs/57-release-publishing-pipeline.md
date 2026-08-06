@@ -210,3 +210,23 @@ Focused verification on 2026-08-05:
 
 No GitHub workflow, release upload, signing, SBOM/provenance generation,
 installer, artifact download or runtime update behavior is part of this phase.
+
+## 13. Phase 57b deterministic local release manifest preflight
+
+The next bounded implementation slice is frozen by
+[ADR 0058](../adr/0058-deterministic-release-manifest-preflight.md). The new
+`pnpm release:manifest` command accepts explicit release metadata and artifact
+descriptors rooted in a caller-provided staging directory. It streams each
+artifact through a built-in SHA-256 hash, records bounded byte size and target
+metadata, validates the existing `release-manifest/v1` contract, and writes
+only the requested manifest file.
+
+The command must reject missing files, path traversal/symlink escape, unsafe
+basenames, malformed tags/commits/channels and stable releases without a
+rollback target. It must not include artifact roots, local absolute paths,
+credentials, environment values or raw errors in the manifest/report. Tests
+use temporary fixtures and do not contact GitHub, sign, upload, build an
+installer, generate SBOM/provenance or alter runtime authorities.
+
+Implementation evidence is recorded in
+[`spec57b-release-manifest-preflight-2026-08-06.md`](../reports/spec57b-release-manifest-preflight-2026-08-06.md).

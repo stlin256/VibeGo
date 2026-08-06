@@ -794,6 +794,18 @@ AgentLoop、RunManager、Scheduler、Approval、Sandbox、WorkspaceRegistry、
   构建、平台签名、GitHub artifact attestation、SBOM、Sigstore、draft→stable promotion、
   release evidence 和 withdrawn/rollback runtime 流程。
 
+### Spec 57b deterministic local release manifest preflight (2026-08-06)
+
+Before adding GitHub Actions or installer side effects, the bounded
+`pnpm release:manifest` now hashes explicitly supplied staging artifacts,
+binds them to immutable version/tag/source/target metadata and validates the
+existing `release-manifest/v1` contract. It writes only the requested manifest,
+rejects missing/traversal/symlink-escape inputs and keeps local paths, secrets
+and raw errors out of output. The focused fixture passes 5/5. This is offline
+release-identity evidence only; workflow, packaging, SBOM/signing, attestation
+and preview promotion remain separate gates. See [ADR 0058](adr/0058-deterministic-release-manifest-preflight.md)
+and the [evidence report](reports/spec57b-release-manifest-preflight-2026-08-06.md).
+
 推荐实施顺序为 `53 → 54 → 56 → 55 → 57`；Spec 57 的 stable gate 必须汇总前四项的
 安装、模型、证书、公网、无障碍、真实设备、性能和恢复证据。实现前应先阅读
 [Spec 53–57 调研记录](research/53-57-release-install-model-operations-research.md)，
