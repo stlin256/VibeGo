@@ -62,6 +62,15 @@ const copy: ConversationCopy = {
   reviewerEyebrow: 'APPROVAL REVIEW SNAPSHOT',
   reviewerOff: 'off',
   reviewerFrozen: 'revision {rev} · policy {policy} · frozen for this run',
+  quickApproval: 'Approval',
+  quickSandbox: 'Sandbox',
+  quickModel: 'Model',
+  approvalOnRequest: 'On request',
+  approvalUntrusted: 'Untrusted',
+  approvalNever: 'Never',
+  sandboxReadOnly: 'Read-only',
+  sandboxWorkspaceWrite: 'Workspace write',
+  sandboxExternal: 'External',
 };
 
 function runFixture(status: RunSnapshot['status'] = 'executing'): RunSnapshot {
@@ -86,7 +95,20 @@ describe('ConversationShell', () => {
     expect(html).toContain('aria-label="Task input"');
     expect(html).toContain('Describe what you want to build.');
     expect(html).toContain('Start run');
-    expect(html).toContain('trusted workspace · read-only');
+    expect(html).not.toContain('composer-tools');
+  });
+
+  it('renders quick approval, sandbox and model controls when profile changes are wired', () => {
+    const html = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onProfileChange={() => undefined} />);
+    expect(html).toContain('composer-tools');
+    expect(html).toContain('>Approval<');
+    expect(html).toContain('>Sandbox<');
+    expect(html).toContain('>Model<');
+    expect(html).toContain('On request');
+    expect(html).toContain('Read-only');
+    expect(html).toContain('deepseek-v4-flash');
+    const custom = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={{ ...DEFAULT_RUN_PROFILE, model: { provider: 'openai-compatible', name: 'my-custom-model' } }} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onProfileChange={() => undefined} />);
+    expect(custom).toContain('my-custom-model');
   });
 
   it('preserves recovery and approval states without exposing paths or credentials', () => {
@@ -100,7 +122,6 @@ describe('ConversationShell', () => {
     expect(html).toContain('Deny');
     expect(html).toContain('TOOL OUTPUTS');
     expect(html).toContain('safe');
-    expect(html).toContain('untrusted content · external sandbox');
     expect(html).not.toMatch(/api[_-]?key|Authorization|C:\\Users/iu);
 
     const recovery = renderToStaticMarkup(<ConversationShell run={runFixture('needs-recovery')} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onRetry={() => undefined} />);

@@ -63,6 +63,15 @@ export interface ConversationCopy {
   readonly reviewerEyebrow: string;
   readonly reviewerOff: string;
   readonly reviewerFrozen: string;
+  readonly quickApproval: string;
+  readonly quickSandbox: string;
+  readonly quickModel: string;
+  readonly approvalOnRequest: string;
+  readonly approvalUntrusted: string;
+  readonly approvalNever: string;
+  readonly sandboxReadOnly: string;
+  readonly sandboxWorkspaceWrite: string;
+  readonly sandboxExternal: string;
 }
 
 export interface ConversationShellProps {
@@ -74,13 +83,26 @@ export interface ConversationShellProps {
   readonly copy: ConversationCopy;
   readonly onMessageChange: (value: string) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onProfileChange?: ((patch: Partial<RunProfile>) => void) | undefined;
   readonly onCancel?: (() => void) | undefined;
   readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined;
   readonly onRetry?: (() => void) | undefined;
 }
 
+const QUICK_MODEL_PRESETS = ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'] as const;
+
 /** Conversation-first surface; all authority remains in the App callbacks. */
-export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onCancel, onApprove, onRetry }: ConversationShellProps): JSX.Element {
+export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onProfileChange, onCancel, onApprove, onRetry }: ConversationShellProps): JSX.Element {
+  const approval = typeof profile.approval === 'string' ? profile.approval : 'on-request';
+  const sandboxMode = profile.sandbox.mode;
+  const modelOptions = QUICK_MODEL_PRESETS.includes(profile.model.name as (typeof QUICK_MODEL_PRESETS)[number]) ? QUICK_MODEL_PRESETS : [...QUICK_MODEL_PRESETS, profile.model.name];
+  const updateSandboxMode = (mode: RunProfile['sandbox']['mode']): void => {
+    if (!onProfileChange) return;
+    const network = 'network' in profile.sandbox && profile.sandbox.network ? profile.sandbox.network : 'restricted';
+    if (mode === 'read-only') onProfileChange({ sandbox: { mode, network } });
+    else if (mode === 'workspace-write') onProfileChange({ sandbox: { mode, network, writableRoots: 'writableRoots' in profile.sandbox && profile.sandbox.writableRoots.length > 0 ? profile.sandbox.writableRoots : ['.'] } });
+    else onProfileChange({ sandbox: { mode, network, provider: 'provider' in profile.sandbox ? profile.sandbox.provider : 'docker', ...('writableRoots' in profile.sandbox && profile.sandbox.writableRoots ? { writableRoots: profile.sandbox.writableRoots } : {}) } });
+  };
   return (
     <section className="conversation-column" aria-label={copy.conversationTimeline}>
       <section className="conversation-stream" aria-label={copy.conversationStream}>
@@ -89,7 +111,14 @@ export function ConversationShell({ run, events, message, profile, composerRef, 
       <section className="panel composer-panel">
         <form onSubmit={onSubmit}>
           <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} placeholder={copy.inputPlaceholder} rows={2} />
-          <div className="composer-footer"><span className="muted">{profile.taskTrust === 'untrusted-content' ? copy.untrustedPolicy : copy.trustedPolicy}</span><Button type="submit">{copy.startRun}</Button></div>
+          <div className="composer-footer">
+            {onProfileChange && <div className="composer-tools">
+              <label className="composer-chip"><span>{copy.quickApproval}</span><select aria-label={copy.quickApproval} value={approval} onChange={(event) => onProfileChange({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">{copy.approvalOnRequest}</option><option value="untrusted">{copy.approvalUntrusted}</option><option value="never">{copy.approvalNever}</option></select></label>
+              <label className="composer-chip"><span>{copy.quickSandbox}</span><select aria-label={copy.quickSandbox} value={sandboxMode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">{copy.sandboxReadOnly}</option><option value="workspace-write">{copy.sandboxWorkspaceWrite}</option><option value="external-sandbox">{copy.sandboxExternal}</option></select></label>
+              <label className="composer-chip"><span>{copy.quickModel}</span><select aria-label={copy.quickModel} value={profile.model.name} onChange={(event) => onProfileChange({ model: { ...profile.model, name: event.target.value } })}>{modelOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+            </div>}
+            <Button type="submit">{copy.startRun}</Button>
+          </div>
         </form>
       </section>
     </section>

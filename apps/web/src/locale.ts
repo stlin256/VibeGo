@@ -168,6 +168,15 @@ export type MessageKey =
   | 'setup.bannerText'
   | 'setup.bannerAction'
   | 'setup.close'
+  | 'composer.approval'
+  | 'composer.sandbox'
+  | 'composer.model'
+  | 'composer.approvalOnRequest'
+  | 'composer.approvalUntrusted'
+  | 'composer.approvalNever'
+  | 'composer.sandboxReadOnly'
+  | 'composer.sandboxWorkspaceWrite'
+  | 'composer.sandboxExternal'
   | 'accessibility.statusLabel';
 
 type Catalog = Readonly<Record<MessageKey, string>>;
@@ -330,6 +339,15 @@ const EN_US: Catalog = {
   'setup.bannerText': 'No model configured yet — runs need a saved provider.',
   'setup.bannerAction': 'Set up now',
   'setup.close': 'Close setup',
+  'composer.approval': 'Approval',
+  'composer.sandbox': 'Sandbox',
+  'composer.model': 'Model',
+  'composer.approvalOnRequest': 'On request',
+  'composer.approvalUntrusted': 'Untrusted',
+  'composer.approvalNever': 'Never',
+  'composer.sandboxReadOnly': 'Read-only',
+  'composer.sandboxWorkspaceWrite': 'Workspace write',
+  'composer.sandboxExternal': 'External',
   'accessibility.statusLabel': 'Live status',
 };
 
@@ -489,6 +507,15 @@ const ZH_CN: Catalog = {
   'setup.bannerText': '尚未配置模型——保存提供方后才能开始运行。',
   'setup.bannerAction': '立即设置',
   'setup.close': '关闭设置',
+  'composer.approval': '审批',
+  'composer.sandbox': '沙箱',
+  'composer.model': '模型',
+  'composer.approvalOnRequest': '按需',
+  'composer.approvalUntrusted': '不可信任务',
+  'composer.approvalNever': '从不',
+  'composer.sandboxReadOnly': '只读',
+  'composer.sandboxWorkspaceWrite': '工作区可写',
+  'composer.sandboxExternal': '外部沙箱',
   'accessibility.statusLabel': '实时状态',
 };
 

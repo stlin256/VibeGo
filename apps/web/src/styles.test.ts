@@ -39,7 +39,7 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('.locale-control');
     expect(styles).toContain('.locale-control select { min-height: 44px;');
     expect(styles).toContain('.sr-only');
-    expect(styles).toContain('button { border: 0; border-radius: var(--vibego-radius-sm); min-height: 44px;');
+    expect(styles).toContain('button { border: 0; border-radius: var(--vibego-radius-sm); min-height: 36px;');
     expect(styles).toContain('prefers-reduced-motion');
   });
 
@@ -60,7 +60,7 @@ describe('ratio-first responsive layout contract', () => {
     expect(styles).toContain('--background: var(--vibego-bg-canvas)');
     expect(styles).toContain('--primary: var(--vibego-primary)');
     expect(styles).toContain('--destructive: var(--vibego-signal-red)');
-    expect(styles).toContain('.ui-button--size-icon { width: 44px;');
+    expect(styles).toContain('.ui-button--size-icon { width: 36px;');
     expect(styles).toContain('.ui-card {');
     expect(styles).toContain('.ui-skeleton {');
     expect(styles).toContain('.ui-button__spinner');
