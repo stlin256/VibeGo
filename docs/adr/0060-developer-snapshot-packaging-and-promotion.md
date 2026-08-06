@@ -42,3 +42,7 @@ are not silently claimed by this snapshot.
 No credential is read by the packager. GitHub authentication is supplied only
 to the explicit `gh release create` command by the operator environment and is
 never written to a file, argument, artifact or release note.
+
+The daemon declares every runtime import, including `zod`, directly in its
+package boundary so the materialized deploy is buildable without relying on a
+hoisted root dependency.
