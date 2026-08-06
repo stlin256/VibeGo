@@ -1012,6 +1012,17 @@ recorded in [`spec61-7-capability-snapshot-2026-08-06.md`](reports/spec61-7-capa
 This does not claim live DeepSeek support and does not change AgentLoop,
 Scheduler, Approval, Sandbox, WorkspaceRegistry or event authority.
 
+### Spec 61-9 provider-owned search application port (complete bounded slice, 2026-08-06)
+
+The slice adds an optional application-injected DeepSeek search executor.
+It uses the captured Responses snapshot, explicit network/approval gate,
+`AbortSignal` and bounded ContextManager mapping; it does not register a
+generic web tool or change AgentLoop/RunManager defaults. The default daemon
+keeps the executor absent, and malformed/failed/cancelled/over-budget search
+returns degraded with no context. Live provider search compatibility and
+release evidence remain open. The no-network fixture report is
+[`spec61-9-provider-owned-search-2026-08-06.md`](reports/spec61-9-provider-owned-search-2026-08-06.md).
+
 ## Spec 62：用户可见文档质量、README 与开箱即用说明（Draft）
 
 详见 [Spec 62](specs/62-user-facing-documentation-quality.md)。该规格指导英文优先的

@@ -8,6 +8,7 @@ import {
   DeepSeekErrorCodeSchema,
   DeepSeekProbeResultSchema,
   DeepSeekReviewRequestSchema,
+  DeepSeekSearchRequestSchema,
   DeepSeekRunSnapshotSchema,
   DeepSeekSearchItemSchema,
   DeepSeekSettingsProfileSchema,
@@ -182,6 +183,21 @@ describe('DeepSeek provider/v1 contracts', () => {
       snippet: 'bad',
       url: 'https://example.com',
     })).toThrow();
+  });
+
+  it('keeps provider-owned search requests versioned, bounded and secret-free', () => {
+    const request = DeepSeekSearchRequestSchema.parse({
+      schemaVersion: 'deepseek-provider-search-request/v1',
+      query: 'bounded documentation query',
+      maxItems: 8,
+      maxBytes: 8_192,
+    });
+    expect(request.query).toBe('bounded documentation query');
+    expect(() => DeepSeekSearchRequestSchema.parse({ ...request, extra: true })).toThrow();
+    expect(() => DeepSeekSearchRequestSchema.parse({ ...request, query: 'sk-' + 'a'.repeat(32) })).toThrow();
+    expect(() => DeepSeekSearchRequestSchema.parse({ ...request, query: 'C:\\Users\\someone\\repo' })).toThrow();
+    expect(() => DeepSeekSearchRequestSchema.parse({ ...request, maxItems: 33 })).toThrow();
+    expect(() => DeepSeekSearchRequestSchema.parse({ ...request, maxBytes: 128 * 1024 + 1 })).toThrow();
   });
 
   it('reports secret-shaped fields, values, and absolute paths recursively', () => {

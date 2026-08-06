@@ -2,6 +2,7 @@ import {
   DeepSeekCapabilitySnapshotSchema,
   DeepSeekConfigSchema,
   DeepSeekRunSnapshotSchema,
+  DeepSeekSearchRequestSchema,
   DeepSeekSearchResponseSchema,
   ModelProviderSnapshotSchema,
   findDeepSeekPrivacyViolations,
@@ -14,6 +15,7 @@ import {
   evaluateDeepSeekSearchGate,
   mapDeepSeekSearchResponseToContextItems,
   resolveDeepSeekThinkingMode,
+  type DeepSeekSearchExecutor,
 } from '@ready4vibe/model-deepseek';
 
 const UNPROBED_CAPABILITY_SUFFIX = '-unprobed';
@@ -58,7 +60,7 @@ export type DeepSeekSearchGateResult =
 
 export interface DeepSeekSearchContextResult {
   readonly status: 'ready' | 'degraded';
-  readonly reasonCode?: 'DEEPSEEK_SEARCH_READY' | 'DEEPSEEK_SEARCH_DEGRADED' | 'DEEPSEEK_SEARCH_PROTOCOL_INVALID' | 'DEEPSEEK_SEARCH_CONTEXT_LIMIT' | 'DEEPSEEK_SNAPSHOT_INVALID';
+  readonly reasonCode?: 'DEEPSEEK_SEARCH_READY' | 'DEEPSEEK_SEARCH_DEGRADED' | 'DEEPSEEK_SEARCH_CANCELLED' | 'DEEPSEEK_SEARCH_TIMEOUT' | 'DEEPSEEK_SEARCH_PROTOCOL_INVALID' | 'DEEPSEEK_SEARCH_CONTEXT_LIMIT' | 'DEEPSEEK_SNAPSHOT_INVALID';
   readonly items: readonly ContextItem[];
   readonly projection?: ContextBuildResult;
 }
@@ -67,6 +69,7 @@ export interface DeepSeekApplicationCapabilityOptions {
   readonly maxContextBytes?: number;
   readonly maxContextItems?: number;
   readonly maxContextTokens?: number;
+  readonly searchExecutor?: DeepSeekSearchExecutor;
 }
 
 /**
@@ -80,6 +83,7 @@ export interface DeepSeekApplicationCapabilityOptions {
 export class DeepSeekApplicationCapabilityService {
   private readonly binding: DeepSeekApplicationRunBinding | undefined;
   private readonly contextLimits: Required<Pick<DeepSeekApplicationCapabilityOptions, 'maxContextBytes' | 'maxContextItems' | 'maxContextTokens'>>;
+  private readonly searchExecutor: DeepSeekSearchExecutor | undefined;
 
   constructor(input: DeepSeekApplicationRunBindingInput, options: DeepSeekApplicationCapabilityOptions = {}) {
     this.binding = parseBinding(input);
@@ -88,6 +92,7 @@ export class DeepSeekApplicationCapabilityService {
       maxContextItems: boundedPositive(options.maxContextItems ?? MAX_CONTEXT_ITEMS, MAX_CONTEXT_ITEMS),
       maxContextTokens: boundedPositive(options.maxContextTokens ?? MAX_CONTEXT_TOKENS, MAX_CONTEXT_TOKENS),
     };
+    this.searchExecutor = options.searchExecutor;
   }
 
   bindingSnapshot(): DeepSeekApplicationRunBinding | undefined {
@@ -176,6 +181,36 @@ export class DeepSeekApplicationCapabilityService {
       return { status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_CONTEXT_LIMIT', items: [] };
     }
   }
+
+  /**
+   * Execute an optional provider-owned retrieval request after the immutable
+   * run gate has passed. This is an application port, not a generic tool
+   * runtime; all failures are bounded and fail-soft.
+   */
+  async search(
+    request: unknown,
+    gate: { readonly network: 'restricted' | 'enabled'; readonly approvalGranted: boolean },
+    signal: AbortSignal,
+  ): Promise<DeepSeekSearchContextResult> {
+    const eligibility = this.evaluateSearch(gate);
+    if (!eligibility.eligible) return { status: 'degraded', reasonCode: eligibility.reasonCode, items: [] };
+    const parsedRequest = DeepSeekSearchRequestSchema.safeParse(request);
+    if (!parsedRequest.success) return { status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_PROTOCOL_INVALID', items: [] };
+    if (signal.aborted) return { status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_CANCELLED', items: [] };
+    const executor = this.searchExecutor;
+    if (!executor) return { status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_DEGRADED', items: [] };
+    try {
+      const response = await executor.search(parsedRequest.data, signal);
+      if (signal.aborted) return { status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_CANCELLED', items: [] };
+      const parsedResponse = DeepSeekSearchResponseSchema.safeParse(response);
+      if (!parsedResponse.success || parsedResponse.data.query !== parsedRequest.data.query) {
+        return { status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_PROTOCOL_INVALID', items: [] };
+      }
+      return this.mapSearchResponse(parsedResponse.data, gate);
+    } catch (error) {
+      return { status: 'degraded', reasonCode: mapSearchFailureReason(error, signal), items: [] };
+    }
+  }
 }
 
 function parseBinding(input: DeepSeekApplicationRunBindingInput): DeepSeekApplicationRunBinding | undefined {
@@ -231,4 +266,15 @@ function isSafeToolDescriptor(value: DeepSeekToolDescriptor): boolean {
     if (findDeepSeekPrivacyViolations(value.inputSchema).length > 0) return false;
   }
   return true;
+}
+
+function mapSearchFailureReason(error: unknown, signal: AbortSignal): Exclude<DeepSeekSearchContextResult['reasonCode'], undefined> {
+  if (signal.aborted) return 'DEEPSEEK_SEARCH_CANCELLED';
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (code === 'DEEPSEEK_SEARCH_CANCELLED') return 'DEEPSEEK_SEARCH_CANCELLED';
+    if (code === 'DEEPSEEK_SEARCH_TIMEOUT') return 'DEEPSEEK_SEARCH_TIMEOUT';
+    if (code === 'DEEPSEEK_SEARCH_PROTOCOL_INVALID') return 'DEEPSEEK_SEARCH_PROTOCOL_INVALID';
+  }
+  return 'DEEPSEEK_SEARCH_DEGRADED';
 }

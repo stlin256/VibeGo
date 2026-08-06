@@ -8,7 +8,7 @@
 
 [简体中文说明](README-zh.md)
 
-> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), and model onboarding contracts, explicit OpenAI-compatible model probe, and authenticated daemon probe route (Spec 54 Phase 0/1/2) are implemented and tested. The signed release bundle, ACME/OS certificate automation, OS keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
+> **Project status:** early implementation. The contracts, persistent event log, scheduler, model/context boundary, policy/sandbox guards, single-user pairing gate, LAN TLS MVP, guided workspace registry, opt-in Git read-only tools, digest-pinned external shell wiring, responsive Web/PWA run console, Host-first Web dist (Spec 51-R1), dependency-free launcher lifecycle (Spec 51-R2), certificate readiness projection (Spec 51-R3a), versioned REST/SSE client SDK (Spec 51-R4), strict Host manifest/update-state contracts (Spec 53 Phase 0/1), model onboarding contracts, explicit OpenAI-compatible model probe, authenticated daemon probe route (Spec 54 Phase 0/1/2), and the DeepSeek capability/snapshot plus bounded provider-owned search application port (Spec 61-7/61-9) are implemented and tested. Live DeepSeek search/reasoning compatibility, the signed release bundle, ACME/OS certificate automation, OS keychain adapters, MCP/Skill activation, Git write/patch operations, full approval/diff UI, and native Android/iOS/HarmonyOS clients remain staged for later milestones.
 
 ## Why VibeGo?
 
@@ -41,7 +41,7 @@ The core loop is deliberately small:
 | Area | Included now |
 | --- | --- |
 | Runtime | Node.js daemon, resumable run state, SQLite event store, bounded scheduler, cancellation |
-| Models | OpenAI-compatible provider boundary, authenticated Web onboarding, process-memory secret handling, and in-memory fake provider for deterministic tests |
+| Models | OpenAI-compatible and opt-in DeepSeek provider boundaries, capability snapshots, authenticated Web onboarding, process-memory secret handling, and deterministic fake providers |
 | Context | Source-labelled context manager with budget/compaction boundaries |
 | Safety | Untrusted-task external-sandbox requirement, path/argv guards, approval policy metadata |
 | Tools | Guarded filesystem read/write, opt-in Git status/diff/log reads, plus opt-in Docker/Podman shell adapters behind a shared executor; host fallback remains disabled; digest-pinned container smoke is explicit |
@@ -80,6 +80,18 @@ OpenAI-compatible request, prints only a redacted status/latency/usage report,
 and never writes the key, endpoint, prompt, raw response, or report to the
 repository, daemon events, logs, or browser storage. Use a complete provider
 endpoint; a base URL without `/chat/completions` is intentionally rejected.
+
+The provider-owned search application port has a deterministic, no-network
+fixture. It exercises the explicit Responses snapshot, network/approval gate,
+bounded untrusted retrieval mapping, malformed response handling, and
+cancellation without requiring a key:
+
+```bash
+pnpm smoke:deepseek-search
+```
+
+This fixture is not live-provider evidence; real DeepSeek `web_search`
+compatibility remains a separately gated milestone.
 
 The default daemon address is `http://127.0.0.1:8787`. This is the contributor/development
 path. When `pnpm build` has produced `apps/web/dist`, the daemon serves the compiled Web,
@@ -175,6 +187,7 @@ packages/
   agent/        deterministic loop orchestration boundary
   context/      context sources, budgets, and compaction boundary
   model-openai/ OpenAI-compatible provider adapter
+  model-deepseek/ DeepSeek protocol, capability, and bounded search adapter
   policy/       approval decisions and risk metadata
   sandbox/      external-sandbox resolver and input guards
   execution/    path/argv verification primitives

@@ -8,7 +8,7 @@
 
 [English README](README.md)
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1），以及模型 onboarding contracts、显式 OpenAI-compatible model probe 和 authenticated daemon probe route（Spec 54 Phase 0/1/2）已经实现并通过测试。签名发行包、ACME/系统证书自动化、系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
+> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1），以及模型 onboarding contracts、显式 OpenAI-compatible model probe、authenticated daemon probe route（Spec 54 Phase 0/1/2）、DeepSeek capability/snapshot 和有界的 provider-owned search application port（Spec 61-7/61-9）已经实现并通过测试。真实 DeepSeek search/reasoning 兼容性、签名发行包、ACME/系统证书自动化、系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
 
 ## 为什么做 VibeGo？
 
@@ -41,7 +41,7 @@ flowchart LR
 | 领域 | 当前包含 |
 | --- | --- |
 | Runtime | Node.js daemon、可恢复 run 状态、SQLite 事件存储、有界调度、取消 |
-| 模型 | OpenAI-compatible provider 边界和可确定测试的 fake provider |
+| 模型 | OpenAI-compatible 与可选 DeepSeek provider 边界、capability snapshot、authenticated Web onboarding、进程内 secret 处理和可确定测试的 fake provider |
 | 上下文 | 带来源标签的上下文管理、预算/压缩边界 |
 | 安全 | 不可信任务必须 external sandbox、路径/argv 守卫、审批策略元数据 |
 | 工具 | filesystem/shell 适配器和统一 executor；默认不启用主机执行；digest 固定的 container smoke 只能显式运行 |
@@ -77,6 +77,17 @@ pnpm smoke:model -- --endpoint https://api.deepseek.com/chat/completions --model
 
 `pnpm smoke:model` 只有显式调用时才会运行，不属于 `pnpm verify`。它发起一次受限的
 OpenAI-compatible 请求，只输出脱敏的状态、延迟和 usage 摘要，不会把 key、地址、提示词、原始响应或报告写入仓库、事件、日志或浏览器。必须使用完整的 provider endpoint，直接使用没有 `/chat/completions` 的基础 URL 会被拒绝。
+
+provider-owned search application port 提供了确定性的无网络 fixture。它覆盖显式
+Responses snapshot、network/approval gate、有界的不可信 retrieval 映射、malformed
+response 处理和取消路径，不需要 API key：
+
+```bash
+pnpm smoke:deepseek-search
+```
+
+这个 fixture 不代表真实 provider 证据；DeepSeek `web_search` 的实际兼容性仍是单独
+门控的后续里程碑。
 
 默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。构建 `apps/web/dist`
 后，daemon 会在同一个 Host URL 托管编译后的 Web、API 和 SSE；`READY4VIBE_WEB_DIST_DIR`
@@ -145,7 +156,7 @@ ACME/Let's Encrypt 签发续期、Windows 证书存储和反向代理方案会�
 apps/daemon       HTTP(S) API、认证门禁、run manager、SSE
 apps/web          React + TypeScript 响应式控制台
 packages/contracts / storage / scheduler
-packages/agent / context / model-openai
+packages/agent / context / model-openai / model-deepseek（协议、capability 和有界 search adapter）
 packages/policy / sandbox / execution / tool-adapters（filesystem/shell/Git）
 packages/sandbox-runtime  Docker/Podman 命令计划与 fail-closed CLI runner 边界
 packages/workspaces      单用户 workspace id 到 daemon 根目录的安全 registry

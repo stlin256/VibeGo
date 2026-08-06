@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ModelProviderSnapshotSchema } from '@ready4vibe/contracts';
+import type { DeepSeekSearchExecutor } from '@ready4vibe/model-deepseek';
 import { DeepSeekApplicationCapabilityService } from './deepseek-capability-runtime.js';
 
 const modelSnapshot = ModelProviderSnapshotSchema.parse({
@@ -61,6 +62,16 @@ function service(overrides: Record<string, unknown> = {}, options: Record<string
     deepSeekSnapshot: { ...deepSeekSnapshot, ...overrides },
     capabilitySnapshot: capability,
   }, options);
+}
+
+function searchExecutor(response: unknown, calls: { count: number; signal?: AbortSignal }): DeepSeekSearchExecutor {
+  return {
+    async search(_request, signal) {
+      calls.count += 1;
+      calls.signal = signal;
+      return response;
+    },
+  };
 }
 
 function searchResponse(snippet = 'A bounded provider result.') {
@@ -140,5 +151,42 @@ describe('DeepSeekApplicationCapabilityService', () => {
   it('treats a valid empty search result as ready without inventing context', () => {
     const result = service().mapSearchResponse({ schemaVersion: 'deepseek-provider-search/v1', query: 'q', items: [], truncated: false }, { network: 'enabled', approvalGranted: true });
     expect(result).toMatchObject({ status: 'ready', reasonCode: 'DEEPSEEK_SEARCH_READY', items: [], projection: { bytes: 0, droppedCount: 0 } });
+  });
+
+  it('invokes an injected executor only after the immutable gate and maps the result through ContextManager', async () => {
+    const calls: { count: number; signal?: AbortSignal } = { count: 0 };
+    const current = new DeepSeekApplicationCapabilityService({
+      modelSnapshot,
+      deepSeekSnapshot,
+      capabilitySnapshot: capability,
+    }, { searchExecutor: searchExecutor(searchResponse(), calls) });
+    const controller = new AbortController();
+    const result = await current.search({ schemaVersion: 'deepseek-provider-search-request/v1', query: 'bounded query', maxItems: 4, maxBytes: 2_048 }, { network: 'enabled', approvalGranted: true }, controller.signal);
+    expect(result.status).toBe('ready');
+    expect(result.items[0]).toMatchObject({ source: 'retrieval', trust: 'untrusted' });
+    expect(calls.count).toBe(1);
+    expect(calls.signal).toBe(controller.signal);
+    expect(JSON.stringify(result)).not.toMatch(/api[_-]?key|authorization|C:\\\\|\/Users\//iu);
+  });
+
+  it('keeps search fail-soft for missing executor, denied gate, malformed output and cancellation', async () => {
+    const missing = service();
+    await expect(missing.search({ schemaVersion: 'deepseek-provider-search-request/v1', query: 'q' }, { network: 'enabled', approvalGranted: true }, new AbortController().signal)).resolves.toMatchObject({ status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_DEGRADED', items: [] });
+    const deniedCalls = { count: 0 };
+    const denied = new DeepSeekApplicationCapabilityService({ modelSnapshot, deepSeekSnapshot, capabilitySnapshot: capability }, { searchExecutor: searchExecutor(searchResponse(), deniedCalls) });
+    await expect(denied.search({ schemaVersion: 'deepseek-provider-search-request/v1', query: 'q' }, { network: 'restricted', approvalGranted: true }, new AbortController().signal)).resolves.toMatchObject({ status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_DEGRADED' });
+    expect(deniedCalls.count).toBe(0);
+    const malformedCalls = { count: 0 };
+    const malformed = new DeepSeekApplicationCapabilityService({ modelSnapshot, deepSeekSnapshot, capabilitySnapshot: capability }, { searchExecutor: searchExecutor({ bad: true }, malformedCalls) });
+    await expect(malformed.search({ schemaVersion: 'deepseek-provider-search-request/v1', query: 'q' }, { network: 'enabled', approvalGranted: true }, new AbortController().signal)).resolves.toMatchObject({ status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_PROTOCOL_INVALID' });
+    const mismatchedCalls = { count: 0 };
+    const mismatched = new DeepSeekApplicationCapabilityService({ modelSnapshot, deepSeekSnapshot, capabilitySnapshot: capability }, { searchExecutor: searchExecutor({ ...searchResponse(), query: 'other query' }, mismatchedCalls) });
+    await expect(mismatched.search({ schemaVersion: 'deepseek-provider-search-request/v1', query: 'q' }, { network: 'enabled', approvalGranted: true }, new AbortController().signal)).resolves.toMatchObject({ status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_PROTOCOL_INVALID' });
+    const controller = new AbortController();
+    controller.abort();
+    const cancelledCalls = { count: 0 };
+    const cancelled = new DeepSeekApplicationCapabilityService({ modelSnapshot, deepSeekSnapshot, capabilitySnapshot: capability }, { searchExecutor: searchExecutor(searchResponse(), cancelledCalls) });
+    await expect(cancelled.search({ schemaVersion: 'deepseek-provider-search-request/v1', query: 'q' }, { network: 'enabled', approvalGranted: true }, controller.signal)).resolves.toMatchObject({ status: 'degraded', reasonCode: 'DEEPSEEK_SEARCH_CANCELLED', items: [] });
+    expect(cancelledCalls.count).toBe(0);
   });
 });

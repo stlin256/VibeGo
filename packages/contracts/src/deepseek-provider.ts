@@ -27,6 +27,7 @@ export const DEEPSEEK_PROBE_SCHEMA_VERSION = 'deepseek-provider-probe/v1' as con
 export const DEEPSEEK_REVIEW_SCHEMA_VERSION = 'deepseek-provider-review/v1' as const;
 export const DEEPSEEK_SEARCH_ITEM_SCHEMA_VERSION = 'deepseek-provider-search-item/v1' as const;
 export const DEEPSEEK_SEARCH_SCHEMA_VERSION = 'deepseek-provider-search/v1' as const;
+export const DEEPSEEK_SEARCH_REQUEST_SCHEMA_VERSION = 'deepseek-provider-search-request/v1' as const;
 export const DEEPSEEK_RETRY_SCHEMA_VERSION = 'deepseek-provider-retry/v1' as const;
 export const DEEPSEEK_RUN_SCHEMA_VERSION = 'deepseek-provider-run/v1' as const;
 export const DEEPSEEK_SETTINGS_PROFILE_SCHEMA_VERSION = 'ready4vibe_deepseek_settings_profile_v1' as const;
@@ -252,6 +253,14 @@ export const DeepSeekSearchItemSchema = z.object({
   publishedAt: timestamp.optional(),
 }).strict().superRefine((value, context) => addPrivacyIssues(value, context));
 export type DeepSeekSearchItem = z.infer<typeof DeepSeekSearchItemSchema>;
+
+export const DeepSeekSearchRequestSchema = z.object({
+  schemaVersion: z.literal(DEEPSEEK_SEARCH_REQUEST_SCHEMA_VERSION),
+  query: boundedText,
+  maxItems: z.number().int().positive().max(32).optional(),
+  maxBytes: z.number().int().positive().max(32 * 1024).optional(),
+}).strict().superRefine((value, context) => addPrivacyIssues(value, context));
+export type DeepSeekSearchRequest = z.infer<typeof DeepSeekSearchRequestSchema>;
 
 export const DeepSeekSearchResponseSchema = z.object({
   schemaVersion: z.literal(DEEPSEEK_SEARCH_SCHEMA_VERSION),

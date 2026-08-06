@@ -554,6 +554,26 @@ application seam. Focused evidence is recorded in
 Production provider-owned retrieval wiring and live reasoning/search evidence
 remain separate Spec 60/61 gates.
 
+#### 61-9 explicit provider-owned search application port (complete bounded slice, 2026-08-06)
+
+The implementation adds an explicit, injectable search port rather than
+teaching `ModelProvider` or `AgentLoop` a second tool protocol. The
+DeepSeek adapter may issue a complete Responses endpoint request only when the
+captured run has passed the existing search gate. The daemon application
+service owns the gate, `AbortSignal` propagation and bounded conversion to
+`retrieval`/`untrusted` `ContextItem` values; it never stores the raw provider
+response or registers `web_search` as a generic `ToolRuntime`.
+
+The port is opt-in and dependency-injected. The default daemon construction
+does not create a search executor, so ordinary interactive runs retain their
+existing behavior. Missing executor, cancellation, transport/HTTP failure,
+malformed search payload and context overflow all return a bounded degraded
+result without retrying or replaying a prior search. This slice proves the
+application boundary and fixture behavior only; a real DeepSeek search smoke,
+provider-specific response compatibility and release evidence remain open.
+The deterministic fixture is recorded in
+[`spec61-9-provider-owned-search-2026-08-06.md`](../reports/spec61-9-provider-owned-search-2026-08-06.md).
+
 ## 13. Definition of Done
 
 Spec 61 只有在以下条件全部满足后才能标记 `Implemented`：

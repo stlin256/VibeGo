@@ -1,9 +1,13 @@
 import {
   DeepSeekCapabilitySnapshotSchema,
   DeepSeekConfigSchema,
+  DeepSeekSearchRequestSchema,
+  DeepSeekSearchResponseSchema,
   type DeepSeekConfig,
   type DeepSeekCapabilitySnapshot,
   type DeepSeekEndpointProfile,
+  type DeepSeekSearchRequest,
+  type DeepSeekSearchResponse,
   type ModelEvent,
   type ModelProvider,
   type ModelRequest,
@@ -20,18 +24,45 @@ export interface DeepSeekProviderOptions {
   readonly fetchImpl?: FetchImplementation;
 }
 
+export type DeepSeekSearchErrorCode =
+  | 'DEEPSEEK_SEARCH_DEGRADED'
+  | 'DEEPSEEK_SEARCH_CANCELLED'
+  | 'DEEPSEEK_SEARCH_TIMEOUT'
+  | 'DEEPSEEK_SEARCH_PROTOCOL_INVALID'
+  | 'DEEPSEEK_HTTP_400'
+  | 'DEEPSEEK_HTTP_401'
+  | 'DEEPSEEK_HTTP_402'
+  | 'DEEPSEEK_HTTP_403'
+  | 'DEEPSEEK_HTTP_404'
+  | 'DEEPSEEK_HTTP_429'
+  | 'DEEPSEEK_HTTP_5XX';
+
+/** Safe, bounded search failure. Raw provider bodies are never retained. */
+export class DeepSeekSearchError extends Error {
+  constructor(readonly code: DeepSeekSearchErrorCode, readonly retryable = false) {
+    super(code);
+    this.name = 'DeepSeekSearchError';
+  }
+}
+
+/** Application-owned port for provider-owned retrieval. */
+export interface DeepSeekSearchExecutor {
+  search(request: DeepSeekSearchRequest, signal: AbortSignal): Promise<unknown>;
+}
+
 export interface DeepSeekTranslationState {
   readonly chatCallIds: Map<number, string>;
   readonly anthropicToolIds: Map<number, string>;
   anthropicTerminal?: boolean;
 }
 
-export class DeepSeekProvider implements ModelProvider {
+export class DeepSeekProvider implements ModelProvider, DeepSeekSearchExecutor {
   readonly id = 'deepseek';
   readonly capabilities: ModelProvider['capabilities'];
   private readonly config: DeepSeekConfig;
   private readonly apiKey: string;
   private readonly fetchImpl: FetchImplementation;
+  private readonly capability: DeepSeekCapabilitySnapshot | undefined;
 
   constructor(options: DeepSeekProviderOptions) {
     this.config = DeepSeekConfigSchema.parse(options.config);
@@ -50,6 +81,7 @@ export class DeepSeekProvider implements ModelProvider {
       && (!matchingReadyCapability || !capability?.data.webSearch)) {
       throw new Error('DEEPSEEK_SEARCH_DEGRADED');
     }
+    this.capability = capability?.success ? capability.data : undefined;
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
     this.capabilities = {
@@ -62,6 +94,30 @@ export class DeepSeekProvider implements ModelProvider {
   async *stream(request: ModelRequest, signal: AbortSignal): AsyncIterable<ModelEvent> {
     yield* streamDeepSeek({ config: this.config, apiKey: this.apiKey, request, signal, fetchImpl: this.fetchImpl });
   }
+
+  async search(request: DeepSeekSearchRequest, signal: AbortSignal): Promise<DeepSeekSearchResponse> {
+    const parsedRequest = DeepSeekSearchRequestSchema.safeParse(request);
+    if (!parsedRequest.success) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_PROTOCOL_INVALID');
+    const capability = this.capability;
+    if (this.config.endpointProfile !== 'openai-responses'
+      || this.config.webSearch !== 'provider-owned'
+      || !capability
+      || capability.status !== 'ready'
+      || capability.providerId !== 'deepseek'
+      || capability.endpointProfile !== 'openai-responses'
+      || capability.model !== this.config.model
+      || !capability.webSearch) {
+      throw new DeepSeekSearchError('DEEPSEEK_SEARCH_DEGRADED');
+    }
+    if (signal.aborted) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_CANCELLED');
+    return searchDeepSeek({
+      config: this.config,
+      apiKey: this.apiKey,
+      request: parsedRequest.data,
+      signal,
+      fetchImpl: this.fetchImpl,
+    });
+  }
 }
 
 export interface StreamDeepSeekOptions {
@@ -70,6 +126,133 @@ export interface StreamDeepSeekOptions {
   readonly request: ModelRequest;
   readonly signal: AbortSignal;
   readonly fetchImpl?: FetchImplementation;
+}
+
+interface SearchDeepSeekOptions {
+  readonly config: DeepSeekConfig;
+  readonly apiKey: string;
+  readonly request: DeepSeekSearchRequest;
+  readonly signal: AbortSignal;
+  readonly fetchImpl: FetchImplementation;
+}
+
+const MAX_SEARCH_RESPONSE_BYTES = 128 * 1024;
+
+async function searchDeepSeek(options: SearchDeepSeekOptions): Promise<DeepSeekSearchResponse> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const onAbort = (): void => controller.abort();
+  options.signal.addEventListener('abort', onAbort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, options.config.timeoutMs);
+  try {
+    let response: Response;
+    try {
+      response = await options.fetchImpl(options.config.endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${options.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: options.config.model,
+          input: [{ role: 'user', content: options.request.query }],
+          tools: [{ type: 'web_search' }],
+          stream: false,
+          max_output_tokens: Math.min(options.config.maxOutputTokens, 1_024),
+        }),
+        signal: controller.signal,
+      });
+    } catch {
+      if (options.signal.aborted) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_CANCELLED');
+      if (timedOut) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_TIMEOUT', true);
+      throw new DeepSeekSearchError('DEEPSEEK_SEARCH_DEGRADED', true);
+    }
+    if (options.signal.aborted) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_CANCELLED');
+    if (timedOut) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_TIMEOUT', true);
+    if (!response.ok) throw searchHttpError(response.status);
+    if (!response.body) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_PROTOCOL_INVALID');
+    const body = await readBoundedSearchBody(response.body, controller.signal, MAX_SEARCH_RESPONSE_BYTES);
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body) as unknown;
+    } catch {
+      throw new DeepSeekSearchError('DEEPSEEK_SEARCH_PROTOCOL_INVALID');
+    }
+    const parsed = DeepSeekSearchResponseSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.query !== options.request.query) {
+      throw new DeepSeekSearchError('DEEPSEEK_SEARCH_PROTOCOL_INVALID');
+    }
+    return boundSearchResponse(parsed.data, options.request);
+  } catch (error) {
+    if (options.signal.aborted) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_CANCELLED');
+    if (timedOut) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_TIMEOUT', true);
+    if (error instanceof DeepSeekSearchError) throw error;
+    throw new DeepSeekSearchError('DEEPSEEK_SEARCH_DEGRADED', true);
+  } finally {
+    clearTimeout(timer);
+    options.signal.removeEventListener('abort', onAbort);
+  }
+}
+
+async function readBoundedSearchBody(body: ReadableStream<Uint8Array>, signal: AbortSignal, maxBytes: number): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let completed = false;
+  const onAbort = (): void => { void reader.cancel().catch(() => undefined); };
+  signal.addEventListener('abort', onAbort, { once: true });
+  let total = 0;
+  let output = '';
+  try {
+    while (!signal.aborted) {
+      const next = await reader.read();
+      if (next.done) {
+        completed = true;
+        break;
+      }
+      total += next.value.byteLength;
+      if (total > maxBytes) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_PROTOCOL_INVALID');
+      output += decoder.decode(next.value, { stream: true });
+    }
+    output += decoder.decode();
+    if (signal.aborted) throw new DeepSeekSearchError('DEEPSEEK_SEARCH_CANCELLED');
+    return output;
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+    if (!completed) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+function searchHttpError(status: number): DeepSeekSearchError {
+  if (status === 429) return new DeepSeekSearchError('DEEPSEEK_HTTP_429', true);
+  if (status >= 500) return new DeepSeekSearchError('DEEPSEEK_HTTP_5XX', true);
+  if (status === 401) return new DeepSeekSearchError('DEEPSEEK_HTTP_401');
+  if (status === 402) return new DeepSeekSearchError('DEEPSEEK_HTTP_402');
+  if (status === 403) return new DeepSeekSearchError('DEEPSEEK_HTTP_403');
+  if (status === 404) return new DeepSeekSearchError('DEEPSEEK_HTTP_404');
+  return new DeepSeekSearchError('DEEPSEEK_HTTP_400');
+}
+
+function boundSearchResponse(response: DeepSeekSearchResponse, request: DeepSeekSearchRequest): DeepSeekSearchResponse {
+  const maxItems = request.maxItems ?? 32;
+  const maxBytes = request.maxBytes ?? 32 * 1024;
+  const items: DeepSeekSearchResponse['items'][number][] = [];
+  let bytes = 0;
+  for (const item of response.items.slice(0, maxItems)) {
+    const itemBytes = new TextEncoder().encode(JSON.stringify(item)).byteLength;
+    if (itemBytes > maxBytes || bytes + itemBytes > maxBytes) break;
+    items.push(item);
+    bytes += itemBytes;
+  }
+  return DeepSeekSearchResponseSchema.parse({
+    ...response,
+    items,
+    truncated: response.truncated || items.length < response.items.length,
+  });
 }
 
 /**

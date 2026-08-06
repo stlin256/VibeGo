@@ -942,6 +942,19 @@ suite passed 20/20. Redacted evidence is recorded in
 `reports/spec61-8-application-capability-2026-08-06.md`; live provider search/
 reasoning and release evidence remain separate gates.
 
+### Spec 61-9 provider-owned search application port (complete bounded slice, 2026-08-06)
+
+The bounded slice is specified in [ADR 0055](adr/0055-deepseek-provider-owned-search-application-port.md).
+It adds an optional `DeepSeekSearchExecutor` behind the existing daemon
+capability service. The executor will use a complete Responses endpoint and
+runtime-only credential, while the application service owns the immutable
+snapshot/network/approval gate, cancellation and bounded retrieval mapping.
+The default daemon will not construct it; search failures and overflow will be
+degraded without context or replay. The contract/adapter/daemon focused tests
+and `smoke:deepseek-search -- --mode fixture` pass; evidence is recorded in
+`reports/spec61-9-provider-owned-search-2026-08-06.md`. This is
+fixture/application-port evidence, not live DeepSeek search or release evidence.
+
 ## Spec 62 planning note (2026-08-05)
 
 The former `docs/specs/61-user-facing-documentation-quality.md` has been moved
