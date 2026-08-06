@@ -521,6 +521,38 @@ Validation: 113 Web tests passed, `tsc --noEmit` clean, `vite build` clean
 with CSS at 9.97 KiB gzip under the 30 KiB budget. Wiring the primitives
 into App-level error/status surfaces remains a follow-up step.
 
+### Phase 42j implementation update (2026-08-06): toast wired for global errors
+
+The App-level error surface moved from the inline `error-banner` block to
+the toast primitive: `App` accepts a new optional `onDismissError` callback
+and renders the error as `<Toast variant="error">` inside a
+`ToastViewport`, so failures appear as a dismissible `role="alert"`
+notification anchored bottom-right (full-width on phones). `RuntimeApp`
+wires dismissal to clearing its error state. The legacy `.error-banner`
+rule was removed from the stylesheet with a pointer comment; the sr-only
+status live region is unchanged, so screen-reader announcements keep their
+previous wording in addition to the alert toast.
+
+### Phase 42k implementation update (2026-08-06): context rail tabs and a11y pass
+
+The context rail is now tabbed (`Goals` / `Telemetry` / `Workspace`) with
+full tab semantics: `role="tablist"`/`tab`/`tabpanel`, `aria-selected`,
+`aria-controls`/`aria-labelledby` pairing, roving `tabIndex` and arrow/Home/
+End keyboard navigation reusing the tested `resolveSettingsTab` helper.
+All three panels stay mounted and switch via the `hidden` attribute, so
+goal projection and telemetry state survive tab changes and SSR markup
+keeps every bounded section. Tab labels are localized through new
+`rail.goals`/`rail.telemetry`/`rail.workspace` message keys in both locales
+with English defaults inside the component.
+
+Accessibility hardening in the same pass: the live output view now exposes
+`aria-busy` while a run is non-terminal, and the streaming caret stays
+`aria-hidden` decorative. All entrance animations added since Phase 42e are
+covered by explicit `prefers-reduced-motion` guards plus the global rule.
+
+Validation: 114 Web tests passed, `tsc --noEmit` clean, `vite build` clean
+with JS 94.17 KiB and CSS 10.07 KiB gzip under the 110/30 KiB budgets.
+
 ## 9. 退出条件
 
 本规格完成后：
