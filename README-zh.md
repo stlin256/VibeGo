@@ -1,226 +1,180 @@
-# VibeGo / ready4vibe 中文说明
+# VibeGo
 
 <p align="center">
-  <img src="brand/vibego-banner.svg" alt="VibeGo——用于安全远程 Vibe Coding 的本地优先 agent harness" width="1200" />
+  <img src="brand/vibego-banner.svg" alt="VibeGo" width="860" />
 </p>
 
-**一个最小化、优先本地运行的 agent harness，用于远程 Vibe Coding。** VibeGo 让 agent 尽量靠近本地工作区，同时为不可信任务提供明确的审批、沙箱和执行边界，并通过适配桌面、平板和手机的 React 控制台远程观察与继续任务。
+<p align="center">
+  <strong>在本地运行的 coding agent，从任何浏览器访问。</strong><br />
+  让 agent 靠近你的工作区，并从电脑、手机、平板或折叠屏继续同一个对话。
+</p>
 
-[English README](README.md)
+<p align="center">
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#默认安全边界">安全边界</a> ·
+  <a href="README.md">English README</a>
+</p>
 
-> **项目状态：** 早期实现阶段。contracts、可恢复事件日志、调度器、模型/上下文边界、策略/沙箱守卫、单用户 pairing、LAN TLS MVP、guided workspace registry、Git 只读工具、tool-output inspector、digest 固定的 external shell wiring、响应式 Web/PWA 控制台、Host-first Web dist 托管（Spec 51-R1）、依赖零的 Host launcher 生命周期（Spec 51-R2）、只读证书 readiness projection（Spec 51-R3a）、版本化 REST/SSE client SDK（Spec 51-R4）、严格 Host manifest/update-state contracts（Spec 53 Phase 0/1），以及模型 onboarding contracts、显式 OpenAI-compatible model probe、authenticated daemon probe route（Spec 54 Phase 0/1/2）、DeepSeek capability/snapshot、有界 provider-owned search application port 和显式 live smoke 边界（Spec 61-7/61-10/61-11）已经实现并通过测试。真实 DeepSeek search/reasoning 兼容性、签名发行包、ACME/系统证书自动化、系统密钥存储适配器、MCP/Skill 激活、Git 写入/patch、完整审批/diff UI，以及 Android/iOS/HarmonyOS 原生客户端仍按阶段推进，当前不会隐式开启。
+<p align="center">
+  <em>早期体验 · 单用户 · 本地优先 · 持续完善首个公开发行版本</em>
+</p>
 
-## 为什么做 VibeGo？
+VibeGo 是一个面向开发者的轻量 Agent 应用。它不把你的 coding 工作区
+变成没有边界的云端 Shell，而是让 daemon 靠近本地代码运行，再通过
+以对话为中心的 Web 控制台，让你启动、观察、审批、取消和恢复任务。
 
-它面向希望从另一块屏幕继续本地 coding 任务的单用户开发者，同时避免把工作站变成没有边界的远程 shell。
+## 为什么是 VibeGo？
+
+- **工作区留在身边。** Agent 运行在拥有项目文件的开发电脑上，不要求
+  你再搭建一套远程 coding 环境。
+- **一个对话，任意屏幕。** 电脑、竖屏显示器、手机、平板和折叠屏都使用
+  同一套响应式控制台。
+- **不确定的任务默认有边界。** 审批、路径守卫、沙箱、workspace 边界和
+  输出限制都属于一次 run 的安全边界。
+- **通过设置界面完成配置。** 模型、workspace、权限和运行限制在经过认证
+  的 Web Settings 中配置，不需要先研究配置文件。
+
+## 架构总览
+
+用户看到的是一个 Web 控制台；实际执行边界仍然留在本地开发电脑上。
+浏览器只接收有界、可恢复的运行事件，不直接运行 Agent，也不直接接触
+本地工作区。
 
 ```mermaid
 flowchart LR
-    Browser["VibeGo React PWA"] -->|"同源 URL"| Host["VibeGo Host"]
-    Host -->|"Bearer + CSRF"| Daemon["本地 daemon"]
-    Daemon --> Auth["Pairing + 传输门禁"]
-    Daemon --> Loop["Agent loop"]
-    Loop --> Context["上下文管理"]
-    Loop --> Model["模型 provider"]
-    Loop --> Policy["审批策略"]
-    Policy --> Sandbox["沙箱解析器"]
-    Sandbox --> Tools["受守卫的工具适配器"]
-    Loop --> Events["SQLite 事件存储"]
-    Events -->|"按 seq 的 SSE 恢复"| Browser
+    B["浏览器<br/>电脑 · 手机 · 平板 · 折叠屏"]
+    H["VibeGo Host<br/>启动器 + 同源 Web"]
+    D["本地 daemon<br/>认证 · Run manager · API"]
+    L["Agent loop"]
+    C["上下文管理"]
+    M["模型 provider"]
+    P["审批 + 策略"]
+    S["沙箱解析器"]
+    T["受守卫的工具<br/>文件 · Git 只读 · 可选容器 Shell"]
+    E[("SQLite 事件存储")]
+
+    B -->|"Pairing + HTTPS/SSE"| H
+    H --> D
+    D --> L
+    L --> C
+    L --> M
+    L --> P
+    P --> S
+    S --> T
+    D --> E
+    E -->|"按序号恢复事件"| B
 ```
 
-核心流程保持短而明确：
+用实际使用流程来说：
 
-1. 使用短时有效的本地 pairing code 连接浏览器。
-2. 提交带有 workspace、信任级别、sandbox、审批模式和限制的 run。
-3. 通过可恢复 SSE 观察模型增量、调度状态、工具决策和终态事件。
-4. daemon 默认只绑定 loopback；局域网访问必须显式启用，并默认要求证书。
+1. Host 启动本地 daemon 和编译后的 Web 控制台。
+2. 你在 Settings 中配对浏览器并选择 workspace。
+3. Agent loop 在上下文和运行限制内调用选定的模型。
+4. 工具调用必须经过策略、审批、workspace 和沙箱边界。
+5. 浏览器接收可恢复的进度和终态事件；Agent 不在浏览器中运行。
 
-## 当前能力
+## 现在可以用什么？
 
-| 领域 | 当前包含 |
+VibeGo 正在持续完善首个可安装版本。现在已经可以体验本地运行、浏览器对话和
+安全边界；发行包和更广泛的部署验证也在同步推进。
+
+| 状态 | 含义 |
 | --- | --- |
-| Runtime | Node.js daemon、可恢复 run 状态、SQLite 事件存储、有界调度、取消 |
-| 模型 | OpenAI-compatible 与可选 DeepSeek provider 边界、capability snapshot、authenticated Web onboarding、进程内 secret 处理和可确定测试的 fake provider |
-| 上下文 | 带来源标签的上下文管理、预算/压缩边界 |
-| 安全 | 不可信任务必须 external sandbox、路径/argv 守卫、审批策略元数据 |
-| 工具 | filesystem/shell 适配器和统一 executor；默认不启用主机执行；digest 固定的 container smoke 只能显式运行 |
-| Workspace | 单用户 workspace registry、下拉选择、明确添加/删除确认和 per-run 根目录快照 |
-| 访问 | 单用户 pairing、哈希 token、TTL/撤销、Origin/CSRF、禁止 query token |
-| 传输 | 默认 loopback HTTP；LAN 显式开启且无证书时 fail-closed；明文仅可显式开发例外 |
-| Web | React 19 + TypeScript + Vite 响应式控制台：pairing、workspace 添加/选择向导、引导式设置、模型配置、审批卡片、恢复重试、取消、指标、tool-output inspector 和 SSE；生产 Host 同源托管已实现 |
-| Goal Control | Phase 0 原生 TypeScript contracts/projection/claim 守卫，加上 Phase 1 独立 SQLite `goal_events` adapter 与受认证的 daemon 只读 projection/replay；Goal 写操作和默认 run admission 仍关闭 |
+| **现在可以体验** | 本地 daemon、React Web 控制台、pairing、模型设置、workspace 选择、对话式 run、流式事件与恢复、取消、审批卡片、恢复重试、LAN/TLS 门禁、受守卫的文件/Git 只读路径和有界容器 Shell wiring。 |
+| **正在完善** | DeepSeek provider 专属 search/reasoning 兼容性、完整 Goal Control 流程、TencentDB memory sidecar promotion，以及跨平台 external sandbox 证据。 |
+| **后续路线** | 签名安装包、升级/回滚、ACME 和系统证书管理、Tailscale/SSH 适配器、原生移动端，以及更完整的真实设备和无障碍验证。 |
 
 ## 快速开始
 
-要求：Node.js `>=22.12.0`、pnpm `11.9.0`。
+### 当前源码路径
+
+要求：Node.js `>=22.12.0` 和 pnpm `11.9.0`。
 
 ```powershell
 pnpm install
-pnpm typecheck
-pnpm test
-
-# 开发 Web 控制台（源码 checkout 中 Vite 与 daemon 暂时分开）
-pnpm --filter @ready4vibe/web dev
-
-# 构建并启动 daemon（仅 loopback）
 pnpm build
-pnpm --filter @ready4vibe/daemon start
-
-# 可选的本地 Docker/Podman smoke（必须使用 digest，绝不会隐式拉取镜像）
-pnpm smoke:container -- --runtime docker --image ghcr.io/example/runner@sha256:<64-hex-digest>
-
-# 可选的显式真实模型 smoke（密钥只在本次进程中）
-$env:READY4VIBE_MODEL_API_KEY = '<out-of-band-key>'
-pnpm smoke:model -- --endpoint https://api.deepseek.com/chat/completions --model deepseek-v4-flash --secret-env READY4VIBE_MODEL_API_KEY
+node scripts/host-launcher.mjs --open
 ```
 
-`pnpm smoke:model` 只有显式调用时才会运行，不属于 `pnpm verify`。它发起一次受限的
-OpenAI-compatible 请求，只输出脱敏的状态、延迟和 usage 摘要，不会把 key、地址、提示词、原始响应或报告写入仓库、事件、日志或浏览器。必须使用完整的 provider endpoint，直接使用没有 `/chat/completions` 的基础 URL 会被拒绝。
+Host 默认打开 `http://127.0.0.1:8787`。当前先通过源码路径体验完整流程，
+一键签名安装包正在后续发行里程碑中推进。
 
-provider-owned search application port 提供了确定性的无网络 fixture。它覆盖显式
-Responses snapshot、network/approval gate、有界的不可信 retrieval 映射、malformed
-response 处理和取消路径，不需要 API key：
+### 开始第一次对话
 
-```bash
-pnpm smoke:deepseek-search
-```
+1. 打开 Host 显示的地址。
+2. 完成一次性 pairing。
+3. 打开 **Settings → Model Access**，配置 OpenAI-compatible provider
+   或其他已支持的 provider。
+4. 打开 **Settings → Workspace**，选择或添加 daemon 所在电脑上的项目目录。
+5. 点击 **New conversation**，描述任务并发送。
+6. 工具执行前查看审批卡片；如果连接中断，可以从同一对话界面取消、重连，
+   或在明确确认后重试恢复的 run。
 
-这个 fixture 不代表真实 provider 证据；DeepSeek `web_search` 的实际兼容性仍是单独
-门控的后续里程碑。需要显式尝试 live 时，必须先通过 capability probe，并只在本次进程
-提供 secret：
+正常使用不需要编辑 `.env`、YAML 或 JSON 配置文件。Provider key 只通过
+经过认证的设置操作发送到 daemon，保留在 daemon 进程内存中，不会进入浏览器
+存储、URL、事件或日志。
+
+## 默认安全边界
+
+- **默认只监听本机：** daemon 默认绑定 loopback。
+- **LAN 显式开启：** 局域网访问必须主动开启，默认要求 TLS，pairing 和请求
+  防护仍然保留。
+- **不可信任务 fail-closed：** 不可信内容不能静默选择主机工具路径，也不能
+  绕过 external sandbox 要求。
+- **每个工具都有上限：** 路径、参数、环境变量传播、workspace 根目录、审批、
+  超时和输出大小都会经过检查。
+- **Secret 不进入浏览器账本：** 凭据、私钥、原始模型响应和完整工具输出不会
+  写入浏览器存储、run/Goal 事件或发行包。
+
+详见 [安全默认值](docs/adr/0002-security-defaults.md) 和
+[LAN/Codex-like 审批决策](docs/adr/0003-lan-access-and-codex-like-approval.md)。
+
+## 远程访问
+
+| 连接方式 | 默认状态 | 当前边界 |
+| --- | --- | --- |
+| 同一台电脑 | 开启 | Loopback HTTP/HTTPS + pairing |
+| 局域网 | 关闭 | 显式开启，默认要求 TLS，仍必须 pairing |
+| 公网 | 随公网部署里程碑推进 | ACME、反向代理和公网运维加固将作为专门适配器逐步提供 |
+| Tailscale / SSH | 计划中 | 保留适配器边界，不增加第二套 Agent runtime |
+
+在公网部署和证书门禁完成前，不要直接把 daemon 暴露到 Internet。高级 LAN/TLS
+指南会单独说明运维所需的环境变量和证书细节，普通用户不需要先阅读这些内容。
+
+## VibeGo 是什么，不是什么
+
+VibeGo 是一个本地优先、单用户、通过浏览器使用的 coding agent 控制台。
+它不是托管式多租户服务，不是编辑器的替代品，也不是无限制的远程 Shell。
+浏览器控制的是本地 daemon；workspace、审批、沙箱决策和持久化 run 历史都
+保留在 Host 所在的开发电脑上。
+
+## 面向贡献者
+
+项目按模块推进。每个实质性变更都应有明确的 spec 边界、聚焦单元测试、同步
+文档和独立 Git 提交。
 
 ```powershell
-$env:READY4VIBE_DEEPSEEK_API_KEY = '<out-of-band-key>'
-pnpm smoke:deepseek-search -- --mode live --authorize --endpoint https://api.deepseek.com/v1/responses --model deepseek-v4-flash --secret-env READY4VIBE_DEEPSEEK_API_KEY
-```
+# 单个受影响模块的快速内循环
+pnpm check:module -- @ready4vibe/model-openai
 
-live runner 不属于 `pnpm verify`，只输出有界状态/延迟/数量摘要；如果精确的 Responses
-endpoint 没有声明版本化的 provider-owned search capability，就保持 blocked。key、endpoint、
-query 和原始响应不会写入仓库。
-
-还可以对真实 endpoint 显式运行 reasoning smoke，但必须使用 `high` 或 `max`，并先通过
-严格 capability probe；没有声明 `reasoning=true` 时 fail-closed：
-
-```powershell
-$env:READY4VIBE_DEEPSEEK_API_KEY = '<out-of-band-key>'
-pnpm smoke:deepseek -- --endpoint https://api.deepseek.com/v1/responses --profile openai-responses --model deepseek-v4-flash --secret-env READY4VIBE_DEEPSEEK_API_KEY --scenario reasoning --thinking high
-```
-
-该 direct adapter smoke 不属于 `pnpm verify`，报告不会包含私有 reasoning 文本、endpoint、
-prompt、headers、原始响应或凭据；healthy 结果也不等同于 daemon/AgentLoop 或发行就绪证据。
-
-默认地址是 `http://127.0.0.1:8787`。这是贡献者/源码开发路径。构建 `apps/web/dist`
-后，daemon 会在同一个 Host URL 托管编译后的 Web、API 和 SSE；`READY4VIBE_WEB_DIST_DIR`
-可指向另一个绝对 dist 目录。开发 launcher 可运行 `node scripts/host-launcher.mjs`，
-不依赖 Node 的签名发行包仍按 Spec 53/57 推进。
-
-## Host-first 部署目标
-
-用户最终只需在主要开发电脑安装一个 VibeGo Host。Host 会一起启动 Node daemon、SQLite
-和编译后的 React Web，并自动打开一个 URL。远程桌面、手机、平板或折叠屏只需打开该
-URL，不安装 Node、pnpm 或第二套后端；局域网访问仍必须显式开启 TLS 和 pairing。
-
-Android、iOS、HarmonyOS 原生客户端明确后置。未来客户端只消费同一套版本化 REST/SSE
-和 device session，不运行本地 AgentLoop，也不读取 Host 的存储。详见
-[Spec 41](docs/specs/41-host-first-distribution-and-client-boundary.md) 与
-[ADR 0010](docs/adr/0010-host-first-same-origin-web-and-client-boundary.md)。
-
-控制台内置 Settings 面板，可配置 workspace、模型、任务信任级别、sandbox、审批、网络和运行限制；常规使用不需要手动编辑 `.env` 或 YAML。API key、私钥等 secret 不会进入这个面板，后续由 daemon 侧安全 secret provider 负责。
-当传输要求 TLS 时，同一面板还会展示证书有效期和安全的下一步提示，不会要求用户粘贴或上传私钥。
-
-## 模型配置与设置向导
-
-Web 控制台的 Settings 面板包含 Model Access 向导：输入 OpenAI-compatible
-服务地址、模型名和 API key 即可完成配置，不需要编辑 `.env` 或 YAML。API key
-只通过已认证连接发送到 daemon，成功后会清空浏览器输入框，仅保留在 daemon
-进程内存中；它不会写入 localStorage、事件、日志或 URL。daemon 重启后会再次
-提示配置，后续再接入 Windows Credential Manager 等系统密钥存储。
-
-Settings 还提供显式的 Filesystem tools 开关。开启后仅注册受路径守卫、审批和
-输出上限约束的文件读写工具；shell、MCP、网络和外部 sandbox 不会被隐式启用。
-另有独立的 Git read-only tools 开关，仅注册有界的 `git.status`、`git.diff`、
-`git.log` 读取；提交、checkout、reset、patch/apply、remote 和任意 Git 参数均
-不会注册。设置界面也会引导 Docker/Podman 探测和固定 digest 的外部 shell 配置，
-不要求手动编辑配置文件，且 shell 没有主机回退路径。
-
-Workspace 设置使用下拉选择和明确的添加/删除向导。添加路径指 daemon 所在机器
-上的目录，必须由用户确认；路径只保留在 daemon 的非 secret 设置与运行时内，不会
-回显到状态、事件、日志或浏览器存储，未知 workspace 也不会静默回退到 `default`。
-
-## LAN 与公网访问边界
-
-局域网绑定必须显式开启，且默认强制 TLS：
-
-```powershell
-$env:READY4VIBE_HOST = '0.0.0.0'
-$env:READY4VIBE_ALLOW_LAN = '1'
-$env:READY4VIBE_TLS_CERT_FILE = 'C:\path\to\fullchain.pem'
-$env:READY4VIBE_TLS_KEY_FILE = 'C:\path\to\privatekey.pem'
-pnpm --filter @ready4vibe/daemon start
-```
-
-证书 SAN 必须覆盖客户端实际访问的域名/IP。VibeGo 在启动时校验证书/私钥匹配关系，绝不把 PEM 内容写入日志、health、事件或浏览器。`READY4VIBE_ALLOW_INSECURE_LAN=1` 只是明确的开发环境例外，不会关闭 pairing、Bearer、CSRF 或 query token 禁止规则。
-
-ACME/Let's Encrypt 签发续期、Windows 证书存储和反向代理方案会作为后续 adapter，不在启动时隐式联网。
-
-## 安全模型摘要
-
-- Web token 只在内存中保存，不进入 localStorage、cookie、URL、事件或 telemetry。
-- 不可信内容不能静默选择 host adapter；外部 sandbox 不可用时 fail-closed。
-- shell 参数、路径、symlink、环境变量传播和输出限制均有专门测试。
-- health 只是传输/存储摘要，不代表模型、sandbox 或工具已经安全可用。
-
-## 仓库结构
-
-```text
-apps/daemon       HTTP(S) API、认证门禁、run manager、SSE
-apps/web          React + TypeScript 响应式控制台
-packages/contracts / storage / scheduler
-packages/agent / context / model-openai / model-deepseek（协议、capability 和有界 search adapter）
-packages/policy / sandbox / execution / tool-adapters（filesystem/shell/Git）
-packages/sandbox-runtime  Docker/Podman 命令计划与 fail-closed CLI runner 边界
-packages/workspaces      单用户 workspace id 到 daemon 根目录的安全 registry
-packages/auth / certificates / testkit
-packages/skill-mcp   严格 Skill/MCP manifest 与默认拒绝的工具投影
-packages/goal-control 原生 Goal/Todo/Gate/Evidence 控制平面（Phase 0）
-```
-
-## 开发约束
-
-每个实质模块都要先有 spec，再加入单元测试、typecheck 和文档更新，最后用独立 Git 提交。Agent Memory Phase 0 contract/Noop、Phase 1 MemoryCore HTTP adapter、Phase 2 durable settings/status、Phase 3 sidecar supervisor、Phase 4 bounded run integration、Phase 5 显式 MemoryProxy 和只读 MemoryKnowledge adapter、Phase 6a Knowledge settings/probe/新 run context 集成，以及 Phase 6b operations projection/兼容性 fixture 已实现；Knowledge 工具注册和 Proxy sidecar 自动更新仍按阶段推进。详见 [`docs/implementation-status.md`](docs/implementation-status.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [`docs/specs/`](docs/specs/)。
-
-品牌采用 VibeGo：深海军蓝背景、青色/靛蓝/紫色强调色，以及代表安全信号的荧光绿。Web 使用的标志位于 [`apps/web/public/vibego-mark.svg`](apps/web/public/vibego-mark.svg)。
-
-## 延伸阅读
-
-- [产品范围](docs/product-brief.md) 与 [总体架构](docs/architecture.md)
-- [开源项目调研](docs/open-source-research.md) 与 [harness 合约](docs/harness-contracts.md)
-- [安全默认值](docs/adr/0002-security-defaults.md) 与 [LAN/Codex-like 审批决策](docs/adr/0003-lan-access-and-codex-like-approval.md)
-- [实施状态](docs/implementation-status.md)、[路线图](docs/roadmap.md) 与 [Spec 索引](docs/specs/)
-- [Host-first 发行与后续客户端边界](docs/specs/41-host-first-distribution-and-client-boundary.md) 与 [ADR 0010](docs/adr/0010-host-first-same-origin-web-and-client-boundary.md)
-
-## 后续路线
-
-- 更完整的 external sandbox/VM adapter、资源限制与持久化；
-- Skill/MCP manifest 和 secret-safe 工具 allowlist；
-- 分页/高亮 diff/log/approval UI 与桌面/平板/手机 Playwright 流程；
-- Goal 写 API、Web Goal 投影操作和 governed preflight（Phase 0/1 合同、存储与受认证只读 projection 已完成）；
-- ACME/certificate manager、Tailscale/SSH transport adapter；
-- Host-first 同源静态 Web 托管、跨平台 launcher/发行包和签名更新/回滚；
-- 系统密钥存储适配器，以及 Spec 54 的下一阶段向导接入；
-- 在 Host/API/SSE 合约稳定后再开发 Android/iOS/HarmonyOS 原生客户端；
-- 低资源实测、事件保留、备份导出和第三方 provider/tool SDK。
-
-## 贡献
-
-从一个 spec 或 issue 级边界开始，保持模块化，先补测试再接入副作用，提交前更新文档并执行：
-
-```powershell
-pnpm typecheck
-pnpm test
-pnpm diff:check
+# 较大变更交付前的仓库验证
 pnpm verify
 ```
 
-不要提交 API key、私有证书、workspace secret 或运行时数据。
+工程细节请查看 [贡献指南](CONTRIBUTING.md)、[总体架构](docs/architecture.md)、
+[实施状态](docs/implementation-status.md) 和 [路线图](docs/roadmap.md)。发行就绪
+状态与功能实现状态分开管理，详见
+[release publishing spec](docs/specs/57-release-publishing-pipeline.md)。
+
+## 文档导航
+
+- [产品简报](docs/product-brief.md)
+- [安全默认值](docs/adr/0002-security-defaults.md)
+- [Host-first 发行与客户端边界](docs/specs/41-host-first-distribution-and-client-boundary.md)
+- [总体架构](docs/architecture.md) · [harness 合约](docs/harness-contracts.md)
+- [实施状态](docs/implementation-status.md) · [路线图](docs/roadmap.md)
+- [Spec 索引](docs/specs/)
+- [English README](README.md)
+
+VibeGo 仍在公开开发中。上面的“现在可以用什么”负责说明当前可用范围，
+详细 spec 负责说明约束、证据强度和后续里程碑。
