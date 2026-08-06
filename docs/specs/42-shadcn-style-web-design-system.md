@@ -437,6 +437,26 @@ Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean
 with the token import inlined, and `check:web` completed with JS 90.89 KiB
 and CSS 8.78 KiB gzip under the 110/30 KiB budgets.
 
+### Phase 42f implementation update (2026-08-06): drawer and rail motion
+
+The Settings sheet now has a full-viewport backdrop (`settings-backdrop`)
+that fades in beneath the dialog and closes it on click, while the dialog
+itself plays a bounded entrance (`settings-drawer-in`: opacity + vertical
+`translate` offset). The keyframe animates the independent `translate`
+property so it composes with the existing centering `transform` on desktop
+and the `transform: none` inset layout on mobile without overriding either.
+The open/closed contract is unchanged: `data-open` still toggles
+`display: none` when closed, `aria-hidden` mirrors the state, and focus
+management stays in `App`.
+
+The context rail slides in from the right when opened
+(`ui-slide-in-right`), and the topbar connection pill now transitions its
+color/border and carries a cyan glow while connected. All new motion is
+disabled under `prefers-reduced-motion` through the existing global guard
+plus an explicit rule for the new entrance animations.
+
+Validation: 112 Web tests passed, `tsc --noEmit` clean, `vite build` clean.
+
 ## 9. 退出条件
 
 本规格完成后：

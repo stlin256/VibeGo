@@ -12,8 +12,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .brand-lockup { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
 .brand-mark { display: block; width: 36px; height: 36px; border-radius: var(--vibego-radius-sm); }
 .brand-go { color: var(--vibego-lime); }
-.connection-pill, .status-chip { border: 1px solid #30415c; border-radius: 999px; padding: 7px 11px; color: #95a9c3; font-size: 12px; }
+.connection-pill, .status-chip { border: 1px solid #30415c; border-radius: 999px; padding: 7px 11px; color: #95a9c3; font-size: 12px; transition: color var(--vibego-duration-fast) var(--vibego-ease-out), border-color var(--vibego-duration-fast) var(--vibego-ease-out), box-shadow var(--vibego-duration-normal) var(--vibego-ease-out); }
 .connection-pill[data-connected="true"], .status-chip[data-status="completed"] { color: var(--vibego-cyan); border-color: var(--vibego-cyan); }
+.connection-pill[data-connected="true"] { box-shadow: 0 0 12px rgb(92 225 230 / 22%); }
 .content-grid { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .sidebar, .main-column { display: grid; gap: 16px; }
 .panel { border: 1px solid var(--vibego-border-default); border-radius: var(--vibego-radius-md); padding: clamp(16px, 2vw, 24px); background: var(--vibego-bg-surface); backdrop-filter: blur(var(--vibego-blur-md)); -webkit-backdrop-filter: blur(var(--vibego-blur-md)); box-shadow: var(--vibego-shadow-surface); }
@@ -458,6 +459,16 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .ui-gradient-border::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; background: var(--vibego-gradient-border); }
 .ui-backdrop-blur { backdrop-filter: blur(var(--vibego-blur-md)); -webkit-backdrop-filter: blur(var(--vibego-blur-md)); }
 .ui-focus-ring:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* Settings drawer entrance + backdrop. `translate` is used instead of
+   `transform` so the animation composes with the centering transform. */
+.settings-backdrop { position: fixed; inset: 0; z-index: 19; background: rgb(0 0 0 / 48%); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.settings-backdrop[data-open="false"] { display: none; }
+.settings-backdrop[data-open="true"] { animation: ui-fade-in var(--vibego-duration-normal) var(--vibego-ease-out); }
+@keyframes settings-drawer-in { from { opacity: 0; translate: 0 -16px; } to { opacity: 1; translate: 0 0; } }
+.settings-panel[data-open="true"] { animation: settings-drawer-in var(--vibego-duration-slow) var(--vibego-ease-out); }
+.context-rail[data-open="true"] { animation: ui-slide-in-right var(--vibego-duration-normal) var(--vibego-ease-out); }
+@media (prefers-reduced-motion: reduce) { .settings-backdrop[data-open="true"], .settings-panel[data-open="true"], .context-rail[data-open="true"] { animation: none; } }
 
 /* Spec 38: conversation-first shell. The existing settings form remains a
    semantic component, but it is a dismissible drawer rather than the default
