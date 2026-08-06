@@ -19,6 +19,9 @@ export type MessageKey =
   | 'nav.localSession'
   | 'nav.currentTask'
   | 'nav.noOtherRuns'
+  | 'rail.goals'
+  | 'rail.telemetry'
+  | 'rail.workspace'
   | 'connection.connected'
   | 'connection.awaitingPairing'
   | 'settings.title'
@@ -81,6 +84,9 @@ const EN_US: Catalog = {
   'nav.localSession': 'Local session',
   'nav.currentTask': 'Current task',
   'nav.noOtherRuns': 'No other runs',
+  'rail.goals': 'Goals',
+  'rail.telemetry': 'Telemetry',
+  'rail.workspace': 'Workspace',
   'connection.connected': 'Connected',
   'connection.awaitingPairing': 'Awaiting pairing',
   'settings.title': 'Run profile',
@@ -142,6 +148,9 @@ const ZH_CN: Catalog = {
   'nav.localSession': '本地会话',
   'nav.currentTask': '当前任务',
   'nav.noOtherRuns': '暂无其他运行',
+  'rail.goals': '目标',
+  'rail.telemetry': '遥测',
+  'rail.workspace': '工作区',
   'connection.connected': '已连接',
   'connection.awaitingPairing': '等待配对',
   'settings.title': '运行配置',

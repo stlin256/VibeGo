@@ -25,6 +25,17 @@ describe('ContextRail', () => {
     expect(html).not.toMatch(/C:\\Users|api[_-]?key|Authorization/iu);
   });
 
+  it('renders tablist semantics while keeping all panels mounted', () => {
+    const html = renderToStaticMarkup(<ContextRail open goalProjectionLoading={false} goalProjectionUnavailable goalProjectionRefreshing={false} observabilityLoading={false} observabilityUnavailable observabilityRefreshing={false} copy={copy} />);
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain('aria-selected="true"');
+    expect(html).toContain('role="tabpanel"');
+    expect(html).toContain('hidden=""');
+    expect(html).toContain('Goal control');
+    expect(html).toContain('USAGE &amp; AUDIT');
+  });
+
   it('keeps the existing connection health projection in a Card primitive', () => {
     const html = renderToStaticMarkup(<ContextRail open goalProjectionLoading={false} goalProjectionUnavailable goalProjectionRefreshing={false} observabilityLoading={false} observabilityUnavailable goalProjection={undefined} observabilityRefreshing={false} health={{ status: 'ok', service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'https-lan', tlsRequired: true, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } }} copy={copy} />);
     expect(html).toContain('class="ui-card panel connection-panel"');
