@@ -1,6 +1,6 @@
 # Spec 42：shadcn 风格 Web 设计系统与 conversation-first UI
 
-- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1 与 42d-2 已实现；其余 42d 验收仍按后续阶段推进）
+- 状态：Accepted（Phase 42a、42b-1、42b-2、42b-3、42c-1、42c-2、42c-3、42d-1、42d-2 与 42e–42m 已实现；其余 42d 验收仍按后续阶段推进）
 - 日期：2026-08-04
 - 适用范围：`apps/web`、React 19、TypeScript、Vite、Host-first 同源 Web
 - 相关 ADR：[ADR 0011：shadcn 风格本地组件与 VibeGo Web 迁移](../adr/0011-shadcn-style-local-components-and-vibego-web.md)
@@ -552,6 +552,30 @@ covered by explicit `prefers-reduced-motion` guards plus the global rule.
 
 Validation: 114 Web tests passed, `tsc --noEmit` clean, `vite build` clean
 with JS 94.17 KiB and CSS 10.07 KiB gzip under the 110/30 KiB budgets.
+
+### Phase 42l implementation update (2026-08-06): neutral zinc theme with light/dark modes
+
+The neon glassmorphism palette was replaced by a shadcn-style neutral zinc
+system. `brand/tokens.css` now ships per-theme semantic tokens under `:root`
+(light default) and `[data-theme="dark"]` while the brand primitives stay
+stable, and `apps/web/src/styles.css` consumes them through a single semantic
+alias block. Glow shadows, gradient surfaces, backdrop blur, the
+`.ui-glow-*` utilities and the `glow` Button variant were removed; motion
+durations were shortened (80–240 ms) for a snappier feel. A new
+`apps/web/src/theme.ts` module resolves the stored choice
+(`vibego.theme.v1`) ahead of `prefers-color-scheme`, applies `data-theme` to
+the document, and the topbar carries a ghost icon toggle with localized
+labels. No new runtime dependencies were added.
+
+### Phase 42m implementation update (2026-08-06): SSE stream render throttling
+
+Model deltas previously triggered a React state update per SSE event — an
+output append plus a `lastEventSeq` bump on every event type — which made the
+conversation janky during streaming. A new `apps/web/src/streamBuffer.ts`
+module coalesces deltas into 50 ms batches with a synchronous `flush()` before
+approval/completion transitions and `reset()` between runs; event-list appends
+are deduplicated per batch. The goal progress bar now animates
+`transform: scaleX` instead of `width` so updates stay on the compositor.
 
 ## 9. 退出条件
 

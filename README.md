@@ -117,12 +117,14 @@ installer is being prepared.
 ### Start your first conversation
 
 1. Open the URL shown by the Host.
-2. Complete the one-time pairing flow.
-3. Open **Settings → Model Access** and configure an OpenAI-compatible provider
-   or another supported provider.
-4. Open **Settings → Workspace** and select or add the project directory on the
-   daemon computer.
-5. Choose **New conversation**, describe the task, and send it.
+2. Click **Connect in one click** — on loopback the browser pairs with the
+   daemon automatically; manual code entry remains available as a fallback.
+3. The first-run setup wizard opens automatically when no model is configured:
+   step 1 verifies and saves your provider key (DeepSeek or any
+   OpenAI-compatible endpoint), step 2 selects or adds the workspace directory
+   on the daemon computer, step 3 confirms everything is ready. It can be
+   dismissed and re-opened later from the setup banner.
+4. Choose **New conversation**, describe the task, and send it.
 6. Review approval cards before a guarded tool runs. You can cancel, reconnect,
    or explicitly retry a recovered run from the same conversation surface.
 

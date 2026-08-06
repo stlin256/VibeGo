@@ -250,3 +250,19 @@ existing ratio/container rules remain authoritative. Focused Web tests cover
 the fixtures, privacy boundary, default-unverified behavior, report bounds
 and CSS hooks; the Web package currently passes 66 tests, typecheck and
 production build. No Playwright or physical-device evidence is claimed.
+
+## 12. Phase 56d implementation update（2026-08-06）
+
+Web 端 i18n 覆盖在本阶段补齐到全部主交互面：
+
+- locale 字典补全 57 个 key，`createTranslator` 支持 `{param}` 插值，并
+  导出 `Translator`/`messageKeys` 类型供组件 copy props 消费；
+- 运行失败的 `safeError` 经 reason code 本地化为中英文用户可读文案；
+- `ApprovalCard`、`RecoveryCard`、`ConversationShell`、`ContextRail`
+  与 `SetupWizard` 全部改为 copy prop 注入，不再硬编码英文；
+- `index.html` 修正为 `lang="en"` + 产品标题 VibeGo，语言切换即时生效。
+
+已知边界：`GoalProjectionPanel`、`ObservabilityPanel`、Settings drawer
+字段级文案与 `ToolOutputInspector` 仍为英文实现，按后续 56 阶段推进；
+其余面向用户的主流程（pairing、首配向导、对话、审批、恢复、错误）已实现
+中英双语。

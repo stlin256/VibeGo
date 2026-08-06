@@ -15,7 +15,7 @@ submit and recovery UI remain partial by design. Spec 58-5 now adds the bounded
 Harness runner plus one user-authorized live provider path; broader failure/
 recovery and release evidence remain open.
 
-**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2/42e/42f/42g/42h/42i/42j/42k 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 已实现，签名/SBOM/provenance/stable release-hardening 仍为规划）**
+**状态：Accepted（Agent Memory Phase 6b、Goal Control Phase 2A 与 Spec 42 Phase 42a/42b-1/42b-2/42b-3/42c-1/42c-2/42c-3/42d-1/42d-2/42e/42f/42g/42h/42i/42j/42k/42l/42m 已实现；Web/PWA、LAN TLS、Skill/MCP manifest、Sandbox runtime、ToolRuntime、approval continuation 与 Goal 只读投影切片已通过；Spec 53 Phase 0/1/2/3/4/5/6 与 Spec 57 Phase 57a/57b/57c 已实现，签名/SBOM/provenance/stable release-hardening 仍为规划）**
 
 ## 当前实施范围
 
@@ -1735,3 +1735,30 @@ spawn，GNU tar 与 Windows bsdtar 均可通过；focused test 3/3 通过。
 
 便携运行时只是便利层；签名安装包与捆绑运行时发行仍为 Spec 57/60 的独立
 门禁。POSIX shell 等价入口留作后续独立评审切片。
+
+### Spec 42 Phase 42l/42m、i18n 补全与无缝首配体验 (2026-08-06)
+
+Web 前端体验重塑在本轮分段落地：
+
+- **42l 中性语义主题**：设计 token 收敛为 zinc 中性色板，亮色/暗色双主题
+  （`brand/tokens.css` 双主题块 + `styles.css` 语义别名 +
+  `theme.ts` + 头部主题切换），替代此前过于艳丽的配色；
+- **42m 流式渲染性能**：`streamBuffer.ts` 以 50ms 批量 flush 接线
+  watchRun，goal-progress 改为 transform 驱动，消除流式期间的界面卡顿；
+- **i18n 补全**：locale 字典补全 57 key 并支持插值，safeError 本地化，
+  ApprovalCard/RecoveryCard/ConversationShell/ContextRail 全部 copy
+  prop 化（细节见 spec 56 §12）；GoalProjectionPanel 等次级面板仍为
+  英文，按后续阶段推进；
+- **无缝配对与首配向导**：loopback 下新增未认证的
+  `POST /api/v1/pairing/start`，Web "一键连接" 一次手势完成配对；模型
+  未配置时三步 SetupWizard（模型→工作区→完成）自动打开，可跳过并从配置
+  引导横幅重开；修复 AuthGate 默认空 origin allowlist 导致的浏览器写操作
+  403（`defaultLoopbackOrigins`，LAN 仍 fail-closed）——细节见 spec 52
+  52-R3 pairing and first-run wizard implementation update；
+- **模型协议修复**：`@ready4vibe/model-deepseek` 的 chat-chunk 翻译器
+  此前对 reasoning 模型的 `content: null` 增量 fail-closed
+  （`DEEPSEEK_MALFORMED_EVENT`），现按 OpenAI 兼容语义将 null 视为
+  字段缺省；focused tests 26/26 通过。
+
+端到端验证：CDP 自动化在真实 DeepSeek endpoint 上走通 一键连接→三步向导
+→真实运行 completed（中文输出），并产出亮色/暗色 × 中/英四态截图矩阵。

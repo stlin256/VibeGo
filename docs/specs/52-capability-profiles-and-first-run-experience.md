@@ -603,6 +603,31 @@ AgentLoop 21, daemon 180 and Web 96 tests, plus typecheck/build coverage. No
 Goal admission, second scheduler, new approval broker, sandbox authority or
 event stream was added.
 
+#### 52-R3 pairing and first-run wizard implementation update (2026-08-06)
+
+The loopback first-run experience is now seamless end to end:
+
+- `POST /api/v1/pairing/start` is an unauthenticated loopback-only endpoint
+  that mints a short-lived pairing code; the Web "Connect in one click" action
+  calls start + complete in one gesture, with manual code entry kept as an
+  explicit fallback. LAN/TLS transports keep the existing manual pairing and
+  fail-closed origin policy.
+- `AuthGate` now derives a default same-origin allowlist from the bound
+  loopback port (`defaultLoopbackOrigins` in `@ready4vibe/auth`) when no
+  explicit `allowedOrigins` is configured, fixing the 403
+  `ORIGIN_FORBIDDEN` on every authenticated browser write (browsers always
+  send an `Origin` header on POST). Explicit env configuration still wins and
+  LAN mode remains fail-closed.
+- The Web first-run `SetupWizard` (spec 52 stepper, reduced to model →
+  workspace → done) opens automatically when the session is connected and no
+  model is configured, embeds the bounded DeepSeek probe, persists dismissal
+  in localStorage, and can be re-opened from the setup banner. Saving the
+  model no longer unmounts the wizard mid-flow.
+
+The full path was verified against a real DeepSeek endpoint via CDP end-to-end
+automation: one-click pairing, wizard completion and a bounded run reaching
+`completed` with live model output.
+
 ### 52-R4: Goal governed admission
 
 - Add the explicit governed run mode and `GoalRunBinding` application-service

@@ -111,11 +111,13 @@ Host 默认打开 `http://127.0.0.1:8787`。当前先通过源码路径体验完
 ### 开始第一次对话
 
 1. 打开 Host 显示的地址。
-2. 完成一次性 pairing。
-3. 打开 **Settings → Model Access**，配置 OpenAI-compatible provider
-   或其他已支持的 provider。
-4. 打开 **Settings → Workspace**，选择或添加 daemon 所在电脑上的项目目录。
-5. 点击 **New conversation**，描述任务并发送。
+2. 点击 **一键连接**——本机 loopback 下浏览器会自动完成配对，手动输入
+   配对码仍作为兜底保留。
+3. 模型未配置时首配向导自动打开：第一步验证并保存 provider key
+   （DeepSeek 或任意 OpenAI-compatible 端点），第二步选择或添加 daemon
+   所在电脑上的 workspace 目录，第三步确认就绪。向导可以跳过，之后可从
+   配置引导横幅重新打开。
+4. 点击 **New conversation**，描述任务并发送。
 6. 工具执行前查看审批卡片；如果连接中断，可以从同一对话界面取消、重连，
    或在明确确认后重试恢复的 run。
 
