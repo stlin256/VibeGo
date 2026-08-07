@@ -286,6 +286,7 @@ function RuntimeApp(): JSX.Element {
     void client.health().then((nextHealth) => {
       setHealth(nextHealth);
       if (client.hasSession()) {
+        setSessionReady(true);
         void refreshCertificateStatus();
         void refreshDeploymentReadiness();
         void refreshModelSettings();
@@ -307,29 +308,40 @@ function RuntimeApp(): JSX.Element {
     }).catch((reason: unknown) => setError(safeError(reason, t)));
   }, []);
 
-  const pair = async (code: string): Promise<void> => {
+  const completeSignIn = async (): Promise<void> => {
+    setSessionReady(true);
+    setError(undefined);
+    setHealth(await client.health());
+    await refreshCertificateStatus();
+    await refreshDeploymentReadiness();
+    await refreshModelSettings();
+    await refreshDeepSeekSettings();
+    await refreshCapabilityProfileSettings();
+    await refreshPermissionSettings();
+    await refreshApprovalReviewSettings();
+    await refreshAgentMemorySettings();
+    await refreshAgentMemoryOperations();
+    await refreshAgentMemoryKnowledgeSettings();
+    await refreshMcpSettings();
+    await refreshToolSettings();
+    await refreshGitSettings();
+    await refreshSandboxSettings();
+    await refreshWorkspaces();
+    await refreshGoalProjection();
+    await refreshObservability();
+  };
+
+  const createAccount = async (password: string): Promise<void> => {
     try {
-      await client.completePairing(code);
-      setSessionReady(true);
-      setError(undefined);
-      setHealth(await client.health());
-      await refreshCertificateStatus();
-      await refreshDeploymentReadiness();
-      await refreshModelSettings();
-      await refreshDeepSeekSettings();
-      await refreshCapabilityProfileSettings();
-      await refreshPermissionSettings();
-      await refreshApprovalReviewSettings();
-      await refreshAgentMemorySettings();
-      await refreshAgentMemoryOperations();
-      await refreshAgentMemoryKnowledgeSettings();
-      await refreshMcpSettings();
-      await refreshToolSettings();
-      await refreshGitSettings();
-      await refreshSandboxSettings();
-      await refreshWorkspaces();
-      await refreshGoalProjection();
-      await refreshObservability();
+      await client.createAccount(password);
+      await completeSignIn();
+    } catch (reason) { setError(safeError(reason, t)); }
+  };
+
+  const loginWithPassword = async (password: string): Promise<void> => {
+    try {
+      await client.loginWithPassword(password);
+      await completeSignIn();
     } catch (reason) { setError(safeError(reason, t)); }
   };
 
@@ -344,13 +356,6 @@ function RuntimeApp(): JSX.Element {
       setRun((current) => current ? { ...current, output: batch.text ? `${current.output}${batch.text}` : current.output, lastEventSeq: batch.lastEventSeq > current.lastEventSeq ? batch.lastEventSeq : current.lastEventSeq } : current);
     });
     return streamBufferRef.current;
-  };
-
-  const pairSeamless = async (): Promise<void> => {
-    try {
-      const started = await client.startPairing();
-      await pair(started.code);
-    } catch (reason) { setError(safeError(reason, t)); }
   };
 
   const watchRun = async (runId: string, initial: RunSnapshot): Promise<void> => {
@@ -638,7 +643,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App sessionReady={sessionReady} {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onDismissError={() => setError(undefined)} locale={locale} onLocaleChange={setLocale} theme={theme} onThemeChange={setTheme} onPairSeamless={pairSeamless} profile={profile} {...(capabilityProfileSettings ? { capabilityProfileSettings } : {})} capabilityProfileSettingsUnavailable={capabilityProfileSettingsUnavailable} {...(permissionSettings ? { permissionSettings } : {})} {...(permissionStatus ? { permissionStatus } : {})} permissionSettingsUnavailable={permissionSettingsUnavailable} {...(approvalReviewSettings ? { approvalReviewSettings } : {})} approvalReviewSettingsUnavailable={approvalReviewSettingsUnavailable} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(deepSeekSettings ? { deepSeekSettings } : {})} deepSeekSettingsUnavailable={deepSeekSettingsUnavailable} {...(deepSeekProbe ? { deepSeekProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onCreateGoal={createGoal} onAddTodo={addGoalTodo} onOpenGate={openGoalGate} onResolveGate={resolveGoalGate} onAttachEvidence={attachGoalEvidence} onPreflight={preflightGoal} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onPair={pair} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onConfigureDeepSeek={configureDeepSeek} onClearDeepSeekSettings={clearDeepSeekSettings} onProbeDeepSeek={probeDeepSeek} onPatchCapabilityProfileSettings={patchCapabilityProfileSettings} onResetCapabilityProfileSettings={resetCapabilityProfileSettings} onPatchPermissionSettings={patchPermissionSettings} onConfirmFullHost={confirmFullHost} onRevokePermission={revokePermission} onPatchApprovalReviewSettings={patchApprovalReviewSettings} onProbeApprovalReview={probeApprovalReview} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App sessionReady={sessionReady} {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} {...(error ? { error } : {})} onDismissError={() => setError(undefined)} locale={locale} onLocaleChange={setLocale} theme={theme} onThemeChange={setTheme} onCreateAccount={createAccount} onLogin={loginWithPassword} profile={profile} {...(capabilityProfileSettings ? { capabilityProfileSettings } : {})} capabilityProfileSettingsUnavailable={capabilityProfileSettingsUnavailable} {...(permissionSettings ? { permissionSettings } : {})} {...(permissionStatus ? { permissionStatus } : {})} permissionSettingsUnavailable={permissionSettingsUnavailable} {...(approvalReviewSettings ? { approvalReviewSettings } : {})} approvalReviewSettingsUnavailable={approvalReviewSettingsUnavailable} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(deepSeekSettings ? { deepSeekSettings } : {})} deepSeekSettingsUnavailable={deepSeekSettingsUnavailable} {...(deepSeekProbe ? { deepSeekProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onCreateGoal={createGoal} onAddTodo={addGoalTodo} onOpenGate={openGoalGate} onResolveGate={resolveGoalGate} onAttachEvidence={attachGoalEvidence} onPreflight={preflightGoal} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onConfigureDeepSeek={configureDeepSeek} onClearDeepSeekSettings={clearDeepSeekSettings} onProbeDeepSeek={probeDeepSeek} onPatchCapabilityProfileSettings={patchCapabilityProfileSettings} onResetCapabilityProfileSettings={resetCapabilityProfileSettings} onPatchPermissionSettings={patchPermissionSettings} onConfirmFullHost={confirmFullHost} onRevokePermission={revokePermission} onPatchApprovalReviewSettings={patchApprovalReviewSettings} onProbeApprovalReview={probeApprovalReview} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiClient, ApiError, DEFAULT_RUN_PROFILE, loadRunProfile, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, type FetchLike, type RunProfile, type RunProfileStorage } from './api.js';
+import { ApiClient, ApiError, clearSessionCookie, DEFAULT_RUN_PROFILE, loadRunProfile, loadSessionCookie, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, saveSessionCookie, SESSION_COOKIE_NAME, type FetchLike, type PairingResult, type RunProfile, type RunProfileStorage } from './api.js';
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
@@ -83,6 +83,55 @@ describe('ApiClient', () => {
     // rejects again and the client keeps notifying so the UI returns to pairing.
     await expect(client.createRun({} as never)).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
     expect(notified).toBe(2);
+  });
+
+  it('creates an account and logs in through the account endpoints', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      return response({ accessToken: 'a'.repeat(43), csrfToken: 'b'.repeat(32), sessionId: 'session_abcdefgh', expiresAt: Date.now() + 1_000 });
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    await client.createAccount('1234');
+    expect(calls[0]?.input).toBe('http://daemon/api/v1/account/create');
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({ password: '1234' }));
+    expect(JSON.stringify(calls[0]?.init?.headers ?? {})).not.toMatch(/Authorization|CSRF/iu);
+    expect(client.hasSession()).toBe(true);
+
+    client.clearSession();
+    await client.loginWithPassword('1234');
+    expect(calls[1]?.input).toBe('http://daemon/api/v1/account/login');
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ password: '1234' }));
+    expect(client.hasSession()).toBe(true);
+
+    await client.createRun({} as never);
+    expect(calls[2]?.init?.headers).toMatchObject({ Authorization: `Bearer ${'a'.repeat(43)}`, 'X-CSRF-Token': 'b'.repeat(32) });
+  });
+
+  it('round-trips the session through a 30-day strict cookie and rejects stale snapshots', () => {
+    const doc = { cookie: '', location: { protocol: 'http:' } } as Document;
+    const session: PairingResult = { accessToken: 'a'.repeat(43), csrfToken: 'b'.repeat(32), sessionId: 'session_abcdefgh', expiresAt: Date.now() + 60_000 };
+    saveSessionCookie(session, doc);
+    expect(doc.cookie).toContain(`${SESSION_COOKIE_NAME}=`);
+    expect(doc.cookie).toContain('Max-Age=2592000');
+    expect(doc.cookie).toContain('SameSite=Strict');
+    expect(doc.cookie).not.toContain('Secure');
+    expect(loadSessionCookie(doc)).toEqual(session);
+
+    saveSessionCookie({ ...session, expiresAt: Date.now() - 1 }, doc);
+    expect(loadSessionCookie(doc)).toBeUndefined();
+    const malformed = { cookie: `${SESSION_COOKIE_NAME}=%%%`, location: { protocol: 'http:' } } as Document;
+    expect(loadSessionCookie(malformed)).toBeUndefined();
+
+    clearSessionCookie(doc);
+    expect(doc.cookie).toContain('Max-Age=0');
+    expect(loadSessionCookie(undefined)).toBeUndefined();
+  });
+
+  it('marks the session cookie Secure on https origins', () => {
+    const doc = { cookie: '', location: { protocol: 'https:' } } as Document;
+    saveSessionCookie({ accessToken: 'a'.repeat(43), csrfToken: 'b'.repeat(32), sessionId: 'session_abcdefgh', expiresAt: Date.now() + 60_000 }, doc);
+    expect(doc.cookie).toContain('Secure');
   });
 
   it('starts loopback pairing without a session and never persists the code', async () => {

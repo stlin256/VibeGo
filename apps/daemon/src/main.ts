@@ -24,6 +24,8 @@ import { DurablePermissionProfileSettingsManager } from './permission-profile-se
 import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { createApprovalReviewBinding } from './approval-review-runtime.js';
 import { DedicatedReviewerProfilesManager } from './dedicated-reviewer-profiles.js';
+import { DurableAccountManager } from './account-settings.js';
+import { createAuthSessionPersistence } from './auth-session-persistence.js';
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 import type { CapabilityProfilePolicy } from '@ready4vibe/policy';
 import { GoalControlV1WriteService, GoalWriteService } from '@ready4vibe/goal-control';
@@ -77,6 +79,8 @@ try {
   eventStore.close();
   throw error;
 }
+authGate.bindSessionPersistence(createAuthSessionPersistence(settingsStore));
+const accountManager = new DurableAccountManager({ settings: settingsStore });
 let workspaceRegistry: InMemoryWorkspaceRegistry;
 try {
   workspaceRegistry = new InMemoryWorkspaceRegistry({
@@ -306,6 +310,7 @@ const server = createDaemonServer({
   approvalReviewSettings,
   dedicatedReviewerProfiles,
   approvalReviewEventStore,
+  accountManager,
   webDistDir: process.env.READY4VIBE_WEB_DIST_DIR ?? join(process.cwd(), 'apps', 'web', 'dist'),
   goalEventStore,
   goalWriteService,

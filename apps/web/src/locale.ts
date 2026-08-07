@@ -146,6 +146,16 @@ export type MessageKey =
   | 'connection.pairingAuto'
   | 'connection.pairingAutoHint'
   | 'connection.pairingManualDivider'
+  | 'connection.accountCreateTitle'
+  | 'connection.accountCreateDescription'
+  | 'connection.accountCreateAction'
+  | 'connection.accountLoginTitle'
+  | 'connection.accountLoginDescription'
+  | 'connection.accountLoginAction'
+  | 'connection.accountPasswordLabel'
+  | 'connection.accountPasswordConfirmLabel'
+  | 'connection.accountPasswordHint'
+  | 'connection.accountPasswordMismatch'
   | 'setup.title'
   | 'setup.stepProvider'
   | 'setup.stepWorkspace'
@@ -616,6 +626,16 @@ const EN_US: Catalog = {
   'connection.pairingAuto': 'Connect automatically',
   'connection.pairingAutoHint': 'Reads a one-time code from the local daemon — nothing to type.',
   'connection.pairingManualDivider': 'or enter a pairing code',
+  'connection.accountCreateTitle': 'Create your account',
+  'connection.accountCreateDescription': 'Set a password for this VibeGo instance. It is stored only on this machine.',
+  'connection.accountCreateAction': 'Create account',
+  'connection.accountLoginTitle': 'Sign in',
+  'connection.accountLoginDescription': 'Enter your password to continue.',
+  'connection.accountLoginAction': 'Sign in',
+  'connection.accountPasswordLabel': 'Password',
+  'connection.accountPasswordConfirmLabel': 'Confirm password',
+  'connection.accountPasswordHint': 'At least 4 characters.',
+  'connection.accountPasswordMismatch': 'Passwords do not match.',
   'setup.title': 'Set up VibeGo',
   'setup.stepProvider': 'Model',
   'setup.stepWorkspace': 'Workspace',
@@ -1083,6 +1103,16 @@ const ZH_CN: Catalog = {
   'connection.pairingAuto': '一键连接',
   'connection.pairingAutoHint': '自动从本机 daemon 读取一次性配对码，无需输入。',
   'connection.pairingManualDivider': '或手动输入配对码',
+  'connection.accountCreateTitle': '创建账号',
+  'connection.accountCreateDescription': '为这台机器上的 VibeGo 设置登录密码，密码只保存在本机。',
+  'connection.accountCreateAction': '创建账号',
+  'connection.accountLoginTitle': '登录',
+  'connection.accountLoginDescription': '输入密码以继续。',
+  'connection.accountLoginAction': '登录',
+  'connection.accountPasswordLabel': '密码',
+  'connection.accountPasswordConfirmLabel': '确认密码',
+  'connection.accountPasswordHint': '至少 4 个字符。',
+  'connection.accountPasswordMismatch': '两次输入的密码不一致。',
   'setup.title': '初始设置',
   'setup.stepProvider': '模型',
   'setup.stepWorkspace': '工作区',

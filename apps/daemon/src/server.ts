@@ -21,6 +21,7 @@ import { CapabilityProfileSettingsError, type CapabilityProfileSettingsManager }
 import { PermissionProfileSettingsError, type PermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { ApprovalReviewSettingsError, type ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { DedicatedReviewerProfilesError, type DedicatedReviewerProfilesManager } from './dedicated-reviewer-profiles.js';
+import { AccountError, type AccountManager } from './account-settings.js';
 import { GoalAdmissionError, GoalAdmissionService } from './goal-admission.js';
 import type { GoalRunWritebackService } from './goal-writeback.js';
 import { DEFAULT_GOAL_EVENT_PAGE_SIZE, MAX_GOAL_EVENT_PAGE_SIZE, listGoalProjections, readGoalEventPage, readGoalProjection, redactGoalProjection, type GoalProjectionStore } from './goal-api.js';
@@ -77,6 +78,7 @@ export interface DaemonServerOptions {
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
   approvalReviewSettings?: ApprovalReviewSettingsManager;
+  accountManager?: AccountManager;
   dedicatedReviewerProfiles?: DedicatedReviewerProfilesManager;
   approvalReviewEventStore?: ApprovalReviewEventStore;
   observabilityLedger?: ObservabilityLedger;
@@ -114,6 +116,7 @@ interface ResolvedDaemonServerOptions {
   capabilityProfileSettings?: CapabilityProfileSettingsManager;
   permissionProfileSettings?: PermissionProfileSettingsManager;
   approvalReviewSettings?: ApprovalReviewSettingsManager;
+  accountManager?: AccountManager;
   dedicatedReviewerProfiles?: DedicatedReviewerProfilesManager;
   approvalReviewEventStore?: ApprovalReviewEventStore;
   observabilityLedger?: ObservabilityLedger;
@@ -132,6 +135,7 @@ export interface HealthResponse {
   };
   auth: {
     pairingRequired: boolean;
+    accountCreated: boolean;
   };
   storage: {
     kind: StorageKind;
@@ -148,6 +152,7 @@ export interface HealthResponse {
 
 const HEALTH_PATHS = new Set(['/health', '/api/v1/health']);
 const TERMINAL_EVENT_TYPES = new Set(['run.completed', 'run.failed', 'run.cancelled', 'run.needs_recovery']);
+const ACCOUNT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export function createDaemonServer(options: DaemonServerOptions = {}): Server {
   const host = options.host ?? '127.0.0.1';
@@ -183,6 +188,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.permissionProfileSettings ? { permissionProfileSettings: options.permissionProfileSettings } : {}),
     ...(options.approvalReviewSettings ? { approvalReviewSettings: options.approvalReviewSettings } : {}),
     ...(options.dedicatedReviewerProfiles ? { dedicatedReviewerProfiles: options.dedicatedReviewerProfiles } : {}),
+    ...(options.accountManager ? { accountManager: options.accountManager } : {}),
     ...(options.approvalReviewEventStore ? { approvalReviewEventStore: options.approvalReviewEventStore } : {}),
     ...(options.observabilityLedger ? { observabilityLedger: options.observabilityLedger } : {}),
     ...(options.pricingCatalog ? { pricingCatalog: options.pricingCatalog } : {}),
@@ -334,6 +340,65 @@ async function handleRequest(
       }
       throw error;
     }
+    return;
+  }
+
+  if (pathname === '/api/v1/account/create') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.authGate || !options.accountManager) {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isAccountPasswordInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Password must be 4-128 characters.' } });
+      return;
+    }
+    try {
+      options.accountManager.createAccount(input.password);
+    } catch (error) {
+      if (error instanceof AccountError) {
+        writeJson(response, error.code === 'ACCOUNT_EXISTS' ? 409 : 400, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    writeJson(response, 200, options.authGate.issueSession({ ttlMs: ACCOUNT_SESSION_TTL_MS, durable: true }));
+    return;
+  }
+
+  if (pathname === '/api/v1/account/login') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    if (!options.authGate || !options.accountManager) {
+      writeJson(response, 404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isAccountPasswordInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Password must be 4-128 characters.' } });
+      return;
+    }
+    let verified = false;
+    try {
+      verified = options.accountManager.verifyPassword(input.password);
+    } catch (error) {
+      if (error instanceof AccountError && error.code === 'ACCOUNT_NOT_FOUND') {
+        writeJson(response, 404, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    if (!verified) {
+      writeJson(response, 401, { error: { code: 'INVALID_CREDENTIALS', message: 'The password is incorrect.' } });
+      return;
+    }
+    writeJson(response, 200, options.authGate.issueSession({ ttlMs: ACCOUNT_SESSION_TTL_MS, durable: true }));
     return;
   }
 
@@ -1519,7 +1584,7 @@ function createHealthResponse(options: ResolvedDaemonServerOptions): HealthRespo
       tlsRequired: authStatus?.tlsRequired ?? false,
       boundAddresses: [options.host],
     },
-    auth: { pairingRequired: authStatus?.pairingRequired ?? false },
+    auth: { pairingRequired: authStatus?.pairingRequired ?? false, accountCreated: options.accountManager?.hasAccount() ?? false },
     storage: { kind: options.storageKind, status: options.storageStatus },
     sandbox: {
       availableModes: ['read-only', 'workspace-write', 'external-sandbox'],
@@ -1542,6 +1607,11 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
 
 function isPairingInput(value: unknown): value is { code: string } {
   return typeof value === 'object' && value !== null && 'code' in value && typeof value.code === 'string' && value.code.length > 0 && value.code.length <= 64;
+}
+
+function isAccountPasswordInput(value: unknown): value is { password: string } {
+  return typeof value === 'object' && value !== null && 'password' in value && typeof value.password === 'string'
+    && value.password.length >= 4 && value.password.length <= 128;
 }
 
 function readExpectedRevision(value: unknown): string | undefined {

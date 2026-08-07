@@ -56,6 +56,70 @@ describe('AuthGate', () => {
     now = 2_000;
   });
 
+  it('keeps account create loopback-only and gates account login like pairing complete', () => {
+    const gate = new AuthGate({ mode: 'lan', now: () => 1_000, randomBytes: deterministicRandom() });
+    expect(gate.authorize({ method: 'POST', path: '/api/v1/account/create', remoteAddress: '192.168.1.5', secure: true })).toMatchObject({ allowed: false, failureCode: 'ACCOUNT_LOCAL_ONLY' });
+    expect(gate.authorize({ method: 'POST', path: '/api/v1/account/create', remoteAddress: '127.0.0.1', secure: false })).toMatchObject({ allowed: true });
+    expect(gate.authorize({ method: 'POST', path: '/api/v1/account/login', remoteAddress: '192.168.1.5', secure: false })).toMatchObject({ allowed: false, failureCode: 'TLS_REQUIRED' });
+    expect(gate.authorize({ method: 'POST', path: '/api/v1/account/login', remoteAddress: '192.168.1.5', secure: true })).toMatchObject({ allowed: true });
+  });
+
+  it('persists durable sessions across restarts and sweeps expired records', () => {
+    let now = 1_000;
+    const saved = new Map<string, { sessionKey: string; csrfDigest: string; sessionId: string; expiresAt: number; createdAt: number }>();
+    const persistence = {
+      load: () => [...saved.values()],
+      save: (session: { sessionKey: string; csrfDigest: string; sessionId: string; expiresAt: number; createdAt: number }) => { saved.set(session.sessionKey, session); },
+      drop: (sessionKey: string) => { saved.delete(sessionKey); },
+    };
+    const first = new AuthGate({ mode: 'loopback', authRequired: true, now: () => now, randomBytes: deterministicRandom(), sessionPersistence: persistence });
+    const durable = first.issueSession({ at: now, ttlMs: 10_000, durable: true });
+    const volatileSession = first.issueSession({ at: now, ttlMs: 10_000 });
+    expect(saved.size).toBe(1);
+
+    // A restarted gate rehydrates the durable session and accepts its bearer.
+    const restarted = new AuthGate({ mode: 'loopback', authRequired: true, now: () => now, randomBytes: deterministicRandom(), sessionPersistence: persistence });
+    const request = { method: 'GET', path: '/api/v1/runs/run_1', remoteAddress: '127.0.0.1', secure: false, authorization: `Bearer ${durable.accessToken}` };
+    expect(restarted.authorize(request)).toMatchObject({ allowed: true, sessionId: durable.sessionId });
+    expect(restarted.authorize({ ...request, authorization: `Bearer ${volatileSession.accessToken}` })).toMatchObject({ allowed: false, failureCode: 'INVALID_TOKEN' });
+
+    // Expiry purges both the memory entry and the persisted record.
+    now = 20_000;
+    expect(restarted.authorize(request)).toMatchObject({ allowed: false, failureCode: 'INVALID_TOKEN' });
+    expect(saved.size).toBe(0);
+  });
+
+  it('drops persisted sessions on revoke', () => {
+    const saved = new Map<string, { sessionKey: string; csrfDigest: string; sessionId: string; expiresAt: number; createdAt: number }>();
+    const persistence = {
+      load: () => [...saved.values()],
+      save: (session: { sessionKey: string; csrfDigest: string; sessionId: string; expiresAt: number; createdAt: number }) => { saved.set(session.sessionKey, session); },
+      drop: (sessionKey: string) => { saved.delete(sessionKey); },
+    };
+    const gate = new AuthGate({ mode: 'loopback', authRequired: true, now: () => 1_000, randomBytes: deterministicRandom(), sessionPersistence: persistence });
+    const session = gate.issueSession({ at: 1_000, ttlMs: 10_000, durable: true });
+    expect(saved.size).toBe(1);
+    expect(gate.revoke(session.sessionId)).toBe(true);
+    expect(saved.size).toBe(0);
+  });
+
+  it('rehydrates sessions when persistence is bound after construction', () => {
+    const saved = new Map<string, { sessionKey: string; csrfDigest: string; sessionId: string; expiresAt: number; createdAt: number }>();
+    const persistence = {
+      load: () => [...saved.values()],
+      save: (session: { sessionKey: string; csrfDigest: string; sessionId: string; expiresAt: number; createdAt: number }) => { saved.set(session.sessionKey, session); },
+      drop: (sessionKey: string) => { saved.delete(sessionKey); },
+    };
+    const first = new AuthGate({ mode: 'loopback', authRequired: true, now: () => 1_000, randomBytes: deterministicRandom() });
+    first.bindSessionPersistence(persistence);
+    const session = first.issueSession({ ttlMs: 10_000, durable: true });
+
+    const restarted = new AuthGate({ mode: 'loopback', authRequired: true, now: () => 1_000, randomBytes: deterministicRandom() });
+    restarted.bindSessionPersistence(persistence);
+    expect(restarted.authorize({ method: 'GET', path: '/api/v1/runs/run_1', remoteAddress: '127.0.0.1', secure: false, authorization: `Bearer ${session.accessToken}` })).toMatchObject({ allowed: true, sessionId: session.sessionId });
+    expect(() => restarted.bindSessionPersistence(persistence)).toThrow();
+  });
+
   it('allows explicit insecure mode and keeps loopback health/pairing local', () => {
     const gate = new AuthGate({ mode: 'lan', tlsRequired: false, authRequired: false, randomBytes: deterministicRandom() });
     expect(gate.authorize({ method: 'GET', path: '/health', remoteAddress: '192.168.1.5', secure: false })).toMatchObject({ allowed: true });

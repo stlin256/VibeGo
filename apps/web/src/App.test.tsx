@@ -4,13 +4,22 @@ import { App } from './App.js';
 import { DEFAULT_RUN_PROFILE } from './api.js';
 
 describe('web console shell', () => {
-  it('renders a pairing-first surface with responsive semantic controls', () => {
-    const html = renderToStaticMarkup(<App locale="zh-CN" />);
-    expect(html).toContain('配对码');
-    expect(html).toContain('pairing-code');
-    expect(html).toContain('连接你的本地工作区');
-    expect(html).toContain('VibeGo');
-    expect(html).toContain('不可信任务强制使用外部沙箱');
+  it('renders an account-first surface with create and login modes', () => {
+    const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback' as const, tlsRequired: false, boundAddresses: ['127.0.0.1' as const] }, auth: { pairingRequired: true, accountCreated: false }, storage: { kind: 'memory' as const, status: 'ready' as const }, sandbox: { availableModes: ['read-only' as const], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow' as const, 'prompt' as const, 'forbidden' as const] } };
+    const create = renderToStaticMarkup(<App locale="zh-CN" health={health} />);
+    expect(create).toContain('创建账号');
+    expect(create).toContain('account-password-confirm');
+    expect(create).toContain('至少 4 个字符');
+    expect(create).toContain('VibeGo');
+    expect(create).toContain('不可信任务强制使用外部沙箱');
+
+    const login = renderToStaticMarkup(<App locale="zh-CN" health={{ ...health, auth: { pairingRequired: true, accountCreated: true } }} />);
+    expect(login).toContain('登录');
+    expect(login).toContain('account-password');
+    expect(login).not.toContain('account-password-confirm');
+
+    const loading = renderToStaticMarkup(<App locale="zh-CN" />);
+    expect(loading).not.toContain('account-password');
   });
 
   it('renders the non-secret run settings onboarding surface', () => {

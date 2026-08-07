@@ -8,11 +8,30 @@ export type AuthFailureCode =
   | 'PAIRING_LOCAL_ONLY'
   | 'PAIRING_REQUIRED'
   | 'PAIRING_EXPIRED'
+  | 'ACCOUNT_LOCAL_ONLY'
   | 'TLS_REQUIRED'
   | 'ORIGIN_FORBIDDEN'
   | 'CSRF_REQUIRED'
   | 'INVALID_CSRF'
   | 'TOKEN_IN_QUERY_FORBIDDEN';
+
+/** Durable form of a session. Digests only — raw tokens never leave memory. */
+export interface PersistedSession {
+  /** Hex-encoded SHA-256 digest of the access token; doubles as the storage key. */
+  readonly sessionKey: string;
+  /** Hex-encoded SHA-256 digest of the CSRF token. */
+  readonly csrfDigest: string;
+  readonly sessionId: string;
+  readonly expiresAt: number;
+  readonly createdAt: number;
+}
+
+/** Optional durable backing for long-lived sessions (e.g. 30-day password logins). */
+export interface SessionPersistence {
+  load(): readonly PersistedSession[];
+  save(session: PersistedSession): void;
+  drop(sessionKey: string): void;
+}
 
 export interface AuthGateOptions {
   mode: TransportMode;
@@ -21,6 +40,7 @@ export interface AuthGateOptions {
   tokenTtlMs?: number;
   pairingTtlMs?: number;
   allowedOrigins?: readonly string[];
+  sessionPersistence?: SessionPersistence;
   now?: () => number;
   randomBytes?: (size: number) => Uint8Array;
 }
@@ -67,6 +87,7 @@ interface Session {
   tokenHash: Uint8Array;
   csrfHash: Uint8Array;
   expiresAt: number;
+  durable: boolean;
 }
 
 interface PairingCode {
@@ -81,6 +102,7 @@ export class AuthGate {
   private readonly tokenTtlMs: number;
   private readonly pairingTtlMs: number;
   private readonly allowedOrigins: ReadonlySet<string>;
+  private sessionPersistence: SessionPersistence | undefined;
   private readonly now: () => number;
   private readonly randomBytes: (size: number) => Uint8Array;
   private readonly sessions = new Map<string, Session>();
@@ -95,6 +117,28 @@ export class AuthGate {
     this.allowedOrigins = new Set(options.allowedOrigins ?? []);
     this.now = options.now ?? Date.now;
     this.randomBytes = options.randomBytes ?? ((size) => randomBytes(size));
+    if (options.sessionPersistence) this.bindSessionPersistence(options.sessionPersistence);
+  }
+
+  /** Binds durable session storage after construction (the daemon builds its
+   * settings store after the gate) and rehydrates unexpired sessions. */
+  bindSessionPersistence(persistence: SessionPersistence): void {
+    if (this.sessionPersistence) throw new Error('session persistence is already bound');
+    this.sessionPersistence = persistence;
+    const at = this.now();
+    for (const record of persistence.load()) {
+      if (!isPersistedSession(record) || record.expiresAt <= at) {
+        persistence.drop(typeof record?.sessionKey === 'string' ? record.sessionKey : '');
+        continue;
+      }
+      this.sessions.set(record.sessionKey, {
+        sessionId: record.sessionId,
+        tokenHash: Buffer.from(record.sessionKey, 'hex'),
+        csrfHash: Buffer.from(record.csrfDigest, 'hex'),
+        expiresAt: record.expiresAt,
+        durable: true,
+      });
+    }
   }
 
   status(at = this.now()): AuthStatus {
@@ -122,13 +166,14 @@ export class AuthGate {
     if (pairing.expiresAt <= at) throw new AuthGateError('PAIRING_EXPIRED');
     if (typeof code !== 'string' || code.length === 0 || code.length > 64) throw new AuthGateError('PAIRING_REQUIRED');
     if (!safeEqual(pairing.codeHash, digest(code))) throw new AuthGateError('PAIRING_REQUIRED');
-    return this.issueSession(at);
+    return this.issueSession({ at });
   }
 
   revoke(sessionId: string): boolean {
     for (const [key, session] of this.sessions) {
       if (session.sessionId === sessionId) {
         this.sessions.delete(key);
+        if (session.durable) this.sessionPersistence?.drop(key);
         return true;
       }
     }
@@ -149,6 +194,13 @@ export class AuthGate {
       if (this.tlsRequired && !request.secure && !isLoopbackAddress(request.remoteAddress)) return this.fail('TLS_REQUIRED');
       return { allowed: true };
     }
+    if (path === '/api/v1/account/create') {
+      return isLoopbackAddress(request.remoteAddress) ? { allowed: true } : this.fail('ACCOUNT_LOCAL_ONLY');
+    }
+    if (path === '/api/v1/account/login') {
+      if (this.tlsRequired && !request.secure && !isLoopbackAddress(request.remoteAddress)) return this.fail('TLS_REQUIRED');
+      return { allowed: true };
+    }
     if (this.tlsRequired && !request.secure && this.mode !== 'loopback') return this.fail('TLS_REQUIRED');
     if (!this.authRequired) return { allowed: true };
 
@@ -166,17 +218,26 @@ export class AuthGate {
     return { allowed: true, sessionId: session.sessionId };
   }
 
-  private issueSession(at: number): PairingCompleteResult {
+  /** Issues a session. `durable` sessions survive restarts via the configured
+   * persistence (used for 30-day password logins); pairing sessions stay
+   * memory-only. */
+  issueSession(options: { at?: number; ttlMs?: number; durable?: boolean } = {}): PairingCompleteResult {
+    const at = options.at ?? this.now();
     const accessToken = encodeToken(this.randomBytes(32));
     const csrfToken = encodeToken(this.randomBytes(24));
     const sessionId = `session_${encodeToken(this.randomBytes(12))}`;
-    const expiresAt = at + this.tokenTtlMs;
-    this.sessions.set(hex(digest(accessToken)), {
+    const expiresAt = at + (options.ttlMs !== undefined ? positiveLimit(options.ttlMs, 'session ttl') : this.tokenTtlMs);
+    const sessionKey = hex(digest(accessToken));
+    this.sessions.set(sessionKey, {
       sessionId,
       tokenHash: digest(accessToken),
       csrfHash: digest(csrfToken),
       expiresAt,
+      durable: options.durable === true,
     });
+    if (options.durable === true) {
+      this.sessionPersistence?.save({ sessionKey, csrfDigest: hex(digest(csrfToken)), sessionId, expiresAt, createdAt: at });
+    }
     return { accessToken, csrfToken, sessionId, expiresAt };
   }
 
@@ -189,7 +250,11 @@ export class AuthGate {
   }
 
   private purgeExpired(at: number): void {
-    for (const [key, session] of this.sessions) if (session.expiresAt <= at) this.sessions.delete(key);
+    for (const [key, session] of this.sessions) {
+      if (session.expiresAt > at) continue;
+      this.sessions.delete(key);
+      if (session.durable) this.sessionPersistence?.drop(key);
+    }
     if (this.pairingCode?.expiresAt !== undefined && this.pairingCode.expiresAt <= at) this.pairingCode = undefined;
   }
 
@@ -203,6 +268,15 @@ export class AuthGateError extends Error {
     super('Authentication request was rejected.');
     this.name = 'AuthGateError';
   }
+}
+
+function isPersistedSession(value: unknown): value is PersistedSession {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.sessionKey === 'string' && /^[0-9a-f]{64}$/u.test(record.sessionKey)
+    && typeof record.csrfDigest === 'string' && /^[0-9a-f]{64}$/u.test(record.csrfDigest)
+    && typeof record.sessionId === 'string' && record.sessionId.length > 0 && record.sessionId.length <= 128
+    && Number.isSafeInteger(record.expiresAt) && Number.isSafeInteger(record.createdAt);
 }
 
 function positiveLimit(value: number, label: string): number {

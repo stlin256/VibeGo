@@ -5,7 +5,7 @@ export interface HealthResponse {
   service: string;
   version: string;
   transport: { kind: string; tlsRequired: boolean; boundAddresses: readonly string[] };
-  auth: { pairingRequired: boolean };
+  auth: { pairingRequired: boolean; accountCreated?: boolean };
   storage: { kind: string; status: string };
   sandbox: { availableModes: readonly string[]; externalRequiredForUntrusted: boolean };
   approval: { supportedDecisions: readonly string[] };
@@ -393,6 +393,73 @@ export class ApiError extends Error {
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+export const SESSION_COOKIE_NAME = 'vibego.session.v1';
+export const SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+function browserDocument(): Document | undefined {
+  try {
+    return typeof document === 'undefined' ? undefined : document;
+  } catch {
+    return undefined;
+  }
+}
+
+function base64UrlEncode(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+}
+
+function base64UrlDecode(value: string): string {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(normalized + '='.repeat((4 - (normalized.length % 4)) % 4));
+  return new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+}
+
+function parseSessionSnapshot(value: unknown): PairingResult | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.accessToken !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/u.test(record.accessToken)) return undefined;
+  if (typeof record.csrfToken !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/u.test(record.csrfToken)) return undefined;
+  if (typeof record.sessionId !== 'string' || !/^session_[A-Za-z0-9_-]{4,64}$/u.test(record.sessionId)) return undefined;
+  if (typeof record.expiresAt !== 'number' || !Number.isSafeInteger(record.expiresAt)) return undefined;
+  if (record.expiresAt <= Date.now()) return undefined;
+  return { accessToken: record.accessToken, csrfToken: record.csrfToken, sessionId: record.sessionId, expiresAt: record.expiresAt };
+}
+
+/** Persists the daemon session for 30 days so a browser restart stays signed
+ * in. The cookie is intentionally JS-readable: the web client sends the same
+ * values as bearer/CSRF headers, and the daemon re-validates on every call. */
+export function saveSessionCookie(session: PairingResult, doc: Document | undefined = browserDocument()): void {
+  if (!doc) return;
+  try {
+    const value = base64UrlEncode(JSON.stringify(session));
+    if (value.length > 3_500) return;
+    const secure = doc.location?.protocol === 'https:' ? '; Secure' : '';
+    doc.cookie = `${SESSION_COOKIE_NAME}=${value}; Max-Age=${SESSION_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Strict${secure}`;
+  } catch { /* Disabled cookie storage must never block a login. */ }
+}
+
+export function loadSessionCookie(doc: Document | undefined = browserDocument()): PairingResult | undefined {
+  if (!doc) return undefined;
+  try {
+    const prefix = `${SESSION_COOKIE_NAME}=`;
+    const entry = doc.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix));
+    if (!entry) return undefined;
+    return parseSessionSnapshot(JSON.parse(base64UrlDecode(entry.slice(prefix.length))));
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearSessionCookie(doc: Document | undefined = browserDocument()): void {
+  if (!doc) return;
+  try {
+    doc.cookie = `${SESSION_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Strict`;
+  } catch { /* best effort */ }
+}
+
 export class ApiClient {
   /** Invoked when the daemon rejects or the client lacks a session; listeners should return to pairing. */
   onAuthFailure?: () => void;
@@ -403,6 +470,7 @@ export class ApiClient {
   constructor(baseUrl = '', fetcher: FetchLike = (input, init) => fetch(input, init)) {
     this.baseUrl = baseUrl.replace(/\/$/u, '');
     this.fetcher = fetcher;
+    this.session = loadSessionCookie();
   }
 
   hasSession(): boolean {
@@ -411,6 +479,12 @@ export class ApiClient {
 
   clearSession(): void {
     this.session = undefined;
+    clearSessionCookie();
+  }
+
+  private setSession(session: PairingResult): void {
+    this.session = session;
+    saveSessionCookie(session);
   }
 
   async health(): Promise<HealthResponse> {
@@ -707,7 +781,27 @@ export class ApiClient {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ code }),
     }, false);
-    this.session = result;
+    this.setSession(result);
+    return result;
+  }
+
+  async createAccount(password: string): Promise<PairingResult> {
+    const result = await this.request<PairingResult>('/api/v1/account/create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }, false);
+    this.setSession(result);
+    return result;
+  }
+
+  async loginWithPassword(password: string): Promise<PairingResult> {
+    const result = await this.request<PairingResult>('/api/v1/account/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }, false);
+    this.setSession(result);
     return result;
   }
 
@@ -805,6 +899,7 @@ export class ApiClient {
       const code = body.error?.code ?? 'HTTP_ERROR';
       if (code === 'AUTH_REQUIRED' || code === 'INVALID_TOKEN') {
         this.session = undefined;
+        clearSessionCookie();
         this.onAuthFailure?.();
       }
       return new ApiError(response.status, code, body.error?.message ?? 'Request failed.');

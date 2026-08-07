@@ -130,6 +130,7 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .composer-chip:hover { border-color: var(--vibego-text-secondary); color: var(--vibego-text-primary); }
 .composer-chip:focus-within { border-color: var(--vibego-ring-accent); }
 .composer-chip select { min-height: 26px; padding: 0 2px; border: 0; background: transparent; color: var(--vibego-text-primary); font-size: 12px; font-weight: 600; cursor: pointer; }
+.composer-chip select option { background: var(--vibego-bg-surface); color: var(--vibego-text-primary); }
 .empty-state { min-height: 270px; display: grid; place-items: center; align-content: center; text-align: center; }
 .empty-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 14px; border: 1px solid var(--vibego-border-default); border-radius: 14px; color: var(--vibego-signal-cyan); font-size: 25px; }
 /* Legacy inline error banner was replaced by the ui-toast viewport (Spec 42j). */
@@ -720,6 +721,7 @@ body { overflow-x: hidden; }
 .pairing-card h1 { margin: 0; font-size: var(--vibego-text-xl); }
 .pairing-card p { margin: 0; }
 .pairing-manual { display: grid; gap: 8px; text-align: left; }
+.account-form-error { margin: 0; color: var(--vibego-signal-red); font-size: var(--vibego-text-xs); }
 .pairing-manual-row { display: flex; gap: 8px; }
 .pairing-manual-row input { flex: 1; min-width: 0; }
 .pairing-guardrails { margin-top: 8px; font-size: var(--vibego-text-xs); }

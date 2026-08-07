@@ -25,6 +25,8 @@ import { DurableCapabilityProfileSettingsManager } from './capability-profile-se
 import { DurablePermissionProfileSettingsManager } from './permission-profile-settings.js';
 import { ApprovalReviewSettingsManager } from './approval-review-settings.js';
 import { DedicatedReviewerProfilesManager } from './dedicated-reviewer-profiles.js';
+import { DurableAccountManager } from './account-settings.js';
+import { createAuthSessionPersistence } from './auth-session-persistence.js';
 import { type CapabilityProfilePolicy } from '@ready4vibe/policy';
 
 const servers: ReturnType<typeof createDaemonServer>[] = [];
@@ -650,6 +652,49 @@ describe('daemon health server', () => {
     const allowed = await fetch(`${base}/api/v1/runs/run_missing`, { headers: { authorization: `Bearer ${session.accessToken}` } });
     expect(allowed.status).toBe(503);
     expect(await allowed.json()).toMatchObject({ error: { code: 'RUNS_UNAVAILABLE' } });
+  });
+
+  it('creates an account once, logs in with the password and issues durable 30-day sessions', async () => {
+    const settings = new InMemorySettingsStore();
+    const accountManager = new DurableAccountManager({ settings });
+    const authGate = new AuthGate({ mode: 'loopback', authRequired: true });
+    authGate.bindSessionPersistence(createAuthSessionPersistence(settings));
+    const server = createDaemonServer({ authGate, accountManager });
+    servers.push(server);
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}`;
+    const post = (path: string, body: unknown) => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    // Health advertises that no account exists yet; runs stay gated.
+    const healthBefore = await (await fetch(`${base}/health`)).json() as { auth: { pairingRequired: boolean; accountCreated: boolean } };
+    expect(healthBefore.auth).toMatchObject({ pairingRequired: true, accountCreated: false });
+    expect((await fetch(`${base}/api/v1/runs/run_missing`)).status).toBe(401);
+
+    // Password rules are enforced before anything is persisted.
+    expect((await post('/api/v1/account/create', { password: '123' })).status).toBe(400);
+
+    // Create issues a 30-day session; a second create is rejected; health flips.
+    const created = await post('/api/v1/account/create', { password: '1234' });
+    expect(created.status).toBe(200);
+    const createdSession = await created.json() as { accessToken: string; csrfToken: string; expiresAt: number };
+    expect(createdSession.expiresAt - Date.now()).toBeGreaterThan(29 * 24 * 60 * 60 * 1_000);
+    expect((await post('/api/v1/account/create', { password: 'abcd' })).status).toBe(409);
+    const healthAfter = await (await fetch(`${base}/health`)).json() as { auth: { accountCreated: boolean } };
+    expect(healthAfter.auth.accountCreated).toBe(true);
+    expect((await fetch(`${base}/api/v1/runs/run_missing`, { headers: { authorization: `Bearer ${createdSession.accessToken}` } })).status).toBe(503);
+
+    // Wrong password is rejected; the right one logs in with a fresh durable session.
+    const wrong = await post('/api/v1/account/login', { password: '9999' });
+    expect(wrong.status).toBe(401);
+    expect(await wrong.json()).toMatchObject({ error: { code: 'INVALID_CREDENTIALS' } });
+    const login = await post('/api/v1/account/login', { password: '1234' });
+    expect(login.status).toBe(200);
+    const loginSession = await login.json() as { accessToken: string };
+
+    // A restarted gate over the same store still accepts the durable session.
+    const restartedGate = new AuthGate({ mode: 'loopback', authRequired: true });
+    restartedGate.bindSessionPersistence(createAuthSessionPersistence(settings));
+    expect(restartedGate.authorize({ method: 'GET', path: '/api/v1/runs/run_1', remoteAddress: '127.0.0.1', secure: false, authorization: `Bearer ${loginSession.accessToken}` }).allowed).toBe(true);
   });
 
   it('serves and mutates model settings without returning the provider key', async () => {

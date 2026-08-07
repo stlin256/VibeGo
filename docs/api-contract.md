@@ -34,6 +34,8 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 | `GET` | `/runs/:runId/diff` | 获取受限 diff 摘要/分页内容 |
 | `POST` | `/pairing/start` | 仅本机启动一次性配对流程 |
 | `POST` | `/pairing/complete` | 兑换配对码，返回 token（只显示一次） |
+| `POST` | `/account/create` | 仅本机；首次运行创建账号（密码 4-128 字符，仅存 scrypt 散列），签发 30 天持久会话；已有账号返回 409 `ACCOUNT_EXISTS` |
+| `POST` | `/account/login` | 密码登录，签发 30 天持久会话；密码错误返回 401 `INVALID_CREDENTIALS`，无账号返回 404 `ACCOUNT_NOT_FOUND` |
 | `GET` | `/certificates` | 返回证书来源、SAN、指纹、有效期和 TLS 状态（不返回私钥） |
 | `POST` | `/certificates/import` | 仅 loopback 管理端导入用户提供的证书文件路径 |
 | `POST` | `/certificates/rotate` | 轮换 managed/self-signed 或未来 ACME 证书 |
@@ -45,7 +47,9 @@ LAN 模式还要求已配对 Origin/CSRF 校验；Bearer token 不得放入 URL�
 | `POST` | `/usage/rebuild` | 显式重建 usage rollup |
 | `POST` | `/audit/verify` | 显式校验 audit hash-chain |
 
-服务端 health/capability 响应必须包含 `transport.kind`、`transport.tlsRequired`、`transport.boundAddresses`、`auth.pairingRequired`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
+服务端 health/capability 响应必须包含 `transport.kind`、`transport.tlsRequired`、`transport.boundAddresses`、`auth.pairingRequired`、`auth.accountCreated`、`sandbox.availableModes` 和 `approval.supportedDecisions`，但不得返回密钥、完整网卡信息或策略文件原文。
+
+账号会话（`/account/*` 签发）TTL 为 30 天并持久化于 daemon 端（仅存 token 散列），daemon 重启后仍有效；配对会话维持 24 小时内存态。Web 端把会话保存在 `vibego.session.v1` Cookie（`Max-Age=2592000; SameSite=Strict`，HTTPS 时带 `Secure`），请求仍以 `Authorization: Bearer` + `X-CSRF-Token` 头部鉴权。
 
 Usage/Audit 响应统一带 `schemaVersion=ready4vibe_observability_api_v1`、`generatedAt` 和
 `status=ready|degraded|unknown`；历史列表、时间序列和 audit page 均有服务端上限，不返回
