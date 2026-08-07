@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiClient, ApiError, clearSessionCookie, DEFAULT_RUN_PROFILE, loadRunProfile, loadSessionCookie, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, saveSessionCookie, SESSION_COOKIE_NAME, type FetchLike, type PairingResult, type RunProfile, type RunProfileStorage } from './api.js';
+import { ApiClient, ApiError, clampSandboxModeToCapability, clearSessionCookie, DEFAULT_RUN_PROFILE, loadRunProfile, loadSessionCookie, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, saveSessionCookie, SESSION_COOKIE_NAME, type FetchLike, type PairingResult, type RunProfile, type RunProfileStorage } from './api.js';
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
@@ -46,6 +46,33 @@ describe('ApiClient', () => {
     expect(loadRunProfile(failing)).toEqual(DEFAULT_RUN_PROFILE);
     expect(() => saveRunProfile(DEFAULT_RUN_PROFILE, failing)).not.toThrow();
     expect(() => resetRunProfile(failing)).not.toThrow();
+  });
+
+  it('clamps sandbox modes that exceed the effective capability profile', () => {
+    const narrowed = { filesystemMode: 'off', shellMode: 'off' } as const;
+    expect(clampSandboxModeToCapability('workspace-write', narrowed)).toBe('read-only');
+    expect(clampSandboxModeToCapability('external-sandbox', narrowed)).toBe('read-only');
+    expect(clampSandboxModeToCapability('read-only', narrowed)).toBe('read-only');
+    const capable = { filesystemMode: 'workspace-write', shellMode: 'external-sandbox' } as const;
+    expect(clampSandboxModeToCapability('workspace-write', capable)).toBe('workspace-write');
+    expect(clampSandboxModeToCapability('external-sandbox', capable)).toBe('external-sandbox');
+    expect(clampSandboxModeToCapability('workspace-write', undefined)).toBe('workspace-write');
+    expect(clampSandboxModeToCapability('external-sandbox', null)).toBe('external-sandbox');
+  });
+
+  it('loads the run history projection through the authenticated list endpoint', async () => {
+    const calls: Array<{ input: string; init: RequestInit | undefined }> = [];
+    const fetcher: FetchLike = async (input, init) => {
+      calls.push({ input, init });
+      if (input.endsWith('/pairing/complete')) return response({ accessToken: 'access', csrfToken: 'csrf', sessionId: 'session', expiresAt: 2_000 });
+      return response({ runs: [{ runId: 'run-1', status: 'completed', title: 'Say hello', createdAt: '2026-08-07T09:00:00.000Z' }] });
+    };
+    const client = new ApiClient('http://daemon', fetcher);
+    await client.completePairing('PAIR');
+    const history = await client.listRuns();
+    expect(calls[1]?.input).toBe('http://daemon/api/v1/runs?limit=20');
+    expect(calls[1]?.init?.headers).toMatchObject({ Authorization: 'Bearer access' });
+    expect(history.runs[0]?.title).toBe('Say hello');
   });
 
   it('keeps pairing credentials in memory and sends Bearer/CSRF headers', async () => {

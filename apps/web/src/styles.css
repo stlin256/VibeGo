@@ -9,7 +9,7 @@ button { border: 0; border-radius: var(--vibego-radius-sm); min-height: 36px; pa
 button:hover { background: var(--vibego-primary-hover); }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--vibego-ring-accent); outline-offset: 2px; }
 .app-shell { width: min(1440px, 100%); margin: 0 auto; padding: 20px clamp(14px, 3vw, 40px) 48px; }
-.topbar { display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin-bottom: 24px; }
+.topbar { position: relative; z-index: 16; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin-bottom: 24px; }
 .brand-lockup { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
 .brand-mark { display: block; width: 36px; height: 36px; border-radius: var(--vibego-radius-sm); }
 .brand-go { color: var(--vibego-text-link); }
@@ -518,8 +518,10 @@ body { overflow-x: hidden; }
 .rail-settings-button { color: var(--vibego-text-primary); border: 1px solid var(--vibego-border-default); background: transparent; }
 .rail-settings-button:hover { background: var(--vibego-bg-hover); }
 .rail-section-label { margin-top: 12px; color: var(--vibego-text-tertiary); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
-.rail-session { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 8px; border-radius: 8px; color: var(--vibego-text-secondary); font-size: 12px; }
+.rail-session { display: flex; align-items: center; gap: 8px; min-height: 34px; width: 100%; padding: 0 8px; border: 0; border-radius: 8px; color: var(--vibego-text-secondary); background: transparent; font-size: 12px; font-weight: 400; text-align: left; cursor: pointer; }
+.rail-session:hover { color: var(--vibego-text-primary); background: var(--vibego-bg-hover); }
 .rail-session.active { color: var(--vibego-text-primary); background: var(--vibego-bg-hover); }
+.rail-session-title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .session-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--vibego-signal-lime); }
 .muted-dot { background: var(--vibego-border-strong); box-shadow: none; }
 .main-column { min-width: 0; display: block; }

@@ -1329,8 +1329,17 @@ async function handleRequest(
   }
 
   if (pathname === '/api/v1/runs') {
+    if (request.method === 'GET') {
+      if (!options.runManager) {
+        writeJson(response, 503, { error: { code: 'RUNS_UNAVAILABLE', message: 'Run manager is not configured.' } });
+        return;
+      }
+      const requestedLimit = Number(url.searchParams.get('limit') ?? '20');
+      writeJson(response, 200, { runs: await options.runManager.listRunSummaries(requestedLimit) });
+      return;
+    }
     if (request.method !== 'POST') {
-      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET or POST required' } }, { Allow: 'GET, POST' });
       return;
     }
     if (!options.runManager) {

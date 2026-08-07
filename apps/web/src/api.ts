@@ -75,6 +75,18 @@ export function resetRunProfile(storage: RunProfileStorage | undefined = browser
   try { storage?.removeItem(RUN_PROFILE_STORAGE_KEY); } catch { /* best effort */ }
 }
 
+/**
+ * Clamp a composer sandbox selection to what the daemon-resolved effective
+ * capability profile allows, so run creation is never rejected by the
+ * capability gate. `undefined`/`null` capability keeps the selection as-is.
+ */
+export function clampSandboxModeToCapability(mode: RunProfile['sandbox']['mode'], capability: Pick<CapabilityProfile, 'filesystemMode' | 'shellMode'> | null | undefined): RunProfile['sandbox']['mode'] {
+  if (!capability) return mode;
+  if (mode === 'workspace-write' && capability.filesystemMode !== 'workspace-write') return 'read-only';
+  if ((mode === 'external-sandbox' || mode === 'danger-full-access') && capability.shellMode === 'off') return 'read-only';
+  return mode;
+}
+
 function parseRunProfile(value: unknown): RunProfile | undefined {
   if (!isRecord(value)) return undefined;
   try {
@@ -124,6 +136,14 @@ function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Metadata-only history projection; title is daemon-derived from the first user-message line. */
+export interface RunSummary {
+  readonly runId: string;
+  readonly status: string;
+  readonly title: string;
+  readonly createdAt: string;
+}
+
 export interface RunSnapshot {
   version: 1;
   runId: string;
@@ -132,8 +152,7 @@ export interface RunSnapshot {
   capabilitySnapshot?: CapabilityProfileRunSnapshot;
   permissionSnapshot?: PermissionProfileRunSnapshot;
   lastEventSeq: number;
-  output: string;
-  approvals?: readonly ApprovalSummary[];
+  output: string;  approvals?: readonly ApprovalSummary[];
   /** Secret-free reviewer snapshot captured when this run started. */
   approvalReviewerSnapshot?: ApprovalReviewerSnapshot;
   final?: { summary: string; exitReason: string };
@@ -811,6 +830,10 @@ export class ApiClient {
 
   async getRun(runId: string): Promise<RunSnapshot> {
     return this.request(`/api/v1/runs/${encodeURIComponent(runId)}`, { method: 'GET' });
+  }
+
+  async listRuns(limit = 20): Promise<{ runs: RunSummary[] }> {
+    return this.request(`/api/v1/runs?limit=${encodeURIComponent(limit)}`, { method: 'GET' });
   }
 
   async cancel(runId: string): Promise<{ runId: string; status: string }> {

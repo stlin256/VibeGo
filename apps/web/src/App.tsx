@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type StoredEvent } from './api.js';
+import { clampSandboxModeToCapability, DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type RunSummary, type StoredEvent } from './api.js';
 import type { GoalMutationResponse, GoalPreflightResult, GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
 import { ApprovalReviewSettingsCard, ContextRail, ConversationHeader, ConversationShell, PermissionProfileCard, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, SetupWizard, WorkspaceRail } from './components/vibego/index.js';
@@ -26,6 +26,9 @@ export interface AppProps {
   onCancel?: () => void;
   onApprove?: (approvalId: string, decision: 'allow' | 'deny') => void;
   onRetry?: () => void;
+  runHistory?: readonly RunSummary[];
+  onOpenRun?: (runId: string) => void;
+  onNewTask?: () => void;
   locale?: Locale;
   onLocaleChange?: (locale: Locale) => void;
   theme?: Theme;
@@ -111,7 +114,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, sessionReady, run, events = [], error, onDismissError, onCreateAccount, onLogin, onCreateRun, onCancel, onApprove, onRetry, locale = 'en-US', onLocaleChange, theme = 'light', onThemeChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, approvalReviewSettings, approvalReviewSettingsUnavailable = false, onPatchApprovalReviewSettings, onProbeApprovalReview, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, sessionReady, run, events = [], error, onDismissError, onCreateAccount, onLogin, onCreateRun, onCancel, onApprove, onRetry, runHistory, onOpenRun, onNewTask, locale = 'en-US', onLocaleChange, theme = 'light', onThemeChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, approvalReviewSettings, approvalReviewSettingsUnavailable = false, onPatchApprovalReviewSettings, onProbeApprovalReview, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const t = createTranslator(locale);
   const [accountPassword, setAccountPassword] = useState('');
   const [accountPasswordConfirm, setAccountPasswordConfirm] = useState('');
@@ -194,6 +197,16 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
   const [setupActive, setSetupActive] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  /** Brief success toast after any settings save; each save re-triggers it. */
+  const [savedCount, setSavedCount] = useState(0);
+  const [savedVisible, setSavedVisible] = useState(false);
+  const notifySaved = (): void => setSavedCount((count) => count + 1);
+  useEffect(() => {
+    if (savedCount === 0) return;
+    setSavedVisible(true);
+    const timer = window.setTimeout(() => setSavedVisible(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [savedCount]);
   const settingsPanelRef = useRef<HTMLElement | null>(null);
   const settingsTriggerRef = useRef<HTMLElement | null>(null);
   const settingsWasOpen = useRef(false);
@@ -292,6 +305,8 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
   };
   const providerSettingsLoaded = deepSeekSettings !== undefined || modelSettings !== undefined;
   const modelConfigured = deepSeekSettings?.configured === true || modelSettings?.configured === true;
+  /** Daemon-resolved effective capability profile: `undefined` while settings load, `null` when the resolution is blocked. */
+  const effectiveCapabilityProfile = capabilityProfileSettings === undefined ? undefined : capabilityProfileSettings.resolution.status === 'blocked' ? null : capabilityProfileSettings.resolution.effectiveProfile;
   useEffect(() => { if (connected === true && providerSettingsLoaded && !modelConfigured && !setupDismissed) setSetupActive(true); }, [connected, providerSettingsLoaded, modelConfigured, setupDismissed]);
   const setupOpen = connected === true && (setupActive || setupForcedOpen);
   const closeSetup = (): void => { saveSetupDismissed(); setSetupDismissed(true); setSetupForcedOpen(false); setSetupActive(false); };
@@ -308,6 +323,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     try {
       await onConfigureModel?.({ provider: 'openai-compatible', baseUrl: modelBaseUrl, apiKey: modelApiKey, model: profile.model.name });
       setModelApiKey('');
+      notifySaved();
     } catch {
       // The parent renders a safe error; keep the field for an intentional retry.
     }
@@ -326,8 +342,8 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     const updatedAt = new Date().toISOString();
     const transportMode = current.transportMode;
     if (profileId === 'preview') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, modelMode: 'fake', filesystemMode: 'off', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'none', policyRevision: current.policyRevision, requiresAcknowledgement: false, updatedAt };
-    if (profileId === 'advanced-local') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), modelMode: modelSettings?.configured ? 'configured' : 'fake', filesystemMode: 'workspace-write', shellMode: 'host-restricted', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'explicit', policyRevision: current.policyRevision, requiresAcknowledgement: capabilityAcknowledged, updatedAt };
-    if (profileId === 'workspace-coding') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), modelMode: modelSettings?.configured ? 'configured' : 'fake', filesystemMode: 'workspace-write', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'on-request', policyRevision: current.policyRevision, requiresAcknowledgement: false, updatedAt };
+    if (profileId === 'advanced-local') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), modelMode: modelConfigured ? 'configured' : 'fake', filesystemMode: 'workspace-write', shellMode: 'host-restricted', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'explicit', policyRevision: current.policyRevision, requiresAcknowledgement: capabilityAcknowledged, updatedAt };
+    if (profileId === 'workspace-coding') return { schemaVersion: 'ready4vibe_capability_profile_v1', profileId, transportMode, ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), modelMode: modelConfigured ? 'configured' : 'fake', filesystemMode: 'workspace-write', shellMode: 'off', networkMode: 'off', mcpSkillMode: 'off', approvalMode: 'on-request', policyRevision: current.policyRevision, requiresAcknowledgement: false, updatedAt };
     return { ...current, profileId: 'custom', ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}), updatedAt };
   };
   const saveCapabilityProfile = async (): Promise<void> => {
@@ -337,13 +353,13 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     setCapabilityBusy(true);
     try {
       await onPatchCapabilityProfileSettings({ profile: next, expectedRevision: capabilityProfileSettings.currentRevision });
-    } finally { setCapabilityBusy(false); }
+      notifySaved();
+    } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setCapabilityBusy(false); }
   };
   const resetCapabilityProfile = async (): Promise<void> => {
     if (!onResetCapabilityProfileSettings || !capabilityProfileSettings) return;
     setCapabilityBusy(true);
-    try { await onResetCapabilityProfileSettings(capabilityProfileSettings.currentRevision); }
-    finally { setCapabilityBusy(false); }
+    try { await onResetCapabilityProfileSettings(capabilityProfileSettings.currentRevision); notifySaved(); } catch { /* Parent renders a safe error. */ } finally { setCapabilityBusy(false); }
   };
   const submitDeepSeekSettings = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
@@ -353,6 +369,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
       await onConfigureDeepSeek({ endpointProfile: deepSeekEndpointProfile, endpoint: deepSeekEndpoint, model: deepSeekModel, apiKey: deepSeekApiKey, thinkingMode: deepSeekThinking, toolCalling: deepSeekToolCalling, webSearch: deepSeekSearch, reviewer: deepSeekReviewer, ...(deepSeekSettings?.profile?.profileRevision ? { expectedRevision: deepSeekSettings.profile.profileRevision } : {}) });
       setDeepSeekApiKey('');
       updateProfile({ model: { provider: 'deepseek', name: deepSeekModel } });
+      notifySaved();
     } catch { /* parent renders safe error */ }
     finally { setDeepSeekBusy(false); }
   };
@@ -403,7 +420,8 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     setPermissionBusy(true);
     try {
       await onPatchPermissionSettings({ profile: next, expectedRevision: permissionSettings.currentRevision });
-    } finally { setPermissionBusy(false); }
+      notifySaved();
+    } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setPermissionBusy(false); }
   };
   const confirmFullHost = async (): Promise<void> => {
     if (!onConfirmFullHost || !permissionSettings || permissionSettings.settings.profile.profileId !== 'full-host') return;
@@ -423,7 +441,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
   const saveApprovalReviewSettings = async (input: ApprovalReviewSettingsPatchInput): Promise<void> => {
     if (!onPatchApprovalReviewSettings) return;
     setApprovalReviewBusy(true);
-    try { await onPatchApprovalReviewSettings(input); }
+    try { await onPatchApprovalReviewSettings(input); notifySaved(); }
     catch { /* Parent renders a safe error and keeps the bounded draft. */ }
     finally { setApprovalReviewBusy(false); }
   };
@@ -441,6 +459,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
       const selectedMode: AgentMemorySettingsMode = memoryEnabled && memoryMode === 'off' ? 'memory-core' : memoryMode;
       if (selectedMode !== memoryMode) setMemoryMode(selectedMode);
       await onPatchAgentMemorySettings({ enabled: memoryEnabled, mode: selectedMode, teamId: memoryTeamId, agentId: memoryAgentId, userId: memoryUserId, upstreamRepo: memoryUpstreamRepo, upstreamRef: memoryUpstreamRef, upstreamRefLocked: memoryUpstreamRefLocked, autoUpdate: memoryAutoUpdate, updateIntervalMinutes: memoryIntervalMinutes, fallbackToDirectProvider: memoryFallback });
+      notifySaved();
     } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setMemoryBusy(false); }
   };
   const runAgentMemoryAction = async (action?: () => Promise<void> | void): Promise<void> => {
@@ -453,6 +472,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     setKnowledgeBusy(true);
     try {
       await onPatchAgentMemoryKnowledgeSettings({ enabled: knowledgeEnabled, knowledgeId, autoRetrieve: knowledgeAutoRetrieve, maxItems: knowledgeMaxItems, maxBytes: knowledgeMaxBytes, timeoutMs: knowledgeTimeoutMs });
+      notifySaved();
     } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setKnowledgeBusy(false); }
   };
   const probeAgentMemoryKnowledge = async (): Promise<void> => {
@@ -466,6 +486,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     try {
       const capabilityAllowlist = mcpCapabilityAllowlist.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 128);
       await onPatchMcpSettings({ enabled: mcpEnabled, serverId: mcpServerId, serverVersion: mcpServerVersion, transport: mcpTransport, endpointLabel: mcpEndpointLabel, manifestRevision: mcpManifestRevision, capabilityAllowlist });
+      notifySaved();
     } catch { /* Parent renders a safe error and keeps the draft for retry. */ } finally { setMcpBusy(false); }
   };
   const probeMcp = async (): Promise<void> => {
@@ -497,6 +518,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
   const startNewTask = (): void => {
     setMessage('');
     setContextOpen(false);
+    onNewTask?.();
     if (typeof window !== 'undefined') window.requestAnimationFrame(() => composerRef.current?.focus());
   };
   useEffect(() => {
@@ -570,6 +592,12 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     else if (mode === 'workspace-write') updateProfile({ sandbox: { mode, network, writableRoots: 'writableRoots' in profile.sandbox && profile.sandbox.writableRoots.length > 0 ? profile.sandbox.writableRoots : ['.'] } });
     else updateProfile({ sandbox: { mode, network, provider: 'provider' in profile.sandbox ? profile.sandbox.provider : 'docker', ...('writableRoots' in profile.sandbox && profile.sandbox.writableRoots ? { writableRoots: profile.sandbox.writableRoots } : {}) } });
   };
+  // A persisted or stale composer selection that exceeds the effective capability
+  // profile would be blocked at run creation; clamp it to the always-available mode.
+  useEffect(() => {
+    const clamped = clampSandboxModeToCapability(profile.sandbox.mode, effectiveCapabilityProfile);
+    if (clamped !== profile.sandbox.mode) updateSandboxMode(clamped);
+  }, [effectiveCapabilityProfile, profile.sandbox.mode]);
   const openSettings = (target: HTMLElement): void => {
     settingsTriggerRef.current = target;
     setSettingsOpen(true);
@@ -580,7 +608,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
       <ConversationHeader connected={connected} contextOpen={contextOpen} settingsOpen={settingsOpen} locale={locale} theme={theme} onToggleTheme={() => onThemeChange?.(cycleTheme(theme))} copy={{ brandName: t('brand.name'), brandPrefix: 'Vibe', brandSuffix: 'Go', newTask: t('nav.newTask'), hideDetails: t('nav.hideDetails'), showDetails: t('nav.showDetails'), settings: t('nav.settings'), localeLabel: t('locale.label'), localeEnglish: t('locale.english'), localeChinese: t('locale.chinese'), themeToggle: t('theme.toggle'), themeLight: t('theme.light'), themeDark: t('theme.dark'), connected: t('connection.connected'), awaitingPairing: t('connection.awaitingPairing') }} onNewTask={startNewTask} onToggleContext={() => setContextOpen((current) => !current)} onOpenSettings={openSettings} onLocaleChange={onLocaleChange} />
       <div className="sr-only" aria-live="polite" aria-label={t('accessibility.statusLabel')}>{error ?? (connected ? t('connection.connected') : t('connection.awaitingPairing'))}</div>
       <section className="content-grid">
-        <WorkspaceRail workspaceLabel={workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId} settingsOpen={settingsOpen} copy={{ navigationLabel: t('workspace.navigationLabel'), newTask: t('nav.newTask'), recent: t('workspace.recent'), currentTask: t('nav.currentTask'), settings: t('nav.settings') }} onNewTask={startNewTask} onOpenSettings={openSettings} />
+        <WorkspaceRail workspaceLabel={workspaces?.workspaces.find((workspace) => workspace.id === profile.workspaceId)?.label ?? profile.workspaceId} settingsOpen={settingsOpen} copy={{ navigationLabel: t('workspace.navigationLabel'), newTask: t('nav.newTask'), recent: t('workspace.recent'), currentTask: t('nav.currentTask'), settings: t('nav.settings') }} onNewTask={startNewTask} onOpenSettings={openSettings} history={runHistory ?? []} activeRunId={run?.runId} {...(onOpenRun ? { onOpenRun } : {})} />
         <aside className="sidebar" aria-label={t('accessibility.sidebarLabel')}>
           <SettingsSheet open={settingsOpen} panelRef={settingsPanelRef} copy={{ eyebrow: t('settings.eyebrow'), title: t('settings.title'), description: t('settings.description'), close: t('settings.close') }} onClose={() => setSettingsOpen(false)}>
             <SettingsTabs ariaLabel={t('settings.tabsAriaLabel')} tabs={[{ id: 'run', label: t('settings.tabRun') }, { id: 'tools', label: t('settings.tabTools') }, { id: 'access', label: t('settings.tabAccess') }]} activeTab={settingsTab} onTabChange={(tabId) => { if (tabId === 'run' || tabId === 'tools' || tabId === 'access') setSettingsTab(tabId); }}>
@@ -829,7 +857,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
         </aside>
         <section className="main-column">
           {connected && providerSettingsLoaded && !modelConfigured && !setupOpen && <div className="setup-banner" role="status"><span>{t('setup.bannerText')}</span><Button variant="outline" onClick={() => setSetupForcedOpen(true)}>{t('setup.bannerAction')}</Button></div>}
-          {error && <ToastViewport><Toast variant="error" title={error} {...(onDismissError ? { onDismiss: onDismissError } : {})} /></ToastViewport>}
+          {(error || savedVisible) && <ToastViewport>{savedVisible && <Toast variant="success" title={t('settings.saved')} onDismiss={() => setSavedVisible(false)} />}{error && <Toast variant="error" title={error} {...(onDismissError ? { onDismiss: onDismissError } : {})} />}</ToastViewport>}
           {connected ? <ConversationShell run={run} events={events} message={message} profile={profile} composerRef={composerRef} copy={{ title: t('conversation.title'), hint: t('conversation.hint'), newMessage: t('conversation.newMessage'), inputLabel: t('conversation.inputLabel'), inputPlaceholder: t('conversation.inputPlaceholder'), startRun: t('conversation.startRun'), readyTitle: t('conversation.readyTitle'), readyDescription: t('conversation.readyDescription'), untrustedPolicy: t('conversation.untrustedPolicy'), trustedPolicy: t('conversation.trustedPolicy'), conversationEyebrow: t('shell.conversationEyebrow'), conversationStream: t('shell.conversationStream'), conversationTimeline: t('shell.conversationTimeline'), runConsole: t('shell.runConsole'), waitingOutput: t('shell.waitingOutput'), runDetails: t('shell.runDetails'), cancelRun: t('shell.cancelRun'), timeline: t('shell.timeline'), metricQueue: t('shell.queue'), metricActive: t('shell.active'), metricLease: t('shell.lease'), metricEvents: t('shell.events'), recoveryEyebrow: t('recovery.eyebrow'), recoveryTitle: t('recovery.title'), recoveryDescription: t('recovery.description'), recoveryAction: t('recovery.action'), approvalEyebrow: t('approval.eyebrow'), approvalMeta: t('approval.meta'), approvalSandboxLabel: t('approval.sandboxLabel'), approvalNetworkLabel: t('approval.networkLabel'), approvalImageLabel: t('approval.imageLabel'), approvalAllowOnce: t('approval.allowOnce'), approvalAllowAriaLabel: t('approval.allowAriaLabel'), approvalDeny: t('approval.deny'), approvalSessionNote: t('approval.sessionNote'), reviewReviewedLabel: t('approval.review.reviewed.label'), reviewAskedLabel: t('approval.review.asked.label'), reviewDeniedLabel: t('approval.review.denied.label'), reviewUnavailableLabel: t('approval.review.unavailable.label'), reviewReviewedDescription: t('approval.review.reviewed.description'), reviewAskedDescription: t('approval.review.asked.description'), reviewDeniedDescription: t('approval.review.denied.description'), reviewUnavailableDescription: t('approval.review.unavailable.description'), snapshotEyebrow: t('snapshot.eyebrow'), snapshotTitle: t('snapshot.title'), snapshotAriaLabel: t('snapshot.ariaLabel'), snapshotRequested: t('snapshot.requested'), snapshotEffective: t('snapshot.effective'), snapshotProfileRevision: t('snapshot.profileRevision'), snapshotPolicyRevision: t('snapshot.policyRevision'), snapshotScopeLabel: t('snapshot.scopeLabel'), snapshotBlocked: t('snapshot.blocked'), snapshotGrantExpiry: t('snapshot.grantExpiry'), snapshotActive: t('snapshot.active'), snapshotBlockedChip: t('snapshot.blockedChip'), reviewerEyebrow: t('reviewer.eyebrow'), reviewerOff: t('reviewer.off'), reviewerFrozen: t('reviewer.frozen'), quickApproval: t('composer.approval'), quickSandbox: t('composer.sandbox'), quickModel: t('composer.model'), approvalOnRequest: t('composer.approvalOnRequest'), approvalUntrusted: t('composer.approvalUntrusted'), approvalNever: t('composer.approvalNever'), sandboxReadOnly: t('composer.sandboxReadOnly'), sandboxWorkspaceWrite: t('composer.sandboxWorkspaceWrite'), sandboxExternal: t('composer.sandboxExternal') }} onMessageChange={setMessage} onSubmit={submitRun} onProfileChange={updateProfile} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} {...(capabilityProfileSettings ? { capabilityProfile: capabilityProfileSettings.resolution.effectiveProfile } : {})} /> : <section className="pairing-stage">
             <div className="panel pairing-card">
               <img className="brand-mark pairing-logo" src="/vibego-mark.svg" alt={t('brand.name')} />

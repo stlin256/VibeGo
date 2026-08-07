@@ -516,6 +516,42 @@ describe('daemon health server', () => {
     expect(resumedIds.every((id) => id > after)).toBe(true);
   });
 
+  it('lists newest-first run history with derived titles and a bounded limit', async () => {
+    const { server } = makeRunServer(new FakeModelProvider({ events: [
+      { type: 'text-delta', text: 'hello' },
+      { type: 'completed', finishReason: 'stop' },
+    ] }));
+    const port = await listen(server);
+    const base = `http://127.0.0.1:${port}`;
+    const longMessage = `refactor the approval sandbox flow and keep every existing behavior intact ${'detail '.repeat(12)}`;
+    const messages = ['first task', longMessage];
+    for (const [index, userMessage] of messages.entries()) {
+      const created = await fetch(`${base}/api/v1/runs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...runConfig(), userMessage, clientRequestId: `client-history-${index}` }),
+      });
+      expect(created.status).toBe(202);
+    }
+    let runs: Array<{ runId: string; status: string; title: string; createdAt: string }> = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const listed = await fetch(`${base}/api/v1/runs?limit=10`);
+      expect(listed.status).toBe(200);
+      runs = ((await listed.json()) as { runs: typeof runs }).runs;
+      if (runs.length === 2 && runs.every((run) => run.status === 'completed')) break;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(runs.length).toBe(2);
+    expect(runs.every((run) => run.status === 'completed')).toBe(true);
+    expect(runs[1]?.title).toBe('first task');
+    expect(runs[0]?.title.endsWith('…')).toBe(true);
+    expect(runs[0]?.title.length).toBeLessThanOrEqual(48);
+    expect(runs.every((run) => !run.title.includes('\n'))).toBe(true);
+    const bounded = await fetch(`${base}/api/v1/runs?limit=1`);
+    const boundedBody = await bounded.json() as { runs: unknown[] };
+    expect(boundedBody.runs.length).toBe(1);
+  });
+
   it('serves the independent bounded approval-review event projection', async () => {
     const store = new InMemoryApprovalReviewEventStore();
     await store.append({

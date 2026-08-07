@@ -12,4 +12,17 @@ describe('WorkspaceRail', () => {
     expect(html).toContain('aria-controls="settings-drawer"');
     expect(html).not.toMatch(/C:\\Users|api[_-]?key|Authorization/iu);
   });
+
+  it('renders the run history with titles, active highlight and terminal dots', () => {
+    const history = [
+      { runId: 'run-2', status: 'executing', title: 'Fix the login flow', createdAt: '2026-08-07T10:00:00.000Z' },
+      { runId: 'run-1', status: 'completed', title: 'Say hello', createdAt: '2026-08-07T09:00:00.000Z' },
+    ] as const;
+    const html = renderToStaticMarkup(<WorkspaceRail workspaceLabel="Project A" settingsOpen={false} copy={{ navigationLabel: 'Workspace navigation', newTask: 'New task', recent: 'RECENT', currentTask: 'Current task', settings: 'Settings' }} onNewTask={() => undefined} onOpenSettings={() => undefined} history={history} activeRunId="run-2" onOpenRun={() => undefined} />);
+    expect(html).toContain('Fix the login flow');
+    expect(html).toContain('Say hello');
+    expect(html).toContain('rail-session active');
+    expect(html).toContain('session-dot muted-dot');
+    expect(html).not.toContain('Current task');
+  });
 });

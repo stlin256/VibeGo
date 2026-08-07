@@ -226,6 +226,7 @@ export type MessageKey =
   | 'settings.option.off'
   | 'settings.option.restricted'
   | 'settings.saving'
+  | 'settings.saved'
   | 'settings.probe'
   | 'settings.changesApplyNewRuns'
   | 'settings.grid.status'
@@ -706,6 +707,7 @@ const EN_US: Catalog = {
   'settings.option.off': 'Off',
   'settings.option.restricted': 'Restricted',
   'settings.saving': 'Saving…',
+  'settings.saved': 'Saved',
   'settings.probe': 'Probe',
   'settings.changesApplyNewRuns': 'Changes apply to new runs only.',
   'settings.grid.status': 'Status',
@@ -1183,6 +1185,7 @@ const ZH_CN: Catalog = {
   'settings.option.off': '关闭',
   'settings.option.restricted': '受限',
   'settings.saving': '保存中…',
+  'settings.saved': '已保存',
   'settings.probe': '探测',
   'settings.changesApplyNewRuns': '更改仅对新运行生效。',
   'settings.grid.status': '状态',

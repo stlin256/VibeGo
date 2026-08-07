@@ -102,6 +102,15 @@ export interface RunStartOptions {
   readonly permissionSnapshot?: PermissionProfileRunSnapshot;
 }
 
+/** Metadata-only history projection for the run list; the title is derived
+ * from the first user message line without any model call. */
+export interface RunSummary {
+  readonly runId: string;
+  readonly status: RunStatus;
+  readonly title: string;
+  readonly createdAt: string;
+}
+
 export class RunManagerError extends Error {
   constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID' | 'PERMISSION_PROFILE_BLOCKED' | 'PERMISSION_PROFILE_INVALID' | 'RUN_ID_CONFLICT', message: string) {
     super(message);
@@ -376,6 +385,23 @@ export class RunManager {
    * deliberately metadata-only: no approval, tool input, or execution state is
    * restored and no unknown write is retried automatically.
    */
+  /**
+   * Newest-first, metadata-only projection for the history rail. Titles are
+   * derived from the first user-message line; no model call is made.
+   */
+  async listRunSummaries(limit = 20): Promise<readonly RunSummary[]> {
+    const bounded = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 20;
+    const summaries: RunSummary[] = [];
+    for (const runId of this.eventStore.listRunIds().slice(-bounded).reverse()) {
+      const events = await this.eventStore.read(runId);
+      const created = events.find((event) => event.type === 'run.created');
+      const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
+      if (!created || !config) continue;
+      summaries.push({ runId, status: latestRunStatus(events), title: runTitleFromMessage(config.userMessage), createdAt: created.at });
+    }
+    return summaries;
+  }
+
   async recoverAfterRestart(): Promise<{ marked: number; skipped: number }> {
     let marked = 0;
     let skipped = 0;
@@ -747,6 +773,16 @@ function latestRunStatus(events: readonly StoredEvent[]): RunStatus {
     if (event.type === 'run.needs_recovery') status = 'needs-recovery';
   }
   return status;
+}
+
+const RUN_TITLE_MAX_CHARS = 48;
+
+function runTitleFromMessage(userMessage: string): string {
+  const firstLine = userMessage.split('\n').map((line) => line.trim()).find((line) => line.length > 0) ?? '';
+  const compact = firstLine.replace(/\s+/gu, ' ');
+  if (compact.length === 0) return 'Untitled run';
+  if (compact.length <= RUN_TITLE_MAX_CHARS) return compact;
+  return `${compact.slice(0, RUN_TITLE_MAX_CHARS - 1)}…`;
 }
 
 const MEMORY_RECALL_MAX_ITEMS = 8;
