@@ -1,5 +1,5 @@
-import type { FormEvent, JSX, RefObject } from 'react';
-import type { PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
+import type { FormEvent, JSX, KeyboardEvent, RefObject } from 'react';
+import type { CapabilityProfile, PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
 import { Button, Textarea } from '../ui/index.js';
 import { ApprovalCard, type ApprovalReviewPresentation } from './ApprovalCard.js';
 import { RecoveryCard } from './RecoveryCard.js';
@@ -87,14 +87,32 @@ export interface ConversationShellProps {
   readonly onCancel?: (() => void) | undefined;
   readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined;
   readonly onRetry?: (() => void) | undefined;
+  /** Daemon-resolved effective capability profile; when provided, composer
+   * shortcuts that exceed it are disabled so a run cannot be blocked by the
+   * capability gate. `undefined` keeps every option enabled (settings not
+   * loaded yet); `null` means the resolution is blocked. */
+  readonly capabilityProfile?: CapabilityProfile | null | undefined;
 }
 
 const QUICK_MODEL_PRESETS = ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'] as const;
 
+/** Enter submits the composer; Shift+Enter and IME composition insert a newline. */
+export function isComposerSubmitShortcut(event: { readonly key: string; readonly shiftKey: boolean; readonly isComposing?: boolean }): boolean {
+  return event.key === 'Enter' && !event.shiftKey && event.isComposing !== true;
+}
+
+function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+  if (!isComposerSubmitShortcut({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) return;
+  event.preventDefault();
+  event.currentTarget.form?.requestSubmit();
+}
+
 /** Conversation-first surface; all authority remains in the App callbacks. */
-export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onProfileChange, onCancel, onApprove, onRetry }: ConversationShellProps): JSX.Element {
+export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onProfileChange, onCancel, onApprove, onRetry, capabilityProfile }: ConversationShellProps): JSX.Element {
   const approval = typeof profile.approval === 'string' ? profile.approval : 'on-request';
   const sandboxMode = profile.sandbox.mode;
+  const workspaceWriteEnabled = capabilityProfile === undefined || capabilityProfile?.filesystemMode === 'workspace-write';
+  const externalSandboxEnabled = capabilityProfile === undefined || (capabilityProfile !== null && capabilityProfile.shellMode !== 'off');
   const modelOptions = QUICK_MODEL_PRESETS.includes(profile.model.name as (typeof QUICK_MODEL_PRESETS)[number]) ? QUICK_MODEL_PRESETS : [...QUICK_MODEL_PRESETS, profile.model.name];
   const updateSandboxMode = (mode: RunProfile['sandbox']['mode']): void => {
     if (!onProfileChange) return;
@@ -110,11 +128,11 @@ export function ConversationShell({ run, events, message, profile, composerRef, 
       </section>
       <section className="panel composer-panel">
         <form onSubmit={onSubmit}>
-          <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} placeholder={copy.inputPlaceholder} rows={2} />
+          <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder={copy.inputPlaceholder} rows={2} />
           <div className="composer-footer">
             {onProfileChange && <div className="composer-tools">
               <label className="composer-chip"><span>{copy.quickApproval}</span><select aria-label={copy.quickApproval} value={approval} onChange={(event) => onProfileChange({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">{copy.approvalOnRequest}</option><option value="untrusted">{copy.approvalUntrusted}</option><option value="never">{copy.approvalNever}</option></select></label>
-              <label className="composer-chip"><span>{copy.quickSandbox}</span><select aria-label={copy.quickSandbox} value={sandboxMode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">{copy.sandboxReadOnly}</option><option value="workspace-write">{copy.sandboxWorkspaceWrite}</option><option value="external-sandbox">{copy.sandboxExternal}</option></select></label>
+              <label className="composer-chip"><span>{copy.quickSandbox}</span><select aria-label={copy.quickSandbox} value={sandboxMode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">{copy.sandboxReadOnly}</option><option value="workspace-write" disabled={!workspaceWriteEnabled}>{copy.sandboxWorkspaceWrite}</option><option value="external-sandbox" disabled={!externalSandboxEnabled}>{copy.sandboxExternal}</option></select></label>
               <label className="composer-chip"><span>{copy.quickModel}</span><select aria-label={copy.quickModel} value={profile.model.name} onChange={(event) => onProfileChange({ model: { ...profile.model, name: event.target.value } })}>{modelOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
             </div>}
             <Button type="submit">{copy.startRun}</Button>

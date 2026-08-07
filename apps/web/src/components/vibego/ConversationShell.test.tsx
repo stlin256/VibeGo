@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RUN_PROFILE, type RunSnapshot } from '../../api.js';
-import { ConversationShell, type ConversationCopy } from './ConversationShell.js';
+import { DEFAULT_RUN_PROFILE, type CapabilityProfile, type RunSnapshot } from '../../api.js';
+import { ConversationShell, isComposerSubmitShortcut, type ConversationCopy } from './ConversationShell.js';
 
 const copy: ConversationCopy = {
   title: 'Conversation',
@@ -86,6 +86,33 @@ function runFixture(status: RunSnapshot['status'] = 'executing'): RunSnapshot {
   };
 }
 
+function capabilityProfileFixture(overrides: Partial<CapabilityProfile> = {}): CapabilityProfile {
+  return {
+    schemaVersion: 'ready4vibe_capability_profile_v1',
+    profileId: 'preview',
+    transportMode: 'loopback',
+    modelMode: 'fake',
+    filesystemMode: 'off',
+    shellMode: 'off',
+    networkMode: 'off',
+    mcpSkillMode: 'off',
+    approvalMode: 'none',
+    policyRevision: 'policy-1',
+    requiresAcknowledgement: false,
+    updatedAt: '2026-08-05T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('isComposerSubmitShortcut', () => {
+  it('submits on Enter and keeps newline behavior for Shift+Enter and IME composition', () => {
+    expect(isComposerSubmitShortcut({ key: 'Enter', shiftKey: false })).toBe(true);
+    expect(isComposerSubmitShortcut({ key: 'Enter', shiftKey: true })).toBe(false);
+    expect(isComposerSubmitShortcut({ key: 'Enter', shiftKey: false, isComposing: true })).toBe(false);
+    expect(isComposerSubmitShortcut({ key: 'a', shiftKey: false })).toBe(false);
+  });
+});
+
 describe('ConversationShell', () => {
   it('renders the empty conversation and composer through typed props', () => {
     const html = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} />);
@@ -109,6 +136,19 @@ describe('ConversationShell', () => {
     expect(html).toContain('deepseek-v4-flash');
     const custom = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={{ ...DEFAULT_RUN_PROFILE, model: { provider: 'openai-compatible', name: 'my-custom-model' } }} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onProfileChange={() => undefined} />);
     expect(custom).toContain('my-custom-model');
+  });
+
+  it('disables sandbox shortcuts that exceed the effective capability profile', () => {
+    const restricted = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onProfileChange={() => undefined} capabilityProfile={capabilityProfileFixture()} />);
+    expect(restricted).toContain('value="read-only"');
+    expect(restricted).toContain('value="workspace-write" disabled=""');
+    expect(restricted).toContain('value="external-sandbox" disabled=""');
+
+    const blocked = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onProfileChange={() => undefined} capabilityProfile={null} />);
+    expect(blocked).toContain('value="workspace-write" disabled=""');
+
+    const writable = renderToStaticMarkup(<ConversationShell run={undefined} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onProfileChange={() => undefined} capabilityProfile={capabilityProfileFixture({ filesystemMode: 'workspace-write', shellMode: 'host-restricted' })} />);
+    expect(writable).not.toContain('disabled=""');
   });
 
   it('preserves recovery and approval states without exposing paths or credentials', () => {
