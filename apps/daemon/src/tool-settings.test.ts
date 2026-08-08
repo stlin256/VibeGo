@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { InMemorySettingsStore } from '@ready4vibe/storage';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
 
@@ -32,6 +33,22 @@ describe('daemon filesystem tool settings', () => {
       expect(manager.runtimeForRun()).toBeDefined();
       manager.setFilesystemEnabled(false);
       expect(manager.runtimeForRun()).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('persists the filesystem toggle across restarts and fails closed on malformed entries', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-daemon-tools-'));
+    try {
+      const store = new InMemorySettingsStore();
+      const first = new InMemoryToolSettingsManager(root, store);
+      first.setFilesystemEnabled(true);
+      const restarted = new InMemoryToolSettingsManager(root, store);
+      expect(restarted.status()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+      expect(restarted.runtimeForRun()).toBeDefined();
+      store.set('tools', 'v1', { schemaVersion: 'ready4vibe_tool_settings_v1', filesystemEnabled: 'yes' });
+      expect(new InMemoryToolSettingsManager(root, store).status().filesystemEnabled).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

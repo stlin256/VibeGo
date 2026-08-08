@@ -23,6 +23,10 @@ import {
 import { DeepSeekProvider, probeDeepSeek, type FetchImplementation } from '@ready4vibe/model-deepseek';
 import { OpenAICompatibleProvider, probeOpenAICompatibleModels, type ProbeFetchImplementation } from '@ready4vibe/model-openai';
 import type { SettingsStore } from '@ready4vibe/storage';
+import { FileSecretStore, SecretStoreError, type SecretStore } from './secret-store.js';
+
+export const DEEPSEEK_SECRET_NAME = 'model.deepseek.api-key';
+export const MODEL_SECRET_NAME = 'model.openai-compatible.api-key';
 
 export const MODEL_SETTINGS_NAMESPACE = 'model';
 export const MODEL_SETTINGS_KEY = 'profile';
@@ -138,28 +142,45 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
   private deepSeekLastProbe: DeepSeekProbeResult | undefined;
   private deepSeekApiKey: string | undefined;
   private deepSeekRevision = 0;
+  private readonly secretStore: SecretStore | undefined;
 
-  constructor(env: NodeJS.ProcessEnv = process.env, clock: () => Date = () => new Date(), probeFetchImpl?: ProbeFetchImplementation, settings?: SettingsStore) {
+  constructor(env: NodeJS.ProcessEnv = process.env, clock: () => Date = () => new Date(), probeFetchImpl?: ProbeFetchImplementation, settings?: SettingsStore, secretStore?: SecretStore) {
     this.settings = settings;
+    this.secretStore = secretStore;
     this.clock = clock;
     const environmentBinding = env.READY4VIBE_MODEL_PROVIDER === 'deepseek' ? readDeepSeekEnvironmentBinding(env) : undefined;
     const environmentProvider = environmentBinding?.provider ?? createModelProvider(env);
     const hasEnvironmentCredential = Boolean(env.READY4VIBE_MODEL_API_KEY ?? env.READY4VIBE_DEEPSEEK_API_KEY);
     const persistedDeepSeekProfile = !hasEnvironmentCredential ? loadDeepSeekProfile(settings) : undefined;
     const persistedProfile = !hasEnvironmentCredential && !persistedDeepSeekProfile ? loadDurableProfile(settings) : undefined;
-    const provider = persistedDeepSeekProfile || persistedProfile ? createUnconfiguredProvider() : environmentProvider;
+    // A durable profile plus its encrypted credential restores a ready provider
+    // across restarts; without the credential it degrades to "required".
+    const restoredDeepSeek = persistedDeepSeekProfile && secretStore
+      ? restoreDeepSeekBinding(persistedDeepSeekProfile, secretStore)
+      : undefined;
+    const restoredModelKey = !restoredDeepSeek && persistedProfile && secretStore
+      ? secretStore.get(MODEL_SECRET_NAME)
+      : undefined;
+    const restoredModelProvider = restoredModelKey && persistedProfile
+      ? new OpenAICompatibleProvider({ id: persistedProfile.providerId, baseUrl: persistedProfile.baseUrl, apiKey: restoredModelKey })
+      : undefined;
+    const provider = restoredDeepSeek?.provider ?? restoredModelProvider ?? (persistedDeepSeekProfile || persistedProfile ? createUnconfiguredProvider() : environmentProvider);
     this.provider = new SwitchingModelProvider(provider);
-    this.currentStatus = persistedDeepSeekProfile
-      ? statusFromDeepSeekProfile(persistedDeepSeekProfile)
-      : persistedProfile
-        ? statusFromDurableProfile(persistedProfile)
-        : statusFromEnvironment(env, provider, environmentBinding);
-    this.currentApiKey = env.READY4VIBE_MODEL_API_KEY ?? env.READY4VIBE_DEEPSEEK_API_KEY;
+    this.currentStatus = restoredDeepSeek
+      ? statusFromDeepSeekConfig(restoredDeepSeek.config, 'durable-profile', true)
+      : persistedDeepSeekProfile
+        ? statusFromDeepSeekProfile(persistedDeepSeekProfile)
+        : persistedProfile
+          ? restoredModelProvider
+            ? { configured: true, providerId: persistedProfile.providerId, baseUrl: persistedProfile.baseUrl, modelName: persistedProfile.modelName, source: 'durable-profile', credentialState: 'available' }
+            : statusFromDurableProfile(persistedProfile)
+          : statusFromEnvironment(env, provider, environmentBinding);
+    this.currentApiKey = env.READY4VIBE_MODEL_API_KEY ?? env.READY4VIBE_DEEPSEEK_API_KEY ?? restoredDeepSeek?.apiKey ?? restoredModelKey;
     this.currentModelName = env.READY4VIBE_MODEL_NAME ?? persistedDeepSeekProfile?.model ?? persistedProfile?.modelName ?? null;
-    this.deepSeekEnvironment = persistedDeepSeekProfile ? undefined : environmentBinding;
-    this.deepSeekConfig = environmentBinding?.config ?? (persistedDeepSeekProfile ? configFromDeepSeekProfile(persistedDeepSeekProfile) : undefined);
+    this.deepSeekEnvironment = restoredDeepSeek ?? (persistedDeepSeekProfile ? undefined : environmentBinding);
+    this.deepSeekConfig = restoredDeepSeek?.config ?? environmentBinding?.config ?? (persistedDeepSeekProfile ? configFromDeepSeekProfile(persistedDeepSeekProfile) : undefined);
     this.deepSeekProfile = persistedDeepSeekProfile;
-    this.deepSeekApiKey = environmentBinding?.apiKey;
+    this.deepSeekApiKey = restoredDeepSeek?.apiKey ?? environmentBinding?.apiKey;
     this.deepSeekRevision = persistedDeepSeekProfile ? profileRevisionNumber(persistedDeepSeekProfile.profileRevision) : environmentBinding ? profileRevisionNumber(environmentBinding.config.revision) : 0;
     this.revision = persistedProfile ? profileRevisionNumber(persistedProfile.profileRevision) : 0;
     this.probeFetchImpl = probeFetchImpl;
@@ -230,6 +251,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     const profile = profileFromDeepSeekConfig(config, `deepseek-settings-${nextRevision}`, config.updatedAt);
     persistDeepSeekProfile(this.settings, profile);
     deleteDurableProfile(this.settings);
+    persistSecret(this.secretStore, DEEPSEEK_SECRET_NAME, normalized.apiKey);
+    deleteSecret(this.secretStore, MODEL_SECRET_NAME);
     this.provider.replace(nextProvider);
     this.deepSeekConfig = config;
     this.deepSeekProfile = profile;
@@ -248,6 +271,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
   clearDeepSeek(): DeepSeekSettingsStatus {
     if (this.currentStatus.source === 'environment' && this.deepSeekEnvironment) return this.deepSeekStatus();
     deleteDeepSeekProfile(this.settings);
+    deleteSecret(this.secretStore, DEEPSEEK_SECRET_NAME);
     this.deepSeekConfig = undefined;
     this.deepSeekProfile = undefined;
     this.deepSeekCapability = undefined;
@@ -287,6 +311,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     const profile = createModelSettingsProfile(normalized, nextRevision, this.clock);
     persistDurableProfile(this.settings, profile);
     deleteDeepSeekProfile(this.settings);
+    persistSecret(this.secretStore, MODEL_SECRET_NAME, normalized.apiKey);
+    deleteSecret(this.secretStore, DEEPSEEK_SECRET_NAME);
     const nextProvider = new OpenAICompatibleProvider({
       id: normalized.provider,
       baseUrl: normalized.baseUrl,
@@ -316,6 +342,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
   clear(): ModelSettingsStatus {
     deleteDurableProfile(this.settings);
     deleteDeepSeekProfile(this.settings);
+    deleteSecret(this.secretStore, DEEPSEEK_SECRET_NAME);
+    deleteSecret(this.secretStore, MODEL_SECRET_NAME);
     this.provider.replace(createUnconfiguredProvider());
     this.currentApiKey = undefined;
     this.currentModelName = null;
@@ -820,4 +848,37 @@ function unavailableProbe(checkedAt: string, errorCode: NonNullable<ModelProbeRe
     errorCode,
     capabilities: null,
   });
+}
+
+/** Rebuilds a DeepSeek binding from a durable profile and its encrypted credential. */
+function restoreDeepSeekBinding(profile: DeepSeekSettingsProfile, secretStore: SecretStore): DeepSeekEnvironmentBinding | undefined {
+  const apiKey = secretStore.get(DEEPSEEK_SECRET_NAME);
+  if (!apiKey) return undefined;
+  try {
+    const config = configFromDeepSeekProfile(profile);
+    return { provider: new DeepSeekProvider({ config, apiKey }), config, apiKey };
+  } catch {
+    // A profile that no longer constructs (e.g. unprobed thinking mode) fails
+    // closed to "credential required" instead of breaking daemon startup.
+    return undefined;
+  }
+}
+
+function persistSecret(secretStore: SecretStore | undefined, name: string, value: string): void {
+  if (!secretStore) return;
+  try {
+    secretStore.set(name, value);
+  } catch (error) {
+    if (error instanceof SecretStoreError) throw new ModelSettingsError('PERSISTENCE_FAILED', 'The provider credential could not be saved.');
+    throw error;
+  }
+}
+
+function deleteSecret(secretStore: SecretStore | undefined, name: string): void {
+  if (!secretStore) return;
+  try {
+    secretStore.delete(name);
+  } catch {
+    // Best effort: a missing/locked secret store must not block clearing.
+  }
 }

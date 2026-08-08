@@ -7,6 +7,7 @@ import { RunManager } from './run-manager.js';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { SqliteApprovalReviewEventStore, SqliteEventStore, SqliteGoalControlV1EventStore, SqliteGoalEventStore, SqliteObservabilityLedger, SqliteSettingsStore } from '@ready4vibe/storage';
 import { InMemoryModelSettingsManager } from './model-config.js';
+import { FileSecretStore } from './secret-store.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
@@ -96,7 +97,7 @@ try {
   eventStore.close();
   throw error;
 }
-const modelSettings = new InMemoryModelSettingsManager(process.env, undefined, undefined, settingsStore);
+const modelSettings = new InMemoryModelSettingsManager(process.env, undefined, undefined, settingsStore, new FileSecretStore(join(dataDir, 'secrets')));
 let agentMemorySettings!: AgentMemorySettingsManager;
 let agentMemoryKnowledgeSettings!: AgentMemoryKnowledgeSettingsManager;
 const agentMemoryRuntime = new TencentMemoryRuntimeSupervisor({
@@ -126,7 +127,7 @@ try {
   eventStore.close();
   throw error;
 }
-const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry);
+const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry, settingsStore);
 const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry });
 const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry });
 // MCP remains explicitly disabled and has no default probe/transport. Web can

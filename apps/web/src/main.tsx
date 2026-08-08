@@ -670,7 +670,15 @@ function readTextDelta(payload: unknown): string {
 }
 
 function safeError(reason: unknown, t: Translator): string {
-  if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') return t('error.requestFailedWithCode', { code: reason.code });
+  if (typeof reason === 'object' && reason !== null && 'code' in reason && typeof reason.code === 'string') {
+    const base = t('error.requestFailedWithCode', { code: reason.code });
+    // Surface the daemon's bounded, developer-authored reason (e.g. which
+    // capability gate rejected the run); never raw response bodies.
+    const detail = 'message' in reason && typeof reason.message === 'string' && reason.message !== 'Request failed.'
+      ? reason.message.replace(/[\r\n]+/gu, ' ').slice(0, 200)
+      : '';
+    return detail ? `${base} · ${detail}` : base;
+  }
   return t('error.requestFailed');
 }
 

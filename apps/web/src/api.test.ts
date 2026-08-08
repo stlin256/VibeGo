@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiClient, ApiError, clampSandboxModeToCapability, clearSessionCookie, DEFAULT_RUN_PROFILE, loadRunProfile, loadSessionCookie, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, saveSessionCookie, SESSION_COOKIE_NAME, type FetchLike, type PairingResult, type RunProfile, type RunProfileStorage } from './api.js';
+import { ApiClient, ApiError, clampSandboxModeToCapability, clampSandboxToCapability, clearSessionCookie, DEFAULT_RUN_PROFILE, loadRunProfile, loadSessionCookie, parseSseFrame, resetRunProfile, RUN_PROFILE_STORAGE_KEY, saveRunProfile, saveSessionCookie, SESSION_COOKIE_NAME, type FetchLike, type PairingResult, type RunProfile, type RunProfileStorage } from './api.js';
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
@@ -58,6 +58,18 @@ describe('ApiClient', () => {
     expect(clampSandboxModeToCapability('external-sandbox', capable)).toBe('external-sandbox');
     expect(clampSandboxModeToCapability('workspace-write', undefined)).toBe('workspace-write');
     expect(clampSandboxModeToCapability('external-sandbox', null)).toBe('external-sandbox');
+  });
+
+  it('clamps sandbox network and mode together against the effective capability profile', () => {
+    const narrowed = { filesystemMode: 'off', shellMode: 'off', networkMode: 'off' } as const;
+    const writable = { mode: 'workspace-write', network: 'enabled', writableRoots: ['.'] } as { mode: 'workspace-write'; network: 'enabled'; writableRoots: string[] };
+    expect(clampSandboxToCapability(writable, narrowed)).toEqual({ mode: 'read-only', network: 'restricted', writableRoots: ['.'] });
+    const readonly = { mode: 'read-only', network: 'enabled' } as const;
+    expect(clampSandboxToCapability(readonly, narrowed)).toEqual({ mode: 'read-only', network: 'restricted' });
+    const allowed = { filesystemMode: 'workspace-write', shellMode: 'external-sandbox', networkMode: 'enabled' } as const;
+    expect(clampSandboxToCapability(writable, allowed)).toBe(writable);
+    expect(clampSandboxToCapability(readonly, undefined)).toBe(readonly);
+    expect(clampSandboxToCapability(readonly, null)).toBe(readonly);
   });
 
   it('loads the run history projection through the authenticated list endpoint', async () => {

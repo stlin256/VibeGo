@@ -1,6 +1,6 @@
 import type { FormEvent, JSX } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { clampSandboxModeToCapability, DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type RunSummary, type StoredEvent } from './api.js';
+import { clampSandboxToCapability, DEFAULT_RUN_PROFILE, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsMode, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfile, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionApprovalPosture, type PermissionProfile, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type RunSummary, type StoredEvent } from './api.js';
 import type { GoalMutationResponse, GoalPreflightResult, GoalProjectionListResponse } from './api.js';
 import { focusFirst, focusableElements, nextFocusIndex } from './accessibility.js';
 import { ApprovalReviewSettingsCard, ContextRail, ConversationHeader, ConversationShell, PermissionProfileCard, SettingsSection, SettingsSheet, SettingsTabPanel, SettingsTabs, SetupWizard, WorkspaceRail } from './components/vibego/index.js';
@@ -595,9 +595,9 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
   // A persisted or stale composer selection that exceeds the effective capability
   // profile would be blocked at run creation; clamp it to the always-available mode.
   useEffect(() => {
-    const clamped = clampSandboxModeToCapability(profile.sandbox.mode, effectiveCapabilityProfile);
-    if (clamped !== profile.sandbox.mode) updateSandboxMode(clamped);
-  }, [effectiveCapabilityProfile, profile.sandbox.mode]);
+    const clamped = clampSandboxToCapability(profile.sandbox, effectiveCapabilityProfile);
+    if (clamped !== profile.sandbox) updateProfile({ sandbox: clamped });
+  }, [effectiveCapabilityProfile, profile.sandbox]);
   const openSettings = (target: HTMLElement): void => {
     settingsTriggerRef.current = target;
     setSettingsOpen(true);

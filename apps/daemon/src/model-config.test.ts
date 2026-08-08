@@ -1,6 +1,10 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { InMemorySettingsStore, type SettingsStore } from '@ready4vibe/storage';
 import { createModelProvider, InMemoryModelSettingsManager, ModelSettingsError } from './model-config.js';
+import { FileSecretStore } from './secret-store.js';
 
 describe('daemon model configuration', () => {
   it('uses a safe unconfigured provider without an API key', async () => {
@@ -250,5 +254,66 @@ describe('daemon model configuration', () => {
     const manager = new InMemoryModelSettingsManager({});
     expect(() => manager.configureDeepSeek({ endpointProfile: 'openai-responses', endpoint: 'https://api.deepseek.com/v1/responses', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'provider-owned', reviewer: 'off' })).toThrowError(new ModelSettingsError('DEEPSEEK_CAPABILITY_REQUIRED', 'Probe must declare provider-owned web search support before it can be enabled.'));
     expect(manager.provider.id).toBe('unconfigured');
+  });
+});
+
+describe('daemon model credential persistence', () => {
+  it('restores a ready DeepSeek provider from the encrypted credential after restart', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-model-secrets-'));
+    try {
+      const settings = new InMemorySettingsStore();
+      const secrets = new FileSecretStore(root);
+      const input = { endpointProfile: 'openai-chat-completions' as const, endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto' as const, toolCalling: 'enabled' as const, webSearch: 'off' as const, reviewer: 'off' as const };
+      const first = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, secrets);
+      first.configureDeepSeek(input);
+      expect(JSON.stringify(settings.get('deepseek', 'profile'))).not.toContain('test-secret');
+
+      const restarted = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, new FileSecretStore(root));
+      expect(restarted.status()).toEqual({ configured: true, providerId: 'deepseek', baseUrl: 'https://api.deepseek.com/v1/chat/completions', modelName: 'deepseek-v4-flash', source: 'durable-profile', credentialState: 'available' });
+      expect(restarted.provider.id).toBe('deepseek');
+      expect(restarted.bindRun({ provider: 'deepseek', name: 'deepseek-v4-flash' }).deepSeekSnapshot).toMatchObject({ providerId: 'deepseek', model: 'deepseek-v4-flash' });
+
+      restarted.clearDeepSeek();
+      const cleared = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, new FileSecretStore(root));
+      expect(cleared.status()).toMatchObject({ configured: false, providerId: 'unconfigured', credentialState: 'none' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('restores an OpenAI-compatible provider from the encrypted credential after restart', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-model-secrets-'));
+    try {
+      const settings = new InMemorySettingsStore();
+      const first = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, new FileSecretStore(root));
+      first.configure({ provider: 'openai-compatible', baseUrl: 'https://api.deepseek.com', apiKey: 'test-secret', model: 'deepseek-v4-flash' });
+
+      const restarted = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, new FileSecretStore(root));
+      expect(restarted.status()).toEqual({ configured: true, providerId: 'openai-compatible', baseUrl: 'https://api.deepseek.com', modelName: 'deepseek-v4-flash', source: 'durable-profile', credentialState: 'available' });
+      expect(restarted.provider.id).toBe('openai-compatible');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('degrades to credential-required when the secret is missing and never echoes it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-model-secrets-'));
+    try {
+      const settings = new InMemorySettingsStore();
+      const first = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, new FileSecretStore(root));
+      first.configureDeepSeek({ endpointProfile: 'openai-chat-completions', endpoint: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+
+      // A different secret store (fresh master key) cannot decrypt the credential.
+      const otherRoot = await mkdtemp(join(tmpdir(), 'ready4vibe-model-secrets-'));
+      try {
+        const foreign = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), undefined, settings, new FileSecretStore(otherRoot));
+        expect(foreign.status()).toMatchObject({ configured: false, providerId: 'deepseek', source: 'durable-profile', credentialState: 'required' });
+        expect(foreign.provider.id).toBe('unconfigured');
+      } finally {
+        await rm(otherRoot, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

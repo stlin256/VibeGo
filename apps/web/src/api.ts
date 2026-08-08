@@ -87,6 +87,21 @@ export function clampSandboxModeToCapability(mode: RunProfile['sandbox']['mode']
   return mode;
 }
 
+/**
+ * Clamp a persisted composer sandbox selection (mode and network) to what the
+ * daemon-resolved effective capability profile allows, so run creation is
+ * never rejected by the capability gate. Returns the same object when nothing
+ * needs to change.
+ */
+export function clampSandboxToCapability(sandbox: RunProfile['sandbox'], capability: Pick<CapabilityProfile, 'filesystemMode' | 'shellMode' | 'networkMode'> | null | undefined): RunProfile['sandbox'] {
+  if (!capability) return sandbox;
+  const mode = clampSandboxModeToCapability(sandbox.mode, capability);
+  const currentNetwork = 'network' in sandbox ? sandbox.network : undefined;
+  const network = currentNetwork === 'enabled' && capability.networkMode !== 'enabled' ? 'restricted' : currentNetwork;
+  if (mode === sandbox.mode && network === currentNetwork) return sandbox;
+  return { ...sandbox, mode, ...(network ? { network } : {}) } as RunProfile['sandbox'];
+}
+
 function parseRunProfile(value: unknown): RunProfile | undefined {
   if (!isRecord(value)) return undefined;
   try {

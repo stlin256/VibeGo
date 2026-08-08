@@ -14,8 +14,12 @@ import {
   ToolHandlerRegistry,
   type FileSystemAdapterFileSystem,
 } from '@ready4vibe/tool-adapters';
+import type { SettingsStore } from '@ready4vibe/storage';
 import { ToolRegistry } from '@ready4vibe/tools';
 import { InMemoryWorkspaceRegistry, type WorkspaceRegistry } from '@ready4vibe/workspaces';
+
+export const TOOL_SETTINGS_NAMESPACE = 'tools';
+export const TOOL_SETTINGS_KEY = 'v1';
 
 export interface ToolSettingsStatus {
   filesystemEnabled: boolean;
@@ -32,11 +36,14 @@ export interface ToolSettingsManager {
 export class InMemoryToolSettingsManager implements ToolSettingsManager {
   private enabled = false;
   private readonly workspaceRegistry: WorkspaceRegistry;
+  private readonly settings: SettingsStore | undefined;
 
-  constructor(workspaceRootOrRegistry: string | WorkspaceRegistry = process.cwd()) {
+  constructor(workspaceRootOrRegistry: string | WorkspaceRegistry = process.cwd(), settings?: SettingsStore) {
     this.workspaceRegistry = typeof workspaceRootOrRegistry === 'string'
       ? new InMemoryWorkspaceRegistry({ defaultRoot: resolve(workspaceRootOrRegistry) })
       : workspaceRootOrRegistry;
+    this.settings = settings;
+    this.enabled = loadFilesystemEnabled(settings);
   }
 
   status(): ToolSettingsStatus {
@@ -50,6 +57,13 @@ export class InMemoryToolSettingsManager implements ToolSettingsManager {
 
   setFilesystemEnabled(enabled: boolean): ToolSettingsStatus {
     if (typeof enabled !== 'boolean') throw new ToolSettingsError();
+    if (this.settings) {
+      try {
+        this.settings.set(TOOL_SETTINGS_NAMESPACE, TOOL_SETTINGS_KEY, { schemaVersion: 'ready4vibe_tool_settings_v1', filesystemEnabled: enabled });
+      } catch {
+        throw new ToolSettingsError();
+      }
+    }
     this.enabled = enabled;
     return this.status();
   }
@@ -105,6 +119,19 @@ export class ToolSettingsError extends Error {
   constructor() {
     super('Filesystem tool settings are invalid.');
     this.name = 'ToolSettingsError';
+  }
+}
+
+/** Fails closed to disabled when nothing is stored or the entry is malformed. */
+function loadFilesystemEnabled(settings: SettingsStore | undefined): boolean {
+  if (!settings) return false;
+  try {
+    const value = settings.get<unknown>(TOOL_SETTINGS_NAMESPACE, TOOL_SETTINGS_KEY);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const enabled = (value as Record<string, unknown>).filesystemEnabled;
+    return enabled === true;
+  } catch {
+    return false;
   }
 }
 
