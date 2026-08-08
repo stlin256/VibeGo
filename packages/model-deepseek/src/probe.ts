@@ -72,6 +72,13 @@ export async function probeDeepSeek(options: DeepSeekProbeOptions): Promise<Deep
     if (declared?.webSearch === true && config.endpointProfile !== 'openai-responses') {
       return failure(checkedAt, elapsedMs(startedAt), 'DEEPSEEK_PROTOCOL_UNSUPPORTED');
     }
+    // Providers rarely self-declare capabilities, so web search support is
+    // probed actively on the Responses profile: a bounded ping carrying the
+    // provider-owned tool. Any non-2xx means the tool is unsupported.
+    const webSearch = declared?.webSearch
+      ?? (config.endpointProfile === 'openai-responses'
+        ? await probeWebSearchTool(config, options.apiKey, fetchImpl, controller.signal)
+        : false);
 
     const capability: DeepSeekCapabilitySnapshot = {
       schemaVersion: 'deepseek-provider-capability/v1',
@@ -88,7 +95,7 @@ export async function probeDeepSeek(options: DeepSeekProbeOptions): Promise<Deep
       structuredOutput: declared?.structuredOutput ?? false,
       reasoning: declared?.reasoning ?? false,
       usage: declared?.usage ?? hasUsage(payload),
-      webSearch: declared?.webSearch ?? false,
+      webSearch,
       contextLimit: declared?.contextLimit ?? config.contextLimit ?? 'unknown',
       outputLimit: declared?.outputLimit ?? config.maxOutputTokens,
       degradedReason: null,
@@ -122,6 +129,23 @@ function probeBody(config: DeepSeekConfig): Record<string, unknown> {
     return { model: config.model, input: [{ role: 'user', content: 'ping' }], max_output_tokens: 1, stream: false };
   }
   return { model: config.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, stream: false };
+}
+
+/** Bounded support check for the provider-owned web_search tool: a 1-token
+ * ping with the tool attached. `false` on any non-2xx or transport error; it
+ * never fails the enclosing probe. */
+async function probeWebSearchTool(config: DeepSeekConfig, apiKey: string, fetchImpl: FetchImplementation, signal: AbortSignal): Promise<boolean> {
+  try {
+    const response = await fetchImpl(config.endpoint, {
+      method: 'POST',
+      headers: probeHeaders(config.endpointProfile, apiKey),
+      body: JSON.stringify({ ...probeBody(config), tools: [{ type: 'web_search' }] }),
+      signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 function looksLikeResponse(profile: DeepSeekConfig['endpointProfile'], value: unknown): boolean {

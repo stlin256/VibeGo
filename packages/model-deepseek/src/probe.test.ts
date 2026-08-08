@@ -98,3 +98,55 @@ describe('DeepSeek explicit endpoint probe', () => {
     await expect(probeDeepSeek({ config, apiKey: 'runtime-secret', fetchImpl: async () => { throw new Error('network secret'); } })).resolves.toMatchObject({ status: 'degraded', errorCode: 'DEEPSEEK_STREAM_DISCONNECTED' });
   });
 });
+
+describe('DeepSeek active web_search probing', () => {
+  const responsesConfig: DeepSeekConfig = { ...config, endpointProfile: 'openai-responses', endpoint: 'https://provider.test/v1/responses' };
+
+  it('declares webSearch when the provider-owned tool ping succeeds', async () => {
+    const bodies: string[] = [];
+    const result = await probeDeepSeek({
+      config: responsesConfig,
+      apiKey: 'runtime-secret',
+      fetchImpl: async (_input, init) => {
+        bodies.push(String(init?.body));
+        return new Response(JSON.stringify({ output: [], status: 'completed' }), { status: 200 });
+      },
+    });
+    expect(result).toMatchObject({ status: 'ready', capabilities: { webSearch: true } });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toContain('web_search');
+  });
+
+  it('stays conservative when the provider-owned tool ping is rejected or fails', async () => {
+    const rejected = await probeDeepSeek({
+      config: responsesConfig,
+      apiKey: 'runtime-secret',
+      fetchImpl: async (_input, init) => new Response(
+        String(init?.body).includes('web_search') ? '{"error":"unsupported tool"}' : JSON.stringify({ output: [], status: 'completed' }),
+        { status: String(init?.body).includes('web_search') ? 400 : 200 },
+      ),
+    });
+    expect(rejected).toMatchObject({ status: 'ready', capabilities: { webSearch: false } });
+
+    const transportFailure = await probeDeepSeek({
+      config: responsesConfig,
+      apiKey: 'runtime-secret',
+      fetchImpl: async (_input, init) => {
+        if (String(init?.body).includes('web_search')) throw new Error('socket reset');
+        return new Response(JSON.stringify({ output: [], status: 'completed' }), { status: 200 });
+      },
+    });
+    expect(transportFailure).toMatchObject({ status: 'ready', capabilities: { webSearch: false } });
+  });
+
+  it('does not issue a second request outside the Responses profile', async () => {
+    let calls = 0;
+    const result = await probeDeepSeek({
+      config,
+      apiKey: 'runtime-secret',
+      fetchImpl: async () => { calls += 1; return new Response(JSON.stringify({ choices: [] }), { status: 200 }); },
+    });
+    expect(result).toMatchObject({ status: 'ready', capabilities: { webSearch: false } });
+    expect(calls).toBe(1);
+  });
+});

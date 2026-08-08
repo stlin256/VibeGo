@@ -317,3 +317,30 @@ describe('daemon model credential persistence', () => {
     }
   });
 });
+
+describe('daemon DeepSeek web-search capability persistence', () => {
+  it('keeps provider-owned search enabled across restarts once probed', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-model-secrets-'));
+    try {
+      const settings = new InMemorySettingsStore();
+      const probe = async () => new Response(JSON.stringify({ output: [], status: 'completed' }), { status: 200 });
+      const first = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), probe, settings, new FileSecretStore(root));
+      const configured = first.configureDeepSeek({ endpointProfile: 'openai-responses', endpoint: 'https://api.deepseek.com/v1/responses', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'off', reviewer: 'off' });
+      await expect(first.probeDeepSeek()).resolves.toMatchObject({ status: 'ready', capabilities: { webSearch: true } });
+      first.configureDeepSeek({ endpointProfile: 'openai-responses', endpoint: 'https://api.deepseek.com/v1/responses', model: 'deepseek-v4-flash', apiKey: 'test-secret', thinkingMode: 'auto', toolCalling: 'enabled', webSearch: 'provider-owned', reviewer: 'off', ...(configured.profile?.profileRevision ? { expectedRevision: configured.profile.profileRevision } : {}) });
+      expect(first.deepSeekStatus()).toMatchObject({ profile: { webSearch: 'provider-owned' }, capability: { webSearch: true } });
+
+      const restarted = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), probe, settings, new FileSecretStore(root));
+      expect(restarted.status()).toMatchObject({ configured: true, providerId: 'deepseek', source: 'durable-profile', credentialState: 'available' });
+      expect(restarted.provider.id).toBe('deepseek');
+      expect(restarted.deepSeekStatus()).toMatchObject({ capability: { webSearch: true } });
+      expect(restarted.bindRun({ provider: 'deepseek', name: 'deepseek-v4-flash' }).provider.id).toBe('deepseek');
+
+      restarted.clearDeepSeek();
+      const cleared = new InMemoryModelSettingsManager({}, () => new Date('2026-08-05T00:00:00.000Z'), probe, settings, new FileSecretStore(root));
+      expect(cleared.deepSeekStatus()).toMatchObject({ configured: false, capability: null });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});

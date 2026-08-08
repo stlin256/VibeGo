@@ -1,6 +1,7 @@
 import {
   DEEPSEEK_CAPABILITY_SCHEMA_VERSION,
   DEEPSEEK_PROVIDER_SCHEMA_VERSION,
+  DeepSeekCapabilitySnapshotSchema,
   DeepSeekConfigSchema,
   DeepSeekSettingsProfileSchema,
   DeepSeekSettingsStatusSchema,
@@ -32,6 +33,7 @@ export const MODEL_SETTINGS_NAMESPACE = 'model';
 export const MODEL_SETTINGS_KEY = 'profile';
 export const DEEPSEEK_SETTINGS_NAMESPACE = 'deepseek';
 export const DEEPSEEK_SETTINGS_KEY = 'profile';
+export const DEEPSEEK_CAPABILITY_KEY = 'capability';
 
 export type ModelSettingsSource = 'environment' | 'web-memory' | 'durable-profile' | 'unconfigured';
 export type ModelCredentialState = 'available' | 'required' | 'none';
@@ -156,7 +158,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     // A durable profile plus its encrypted credential restores a ready provider
     // across restarts; without the credential it degrades to "required".
     const restoredDeepSeek = persistedDeepSeekProfile && secretStore
-      ? restoreDeepSeekBinding(persistedDeepSeekProfile, secretStore)
+      ? restoreDeepSeekBinding(persistedDeepSeekProfile, secretStore, loadDeepSeekCapability(settings))
       : undefined;
     const restoredModelKey = !restoredDeepSeek && persistedProfile && secretStore
       ? secretStore.get(MODEL_SECRET_NAME)
@@ -181,6 +183,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     this.deepSeekConfig = restoredDeepSeek?.config ?? environmentBinding?.config ?? (persistedDeepSeekProfile ? configFromDeepSeekProfile(persistedDeepSeekProfile) : undefined);
     this.deepSeekProfile = persistedDeepSeekProfile;
     this.deepSeekApiKey = restoredDeepSeek?.apiKey ?? environmentBinding?.apiKey;
+    this.deepSeekCapability = restoredDeepSeek?.capability;
     this.deepSeekRevision = persistedDeepSeekProfile ? profileRevisionNumber(persistedDeepSeekProfile.profileRevision) : environmentBinding ? profileRevisionNumber(environmentBinding.config.revision) : 0;
     this.revision = persistedProfile ? profileRevisionNumber(persistedProfile.profileRevision) : 0;
     this.probeFetchImpl = probeFetchImpl;
@@ -250,6 +253,8 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
     }
     const profile = profileFromDeepSeekConfig(config, `deepseek-settings-${nextRevision}`, config.updatedAt);
     persistDeepSeekProfile(this.settings, profile);
+    if (matchingCapability) persistDeepSeekCapability(this.settings, matchingCapability);
+    else deleteDeepSeekCapability(this.settings);
     deleteDurableProfile(this.settings);
     persistSecret(this.secretStore, DEEPSEEK_SECRET_NAME, normalized.apiKey);
     deleteSecret(this.secretStore, MODEL_SECRET_NAME);
@@ -271,6 +276,7 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
   clearDeepSeek(): DeepSeekSettingsStatus {
     if (this.currentStatus.source === 'environment' && this.deepSeekEnvironment) return this.deepSeekStatus();
     deleteDeepSeekProfile(this.settings);
+    deleteDeepSeekCapability(this.settings);
     deleteSecret(this.secretStore, DEEPSEEK_SECRET_NAME);
     this.deepSeekConfig = undefined;
     this.deepSeekProfile = undefined;
@@ -301,7 +307,10 @@ export class InMemoryModelSettingsManager implements ModelSettingsManager, DeepS
       now: () => this.clock().toISOString(),
     });
     this.deepSeekLastProbe = result;
-    if (result.status === 'ready' && result.capabilities) this.deepSeekCapability = result.capabilities;
+    if (result.status === 'ready' && result.capabilities) {
+      this.deepSeekCapability = result.capabilities;
+      persistDeepSeekCapability(this.settings, result.capabilities);
+    }
     return result;
   }
 
@@ -600,6 +609,7 @@ interface DeepSeekEnvironmentBinding {
   readonly provider: DeepSeekProvider;
   readonly config: DeepSeekConfig;
   readonly apiKey: string;
+  readonly capability?: DeepSeekCapabilitySnapshot | undefined;
 }
 
 function readDeepSeekEnvironmentBinding(env: NodeJS.ProcessEnv): DeepSeekEnvironmentBinding | undefined {
@@ -763,6 +773,30 @@ function deleteDeepSeekProfile(settings: SettingsStore | undefined): void {
   settings.delete(DEEPSEEK_SETTINGS_NAMESPACE, DEEPSEEK_SETTINGS_KEY);
 }
 
+/** Advisory capability snapshot; a corrupt or stale entry is simply ignored
+ * (unlike the profile, which fails closed) because it only gates opt-ins. */
+function loadDeepSeekCapability(settings: SettingsStore | undefined): DeepSeekCapabilitySnapshot | undefined {
+  if (!settings) return undefined;
+  const value = settings.get<unknown>(DEEPSEEK_SETTINGS_NAMESPACE, DEEPSEEK_CAPABILITY_KEY);
+  if (value === undefined) return undefined;
+  const parsed = DeepSeekCapabilitySnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function persistDeepSeekCapability(settings: SettingsStore | undefined, capability: DeepSeekCapabilitySnapshot): void {
+  if (!settings) return;
+  try {
+    settings.set(DEEPSEEK_SETTINGS_NAMESPACE, DEEPSEEK_CAPABILITY_KEY, DeepSeekCapabilitySnapshotSchema.parse(capability));
+  } catch {
+    throw new ModelSettingsError('PERSISTENCE_FAILED', 'DeepSeek capability snapshot could not be saved.');
+  }
+}
+
+function deleteDeepSeekCapability(settings: SettingsStore | undefined): void {
+  if (!settings) return;
+  settings.delete(DEEPSEEK_SETTINGS_NAMESPACE, DEEPSEEK_CAPABILITY_KEY);
+}
+
 function defaultDeepSeekConfig(): DeepSeekConfig {
   return DeepSeekConfigSchema.parse({
     schemaVersion: 'deepseek-provider/v1',
@@ -851,12 +885,13 @@ function unavailableProbe(checkedAt: string, errorCode: NonNullable<ModelProbeRe
 }
 
 /** Rebuilds a DeepSeek binding from a durable profile and its encrypted credential. */
-function restoreDeepSeekBinding(profile: DeepSeekSettingsProfile, secretStore: SecretStore): DeepSeekEnvironmentBinding | undefined {
+function restoreDeepSeekBinding(profile: DeepSeekSettingsProfile, secretStore: SecretStore, persistedCapability?: DeepSeekCapabilitySnapshot): DeepSeekEnvironmentBinding | undefined {
   const apiKey = secretStore.get(DEEPSEEK_SECRET_NAME);
   if (!apiKey) return undefined;
   try {
     const config = configFromDeepSeekProfile(profile);
-    return { provider: new DeepSeekProvider({ config, apiKey }), config, apiKey };
+    const capability = matchingDeepSeekCapability(persistedCapability, config);
+    return { provider: new DeepSeekProvider({ config, apiKey, ...(capability ? { capability } : {}) }), config, apiKey, ...(capability ? { capability } : {}) };
   } catch {
     // A profile that no longer constructs (e.g. unprobed thinking mode) fails
     // closed to "credential required" instead of breaking daemon startup.
