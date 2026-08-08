@@ -369,6 +369,7 @@ function RuntimeApp(): JSX.Element {
     for await (const event of client.streamEvents(runId, initial.lastEventSeq)) {
       buffer.push(event, event.type === 'model.delta' ? readTextDelta(event.payload) : '');
       if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') { buffer.flush(); setRun(await client.getRun(runId)); }
+      if (event.type === 'run.titled') await refreshRunHistory();
     }
     buffer.flush();
     await refreshGoalProjection();

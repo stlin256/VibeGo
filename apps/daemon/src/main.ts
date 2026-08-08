@@ -191,6 +191,7 @@ const runManager = new RunManager({
   agentMemorySettings,
   agentMemoryKnowledgeSettings,
   observabilityUsageObserver,
+  generateRunTitles: true,
   scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY),
 });
 let goalAdmissionService!: GoalAdmissionService;

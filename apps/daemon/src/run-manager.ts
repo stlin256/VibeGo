@@ -90,6 +90,10 @@ export interface RunManagerOptions {
   agentMemorySettings?: AgentMemorySettingsManager;
   agentMemoryKnowledgeSettings?: AgentMemoryKnowledgeSettingsManager;
   observabilityUsageObserver?: RunUsageObserver;
+  /** Opt-in: after a completed run, ask the captured provider for a short
+   * `run.titled` title event. Off by default so embedded/test loops keep the
+   * deterministic message-derived title. */
+  generateRunTitles?: boolean;
 }
 
 /** Optional application-owned snapshot seam. Interactive callers keep the
@@ -102,8 +106,9 @@ export interface RunStartOptions {
   readonly permissionSnapshot?: PermissionProfileRunSnapshot;
 }
 
-/** Metadata-only history projection for the run list; the title is derived
- * from the first user message line without any model call. */
+/** Metadata-only history projection for the run list; the title comes from the
+ * latest `run.titled` event when the model generated one, otherwise it is
+ * derived from the first user message line. */
 export interface RunSummary {
   readonly runId: string;
   readonly status: RunStatus;
@@ -132,6 +137,7 @@ export class RunManager {
   private readonly agentMemorySettings: AgentMemorySettingsManager | undefined;
   private readonly agentMemoryKnowledgeSettings: AgentMemoryKnowledgeSettingsManager | undefined;
   private readonly observabilityUsageObserver: RunUsageObserver | undefined;
+  private readonly runTitlesEnabled: boolean;
   private readonly approvalReviewForRun: ApprovalReviewBindingFactory | undefined;
   private readonly approvalReviewEventStore: ApprovalReviewEventStore | undefined;
   private readonly approvalReviewBindings = new Map<string, ApprovalReviewBinding>();
@@ -151,6 +157,7 @@ export class RunManager {
     this.agentMemorySettings = options.agentMemorySettings;
     this.agentMemoryKnowledgeSettings = options.agentMemoryKnowledgeSettings;
     this.observabilityUsageObserver = options.observabilityUsageObserver;
+    this.runTitlesEnabled = options.generateRunTitles === true;
     this.scheduler = options.scheduler ?? new Scheduler(options.schedulerPolicy ?? {
       maxActiveRuns: 2,
       maxActiveModelCalls: 2,
@@ -277,6 +284,7 @@ export class RunManager {
     void promise.then((result) => {
       this.completions.set(runId, result);
       this.controllers.delete(runId);
+      if (result.status === 'completed' && this.runTitlesEnabled) void this.generateRunTitle(runId, config, capturedModelBinding.provider).catch(() => undefined);
       void this.observeTerminalUsage(runId).catch(() => undefined);
       if (capturedMemory) {
         void this.writeMemory(capturedMemory, config, result)
@@ -310,6 +318,50 @@ export class RunManager {
     if (!observer) return;
     const events = await this.eventStore.read(runId);
     await observer.recordTerminal(runId, events);
+  }
+
+  /**
+   * Best-effort LLM title for the history rail, appended as a `run.titled`
+   * event after a run completes. It never blocks the run lifecycle; any
+   * failure leaves the message-derived fallback title in place.
+   */
+  private async generateRunTitle(runId: string, config: RunConfig, provider: ModelProvider): Promise<void> {
+    const events = await this.eventStore.read(runId);
+    if (events.some((event) => event.type === 'run.titled')) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RUN_TITLE_TIMEOUT_MS);
+    try {
+      let text = '';
+      const stream = provider.stream({
+        model: config.model.name,
+        messages: [
+          { role: 'system', content: `Generate a very short conversation title for the user's message, in the same language as the message. Hard limit: ${RUN_TITLE_PROMPT_MAX_CHARS} characters or fewer. Reply with only the title: no quotes, no trailing punctuation, no explanation.` },
+          { role: 'user', content: config.userMessage.slice(0, RUN_TITLE_INPUT_MAX_CHARS) },
+        ],
+        tools: [],
+        // Reasoning models spend output budget on hidden thinking first, so a
+        // small cap would return zero visible title text.
+        budget: { maxInputTokens: 2048, maxOutputTokens: RUN_TITLE_MAX_OUTPUT_TOKENS },
+        metadata: { runId, turnId: `title_${runId}`, requestId: `titlereq_${uuidv7()}` },
+      }, controller.signal);
+      for await (const event of stream) {
+        if (event.type === 'text-delta') text += event.text;
+        if (event.type === 'error' || event.type === 'completed') break;
+      }
+      const title = sanitizeGeneratedTitle(text);
+      if (!title) return;
+      await this.eventStore.append({
+        runId,
+        type: 'run.titled',
+        source: 'orchestrator',
+        correlationId: `title_${runId}`,
+        payload: { title },
+      });
+    } catch {
+      // Title generation is advisory; the truncated-message title remains.
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async retryRecovered(runId: string, startOptions: RunStartOptions = {}): Promise<{ runId: string; status: 'queued'; retryOf: string } | 'not-found' | 'not-recoverable'> {
@@ -386,8 +438,9 @@ export class RunManager {
    * restored and no unknown write is retried automatically.
    */
   /**
-   * Newest-first, metadata-only projection for the history rail. Titles are
-   * derived from the first user-message line; no model call is made.
+   * Newest-first, metadata-only projection for the history rail. Titles come
+   * from the latest `run.titled` event when the model generated one, otherwise
+   * from the first user-message line.
    */
   async listRunSummaries(limit = 20): Promise<readonly RunSummary[]> {
     const bounded = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 20;
@@ -397,7 +450,7 @@ export class RunManager {
       const created = events.find((event) => event.type === 'run.created');
       const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
       if (!created || !config) continue;
-      summaries.push({ runId, status: latestRunStatus(events), title: runTitleFromMessage(config.userMessage), createdAt: created.at });
+      summaries.push({ runId, status: latestRunStatus(events), title: runTitleFromEvents(events, config.userMessage), createdAt: created.at });
     }
     return summaries;
   }
@@ -776,11 +829,37 @@ function latestRunStatus(events: readonly StoredEvent[]): RunStatus {
 }
 
 const RUN_TITLE_MAX_CHARS = 48;
+const RUN_TITLE_PROMPT_MAX_CHARS = 20;
+const RUN_TITLE_INPUT_MAX_CHARS = 2000;
+const RUN_TITLE_MAX_OUTPUT_TOKENS = 512;
+const RUN_TITLE_TIMEOUT_MS = 30_000;
 
 function runTitleFromMessage(userMessage: string): string {
   const firstLine = userMessage.split('\n').map((line) => line.trim()).find((line) => line.length > 0) ?? '';
   const compact = firstLine.replace(/\s+/gu, ' ');
   if (compact.length === 0) return 'Untitled run';
+  if (compact.length <= RUN_TITLE_MAX_CHARS) return compact;
+  return `${compact.slice(0, RUN_TITLE_MAX_CHARS - 1)}…`;
+}
+
+function runTitleFromEvents(events: readonly StoredEvent[], userMessage: string): string {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type === 'run.titled' && isTitledPayload(event.payload)) return event.payload.title;
+  }
+  return runTitleFromMessage(userMessage);
+}
+
+function isTitledPayload(value: unknown): value is { title: string } {
+  if (typeof value !== 'object' || value === null) return false;
+  const title = (value as { title?: unknown }).title;
+  return typeof title === 'string' && title.length > 0 && title.length <= RUN_TITLE_MAX_CHARS;
+}
+
+function sanitizeGeneratedTitle(raw: string): string | undefined {
+  const firstLine = raw.split('\n').map((line) => line.trim()).find((line) => line.length > 0) ?? '';
+  const compact = firstLine.replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/gu, '').replace(/\s+/gu, ' ').trim();
+  if (compact.length === 0) return undefined;
   if (compact.length <= RUN_TITLE_MAX_CHARS) return compact;
   return `${compact.slice(0, RUN_TITLE_MAX_CHARS - 1)}…`;
 }

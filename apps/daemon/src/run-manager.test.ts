@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentMemoryIdentity, AgentMemoryProvider, AgentMemoryStatus, AgentMemoryWriteRequest } from '@ready4vibe/contracts';
 import { DEFAULT_SCHEDULER_POLICY } from '@ready4vibe/contracts';
+import type { ModelEvent, ModelProvider, ModelRequest } from '@ready4vibe/contracts';
 import { Scheduler } from '@ready4vibe/scheduler';
 import { InMemoryEventStore, InMemorySettingsStore } from '@ready4vibe/storage';
 import { FakeModelProvider } from '@ready4vibe/testkit';
@@ -440,3 +441,56 @@ function responseFromChunks(chunks: readonly string[], status = 200): Response {
   });
   return new Response(body, { status });
 }
+
+describe('RunManager LLM run titles', () => {
+  const titleConfig = { ...config, userMessage: 'please inspect the workspace layout carefully' };
+
+  function titleProvider(titleEvents: ModelEvent[]): ModelProvider {
+    return {
+      id: 'title-fake',
+      capabilities: { streaming: true, toolCalls: false, structuredOutput: false },
+      async *stream(request: ModelRequest) {
+        if (request.metadata.turnId.startsWith('title_')) {
+          for (const event of titleEvents) yield event;
+          return;
+        }
+        yield { type: 'text-delta', text: 'run output' };
+        yield { type: 'completed', finishReason: 'stop' };
+      },
+    };
+  }
+
+  it('asks the captured provider for a short title and projects it in run summaries', async () => {
+    const eventStore = new InMemoryEventStore();
+    const provider = titleProvider([
+      { type: 'text-delta', text: '"Workspace layout inspection with an overly long generated title that must be clipped"' },
+      { type: 'completed', finishReason: 'stop' },
+    ]);
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, generateRunTitles: true });
+    await runManager.start(titleConfig);
+    await vi.waitFor(async () => {
+      const summaries = await runManager.listRunSummaries();
+      expect(summaries[0]?.title).not.toBe(titleConfig.userMessage);
+    });
+    const summaries = await runManager.listRunSummaries();
+    expect(summaries[0]?.title.startsWith('Workspace layout inspection')).toBe(true);
+    expect(summaries[0]?.title.length).toBeLessThanOrEqual(48);
+    const events = await eventStore.read(summaries[0]!.runId);
+    expect(events.filter((event) => event.type === 'run.titled')).toHaveLength(1);
+  });
+
+  it('keeps the message-derived title when title generation fails', async () => {
+    const eventStore = new InMemoryEventStore();
+    const provider = titleProvider([{ type: 'error', code: 'DEEPSEEK_HTTP_500', retryable: false, safeMessage: 'boom' }]);
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, generateRunTitles: true });
+    const { runId } = await runManager.start(titleConfig);
+    await vi.waitFor(async () => {
+      expect((await runManager.snapshot(runId))?.status).toBe('completed');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const summaries = await runManager.listRunSummaries();
+    expect(summaries[0]?.title).toBe(titleConfig.userMessage);
+    const events = await eventStore.read(runId);
+    expect(events.filter((event) => event.type === 'run.titled')).toHaveLength(0);
+  });
+});
