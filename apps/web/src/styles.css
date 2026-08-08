@@ -751,3 +751,57 @@ body { overflow-x: hidden; }
 body, .panel, .topbar-button, .workspace-rail, .context-rail, .composer-panel, .rail-session { transition: background-color var(--vibego-duration-fast) var(--vibego-ease-out), color var(--vibego-duration-fast) var(--vibego-ease-out), border-color var(--vibego-duration-fast) var(--vibego-ease-out); }
 @media (prefers-reduced-motion: reduce) { .empty-state, .run-panel, .pairing-card { animation: none; } .context-rail { transition: none; } }
 .provider-preset { margin-bottom: 14px; }
+
+/* Markdown-rendered assistant output */
+.md-body { white-space: normal; }
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
+.md-p { margin: 8px 0; }
+.md-h { margin: 14px 0 6px; font-weight: 700; line-height: 1.35; }
+.md-h1 { font-size: 19px; }
+.md-h2 { font-size: 17px; }
+.md-h3 { font-size: 15px; }
+.md-h4 { font-size: 14px; }
+.md-body code { padding: 1px 5px; border-radius: 6px; background: var(--vibego-bg-selected); font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.md-code { margin: 10px 0; padding: 12px 14px; overflow-x: auto; border: 1px solid var(--vibego-border-default); border-radius: 10px; background: var(--vibego-bg-surface); }
+.md-code code { padding: 0; background: transparent; white-space: pre; }
+.md-quote { margin: 10px 0; padding: 2px 12px; border-left: 3px solid var(--vibego-border-active); color: var(--vibego-text-secondary); }
+.md-quote p { margin: 6px 0; }
+.md-list { margin: 8px 0; padding-left: 22px; }
+.md-list li { margin: 3px 0; }
+.md-table-wrap { margin: 10px 0; overflow-x: auto; }
+.md-table { border-collapse: collapse; font-size: 13px; }
+.md-table th, .md-table td { padding: 6px 10px; border: 1px solid var(--vibego-border-default); text-align: left; }
+.md-table th { background: var(--vibego-bg-sunken); }
+.md-body a { color: var(--vibego-signal-cyan); text-decoration: underline; text-underline-offset: 2px; }
+.file-ref { display: inline; max-width: 100%; padding: 0 2px; border: 0; border-bottom: 1px dashed var(--vibego-signal-cyan); border-radius: 4px; color: var(--vibego-signal-cyan); background: transparent; font: inherit; overflow-wrap: anywhere; cursor: pointer; }
+.file-ref:hover { background: var(--vibego-bg-hover); }
+.file-ref code { color: inherit; }
+
+/* File-reference audit slide-over */
+.file-audit-backdrop { position: fixed; z-index: 29; inset: 0; background: rgb(0 0 0 / .32); }
+.file-audit-panel { position: fixed; z-index: 30; top: 0; right: 0; bottom: 0; display: grid; gap: 12px; align-content: start; width: min(440px, 96vw); padding: 16px; overflow-y: auto; background: var(--vibego-bg-surface); border-left: 1px solid var(--vibego-border-default); box-shadow: var(--vibego-shadow-elevated); }
+.file-audit-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.file-audit-heading { display: grid; gap: 4px; min-width: 0; }
+.file-audit-path { overflow-wrap: anywhere; font-size: 13px; }
+.file-audit-close { flex: 0 0 auto; width: 32px; height: 32px; border: 1px solid var(--vibego-border-default); border-radius: 8px; color: var(--vibego-text-primary); background: transparent; font-size: 16px; cursor: pointer; }
+.file-audit-close:hover { background: var(--vibego-bg-hover); }
+.file-audit-empty { margin: 8px 0; font-size: 13px; }
+.file-audit-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.file-audit-entry { padding: 10px 12px; border: 1px solid var(--vibego-border-default); border-radius: 10px; background: var(--vibego-bg-sunken); }
+.file-audit-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 11px; color: var(--vibego-text-tertiary); }
+.file-audit-tool { color: var(--vibego-text-primary); font-weight: 600; }
+.file-audit-type { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.file-audit-content { margin-top: 8px; }
+.file-audit-content summary { font-size: 12px; cursor: pointer; }
+.file-audit-content pre { max-height: 320px; margin: 8px 0 0; padding: 10px; overflow: auto; border-radius: 8px; background: var(--vibego-bg-surface); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+
+/* Narrow viewports: bubbles and code stay readable without widening layout */
+@media (max-width: 640px) {
+  .chat-bubble { max-width: 100%; padding: 10px 12px; }
+  .chat-thread { gap: 10px; }
+  .md-code { padding: 10px; font-size: 12px; }
+  .md-h1 { font-size: 17px; }
+  .md-h2 { font-size: 15.5px; }
+}
+@media (prefers-reduced-motion: reduce) { .file-ref { transition: none; } }

@@ -91,6 +91,10 @@ export type MessageKey =
   | 'shell.runConsole'
   | 'shell.waitingOutput'
   | 'shell.runDetails'
+  | 'shell.fileAuditTitle'
+  | 'shell.fileAuditClose'
+  | 'shell.fileAuditEmpty'
+  | 'shell.fileAuditContentLabel'
   | 'shell.cancelRun'
   | 'shell.timeline'
   | 'shell.queue'
@@ -572,6 +576,10 @@ const EN_US: Catalog = {
   'shell.runConsole': 'RUN CONSOLE',
   'shell.waitingOutput': 'Waiting for model output…',
   'shell.runDetails': 'Run details',
+  'shell.fileAuditTitle': 'FILE REFERENCE',
+  'shell.fileAuditClose': 'Close file reference panel',
+  'shell.fileAuditEmpty': 'No tool activity recorded for this path in the current run.',
+  'shell.fileAuditContentLabel': 'Captured content',
   'shell.cancelRun': 'Request cancel',
   'shell.timeline': 'Run timeline',
   'shell.queue': 'queue',
@@ -1050,6 +1058,10 @@ const ZH_CN: Catalog = {
   'shell.runConsole': '运行控制台',
   'shell.waitingOutput': '等待模型输出…',
   'shell.runDetails': '运行详情',
+  'shell.fileAuditTitle': '文件引用',
+  'shell.fileAuditClose': '关闭文件引用面板',
+  'shell.fileAuditEmpty': '当前运行中没有记录到这个路径的工具活动。',
+  'shell.fileAuditContentLabel': '捕获的内容',
   'shell.cancelRun': '请求取消',
   'shell.timeline': '运行时间线',
   'shell.queue': '队列',

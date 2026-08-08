@@ -1,8 +1,10 @@
-import type { FormEvent, JSX, KeyboardEvent, RefObject } from 'react';
+import { useEffect, useState, type FormEvent, type JSX, type KeyboardEvent, type RefObject } from 'react';
 import type { CapabilityProfile, PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
 import { Button, Textarea } from '../ui/index.js';
 import { ApprovalCard, type ApprovalReviewPresentation } from './ApprovalCard.js';
 import { RecoveryCard } from './RecoveryCard.js';
+import { Markdown } from './markdown.js';
+import { FileAuditPanel } from './FileAuditPanel.js';
 
 export interface ConversationCopy {
   readonly title: string;
@@ -72,6 +74,10 @@ export interface ConversationCopy {
   readonly sandboxReadOnly: string;
   readonly sandboxWorkspaceWrite: string;
   readonly sandboxExternal: string;
+  readonly fileAuditTitle?: string | undefined;
+  readonly fileAuditClose?: string | undefined;
+  readonly fileAuditEmpty?: string | undefined;
+  readonly fileAuditContentLabel?: string | undefined;
 }
 
 export interface ConversationShellProps {
@@ -109,6 +115,9 @@ function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void 
 
 /** Conversation-first surface; all authority remains in the App callbacks. */
 export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onProfileChange, onCancel, onApprove, onRetry, capabilityProfile }: ConversationShellProps): JSX.Element {
+  const [auditPath, setAuditPath] = useState<string | undefined>(undefined);
+  const runId = run?.runId;
+  useEffect(() => { setAuditPath(undefined); }, [runId]);
   const approval = typeof profile.approval === 'string' ? profile.approval : 'on-request';
   const sandboxMode = profile.sandbox.mode;
   const workspaceWriteEnabled = capabilityProfile === undefined || capabilityProfile?.filesystemMode === 'workspace-write';
@@ -124,7 +133,8 @@ export function ConversationShell({ run, events, message, profile, composerRef, 
   return (
     <section className="conversation-column" aria-label={copy.conversationTimeline}>
       <section className="conversation-stream" aria-label={copy.conversationStream}>
-        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} /> : <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div>}
+        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} onFileRef={setAuditPath} /> : <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div>}
+        <FileAuditPanel path={auditPath} events={events} onClose={() => setAuditPath(undefined)} copy={{ title: copy.fileAuditTitle, close: copy.fileAuditClose, empty: copy.fileAuditEmpty, contentLabel: copy.fileAuditContentLabel }} />
       </section>
       <section className="panel composer-panel">
         <form onSubmit={onSubmit}>
@@ -206,8 +216,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-function RunConsole({ run, events, copy, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
-  return <RunConsoleContent run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} />;
+function RunConsole({ run, events, copy, onCancel, onApprove, onRetry, onFileRef }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined; readonly onFileRef?: ((path: string) => void) | undefined }): JSX.Element {
+  return <RunConsoleContent run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} onFileRef={onFileRef} />;
 }
 
 function PermissionSnapshotSummary({ snapshot, copy }: { readonly snapshot: PermissionProfileRunSnapshot; readonly copy: ConversationCopy }): JSX.Element {
@@ -228,7 +238,7 @@ function formatSnapshotTimestamp(value: string): string {
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : 'not set';
 }
 
-function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined }): JSX.Element {
+function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry, onFileRef }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined; readonly onFileRef?: ((path: string) => void) | undefined }): JSX.Element {
   const streaming = !['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status);
   const snapshotBlocked = run.permissionSnapshot !== undefined && run.permissionSnapshot.status !== 'ready';
   return (
@@ -246,7 +256,7 @@ function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry }: 
         <div className="chat-message chat-message-assistant">
           <div className="chat-bubble">
             {run.output.length > 0
-              ? <>{run.output}{streaming && <span className="stream-cursor" aria-hidden="true" />}</>
+              ? <><Markdown text={run.output} onFileRef={onFileRef} />{streaming && <span className="stream-cursor" aria-hidden="true" />}</>
               : <span className="chat-thinking">{copy.waitingOutput}{streaming && <span className="thinking-dots" aria-hidden="true"><span /><span /><span /></span>}</span>}
           </div>
         </div>
