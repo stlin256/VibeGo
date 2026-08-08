@@ -53,6 +53,8 @@ export interface DeepSeekSearchExecutor {
 export interface DeepSeekTranslationState {
   readonly chatCallIds: Map<number, string>;
   readonly anthropicToolIds: Map<number, string>;
+  readonly responsesStreamedArguments: Set<string>;
+  readonly responsesItemCallIds: Map<string, string>;
   anthropicTerminal?: boolean;
 }
 
@@ -261,7 +263,7 @@ function boundSearchResponse(response: DeepSeekSearchResponse, request: DeepSeek
  */
 export async function* streamDeepSeek(options: StreamDeepSeekOptions): AsyncIterable<ModelEvent> {
   const fetchImpl = options.fetchImpl ?? ((input: string, init?: RequestInit) => globalThis.fetch(input, init));
-  const state: DeepSeekTranslationState = { chatCallIds: new Map(), anthropicToolIds: new Map() };
+  const state: DeepSeekTranslationState = newTranslationState();
   let response: Response;
   try {
     response = await fetchImpl(options.config.endpoint, buildRequest(options.config, options.request, options.apiKey, options.signal));
@@ -380,13 +382,16 @@ export function translateDeepSeekResponsesEvent(input: unknown, state: DeepSeekT
   if (!record || !type) return [malformedEvent()];
   if (type === 'response.output_text.delta') return textEvent(record.delta);
   if (type === 'response.function_call_arguments.delta') {
-    const callId = stringValue(record.call_id) ?? stringValue(record.item_id);
+    const itemId = stringValue(record.item_id);
+    // DeepSeek deltas carry only the item id; the public call id arrives with the output item.
+    const callId = stringValue(record.call_id) ?? (itemId === undefined ? undefined : state.responsesItemCallIds.get(itemId)) ?? itemId;
     const argumentsChunk = record.delta;
     if (!callId || !isSafeCallId(callId) || typeof argumentsChunk !== 'string') return [malformedEvent()];
+    state.responsesStreamedArguments.add(callId);
     const name = stringValue(record.name);
     return [{ type: 'tool-call-delta', callId, ...(name ? { name } : {}), argumentsChunk }];
   }
-  if (type === 'response.completed') {
+  if (type === 'response.completed' || type === 'response.incomplete') {
     const response = asRecord(record.response);
     if (!response) return [malformedEvent()];
     const usage = asRecord(response.usage);
@@ -405,11 +410,36 @@ export function translateDeepSeekResponsesEvent(input: unknown, state: DeepSeekT
   }
   if (type === 'response.failed') return [{ type: 'error', code: 'DEEPSEEK_STREAM_DISCONNECTED', retryable: true, safeMessage: 'DeepSeek response failed.' }];
   if (type === 'response.error') return [malformedEvent()];
-  if (type === 'response.created' || type === 'response.in_progress' || type === 'response.output_item.added'
-    || type === 'response.output_item.done' || type === 'response.content_part.added'
+  if (type === 'response.output_item.added' || type === 'response.output_item.done') {
+    const item = asRecord(record.item);
+    // The function call name only appears on the output item, not on the
+    // argument deltas, so surface it as a tool-call delta. Arguments arrive
+    // either incrementally via deltas or buffered on the done item — never both.
+    if (item && stringValue(item.type) === 'function_call') {
+      const callId = stringValue(item.call_id) ?? stringValue(item.id);
+      const name = stringValue(item.name);
+      const argumentsText = stringValue(item.arguments) ?? '';
+      if (!callId || !isSafeCallId(callId) || !name) return [malformedEvent()];
+      const itemId = stringValue(item.id);
+      if (itemId) state.responsesItemCallIds.set(itemId, callId);
+      if (type === 'response.output_item.added') {
+        if (argumentsText.length > 0) state.responsesStreamedArguments.add(callId);
+        return [{ type: 'tool-call-delta', callId, name, argumentsChunk: argumentsText }];
+      }
+      const buffered = state.responsesStreamedArguments.has(callId) ? '' : argumentsText;
+      state.responsesStreamedArguments.add(callId);
+      return [{ type: 'tool-call-delta', callId, name, argumentsChunk: buffered }];
+    }
+    return [];
+  }
+  if (type === 'response.created' || type === 'response.in_progress'
+    || type === 'response.content_part.added'
     || type === 'response.content_part.done' || type === 'response.web_search_call.in_progress'
     || type === 'response.web_search_call.searching' || type === 'response.web_search_call.completed'
     || type.startsWith('response.reasoning')) return [];
+  // Other Responses lifecycle events (response.queued, *.done, ...) carry no
+  // model output; ignoring them keeps the stream tolerant of provider additions.
+  if (type.startsWith('response.')) return [];
   return [malformedEvent()];
 }
 
@@ -504,13 +534,13 @@ function buildRequest(config: DeepSeekConfig, request: ModelRequest, apiKey: str
     : config.endpointProfile === 'openai-responses'
       ? {
         model: request.model,
-        input: request.messages,
-        ...(config.toolCalling === 'enabled' && request.tools.length > 0 ? { tools: request.tools } : {}),
+        input: toResponsesInput(request.messages),
+        ...(config.toolCalling === 'enabled' && request.tools.length > 0 ? { tools: toResponsesTools(request.tools) } : {}),
         stream: true,
         max_output_tokens: request.budget.maxOutputTokens,
         ...thinkingBody(config.thinkingMode),
         ...(config.webSearch === 'provider-owned' ? {
-          tools: [...(config.toolCalling === 'enabled' ? request.tools : []), { type: 'web_search' }],
+          tools: [...(config.toolCalling === 'enabled' ? toResponsesTools(request.tools) : []), { type: 'web_search' }],
         } : {}),
       }
       : {
@@ -534,6 +564,53 @@ function buildRequest(config: DeepSeekConfig, request: ModelRequest, apiKey: str
       Authorization: `Bearer ${apiKey}`,
     };
   return { method: 'POST', headers, body: JSON.stringify(body), signal };
+}
+
+function toResponsesTools(tools: readonly unknown[]): unknown[] {
+  return tools.map((tool) => {
+    if (typeof tool !== 'object' || tool === null) return tool;
+    const candidate = tool as { type?: unknown; function?: unknown };
+    if (candidate.type !== 'function' || typeof candidate.function !== 'object' || candidate.function === null) return tool;
+    const fn = candidate.function as { name?: unknown; description?: unknown; parameters?: unknown };
+    if (typeof fn.name !== 'string') return tool;
+    // The Responses endpoint expects a flat function item, not the chat-completions wrapper.
+    return {
+      type: 'function',
+      name: fn.name,
+      ...(typeof fn.description === 'string' ? { description: fn.description } : {}),
+      ...(fn.parameters === undefined ? {} : { parameters: fn.parameters }),
+    };
+  });
+}
+
+function toResponsesInput(messages: readonly unknown[]): unknown[] {
+  const items: unknown[] = [];
+  for (const message of messages) {
+    if (typeof message !== 'object' || message === null) {
+      items.push(message);
+      continue;
+    }
+    const record = message as Record<string, unknown>;
+    if (record.role === 'tool') {
+      items.push({
+        type: 'function_call_output',
+        call_id: record.tool_call_id,
+        output: typeof record.content === 'string' ? record.content : JSON.stringify(record.content ?? null),
+      });
+      continue;
+    }
+    if (record.role === 'assistant' && Array.isArray(record.tool_calls)) {
+      if (typeof record.content === 'string' && record.content.length > 0) items.push({ role: 'assistant', content: record.content });
+      for (const call of record.tool_calls.slice(0, 64)) {
+        const toolCall = call as Record<string, unknown>;
+        const fn = toolCall.function as Record<string, unknown> | undefined;
+        items.push({ type: 'function_call', call_id: toolCall.id, name: fn?.name, arguments: fn?.arguments });
+      }
+      continue;
+    }
+    items.push(message);
+  }
+  return items;
 }
 
 function thinkingBody(mode: DeepSeekConfig['thinkingMode']): Record<string, unknown> {
@@ -592,8 +669,8 @@ function disconnectedEvent(): Extract<ModelEvent, { type: 'error' }> {
   return { type: 'error', code: 'DEEPSEEK_STREAM_DISCONNECTED', retryable: true, safeMessage: 'DeepSeek stream disconnected.' };
 }
 
-function newTranslationState(): DeepSeekTranslationState {
-  return { chatCallIds: new Map(), anthropicToolIds: new Map() };
+export function newTranslationState(): DeepSeekTranslationState {
+  return { chatCallIds: new Map(), anthropicToolIds: new Map(), responsesStreamedArguments: new Set(), responsesItemCallIds: new Map() };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

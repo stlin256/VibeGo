@@ -209,8 +209,12 @@ export class AgentLoop {
       if (controller.signal.aborted) return await cancel('user-cancelled-before-start');
       await transition('planning');
 const messages: unknown[] = [...contextResult.messages];
+      const modelToolDescriptors = new Map<string, AgentToolDescriptor>();
       const modelTools = modelProvider.capabilities.toolCalls && toolRuntime
-        ? toolRuntime.descriptors.map(toModelTool)
+        ? toolRuntime.descriptors.map((descriptor) => {
+          modelToolDescriptors.set(toModelToolName(descriptor.name), descriptor);
+          return toModelTool(descriptor);
+        })
         : [];
       let turnIndex = 0;
       let toolCallCount = 0;
@@ -338,7 +342,7 @@ const messages: unknown[] = [...contextResult.messages];
 
         const toolResults: Array<{ call: PendingToolCall; descriptor: AgentToolDescriptor; content: string }> = [];
         for (const call of calls.values()) {
-          const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal, transition, toolRuntime);
+          const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal, transition, toolRuntime, modelToolDescriptors);
           if (toolResult.failure) {
             if (controller.signal.aborted) return await cancel('user-cancelled-during-tool');
             controller.abort();
@@ -354,7 +358,7 @@ const messages: unknown[] = [...contextResult.messages];
           tool_calls: toolResults.map(({ call, descriptor }) => ({
             id: call.callId,
             type: 'function',
-            function: { name: descriptor.name, arguments: call.argumentsText.trim() || '{}' },
+            function: { name: call.name ?? descriptor.name, arguments: call.argumentsText.trim() || '{}' },
           })),
         });
         for (const { call, content } of toolResults) {
@@ -400,9 +404,11 @@ const messages: unknown[] = [...contextResult.messages];
     signal: AbortSignal,
     transition: (next: RunStatus, reason?: string) => Promise<void>,
     runtime: ToolRuntime | undefined,
+    modelToolDescriptors: ReadonlyMap<string, AgentToolDescriptor>,
   ): Promise<{ descriptor: AgentToolDescriptor; content: string; failure?: undefined } | { failure: { code: string; message: string } }> {
     if (!runtime) return { failure: { code: 'TOOLS_UNAVAILABLE', message: 'Tool calls are not enabled for this run.' } };
-    const descriptor = runtime.descriptors.find((entry) => entry.name === call.name || entry.id === call.name);
+    const descriptor = runtime.descriptors.find((entry) => entry.name === call.name || entry.id === call.name)
+      ?? (call.name === undefined ? undefined : modelToolDescriptors.get(call.name));
     await this.append(runId, 'tool.requested', 'orchestrator', turnId, {
       callId: call.callId,
       ...(descriptor ? { toolId: descriptor.id, toolVersion: descriptor.version, risk: descriptor.risk } : { toolName: call.name ?? 'unknown' }),
@@ -562,11 +568,17 @@ interface PendingToolCall {
 
 const MAX_TOOL_ARGUMENT_BYTES = 256 * 1024;
 
+/** Model APIs enforce ^[a-zA-Z0-9_-]+$ on tool names; descriptor names may contain dots. */
+function toModelToolName(name: string): string {
+  const sanitized = name.replace(/[^a-zA-Z0-9_-]/gu, '_');
+  return sanitized.length > 0 ? sanitized : 'tool';
+}
+
 function toModelTool(descriptor: AgentToolDescriptor): unknown {
   return {
     type: 'function',
     function: {
-      name: descriptor.name,
+      name: toModelToolName(descriptor.name),
       description: descriptor.summary,
       parameters: descriptor.inputSchema ?? { type: 'object' },
     },

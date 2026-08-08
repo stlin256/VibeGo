@@ -3,6 +3,7 @@ import type { ModelEvent, ModelRequest } from '@ready4vibe/contracts';
 import {
   DeepSeekProvider,
   mapDeepSeekHttpError,
+  newTranslationState,
   translateDeepSeekAnthropicEvent,
   translateDeepSeekChatChunk,
   translateDeepSeekResponsesEvent,
@@ -70,6 +71,28 @@ describe('DeepSeek protocol translators', () => {
     expect(translateDeepSeekResponsesEvent({ type: 'response.completed', response: { status: 'completed', usage: { input_tokens: 3, output_tokens: 5 } } })).toEqual([
       { type: 'usage', inputTokens: 3, outputTokens: 5 },
       { type: 'completed', finishReason: 'stop' },
+    ]);
+    expect(translateDeepSeekResponsesEvent({ type: 'response.incomplete', response: { status: 'incomplete', usage: { input_tokens: 3, output_tokens: 5 } } })).toEqual([
+      { type: 'usage', inputTokens: 3, outputTokens: 5 },
+      { type: 'completed', finishReason: 'length' },
+    ]);
+    expect(translateDeepSeekResponsesEvent({ type: 'response.output_text.done', text: 'ok' })).toEqual([]);
+    expect(translateDeepSeekResponsesEvent({ type: 'response.queued', response: { status: 'queued' } })).toEqual([]);
+    const toolState = newTranslationState();
+    expect(translateDeepSeekResponsesEvent({ type: 'response.output_item.added', item: { type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'filesystem_read', arguments: '' } }, toolState)).toEqual([
+      { type: 'tool-call-delta', callId: 'call-1', name: 'filesystem_read', argumentsChunk: '' },
+    ]);
+    // DeepSeek deltas carry only the item id; the call id resolves via the output item.
+    expect(translateDeepSeekResponsesEvent({ type: 'response.function_call_arguments.delta', item_id: 'item-1', delta: '{"path"' }, toolState)).toEqual([
+      { type: 'tool-call-delta', callId: 'call-1', argumentsChunk: '{"path"' },
+    ]);
+    // The done item carries the buffered arguments again; streamed deltas win.
+    expect(translateDeepSeekResponsesEvent({ type: 'response.output_item.done', item: { type: 'function_call', call_id: 'call-1', name: 'filesystem_read', arguments: '{"path":"note.txt"}' } }, toolState)).toEqual([
+      { type: 'tool-call-delta', callId: 'call-1', name: 'filesystem_read', argumentsChunk: '' },
+    ]);
+    // Without streamed deltas the buffered done arguments are delivered once.
+    expect(translateDeepSeekResponsesEvent({ type: 'response.output_item.done', item: { type: 'function_call', call_id: 'call-2', name: 'filesystem_read', arguments: '{"path":"a"}' } }, toolState)).toEqual([
+      { type: 'tool-call-delta', callId: 'call-2', name: 'filesystem_read', argumentsChunk: '{"path":"a"}' },
     ]);
     expect(translateDeepSeekAnthropicEvent({ type: 'message_start', message: { usage: { input_tokens: 2 } } })).toEqual([{ type: 'usage', inputTokens: 2 }]);
     expect(translateDeepSeekAnthropicEvent({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'ok' } })).toEqual([{ type: 'text-delta', text: 'ok' }]);
@@ -223,5 +246,38 @@ describe('DeepSeekProvider', () => {
     });
     const events = await collect(provider.stream(request, controller.signal));
     expect(events).toEqual([]);
+  });
+
+  it('flattens chat-completions tools and translates tool history for the Responses profile', async () => {
+    const calls: Array<{ input: string; init?: RequestInit }> = [];
+    const provider = new DeepSeekProvider({
+      config: {
+        ...config,
+        endpointProfile: 'openai-responses',
+        endpoint: 'https://api.deepseek.com/v1/responses',
+      },
+      apiKey: 'runtime-secret',
+      fetchImpl: async (input, init) => {
+        calls.push({ input, ...(init === undefined ? {} : { init }) });
+        return responseFor(['{"type":"response.completed","response":{"status":"completed"}}', '[DONE]']);
+      },
+    });
+    const historyRequest: ModelRequest = {
+      ...request,
+      messages: [
+        { role: 'user', content: 'Read note.txt' },
+        { role: 'assistant', content: null, tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'filesystem_read', arguments: '{"path":"note.txt"}' } }] },
+        { role: 'tool', tool_call_id: 'call-1', content: '{"content":"hello"}' },
+      ],
+      tools: [{ type: 'function', function: { name: 'filesystem_read', description: 'Read a file', parameters: { type: 'object', properties: { path: { type: 'string' } } } } }],
+    };
+    await collect(provider.stream(historyRequest, new AbortController().signal));
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.tools).toEqual([{ type: 'function', name: 'filesystem_read', description: 'Read a file', parameters: { type: 'object', properties: { path: { type: 'string' } } } }]);
+    expect(body.input).toEqual([
+      { role: 'user', content: 'Read note.txt' },
+      { type: 'function_call', call_id: 'call-1', name: 'filesystem_read', arguments: '{"path":"note.txt"}' },
+      { type: 'function_call_output', call_id: 'call-1', output: '{"content":"hello"}' },
+    ]);
   });
 });

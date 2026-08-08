@@ -483,4 +483,33 @@ describe('AgentLoop', () => {
     expect(result).toMatchObject({ status: 'failed' });
     expect((await eventStore.read('run_tool_argument_limit')).at(-1)?.payload).toMatchObject({ code: 'TOOL_ARGUMENT_LIMIT_EXCEEDED' });
   });
+
+  it('sanitizes dotted tool names for the model and resolves them back on execution', async () => {
+    const provider = new SequenceModelProvider([
+      [
+        { type: 'tool-call-delta', callId: 'call-1', name: 'filesystem_read', argumentsChunk: '{"path":"note.txt"}' },
+        { type: 'completed', finishReason: 'tool-calls' },
+      ],
+      [
+        { type: 'text-delta', text: 'done' },
+        { type: 'completed', finishReason: 'stop' },
+      ],
+    ]);
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'filesystem.read', id: 'filesystem.read', version: '1.0.0', risk: 'read' as const, summary: 'Read a file', inputSchema: { type: 'object' } }],
+      execute: vi.fn(async ({ input }: { input: unknown }) => ({ output: { received: input } })),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
+
+    const result = await loop.run({ runId: 'run_tool_sanitized', config: config({ limits: { ...config().limits, maxTurns: 2 } }) });
+    expect(result).toMatchObject({ status: 'completed', output: 'done' });
+    expect(provider.requests[0]?.tools).toEqual([{ type: 'function', function: { name: 'filesystem_read', description: 'Read a file', parameters: { type: 'object' } } }]);
+    expect(runtime.execute).toHaveBeenCalledWith(expect.objectContaining({ callId: 'call-1', input: { path: 'note.txt' }, descriptor: expect.objectContaining({ id: 'filesystem.read' }) }));
+    expect(provider.requests[1]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'assistant', tool_calls: [expect.objectContaining({ function: expect.objectContaining({ name: 'filesystem_read' }) })] }),
+    ]));
+    const events = await eventStore.read('run_tool_sanitized');
+    expect(events.find((event) => event.type === 'tool.requested')?.payload).toMatchObject({ toolId: 'filesystem.read' });
+  });
 });
