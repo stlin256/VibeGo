@@ -241,7 +241,16 @@ function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry }: 
       {snapshotBlocked && run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
       {run.status === 'needs-recovery' && <RecoveryCard copy={{ eyebrow: copy.recoveryEyebrow, title: copy.recoveryTitle, description: copy.recoveryDescription, action: copy.recoveryAction }} onRetry={onRetry} />}
       {run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} copy={{ eyebrow: copy.approvalEyebrow, meta: copy.approvalMeta, sandboxLabel: copy.approvalSandboxLabel, networkLabel: copy.approvalNetworkLabel, imageLabel: copy.approvalImageLabel, allowOnce: copy.approvalAllowOnce, allowAriaLabel: copy.approvalAllowAriaLabel, deny: copy.approvalDeny, sessionNote: copy.approvalSessionNote, reviewReviewedLabel: copy.reviewReviewedLabel, reviewAskedLabel: copy.reviewAskedLabel, reviewDeniedLabel: copy.reviewDeniedLabel, reviewUnavailableLabel: copy.reviewUnavailableLabel, reviewReviewedDescription: copy.reviewReviewedDescription, reviewAskedDescription: copy.reviewAskedDescription, reviewDeniedDescription: copy.reviewDeniedDescription, reviewUnavailableDescription: copy.reviewUnavailableDescription }} />)}
-      <pre className="output-view" aria-busy={streaming}>{run.output || copy.waitingOutput}{streaming && <span className="stream-cursor" aria-hidden="true" />}</pre>
+      <div className="chat-thread" aria-busy={streaming}>
+        {typeof run.config.userMessage === 'string' && run.config.userMessage.length > 0 && <div className="chat-message chat-message-user"><div className="chat-bubble">{run.config.userMessage}</div></div>}
+        <div className="chat-message chat-message-assistant">
+          <div className="chat-bubble">
+            {run.output.length > 0
+              ? <>{run.output}{streaming && <span className="stream-cursor" aria-hidden="true" />}</>
+              : <span className="chat-thinking">{copy.waitingOutput}{streaming && <span className="thinking-dots" aria-hidden="true"><span /><span /><span /></span>}</span>}
+          </div>
+        </div>
+      </div>
       <details className="run-details">
         <summary>{copy.runDetails}</summary>
         <div className="run-details-body">
