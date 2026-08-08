@@ -378,10 +378,18 @@ function sandboxNetwork(policy: SandboxPolicy): 'restricted' | 'enabled' {
   return 'network' in policy ? policy.network : 'restricted';
 }
 
+export interface FileSystemAdapterEntry {
+  readonly name: string;
+  isFile(): boolean;
+  isDirectory(): boolean;
+  isSymbolicLink(): boolean;
+}
+
 export interface FileSystemAdapterFileSystem {
   stat(path: string): Promise<{ size: number; isFile(): boolean }>;
   readFile(path: string): Promise<Uint8Array>;
   writeFile(path: string, content: Uint8Array): Promise<void>;
+  readdir(path: string): Promise<readonly FileSystemAdapterEntry[]>;
 }
 
 export interface FileReadInput {
@@ -677,6 +685,249 @@ function redactWorkspacePath(value: string, workspaceRoot: string): string {
 
 export function createSafeToolExecutor(options: ToolExecutorOptions): ToolExecutor {
   return new ToolExecutor(options);
+}
+
+const WALK_IGNORED_DIRS = new Set(['.git', 'node_modules']);
+
+interface WalkOptions {
+  readonly maxDepth: number;
+  readonly maxEntries: number;
+}
+
+/** Depth-bounded recursive listing under an already-resolved workspace base.
+ * Symlinked entries are skipped so the walk cannot escape the PathGuard
+ * boundary that resolved the base. */
+async function walkWorkspace(
+  fileSystem: FileSystemAdapterFileSystem,
+  baseAbsolute: string,
+  baseRelative: string,
+  options: WalkOptions,
+  visit: (entry: { relativePath: string; absolutePath: string; isDirectory: boolean }) => boolean | void,
+): Promise<void> {
+  let visited = 0;
+  const walk = async (absolute: string, relative: string, depth: number): Promise<void> => {
+    if (visited >= options.maxEntries) return;
+    let entries: readonly FileSystemAdapterEntry[];
+    try {
+      entries = await fileSystem.readdir(absolute);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (visited >= options.maxEntries) return;
+      if (entry.isSymbolicLink()) continue;
+      const isDirectory = entry.isDirectory();
+      if (isDirectory && WALK_IGNORED_DIRS.has(entry.name)) continue;
+      const childRelative = relative === '' ? entry.name : `${relative}/${entry.name}`;
+      const childAbsolute = `${absolute}/${entry.name}`;
+      visited += 1;
+      if (visit({ relativePath: childRelative, absolutePath: childAbsolute, isDirectory }) === false) return;
+      if (isDirectory && depth < options.maxDepth) await walk(childAbsolute, childRelative, depth + 1);
+    }
+  };
+  await walk(baseAbsolute, baseRelative, 0);
+}
+
+async function resolveWalkBase(pathGuard: PathGuard, workspaceRoot: string, value: unknown): Promise<{ absolute: string; relative: string }> {
+  const raw = typeof value === 'string' && value.trim().length > 0 ? value.trim() : '.';
+  // Models often send "/", "./src", or Windows separators; normalize to a workspace-relative path.
+  const relative = raw.replace(/\\/gu, '/').replace(/^\.\//u, '').replace(/^\/+/u, '').replace(/\/$/u, '') || '.';
+  // PathGuard.resolve('.') rejects the workspace root itself, so short-circuit it.
+  if (relative === '.') return { absolute: workspaceRoot, relative: '' };
+  try {
+    const absolute = await pathGuard.resolve(relative);
+    return { absolute, relative };
+  } catch {
+    throw new ToolAdapterError('PATH_GUARD');
+  }
+}
+
+function boundedCount(value: unknown, fallback: number, maximum: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > maximum) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+
+/** `filesystem.list`: bounded directory listing for workspace orientation. */
+export class FileSystemListToolAdapter implements ToolHandler {
+  readonly id = 'filesystem.list';
+  readonly version = '1.0.0';
+
+  constructor(
+    private readonly pathGuard: PathGuard,
+    private readonly fileSystem: FileSystemAdapterFileSystem,
+    private readonly workspaceRoot: string,
+  ) {}
+
+  async execute(input: unknown, _context: ToolHandlerContext): Promise<unknown> {
+    if (!isRecord(input)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const maxDepth = boundedCount(input.maxDepth, 2, 8);
+    const maxEntries = boundedCount(input.maxEntries, 200, 1_000);
+    const base = await resolveWalkBase(this.pathGuard, this.workspaceRoot, input.path);
+    const lines: string[] = [];
+    await walkWorkspace(this.fileSystem, base.absolute, base.relative, { maxDepth, maxEntries }, (entry) => {
+      lines.push(entry.isDirectory ? `${entry.relativePath}/` : entry.relativePath);
+    });
+    return { path: typeof input.path === 'string' ? input.path : '.', entries: lines, truncated: lines.length >= maxEntries };
+  }
+}
+
+/** `filesystem.search`: bounded regex content search across workspace files. */
+export class FileSystemSearchToolAdapter implements ToolHandler {
+  readonly id = 'filesystem.search';
+  readonly version = '1.0.0';
+
+  constructor(
+    private readonly pathGuard: PathGuard,
+    private readonly fileSystem: FileSystemAdapterFileSystem,
+    private readonly workspaceRoot: string,
+  ) {}
+
+  async execute(input: unknown, _context: ToolHandlerContext): Promise<unknown> {
+    if (!isRecord(input) || typeof input.pattern !== 'string' || input.pattern.length === 0 || input.pattern.length > 500) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const maxResults = boundedCount(input.maxResults, 50, 200);
+    const maxFileBytes = boundedCount(input.maxFileBytes, 512 * 1024, 1024 * 1024);
+    const maxDepth = boundedCount(input.maxDepth, 8, 12);
+    let matcher: RegExp;
+    try {
+      matcher = new RegExp(input.pattern, input.caseSensitive === true ? 'u' : 'iu');
+    } catch {
+      throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    }
+    const base = await resolveWalkBase(this.pathGuard, this.workspaceRoot, input.path);
+    const matches: string[] = [];
+    const files: { relativePath: string; absolutePath: string }[] = [];
+    await walkWorkspace(this.fileSystem, base.absolute, base.relative, { maxDepth, maxEntries: 20_000 }, (entry) => {
+      if (!entry.isDirectory) files.push({ relativePath: entry.relativePath, absolutePath: entry.absolutePath });
+      return files.length < 20_000;
+    });
+    for (const file of files) {
+      if (matches.length >= maxResults) break;
+      let stats: { size: number; isFile(): boolean };
+      try {
+        stats = await this.fileSystem.stat(file.absolutePath);
+      } catch {
+        continue;
+      }
+      if (!stats.isFile() || stats.size > maxFileBytes) continue;
+      let content: string;
+      try {
+        content = new TextDecoder().decode(await this.fileSystem.readFile(file.absolutePath));
+      } catch {
+        continue;
+      }
+      const lines = content.split('\n');
+      for (let index = 0; index < lines.length && matches.length < maxResults; index += 1) {
+        const line = lines[index] ?? '';
+        matcher.lastIndex = 0;
+        if (!matcher.test(line)) continue;
+        matches.push(`${file.relativePath}:${index + 1}: ${line.length > 200 ? `${line.slice(0, 200)}…` : line}`);
+      }
+    }
+    return { pattern: input.pattern, matches, truncated: matches.length >= maxResults };
+  }
+}
+
+/** `filesystem.find`: bounded glob matching over workspace-relative paths. */
+export class FileSystemFindToolAdapter implements ToolHandler {
+  readonly id = 'filesystem.find';
+  readonly version = '1.0.0';
+
+  constructor(
+    private readonly pathGuard: PathGuard,
+    private readonly fileSystem: FileSystemAdapterFileSystem,
+    private readonly workspaceRoot: string,
+  ) {}
+
+  async execute(input: unknown, _context: ToolHandlerContext): Promise<unknown> {
+    if (!isRecord(input) || typeof input.pattern !== 'string' || input.pattern.length === 0 || input.pattern.length > 200) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const maxResults = boundedCount(input.maxResults, 100, 500);
+    const maxDepth = boundedCount(input.maxDepth, 8, 12);
+    const matcher = globToRegExp(input.pattern);
+    if (!matcher) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const base = await resolveWalkBase(this.pathGuard, this.workspaceRoot, input.path);
+    const byBasename = !input.pattern.includes('/');
+    const matches: string[] = [];
+    await walkWorkspace(this.fileSystem, base.absolute, base.relative, { maxDepth, maxEntries: 20_000 }, (entry) => {
+      if (matches.length >= maxResults) return false;
+      const candidate = byBasename ? (entry.relativePath.split('/').pop() ?? entry.relativePath) : entry.relativePath;
+      if (matcher.test(candidate)) matches.push(entry.isDirectory ? `${entry.relativePath}/` : entry.relativePath);
+      return undefined;
+    });
+    return { pattern: input.pattern, matches, truncated: matches.length >= maxResults };
+  }
+}
+
+function globToRegExp(pattern: string): RegExp | undefined {
+  let source = '';
+  let index = 0;
+  while (index < pattern.length) {
+    const char = pattern[index] ?? '';
+    if (char === '*') {
+      if (pattern[index + 1] === '*') { source += '.*'; index += 2; }
+      else { source += '[^/]*'; index += 1; }
+    } else if (char === '?') {
+      source += '[^/]';
+      index += 1;
+    } else {
+      source += char.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+      index += 1;
+    }
+  }
+  try {
+    return new RegExp(`^${source}$`, 'u');
+  } catch {
+    return undefined;
+  }
+}
+
+/** `filesystem.edit`: anchored single-occurrence replacement, the bounded
+ * alternative to full-file rewrites for small targeted changes. */
+export class FileSystemEditToolAdapter implements ToolHandler {
+  readonly id = 'filesystem.edit';
+  readonly version = '1.0.0';
+
+  constructor(
+    private readonly pathGuard: PathGuard,
+    private readonly fileSystem: FileSystemAdapterFileSystem,
+    private readonly defaults: { maxFileBytes?: number } = {},
+  ) {}
+
+  async execute(input: unknown, _context: ToolHandlerContext): Promise<unknown> {
+    if (!isRecord(input) || typeof input.path !== 'string' || typeof input.oldText !== 'string' || typeof input.newText !== 'string' || input.oldText.length === 0) {
+      throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    }
+    const maximum = this.defaults.maxFileBytes ?? 1024 * 1024;
+    let safePath: string;
+    try {
+      safePath = await this.pathGuard.resolve(input.path);
+    } catch {
+      throw new ToolAdapterError('PATH_GUARD');
+    }
+    let content: Uint8Array;
+    try {
+      const stats = await this.fileSystem.stat(safePath);
+      if (!stats.isFile()) throw new ToolAdapterError('TARGET_NOT_FILE');
+      if (stats.size > maximum) throw new ToolAdapterError('FILE_TOO_LARGE');
+      content = await this.fileSystem.readFile(safePath);
+    } catch (error) {
+      if (error instanceof ToolAdapterError) throw error;
+      throw new ToolAdapterError('TARGET_UNAVAILABLE');
+    }
+    const text = new TextDecoder().decode(content);
+    const first = text.indexOf(input.oldText);
+    if (first === -1) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if (text.indexOf(input.oldText, first + 1) !== -1) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const next = text.slice(0, first) + input.newText + text.slice(first + input.oldText.length);
+    const encoded = new TextEncoder().encode(next);
+    if (encoded.byteLength > maximum) throw new ToolAdapterError('FILE_TOO_LARGE');
+    try {
+      await this.fileSystem.writeFile(safePath, encoded);
+    } catch {
+      throw new ToolAdapterError('TOOL_FAILED');
+    }
+    return { path: input.path, bytes: encoded.byteLength, replacements: 1 };
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

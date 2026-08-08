@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,10 @@ import { ApprovalPolicy, type ToolIntent } from '@ready4vibe/policy';
 import { SandboxResolver, type SandboxResolveRequest } from '@ready4vibe/sandbox';
 import { ToolRegistry } from '@ready4vibe/tools';
 import {
+  FileSystemEditToolAdapter,
+  FileSystemFindToolAdapter,
+  FileSystemListToolAdapter,
+  FileSystemSearchToolAdapter,
   FileSystemToolAdapter,
   FileSystemWriteToolAdapter,
   GitToolAdapter,
@@ -107,6 +111,7 @@ function realFileSystem(): FileSystemAdapterFileSystem {
     stat,
     readFile: async (path) => readFile(path),
     writeFile,
+    readdir: async (path) => readdir(path, { withFileTypes: true }),
   };
 }
 
@@ -444,5 +449,78 @@ describe('McpToolExecutorRuntime', () => {
       callPort: { call: vi.fn() },
       resolveWorkspaceRoot: () => 'C:\\workspace',
     })).toThrowError(new ToolAdapterError('TOOL_FORBIDDEN'));
+  });
+});
+
+describe('workspace navigation adapters', () => {
+  async function seededWorkspace(): Promise<string> {
+    const root = await temporaryWorkspace();
+    await mkdir(join(root, 'src', 'deep'), { recursive: true });
+    await mkdir(join(root, 'docs'));
+    await writeFile(join(root, 'src', 'main.ts'), 'export const answer = 42;\n// TODO: refine\n');
+    await writeFile(join(root, 'src', 'deep', 'util.ts'), 'export const helper = true;\n');
+    await writeFile(join(root, 'docs', 'guide.md'), '# Guide\nSee src/main.ts for the answer.\n');
+    return root;
+  }
+
+  it('lists a bounded directory tree with directory markers', async () => {
+    const root = await seededWorkspace();
+    try {
+      const adapter = new FileSystemListToolAdapter(new PathGuard(root), realFileSystem(), root);
+      const result = await adapter.execute({ path: '.', maxDepth: 1 }, {} as never) as { entries: string[]; truncated: boolean };
+      expect(result.entries).toContain('src/');
+      const fromSlash = await adapter.execute({ path: '/', maxDepth: 1 }, {} as never) as { entries: string[] };
+      expect(fromSlash.entries).toEqual(result.entries);
+      expect(result.entries).toContain('src/main.ts');
+      expect(result.entries).toContain('docs/guide.md');
+      expect(result.entries).not.toContain('src/deep/util.ts');
+      await expect(adapter.execute({ path: '../outside' }, {} as never)).rejects.toMatchObject({ code: 'PATH_GUARD' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('searches file contents with a bounded regex and returns located lines', async () => {
+    const root = await seededWorkspace();
+    try {
+      const adapter = new FileSystemSearchToolAdapter(new PathGuard(root), realFileSystem(), root);
+      const result = await adapter.execute({ pattern: 'answer' }, {} as never) as { matches: string[] };
+      expect(result.matches.some((line) => line.startsWith('src/main.ts:1:'))).toBe(true);
+      expect(result.matches.some((line) => line.startsWith('docs/guide.md:2:'))).toBe(true);
+      const caseSensitive = await adapter.execute({ pattern: 'ANSWER', caseSensitive: true }, {} as never) as { matches: string[] };
+      expect(caseSensitive.matches).toEqual([]);
+      await expect(adapter.execute({ pattern: '([' }, {} as never)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('finds files by glob against basenames or workspace-relative paths', async () => {
+    const root = await seededWorkspace();
+    try {
+      const adapter = new FileSystemFindToolAdapter(new PathGuard(root), realFileSystem(), root);
+      const byBasename = await adapter.execute({ pattern: '*.ts' }, {} as never) as { matches: string[] };
+      expect(byBasename.matches).toEqual(expect.arrayContaining(['src/main.ts', 'src/deep/util.ts']));
+      const byPath = await adapter.execute({ pattern: 'src/deep/*' }, {} as never) as { matches: string[] };
+      expect(byPath.matches).toEqual(['src/deep/util.ts']);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('edits exactly one anchored occurrence and rejects ambiguous or missing anchors', async () => {
+    const root = await seededWorkspace();
+    try {
+      const adapter = new FileSystemEditToolAdapter(new PathGuard(root), realFileSystem());
+      const result = await adapter.execute({ path: 'src/main.ts', oldText: 'answer = 42', newText: 'answer = 43' }, {} as never);
+      expect(result).toEqual({ path: 'src/main.ts', bytes: 42, replacements: 1 });
+      await expect(readFile(join(root, 'src', 'main.ts'), 'utf8')).resolves.toContain('answer = 43');
+      await expect(adapter.execute({ path: 'src/main.ts', oldText: 'missing anchor', newText: 'x' }, {} as never)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+      await writeFile(join(root, 'src', 'dup.ts'), 'dup\ndup\n');
+      await expect(adapter.execute({ path: 'src/dup.ts', oldText: 'dup', newText: 'x' }, {} as never)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+      await expect(adapter.execute({ path: '../outside.ts', oldText: 'a', newText: 'b' }, {} as never)).rejects.toMatchObject({ code: 'PATH_GUARD' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

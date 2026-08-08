@@ -29,7 +29,7 @@ describe('daemon filesystem tool settings', () => {
       expect(manager.runtimeForRun()).toBeUndefined();
       const enabled = manager.setFilesystemEnabled(true);
       expect(enabled.filesystemEnabled).toBe(true);
-      expect(enabled.availableTools).toEqual(['filesystem.read@1.0.0', 'filesystem.write@1.0.0']);
+      expect(enabled.availableTools).toEqual(['filesystem.read@1.0.0', 'filesystem.write@1.0.0', 'filesystem.list@1.0.0', 'filesystem.search@1.0.0', 'filesystem.find@1.0.0', 'filesystem.edit@1.0.0']);
       expect(manager.runtimeForRun()).toBeDefined();
       manager.setFilesystemEnabled(false);
       expect(manager.runtimeForRun()).toBeUndefined();
@@ -45,7 +45,7 @@ describe('daemon filesystem tool settings', () => {
       const first = new InMemoryToolSettingsManager(root, store);
       first.setFilesystemEnabled(true);
       const restarted = new InMemoryToolSettingsManager(root, store);
-      expect(restarted.status()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+      expect(restarted.status()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0', 'filesystem.list@1.0.0', 'filesystem.search@1.0.0', 'filesystem.find@1.0.0', 'filesystem.edit@1.0.0'] });
       expect(restarted.runtimeForRun()).toBeDefined();
       store.set('tools', 'v1', { schemaVersion: 'ready4vibe_tool_settings_v1', filesystemEnabled: 'yes' });
       expect(new InMemoryToolSettingsManager(root, store).status().filesystemEnabled).toBe(false);

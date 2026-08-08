@@ -340,7 +340,7 @@ const messages: unknown[] = [...contextResult.messages];
           return await fail('MAX_TOOL_CALLS_EXCEEDED', 'The run exceeded its tool-call limit.', false);
         }
 
-        const toolResults: Array<{ call: PendingToolCall; descriptor: AgentToolDescriptor; content: string }> = [];
+        const toolResults: Array<{ call: PendingToolCall; descriptor: AgentToolDescriptor | undefined; content: string }> = [];
         for (const call of calls.values()) {
           const toolResult = await this.executeToolCall(runId, turnId, call, config, controller.signal, transition, toolRuntime, modelToolDescriptors);
           if (toolResult.failure) {
@@ -358,7 +358,7 @@ const messages: unknown[] = [...contextResult.messages];
           tool_calls: toolResults.map(({ call, descriptor }) => ({
             id: call.callId,
             type: 'function',
-            function: { name: call.name ?? descriptor.name, arguments: call.argumentsText.trim() || '{}' },
+            function: { name: call.name ?? descriptor?.name ?? 'unknown', arguments: call.argumentsText.trim() || '{}' },
           })),
         });
         for (const { call, content } of toolResults) {
@@ -405,7 +405,7 @@ const messages: unknown[] = [...contextResult.messages];
     transition: (next: RunStatus, reason?: string) => Promise<void>,
     runtime: ToolRuntime | undefined,
     modelToolDescriptors: ReadonlyMap<string, AgentToolDescriptor>,
-  ): Promise<{ descriptor: AgentToolDescriptor; content: string; failure?: undefined } | { failure: { code: string; message: string } }> {
+  ): Promise<{ descriptor: AgentToolDescriptor | undefined; content: string; failure?: undefined } | { failure: { code: string; message: string } }> {
     if (!runtime) return { failure: { code: 'TOOLS_UNAVAILABLE', message: 'Tool calls are not enabled for this run.' } };
     const descriptor = runtime.descriptors.find((entry) => entry.name === call.name || entry.id === call.name)
       ?? (call.name === undefined ? undefined : modelToolDescriptors.get(call.name));
@@ -416,7 +416,7 @@ const messages: unknown[] = [...contextResult.messages];
     });
     if (!descriptor) {
       await this.append(runId, 'tool.completed', 'tool', turnId, { callId: call.callId, success: false, code: 'TOOL_UNKNOWN' });
-      return { failure: { code: 'TOOL_UNKNOWN', message: 'The requested tool is not available.' } };
+      return { descriptor: undefined, content: toolErrorContent('TOOL_UNKNOWN', `Tool "${call.name ?? 'unknown'}" is not available. Retry with one of the tools listed in this conversation.`) };
     }
 
     let input: unknown;
@@ -424,7 +424,7 @@ const messages: unknown[] = [...contextResult.messages];
       input = JSON.parse(call.argumentsText.trim() || '{}');
     } catch {
       await this.append(runId, 'tool.completed', 'tool', turnId, { callId: call.callId, toolId: descriptor.id, toolVersion: descriptor.version, success: false, code: 'TOOL_INPUT_INVALID' });
-      return { failure: { code: 'TOOL_INPUT_INVALID', message: 'The tool arguments were not valid JSON.' } };
+      return { descriptor, content: toolErrorContent('TOOL_INPUT_INVALID', 'The tool arguments were not valid JSON. Retry with a valid JSON object matching the tool schema.') };
     }
 
     const runtimeRequest: ToolRuntimeRequest = { runId, turnId, callId: call.callId, descriptor, input, config, signal };
@@ -538,6 +538,11 @@ const messages: unknown[] = [...contextResult.messages];
           code: failure.code,
           attempt: attempt + 1,
         });
+        if (MODEL_RECOVERABLE_TOOL_CODES.has(failure.code)) {
+          const content = toolErrorContent(failure.code, failure.message);
+          await this.append(runId, 'tool.output', 'tool', turnId, { callId: call.callId, content, bytes: Buffer.byteLength(content), truncated: false });
+          return { descriptor, content };
+        }
         return { failure };
       }
     }
@@ -602,6 +607,13 @@ function safeJsonStringify(value: unknown): string {
   }
 }
 
+/** Input-level tool failures the model can correct on the next turn. */
+const MODEL_RECOVERABLE_TOOL_CODES = new Set(['TOOL_UNKNOWN', 'TOOL_INPUT_INVALID', 'PATH_GUARD']);
+
+function toolErrorContent(code: string, message: string): string {
+  return JSON.stringify({ error: { code, message } });
+}
+
 function safeToolFailure(error: unknown): { code: string; message: string } {
   const code = isRecord(error) && typeof error.code === 'string' ? error.code : 'TOOL_FAILED';
   const messages: Record<string, string> = {
@@ -615,6 +627,7 @@ function safeToolFailure(error: unknown): { code: string; message: string } {
     TOOL_EXECUTION_UNAVAILABLE: 'The tool execution provider is unavailable.',
     TOOL_HANDLER_UNAVAILABLE: 'The tool implementation is unavailable.',
     TOOL_INPUT_INVALID: 'The tool arguments were invalid.',
+    PATH_GUARD: 'The path was rejected by the workspace guard. Use a workspace-relative path such as "src/main.ts", or "." for the workspace root.',
   };
   return { code, message: messages[code] ?? 'The tool request failed safely.' };
 }

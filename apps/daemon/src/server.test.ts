@@ -1087,7 +1087,7 @@ describe('daemon health server', () => {
       expect(JSON.parse(initialBody)).toMatchObject({ filesystemEnabled: false, availableTools: [] });
       const enabled = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ filesystemEnabled: true }) });
       expect(enabled.status).toBe(200);
-      expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] });
+      expect(await enabled.json()).toMatchObject({ filesystemEnabled: true, availableTools: ['filesystem.read@1.0.0', 'filesystem.write@1.0.0', 'filesystem.list@1.0.0', 'filesystem.search@1.0.0', 'filesystem.find@1.0.0', 'filesystem.edit@1.0.0'] });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

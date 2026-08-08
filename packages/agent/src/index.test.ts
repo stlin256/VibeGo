@@ -356,8 +356,11 @@ describe('AgentLoop', () => {
     ]));
   });
 
-  it('fails closed on malformed arguments and unknown tools without executing', async () => {
-    const provider = new SequenceModelProvider([[{ type: 'tool-call-delta', callId: 'bad', name: 'missing', argumentsChunk: '{' }, { type: 'completed', finishReason: 'tool-calls' }]]);
+  it('returns unknown-tool errors to the model instead of failing the run', async () => {
+    const provider = new SequenceModelProvider([
+      [{ type: 'tool-call-delta', callId: 'bad', name: 'missing', argumentsChunk: '{}' }, { type: 'completed', finishReason: 'tool-calls' }],
+      [{ type: 'text-delta', text: 'recovered' }, { type: 'completed', finishReason: 'stop' }],
+    ]);
     const eventStore = new InMemoryEventStore();
     const runtime = {
       descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo' }],
@@ -365,11 +368,36 @@ describe('AgentLoop', () => {
     };
     const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
 
-    const result = await loop.run({ runId: 'run_tool_invalid', config: config() });
-    const events = await eventStore.read('run_tool_invalid');
-    expect(result).toMatchObject({ status: 'failed' });
-    expect(events.at(-1)?.payload).toMatchObject({ code: 'TOOL_UNKNOWN' });
+    const result = await loop.run({ runId: 'run_tool_invalid', config: config({ limits: { ...config().limits, maxTurns: 3 } }) });
+    expect(result).toMatchObject({ status: 'completed', output: 'recovered' });
     expect(runtime.execute).not.toHaveBeenCalled();
+    expect(provider.requests[1]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'tool', tool_call_id: 'bad', content: expect.stringContaining('TOOL_UNKNOWN') }),
+    ]));
+  });
+
+  it('returns malformed arguments and guard rejections to the model for a retry', async () => {
+    const provider = new SequenceModelProvider([
+      [{ type: 'tool-call-delta', callId: 'bad-json', name: 'echo', argumentsChunk: '{' }, { type: 'completed', finishReason: 'tool-calls' }],
+      [{ type: 'tool-call-delta', callId: 'bad-path', name: 'echo', argumentsChunk: '{"path":"/etc"}' }, { type: 'completed', finishReason: 'tool-calls' }],
+      [{ type: 'text-delta', text: 'recovered' }, { type: 'completed', finishReason: 'stop' }],
+    ]);
+    const eventStore = new InMemoryEventStore();
+    const runtime = {
+      descriptors: [{ name: 'echo', id: 'test.echo', version: '1.0.0', risk: 'read' as const, summary: 'Echo' }],
+      execute: vi.fn(async () => { throw Object.assign(new Error('guarded'), { code: 'PATH_GUARD' }); }),
+    };
+    const loop = new AgentLoop({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: provider, toolRuntime: runtime });
+
+    const result = await loop.run({ runId: 'run_tool_retry', config: config({ limits: { ...config().limits, maxTurns: 4 } }) });
+    expect(result).toMatchObject({ status: 'completed', output: 'recovered' });
+    expect(runtime.execute).toHaveBeenCalledTimes(1);
+    expect(provider.requests[1]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'tool', tool_call_id: 'bad-json', content: expect.stringContaining('TOOL_INPUT_INVALID') }),
+    ]));
+    expect(provider.requests[2]?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'tool', tool_call_id: 'bad-path', content: expect.stringContaining('PATH_GUARD') }),
+    ]));
   });
 
   it('records approval.required and does not fabricate an approval', async () => {

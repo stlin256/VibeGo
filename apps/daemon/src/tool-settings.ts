@@ -1,4 +1,4 @@
-import { readFile as defaultReadFile, stat as defaultStat, writeFile as defaultWriteFile } from 'node:fs/promises';
+import { readFile as defaultReadFile, readdir as defaultReaddir, stat as defaultStat, writeFile as defaultWriteFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ToolRuntime, ToolRuntimeRequest } from '@ready4vibe/agent';
 import type { RunConfig } from '@ready4vibe/contracts';
@@ -6,6 +6,10 @@ import { PathGuard } from '@ready4vibe/execution';
 import { ApprovalPolicy, type ToolIntent } from '@ready4vibe/policy';
 import { SandboxResolver, type SandboxResolveRequest } from '@ready4vibe/sandbox';
 import {
+  FileSystemEditToolAdapter,
+  FileSystemFindToolAdapter,
+  FileSystemListToolAdapter,
+  FileSystemSearchToolAdapter,
   FileSystemToolAdapter,
   FileSystemWriteToolAdapter,
   ToolAdapterError,
@@ -51,7 +55,7 @@ export class InMemoryToolSettingsManager implements ToolSettingsManager {
     return {
       filesystemEnabled: this.enabled,
       workspaceLabel: defaultWorkspace?.label ?? 'workspace',
-      availableTools: this.enabled ? ['filesystem.read@1.0.0', 'filesystem.write@1.0.0'] : [],
+      availableTools: this.enabled ? FILESYSTEM_TOOL_IDS : [],
     };
   }
 
@@ -135,6 +139,8 @@ function loadFilesystemEnabled(settings: SettingsStore | undefined): boolean {
   }
 }
 
+const FILESYSTEM_TOOL_IDS = ['filesystem.read@1.0.0', 'filesystem.write@1.0.0', 'filesystem.list@1.0.0', 'filesystem.search@1.0.0', 'filesystem.find@1.0.0', 'filesystem.edit@1.0.0'] as const;
+
 function createFilesystemRuntime(workspaceRoot: string, workspaceId: string): ToolExecutorRuntime {
   const registry = new ToolRegistry();
   registry.register({
@@ -153,16 +159,53 @@ function createFilesystemRuntime(workspaceRoot: string, workspaceId: string): To
     supportedSandboxModes: ['workspace-write', 'external-sandbox'],
     inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' }, maxBytes: { type: 'integer', minimum: 1 } }, required: ['path', 'content'], additionalProperties: false },
   });
+  registry.register({
+    id: 'filesystem.list',
+    version: '1.0.0',
+    risk: 'read',
+    summary: 'List a bounded directory tree inside the workspace.',
+    supportedSandboxModes: ['read-only', 'workspace-write'],
+    inputSchema: { type: 'object', properties: { path: { type: 'string' }, maxDepth: { type: 'integer', minimum: 1, maximum: 8 }, maxEntries: { type: 'integer', minimum: 1, maximum: 1000 } }, additionalProperties: false },
+  });
+  registry.register({
+    id: 'filesystem.search',
+    version: '1.0.0',
+    risk: 'read',
+    summary: 'Search workspace file contents with a bounded regex and return matching lines.',
+    supportedSandboxModes: ['read-only', 'workspace-write'],
+    inputSchema: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, caseSensitive: { type: 'boolean' }, maxResults: { type: 'integer', minimum: 1, maximum: 200 }, maxFileBytes: { type: 'integer', minimum: 1 }, maxDepth: { type: 'integer', minimum: 1, maximum: 12 } }, required: ['pattern'], additionalProperties: false },
+  });
+  registry.register({
+    id: 'filesystem.find',
+    version: '1.0.0',
+    risk: 'read',
+    summary: 'Find workspace files or directories by a bounded glob pattern.',
+    supportedSandboxModes: ['read-only', 'workspace-write'],
+    inputSchema: { type: 'object', properties: { pattern: { type: 'string' }, path: { type: 'string' }, maxResults: { type: 'integer', minimum: 1, maximum: 500 }, maxDepth: { type: 'integer', minimum: 1, maximum: 12 } }, required: ['pattern'], additionalProperties: false },
+  });
+  registry.register({
+    id: 'filesystem.edit',
+    version: '1.0.0',
+    risk: 'write',
+    summary: 'Replace one unique anchored text span in a workspace file after approval.',
+    supportedSandboxModes: ['workspace-write', 'external-sandbox'],
+    inputSchema: { type: 'object', properties: { path: { type: 'string' }, oldText: { type: 'string' }, newText: { type: 'string' } }, required: ['path', 'oldText', 'newText'], additionalProperties: false },
+  });
 
   const pathGuard = new PathGuard(workspaceRoot);
   const fileSystem: FileSystemAdapterFileSystem = {
     stat: async (path) => defaultStat(path),
     readFile: async (path) => new Uint8Array(await defaultReadFile(path)),
     writeFile: async (path, content) => { await defaultWriteFile(path, content); },
+    readdir: async (path) => defaultReaddir(path, { withFileTypes: true }),
   };
   const handlers = new ToolHandlerRegistry();
   handlers.register(new FileSystemToolAdapter(pathGuard, fileSystem));
   handlers.register(new FileSystemWriteToolAdapter(pathGuard, fileSystem));
+  handlers.register(new FileSystemListToolAdapter(pathGuard, fileSystem, workspaceRoot));
+  handlers.register(new FileSystemSearchToolAdapter(pathGuard, fileSystem, workspaceRoot));
+  handlers.register(new FileSystemFindToolAdapter(pathGuard, fileSystem, workspaceRoot));
+  handlers.register(new FileSystemEditToolAdapter(pathGuard, fileSystem));
   const executor = new ToolExecutor({ registry, approvalPolicy: new ApprovalPolicy(registry), sandboxResolver: new SandboxResolver(), handlers });
 
   return new ToolExecutorRuntime({
