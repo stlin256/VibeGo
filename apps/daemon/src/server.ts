@@ -1404,6 +1404,22 @@ async function handleRequest(
     return;
   }
 
+  const conversationSegment = pathname.startsWith('/api/v1/conversations/') && pathname.endsWith('/messages')
+    ? pathname.slice('/api/v1/conversations/'.length, pathname.length - '/messages'.length)
+    : undefined;
+  if (conversationSegment !== undefined && conversationSegment.length > 0 && !conversationSegment.includes('/')) {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'GET required' } }, { Allow: 'GET' });
+      return;
+    }
+    if (!options.runManager) {
+      writeJson(response, 503, { error: { code: 'RUNS_UNAVAILABLE', message: 'Run manager is not configured.' } });
+      return;
+    }
+    writeJson(response, 200, await options.runManager.listConversationMessages(decodeConversationId(conversationSegment)));
+    return;
+  }
+
   const runUsageMatch = /^\/api\/v1\/runs\/([^/]+)\/usage$/u.exec(pathname);
   if (runUsageMatch) {
     if (request.method !== 'GET') {
@@ -1839,6 +1855,16 @@ function decodeRunId(value: string | undefined): string {
   }
 }
 
+function decodeConversationId(value: string | undefined): string {
+  if (!value) throw new RequestError(400, 'INVALID_CONVERSATION_ID', 'Invalid conversation id.');
+  try {
+    const conversationId = decodeURIComponent(value);
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(conversationId)) throw new Error('invalid');
+    return conversationId;
+  } catch {
+    throw new RequestError(400, 'INVALID_CONVERSATION_ID', 'Invalid conversation id.');
+  }
+}
 function decodeGoalId(value: string | undefined): string {
   if (!value) throw new RequestError(400, 'INVALID_GOAL_ID', 'Invalid goal id.');
   try {

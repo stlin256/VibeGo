@@ -21,6 +21,8 @@ export interface RunConfigInput {
   limits: { maxTurns: number; maxWallTimeMs: number; maxModelInputTokens: number; maxModelOutputTokens: number; maxToolCalls: number; maxOutputBytes: number; maxContextBytes: number };
   createdBySessionId: string;
   clientRequestId: string;
+  /** Links the run into an ongoing conversation; omit to start a detached run. */
+  conversationId?: string;
 }
 
 export type RunProfile = Pick<RunConfigInput, 'workspaceId' | 'model' | 'taskTrust' | 'sandbox' | 'approval' | 'limits'>;
@@ -157,6 +159,17 @@ export interface RunSummary {
   readonly status: string;
   readonly title: string;
   readonly createdAt: string;
+  /** Present when the run belongs to a multi-message conversation. */
+  readonly conversationId?: string;
+}
+
+/** One exchange inside a conversation, projected by the daemon in chronological order. */
+export interface ConversationMessage {
+  readonly runId: string;
+  readonly status: string;
+  readonly user: string;
+  readonly assistant: string;
+  readonly at: string;
 }
 
 export interface RunSnapshot {
@@ -338,6 +351,8 @@ export interface StoredEvent {
   seq: number;
   runId: string;
   type: string;
+  source?: string;
+  correlationId?: string;
   at: string;
   payload: unknown;
 }
@@ -849,6 +864,10 @@ export class ApiClient {
 
   async listRuns(limit = 20): Promise<{ runs: RunSummary[] }> {
     return this.request(`/api/v1/runs?limit=${encodeURIComponent(limit)}`, { method: 'GET' });
+  }
+
+  async getConversationMessages(conversationId: string): Promise<{ messages: ConversationMessage[] }> {
+    return this.request(`/api/v1/conversations/${encodeURIComponent(conversationId)}/messages`, { method: 'GET' });
   }
 
   async cancel(runId: string): Promise<{ runId: string; status: string }> {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type JSX, type KeyboardEvent, type RefObject } from 'react';
-import type { CapabilityProfile, PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
+import type { CapabilityProfile, ConversationMessage, PermissionProfileRunSnapshot, RunProfile, RunSnapshot, StoredEvent } from '../../api.js';
 import { Button, Textarea } from '../ui/index.js';
 import { ApprovalCard, type ApprovalReviewPresentation } from './ApprovalCard.js';
 import { RecoveryCard } from './RecoveryCard.js';
@@ -83,6 +83,8 @@ export interface ConversationCopy {
 export interface ConversationShellProps {
   readonly run?: RunSnapshot | undefined;
   readonly events: readonly StoredEvent[];
+  /** Past exchanges of the active conversation, rendered above the live run. */
+  readonly thread?: readonly ConversationMessage[] | undefined;
   readonly message: string;
   readonly profile: RunProfile;
   readonly composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -114,7 +116,7 @@ function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void 
 }
 
 /** Conversation-first surface; all authority remains in the App callbacks. */
-export function ConversationShell({ run, events, message, profile, composerRef, copy, onMessageChange, onSubmit, onProfileChange, onCancel, onApprove, onRetry, capabilityProfile }: ConversationShellProps): JSX.Element {
+export function ConversationShell({ run, events, thread = [], message, profile, composerRef, copy, onMessageChange, onSubmit, onProfileChange, onCancel, onApprove, onRetry, capabilityProfile }: ConversationShellProps): JSX.Element {
   const [auditPath, setAuditPath] = useState<string | undefined>(undefined);
   const runId = run?.runId;
   useEffect(() => { setAuditPath(undefined); }, [runId]);
@@ -133,7 +135,8 @@ export function ConversationShell({ run, events, message, profile, composerRef, 
   return (
     <section className="conversation-column" aria-label={copy.conversationTimeline}>
       <section className="conversation-stream" aria-label={copy.conversationStream}>
-        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} onFileRef={setAuditPath} /> : <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div>}
+        {thread.map((exchange) => <ThreadExchange key={exchange.runId} exchange={exchange} />)}
+        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} onFileRef={setAuditPath} /> : thread.length === 0 ? <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div> : null}
         <FileAuditPanel path={auditPath} events={events} onClose={() => setAuditPath(undefined)} copy={{ title: copy.fileAuditTitle, close: copy.fileAuditClose, empty: copy.fileAuditEmpty, contentLabel: copy.fileAuditContentLabel }} />
       </section>
       <section className="panel composer-panel">
@@ -155,6 +158,16 @@ export function ConversationShell({ run, events, message, profile, composerRef, 
 
 const MAX_TOOL_OUTPUT_CARDS = 24;
 const MAX_TOOL_OUTPUT_DISPLAY_BYTES = 128 * 1024;
+
+/** A completed past exchange of the active conversation, rendered as plain bubbles. */
+function ThreadExchange({ exchange }: { readonly exchange: ConversationMessage }): JSX.Element {
+  return (
+    <div className="chat-thread chat-thread-history" data-status={exchange.status}>
+      {exchange.user.length > 0 && <div className="chat-message chat-message-user"><div className="chat-bubble">{exchange.user}</div></div>}
+      {exchange.assistant.length > 0 && <div className="chat-message chat-message-assistant"><div className="chat-bubble"><Markdown text={exchange.assistant} /></div></div>}
+    </div>
+  );
+}
 
 interface ToolOutputView {
   readonly seq: number;

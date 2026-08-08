@@ -71,7 +71,9 @@ export const RunConfigSchema = z.object({
   approval: ApprovalPolicySchema,
   limits: RunLimitsSchema,
   createdBySessionId: z.string().min(1),
-  clientRequestId: z.string().min(1),
+  clientRequestId: z.string().min(1),
+  /** Links runs into one conversation so the model sees prior exchanges. */
+  conversationId: z.string().min(1).max(128).optional(),
 });
 export type RunConfig = z.infer<typeof RunConfigSchema>;
 

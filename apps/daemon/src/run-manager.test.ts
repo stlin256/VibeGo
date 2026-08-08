@@ -494,3 +494,51 @@ describe('RunManager LLM run titles', () => {
     expect(events.filter((event) => event.type === 'run.titled')).toHaveLength(0);
   });
 });
+
+describe('RunManager conversations', () => {
+  function recordingProvider(requests: ModelRequest[]): ModelProvider {
+    return {
+      id: 'conversation-fake',
+      capabilities: { streaming: true, toolCalls: false, structuredOutput: false },
+      async *stream(request: ModelRequest) {
+        requests.push(request);
+        yield { type: 'text-delta', text: `answer ${requests.length}` };
+        yield { type: 'completed', finishReason: 'stop' };
+      },
+    };
+  }
+
+  it('feeds prior exchanges of the same conversation to the model as context', async () => {
+    const eventStore = new InMemoryEventStore();
+    const requests: ModelRequest[] = [];
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: recordingProvider(requests) });
+    const first = await runManager.start({ ...config, userMessage: 'first question', conversationId: 'conv-test' });
+    await vi.waitFor(() => expect(runManager.completion(first.runId)?.status).toBe('completed'));
+    const second = await runManager.start({ ...config, userMessage: 'second question', conversationId: 'conv-test' });
+    await vi.waitFor(() => expect(runManager.completion(second.runId)?.status).toBe('completed'));
+    const messages = requests[1]?.messages as ReadonlyArray<{ role: string; content: string }>;
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'user']);
+    expect(messages[0]?.content).toBe('first question');
+    expect(messages[1]?.content).toContain('answer 1');
+    expect(messages[2]?.content).toBe('second question');
+  });
+
+  it('projects conversation exchanges chronologically and tags run summaries', async () => {
+    const eventStore = new InMemoryEventStore();
+    const requests: ModelRequest[] = [];
+    const runManager = new RunManager({ eventStore, scheduler: new Scheduler(DEFAULT_SCHEDULER_POLICY), modelProvider: recordingProvider(requests) });
+    const first = await runManager.start({ ...config, userMessage: 'first question', conversationId: 'conv-test' });
+    await vi.waitFor(() => expect(runManager.completion(first.runId)?.status).toBe('completed'));
+    const other = await runManager.start({ ...config, userMessage: 'unrelated question' });
+    await vi.waitFor(() => expect(runManager.completion(other.runId)?.status).toBe('completed'));
+    const second = await runManager.start({ ...config, userMessage: 'second question', conversationId: 'conv-test' });
+    await vi.waitFor(() => expect(runManager.completion(second.runId)?.status).toBe('completed'));
+    const { messages } = await runManager.listConversationMessages('conv-test');
+    expect(messages.map((message) => message.user)).toEqual(['first question', 'second question']);
+    expect(messages.map((message) => message.runId)).toEqual([first.runId, second.runId]);
+    expect(messages[0]?.assistant).toContain('answer');
+    const summaries = await runManager.listRunSummaries();
+    expect(summaries.find((summary) => summary.runId === first.runId)?.conversationId).toBe('conv-test');
+    expect(summaries.find((summary) => summary.runId === other.runId)?.conversationId).toBeUndefined();
+  });
+});

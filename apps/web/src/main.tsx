@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type GoalProjectionListResponse, type GovernedPreflightInput, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionConfirmationInput, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type PermissionRevokeInput, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type RunSummary, type StoredEvent, type RunConfigInput, type GoalMutationResponse, type GoalPreflightResult } from './api.js';
+import { ApiClient, DEFAULT_RUN_PROFILE, loadRunProfile, resetRunProfile, saveRunProfile, type AgentMemoryKnowledgeSettingsPatchInput, type AgentMemoryKnowledgeSettingsStatus, type AgentMemoryOperationsStatus, type AgentMemorySettingsPatchInput, type AgentMemorySettingsStatus, type ApprovalReviewSettingsPatchInput, type ApprovalReviewSettingsStatus, type AuditEventsResponse, type CapabilityProfileSettingsPatchInput, type CapabilityProfileSettingsStatus, type CertificateStatus, type DeepSeekProbeResult, type DeepSeekSettingsInput, type DeepSeekSettingsStatus, type DeploymentReadinessStatus, type GitSettingsStatus, type GoalProjectionListResponse, type GovernedPreflightInput, type HealthResponse, type McpSettingsPatchInput, type McpSettingsStatus, type ModelProbeResult, type ModelSettingsInput, type ModelSettingsStatus, type PermissionConfirmationInput, type PermissionProfileSettingsPatchInput, type PermissionProfileSettingsStatus, type PermissionStatus, type PermissionRevokeInput, type SandboxSettingsStatus, type ToolSettingsStatus, type UsageSummary, type WorkspaceRegistryStatus, type RunProfile, type RunSnapshot, type RunSummary, type ConversationMessage, type StoredEvent, type RunConfigInput, type GoalMutationResponse, type GoalPreflightResult } from './api.js';
 import { App } from './App.js';
 import { applyLocaleToDocument, createTranslator, loadLocale, saveLocale, type Locale, type Translator } from './locale.js';
 import { applyThemeToDocument, loadTheme, saveTheme, type Theme } from './theme.js';
@@ -14,6 +14,8 @@ function RuntimeApp(): JSX.Element {
   const [run, setRun] = useState<RunSnapshot>();
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
+  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
+  const [thread, setThread] = useState<ConversationMessage[]>([]);
   const [error, setError] = useState<string>();
   const [profile, setProfile] = useState<RunProfile>(() => loadRunProfile());
   const [locale, setLocale] = useState<Locale>(() => loadLocale());
@@ -361,17 +363,28 @@ function RuntimeApp(): JSX.Element {
     return streamBufferRef.current;
   };
 
+  const watchAbortRef = useRef<AbortController | undefined>(undefined);
   const watchRun = async (runId: string, initial: RunSnapshot): Promise<void> => {
+    // A new watch supersedes the previous one so a still-streaming run cannot
+    // leak its events into the run the user is looking at now.
+    watchAbortRef.current?.abort();
+    const controller = new AbortController();
+    watchAbortRef.current = controller;
     setRun(initial);
     setEvents([]);
     const buffer = getStreamBuffer();
     buffer.reset();
-    for await (const event of client.streamEvents(runId, initial.lastEventSeq)) {
-      buffer.push(event, event.type === 'model.delta' ? readTextDelta(event.payload) : '');
-      if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') { buffer.flush(); setRun(await client.getRun(runId)); }
-      if (event.type === 'run.titled') await refreshRunHistory();
+    try {
+      for await (const event of client.streamEvents(runId, initial.lastEventSeq, controller.signal)) {
+        buffer.push(event, event.type === 'model.delta' ? readTextDelta(event.payload) : '');
+        if (event.type === 'approval.required' || event.type === 'approval.decided' || event.type === 'approval.expired' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.needs_recovery') { buffer.flush(); setRun(await client.getRun(runId)); }
+        if (event.type === 'run.titled') await refreshRunHistory();
+      }
+    } catch (watchError) {
+      if (!controller.signal.aborted) throw watchError;
     }
     buffer.flush();
+    if (controller.signal.aborted) return;
     await refreshGoalProjection();
     await refreshAgentMemoryOperations();
     await refreshObservability();
@@ -383,20 +396,49 @@ function RuntimeApp(): JSX.Element {
     catch { /* The history rail is optional; the conversation surface must not fail. */ }
   };
 
+  const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery']);
+
   const openRun = async (runId: string): Promise<void> => {
-    try { await watchRun(runId, await client.getRun(runId)); }
+    try {
+      setThread([]);
+      setConversationId(crypto.randomUUID());
+      await watchRun(runId, await client.getRun(runId));
+    }
     catch (reason) { setError(safeError(reason, t)); }
   };
 
+  /** Opens a whole conversation: past exchanges render as the thread, a still-active last run keeps streaming live. */
+  const openConversation = async (key: string): Promise<void> => {
+    if (key.startsWith('run_')) { await openRun(key); return; }
+    try {
+      const { messages } = await client.getConversationMessages(key);
+      if (messages.length === 0) { await openRun(key); return; }
+      setConversationId(key);
+      const last = messages[messages.length - 1]!;
+      const lastActive = !TERMINAL_RUN_STATUSES.has(last.status);
+      setThread(lastActive ? messages.slice(0, -1) : messages);
+      if (lastActive) { await watchRun(last.runId, await client.getRun(last.runId)); return; }
+      watchAbortRef.current?.abort();
+      setRun(undefined);
+      setEvents([]);
+    } catch (reason) { setError(safeError(reason, t)); }
+  };
+
   const newTask = (): void => {
+    watchAbortRef.current?.abort();
     setRun(undefined);
     setEvents([]);
+    setThread([]);
+    setConversationId(crypto.randomUUID());
   };
 
   const createRun = async (message: string): Promise<void> => {
     try {
+      // A follow-up message continues the same conversation; the previous run
+      // becomes a thread entry and the daemon injects it as model context.
+      if (run) setThread((current) => [...current, { runId: run.runId, status: run.status, user: run.config.userMessage, assistant: run.output.length > 0 ? run.output : run.final?.summary ?? '', at: '' }]);
       const config: RunConfigInput = {
-        ...profile, userMessage: message, createdBySessionId: 'web-memory-session', clientRequestId: crypto.randomUUID(),
+        ...profile, userMessage: message, createdBySessionId: 'web-memory-session', clientRequestId: crypto.randomUUID(), conversationId,
       };
       const started = await client.createRun(config);
       await watchRun(started.runId, await client.getRun(started.runId));
@@ -663,7 +705,7 @@ function RuntimeApp(): JSX.Element {
     setProfile(DEFAULT_RUN_PROFILE);
   };
 
-  return <App sessionReady={sessionReady} {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} runHistory={runHistory} onOpenRun={(runId) => { void openRun(runId); }} onNewTask={newTask} {...(error ? { error } : {})} onDismissError={() => setError(undefined)} locale={locale} onLocaleChange={setLocale} theme={theme} onThemeChange={setTheme} onCreateAccount={createAccount} onLogin={loginWithPassword} profile={profile} {...(capabilityProfileSettings ? { capabilityProfileSettings } : {})} capabilityProfileSettingsUnavailable={capabilityProfileSettingsUnavailable} {...(permissionSettings ? { permissionSettings } : {})} {...(permissionStatus ? { permissionStatus } : {})} permissionSettingsUnavailable={permissionSettingsUnavailable} {...(approvalReviewSettings ? { approvalReviewSettings } : {})} approvalReviewSettingsUnavailable={approvalReviewSettingsUnavailable} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(deepSeekSettings ? { deepSeekSettings } : {})} deepSeekSettingsUnavailable={deepSeekSettingsUnavailable} {...(deepSeekProbe ? { deepSeekProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onCreateGoal={createGoal} onAddTodo={addGoalTodo} onOpenGate={openGoalGate} onResolveGate={resolveGoalGate} onAttachEvidence={attachGoalEvidence} onPreflight={preflightGoal} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onConfigureDeepSeek={configureDeepSeek} onClearDeepSeekSettings={clearDeepSeekSettings} onProbeDeepSeek={probeDeepSeek} onPatchCapabilityProfileSettings={patchCapabilityProfileSettings} onResetCapabilityProfileSettings={resetCapabilityProfileSettings} onPatchPermissionSettings={patchPermissionSettings} onConfirmFullHost={confirmFullHost} onRevokePermission={revokePermission} onPatchApprovalReviewSettings={patchApprovalReviewSettings} onProbeApprovalReview={probeApprovalReview} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
+  return <App sessionReady={sessionReady} {...(health ? { health } : {})} {...(run ? { run } : {})} events={events} runHistory={runHistory} thread={thread} activeRailKey={run?.config.conversationId ?? run?.runId ?? conversationId} onOpenConversation={(key) => { void openConversation(key); }} onNewTask={newTask} {...(error ? { error } : {})} onDismissError={() => setError(undefined)} locale={locale} onLocaleChange={setLocale} theme={theme} onThemeChange={setTheme} onCreateAccount={createAccount} onLogin={loginWithPassword} profile={profile} {...(capabilityProfileSettings ? { capabilityProfileSettings } : {})} capabilityProfileSettingsUnavailable={capabilityProfileSettingsUnavailable} {...(permissionSettings ? { permissionSettings } : {})} {...(permissionStatus ? { permissionStatus } : {})} permissionSettingsUnavailable={permissionSettingsUnavailable} {...(approvalReviewSettings ? { approvalReviewSettings } : {})} approvalReviewSettingsUnavailable={approvalReviewSettingsUnavailable} {...(certificateStatus ? { certificateStatus } : {})} certificateStatusUnavailable={certificateStatusUnavailable} {...(deploymentReadiness ? { deploymentReadiness } : {})} deploymentReadinessUnavailable={deploymentReadinessUnavailable} {...(modelSettings ? { modelSettings } : {})} modelSettingsUnavailable={modelSettingsUnavailable} {...(modelProbe ? { modelProbe } : {})} {...(deepSeekSettings ? { deepSeekSettings } : {})} deepSeekSettingsUnavailable={deepSeekSettingsUnavailable} {...(deepSeekProbe ? { deepSeekProbe } : {})} {...(agentMemorySettings ? { agentMemorySettings } : {})} agentMemorySettingsUnavailable={agentMemorySettingsUnavailable} {...(agentMemoryOperations ? { agentMemoryOperations } : {})} {...(agentMemoryKnowledgeSettings ? { agentMemoryKnowledgeSettings } : {})} agentMemoryKnowledgeSettingsUnavailable={agentMemoryKnowledgeSettingsUnavailable} {...(mcpSettings ? { mcpSettings } : {})} mcpSettingsUnavailable={mcpSettingsUnavailable} {...(toolSettings ? { toolSettings } : {})} toolSettingsUnavailable={toolSettingsUnavailable} {...(gitSettings ? { gitSettings } : {})} gitSettingsUnavailable={gitSettingsUnavailable} {...(sandboxSettings ? { sandboxSettings } : {})} sandboxSettingsUnavailable={sandboxSettingsUnavailable} {...(workspaces ? { workspaces } : {})} workspacesUnavailable={workspacesUnavailable} {...(goalProjection ? { goalProjection } : {})} goalProjectionLoading={goalProjectionLoading} goalProjectionUnavailable={goalProjectionUnavailable} goalProjectionRefreshing={goalProjectionRefreshing} onRefreshGoalProjection={refreshGoalProjection} onCreateGoal={createGoal} onAddTodo={addGoalTodo} onOpenGate={openGoalGate} onResolveGate={resolveGoalGate} onAttachEvidence={attachGoalEvidence} onPreflight={preflightGoal} {...(usageSummary ? { usageSummary } : {})} {...(auditEvents ? { auditEvents } : {})} observabilityLoading={observabilityLoading} observabilityUnavailable={observabilityUnavailable} observabilityRefreshing={observabilityRefreshing} onRefreshObservability={refreshObservability} onProfileChange={setProfile} onResetProfile={resetProfile} onCreateRun={createRun} onCancel={cancel} onApprove={approve} onRetry={retry} onConfigureModel={configureModel} onClearModelSettings={clearModelSettings} onProbeModel={probeModel} onConfigureDeepSeek={configureDeepSeek} onClearDeepSeekSettings={clearDeepSeekSettings} onProbeDeepSeek={probeDeepSeek} onPatchCapabilityProfileSettings={patchCapabilityProfileSettings} onResetCapabilityProfileSettings={resetCapabilityProfileSettings} onPatchPermissionSettings={patchPermissionSettings} onConfirmFullHost={confirmFullHost} onRevokePermission={revokePermission} onPatchApprovalReviewSettings={patchApprovalReviewSettings} onProbeApprovalReview={probeApprovalReview} onPatchAgentMemorySettings={patchAgentMemorySettings} onProbeAgentMemory={probeAgentMemory} onUpdateAgentMemory={updateAgentMemory} onRollbackAgentMemory={rollbackAgentMemory} onPatchAgentMemoryKnowledgeSettings={patchAgentMemoryKnowledgeSettings} onProbeAgentMemoryKnowledge={probeAgentMemoryKnowledge} onPatchMcpSettings={patchMcpSettings} onProbeMcp={probeMcp} onSetFilesystemToolsEnabled={setFilesystemToolsEnabled} onSetGitToolsEnabled={setGitToolsEnabled} onProbeSandbox={probeSandbox} onSetSandboxSettings={setSandboxSettingsFromWeb} onAddWorkspace={addWorkspace} onRemoveWorkspace={removeWorkspace} />;
 }
 
 function readTextDelta(payload: unknown): string {

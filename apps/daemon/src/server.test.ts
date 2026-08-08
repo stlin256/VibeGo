@@ -1302,3 +1302,21 @@ describe('daemon health server', () => {
     expect(await runManager.snapshot(secondStarted.runId)).toMatchObject({ permissionSnapshot: { profileRevision: 'profile-2' } });
   });
 });
+
+describe('daemon conversation projection', () => {
+  it('serves conversation messages in chronological order', async () => {
+    const provider = new FakeModelProvider({ events: [{ type: 'text-delta', text: 'hi there' }, { type: 'completed', finishReason: 'stop' }] });
+    const { manager, server } = makeRunServer(provider);
+    const port = await listen(server);
+    const first = await manager.start({ ...runConfig(), userMessage: 'first question', conversationId: 'conv-api', clientRequestId: 'client-conv-1' });
+    await vi.waitFor(() => expect(manager.completion(first.runId)?.status).toBe('completed'));
+    const second = await manager.start({ ...runConfig(), userMessage: 'second question', conversationId: 'conv-api', clientRequestId: 'client-conv-2' });
+    await vi.waitFor(() => expect(manager.completion(second.runId)?.status).toBe('completed'));
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/conversations/conv-api/messages`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { messages: Array<{ runId: string; user: string; assistant: string }> };
+    expect(body.messages.map((message) => message.user)).toEqual(['first question', 'second question']);
+    expect(body.messages.map((message) => message.runId)).toEqual([first.runId, second.runId]);
+    expect(body.messages[0]?.assistant).toBe('hi there');
+  });
+});

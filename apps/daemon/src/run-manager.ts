@@ -114,7 +114,22 @@ export interface RunSummary {
   readonly status: RunStatus;
   readonly title: string;
   readonly createdAt: string;
+  /** Present when the run belongs to a multi-message conversation. */
+  readonly conversationId?: string;
 }
+
+/** Chronological chat projection of one exchange inside a conversation. */
+export interface ConversationMessage {
+  readonly runId: string;
+  readonly status: RunStatus;
+  readonly user: string;
+  readonly assistant: string;
+  readonly at: string;
+}
+
+const MAX_CONVERSATION_HISTORY_RUNS = 10;
+const MAX_CONVERSATION_HISTORY_BYTES = 48 * 1024;
+const MAX_CONVERSATION_MESSAGE_CHARS = 4_000;
 
 export class RunManagerError extends Error {
   constructor(readonly code: 'WORKSPACE_NOT_FOUND' | 'CAPABILITY_PROFILE_BLOCKED' | 'CAPABILITY_PROFILE_INVALID' | 'PERMISSION_PROFILE_BLOCKED' | 'PERMISSION_PROFILE_INVALID' | 'RUN_ID_CONFLICT', message: string) {
@@ -252,6 +267,9 @@ export class RunManager {
     const knowledgeContext = capturedKnowledge
       ? await this.recallKnowledge(capturedKnowledge, config, runId, controller.signal)
       : [];
+    const conversationContext = config.conversationId
+      ? await this.recallConversation(config.conversationId, runId)
+      : [];
     let approvalReviewBinding: ApprovalReviewBinding | undefined;
     if (this.approvalReviewForRun) {
       try {
@@ -279,7 +297,7 @@ export class RunManager {
       ...(permissionSnapshot ? { permissionSnapshot } : {}),
       ...(approvalReviewBinding ? { approvalReviewerSnapshot: approvalReviewBinding.snapshot } : {}),
       ...(capturedToolRuntime ? { toolRuntime: capturedToolRuntime } : {}),
-      ...([...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...memoryContext, ...knowledgeContext] } : {}),
+      ...([...conversationContext, ...memoryContext, ...knowledgeContext].length > 0 ? { contextItems: [...conversationContext, ...memoryContext, ...knowledgeContext] } : {}),
     });
     void promise.then((result) => {
       this.completions.set(runId, result);
@@ -450,9 +468,53 @@ export class RunManager {
       const created = events.find((event) => event.type === 'run.created');
       const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
       if (!created || !config) continue;
-      summaries.push({ runId, status: latestRunStatus(events), title: runTitleFromEvents(events, config.userMessage), createdAt: created.at });
+      summaries.push({ runId, status: latestRunStatus(events), title: runTitleFromEvents(events, config.userMessage), createdAt: created.at, ...(config.conversationId ? { conversationId: config.conversationId } : {}) });
     }
     return summaries;
+  }
+
+  /** Chronological chat projection for one conversation, bounded to the newest exchanges. */
+  async listConversationMessages(conversationId: string, limit = 50): Promise<{ messages: ConversationMessage[] }> {
+    const bounded = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 50;
+    return { messages: (await this.collectConversationRuns(conversationId, undefined, false)).slice(-bounded) };
+  }
+
+  /** Prior terminal exchanges of the same conversation, newest-first budgeted, as model context. */
+  private async recallConversation(conversationId: string, excludeRunId: string): Promise<readonly ContextItem[]> {
+    const exchanges = (await this.collectConversationRuns(conversationId, excludeRunId, true)).slice(-MAX_CONVERSATION_HISTORY_RUNS);
+    const items: ContextItem[] = [];
+    let bytes = 0;
+    for (const exchange of [...exchanges].reverse()) {
+      const pair: ContextItem[] = [
+        { id: `conversation:${exchange.runId}:user`, source: 'user', trust: 'trusted', role: 'user', content: exchange.user.slice(0, MAX_CONVERSATION_MESSAGE_CHARS) },
+        ...(exchange.assistant.length > 0
+          ? [{ id: `conversation:${exchange.runId}:assistant`, source: 'model' as const, trust: 'trusted' as const, role: 'assistant' as const, content: exchange.assistant.slice(0, MAX_CONVERSATION_MESSAGE_CHARS) }]
+          : []),
+      ];
+      const pairBytes = pair.reduce((total, item) => total + Buffer.byteLength(item.content), 0);
+      if (bytes + pairBytes > MAX_CONVERSATION_HISTORY_BYTES) break;
+      bytes += pairBytes;
+      items.unshift(...pair);
+    }
+    return items;
+  }
+
+  /** Event-sourced scan of every run belonging to one conversation, in creation order. */
+  private async collectConversationRuns(conversationId: string, excludeRunId: string | undefined, terminalOnly: boolean): Promise<ConversationMessage[]> {
+    const messages: ConversationMessage[] = [];
+    for (const runId of this.eventStore.listRunIds()) {
+      if (runId === excludeRunId) continue;
+      const events = await this.eventStore.read(runId);
+      const created = events.find((event) => event.type === 'run.created');
+      const config = isRunConfigPayload(created?.payload) ? created.payload.config : undefined;
+      if (!created || !config || config.conversationId !== conversationId) continue;
+      const status = latestRunStatus(events);
+      if (terminalOnly && !isTerminal(status)) continue;
+      let assistant = '';
+      for (const event of events) if (event.type === 'model.delta' && isTextDeltaPayload(event.payload)) assistant += event.payload.text;
+      messages.push({ runId, status, user: config.userMessage, assistant, at: created.at });
+    }
+    return messages;
   }
 
   async recoverAfterRestart(): Promise<{ marked: number; skipped: number }> {
