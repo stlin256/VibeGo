@@ -77,6 +77,7 @@ export interface SandboxSettingsOptions {
   workspaceRegistry?: WorkspaceRegistry;
   probe?: SandboxRuntimeProbe;
   processRunner?: SandboxProcessRunner;
+  resolveRunRoot?: (config?: RunConfig) => string | undefined;
 }
 
 export interface SandboxSettingsManager {
@@ -114,6 +115,7 @@ export class InMemorySandboxSettingsManager implements SandboxSettingsManager {
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly probeRunner: SandboxRuntimeProbe;
   private readonly processRunner: SandboxProcessRunner;
+  private readonly resolveRunRoot: ((config?: RunConfig) => string | undefined) | undefined;
   private lastProbe: { provider: ExternalSandboxProvider; result: SandboxProbeResult } | undefined;
   private config: { provider: ExternalSandboxProvider; imageDigest: string; network: SandboxNetwork; resources: SandboxResourceSettings; enabled: boolean } | undefined;
 
@@ -121,6 +123,7 @@ export class InMemorySandboxSettingsManager implements SandboxSettingsManager {
     this.workspaceRegistry = options.workspaceRegistry ?? new InMemoryWorkspaceRegistry({ defaultRoot: resolve(options.workspaceRoot ?? process.cwd()) });
     this.probeRunner = options.probe ?? new ChildProcessSandboxProbe();
     this.processRunner = options.processRunner ?? new ContainerCliRunner();
+    this.resolveRunRoot = options.resolveRunRoot;
   }
 
   status(): SandboxSettingsStatus {
@@ -165,7 +168,7 @@ export class InMemorySandboxSettingsManager implements SandboxSettingsManager {
     if (!settings?.enabled || !this.lastProbe?.result.healthy || config.sandbox.mode !== 'external-sandbox') return undefined;
     if (config.sandbox.provider !== settings.provider) return undefined;
     if (settings.network === 'restricted' && config.sandbox.network === 'enabled') return undefined;
-    const workspaceRoot = this.workspaceRegistry.resolveRoot(config.workspaceId);
+    const workspaceRoot = this.resolveRunRoot?.(config) ?? this.workspaceRegistry.resolveRoot(config.workspaceId);
     if (!workspaceRoot) return undefined;
     return createShellRuntime(workspaceRoot, config.workspaceId, settings, config, this.processRunner);
   }

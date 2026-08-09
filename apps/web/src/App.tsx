@@ -99,6 +99,7 @@ export interface AppProps {
   workspaces?: WorkspaceRegistryStatus;
   workspacesUnavailable?: boolean;
   onAddWorkspace?: (input: { id: string; path: string; label?: string }) => Promise<void> | void;
+  onCreateProject?: (name: string) => Promise<string | undefined> | void;
   onRemoveWorkspace?: (id: string) => Promise<void> | void;
   goalProjection?: GoalProjectionListResponse;
   goalProjectionLoading?: boolean;
@@ -119,7 +120,7 @@ export interface AppProps {
   onRefreshObservability?: () => Promise<void> | void;
 }
 
-export function App({ health, sessionReady, run, events = [], error, onDismissError, onCreateAccount, onLogin, onCreateRun, onCancel, onApprove, onRetry, runHistory, onOpenRun, thread = [], activeRailKey, onOpenConversation, onNewTask, locale = 'en-US', onLocaleChange, theme = 'light', onThemeChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, approvalReviewSettings, approvalReviewSettingsUnavailable = false, onPatchApprovalReviewSettings, onProbeApprovalReview, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
+export function App({ health, sessionReady, run, events = [], error, onDismissError, onCreateAccount, onLogin, onCreateRun, onCancel, onApprove, onRetry, runHistory, onOpenRun, thread = [], activeRailKey, onOpenConversation, onNewTask, locale = 'en-US', onLocaleChange, theme = 'light', onThemeChange, profile = DEFAULT_RUN_PROFILE, onProfileChange, onResetProfile, capabilityProfileSettings, capabilityProfileSettingsUnavailable = false, onPatchCapabilityProfileSettings, onResetCapabilityProfileSettings, permissionSettings, permissionStatus, permissionSettingsUnavailable = false, onPatchPermissionSettings, onConfirmFullHost, onRevokePermission, approvalReviewSettings, approvalReviewSettingsUnavailable = false, onPatchApprovalReviewSettings, onProbeApprovalReview, certificateStatus, certificateStatusUnavailable = false, deploymentReadiness, deploymentReadinessUnavailable = false, modelSettings, modelSettingsUnavailable = false, modelProbe, onConfigureModel, onClearModelSettings, onProbeModel, deepSeekSettings, deepSeekSettingsUnavailable = false, deepSeekProbe, onConfigureDeepSeek, onClearDeepSeekSettings, onProbeDeepSeek, agentMemorySettings, agentMemorySettingsUnavailable = false, onPatchAgentMemorySettings, onProbeAgentMemory, onUpdateAgentMemory, onRollbackAgentMemory, agentMemoryOperations, agentMemoryKnowledgeSettings, agentMemoryKnowledgeSettingsUnavailable = false, onPatchAgentMemoryKnowledgeSettings, onProbeAgentMemoryKnowledge, mcpSettings, mcpSettingsUnavailable = false, onPatchMcpSettings, onProbeMcp, toolSettings, toolSettingsUnavailable = false, onSetFilesystemToolsEnabled, gitSettings, gitSettingsUnavailable = false, onSetGitToolsEnabled, sandboxSettings, sandboxSettingsUnavailable = false, onProbeSandbox, onSetSandboxSettings, workspaces, workspacesUnavailable = false, onAddWorkspace, onCreateProject, onRemoveWorkspace, goalProjection, goalProjectionLoading = false, goalProjectionUnavailable = false, goalProjectionRefreshing = false, onRefreshGoalProjection, onCreateGoal, onAddTodo, onOpenGate, onResolveGate, onAttachEvidence, onPreflight, usageSummary, auditEvents, observabilityLoading = false, observabilityUnavailable = false, observabilityRefreshing = false, onRefreshObservability }: AppProps): JSX.Element {
   const t = createTranslator(locale);
   const [accountPassword, setAccountPassword] = useState('');
   const [accountPasswordConfirm, setAccountPasswordConfirm] = useState('');
@@ -191,6 +192,7 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
   const [sandboxNetwork, setSandboxNetwork] = useState<'restricted' | 'enabled'>('restricted');
   const [sandboxBusy, setSandboxBusy] = useState(false);
   const [workspaceIdInput, setWorkspaceIdInput] = useState('');
+  const [workspaceProjectName, setWorkspaceProjectName] = useState('');
   const [workspaceLabelInput, setWorkspaceLabelInput] = useState('');
   const [workspacePathInput, setWorkspacePathInput] = useState('');
   const [workspaceConfirmed, setWorkspaceConfirmed] = useState(false);
@@ -590,6 +592,18 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
     setWorkspaceBusy(true);
     try { await onRemoveWorkspace(id); } catch { /* Parent renders a safe error. */ } finally { setWorkspaceBusy(false); }
   };
+  const createProject = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (!onCreateProject || !workspaceProjectName.trim()) return;
+    setWorkspaceBusy(true);
+    try {
+      const createdId = await onCreateProject(workspaceProjectName.trim());
+      if (typeof createdId === 'string' && createdId.length > 0) updateProfile({ workspaceId: createdId });
+      setWorkspaceProjectName('');
+    } catch {
+      // Parent renders a safe error and keeps the form for an intentional retry.
+    } finally { setWorkspaceBusy(false); }
+  };
   const updateLimit = (key: keyof RunProfile['limits'], value: string): void => onProfileChange?.({ ...profile, limits: { ...profile.limits, [key]: clampLimit(key, value) } });
   const updateSandboxMode = (mode: RunProfile['sandbox']['mode']): void => {
     const network = 'network' in profile.sandbox && profile.sandbox.network ? profile.sandbox.network : 'restricted';
@@ -687,6 +701,10 @@ export function App({ health, sessionReady, run, events = [], error, onDismissEr
                       {workspacesUnavailable ? <p className="muted">{t('settings.workspace.unavailableNote')}</p> : workspaces ? <>
                         <label>{t('settings.workspace')}<select value={profile.workspaceId} disabled={workspaceBusy} onChange={(event) => updateProfile({ workspaceId: event.target.value })}>{workspaces.workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.label} · {workspace.id}{workspace.isDefault ? t('settings.workspace.defaultSuffix') : ''}</option>)}</select></label>
                         <p className="muted">{t('settings.workspace.pathNote')}</p>
+                        {onCreateProject && <form onSubmit={(event) => { void createProject(event); }}>
+                          <label>{t('settings.workspace.createLabel')}<input value={workspaceProjectName} disabled={workspaceBusy} onChange={(event) => setWorkspaceProjectName(event.target.value)} placeholder={t('settings.workspace.createPlaceholder')} autoComplete="off" /></label>
+                          <button type="submit" disabled={workspaceBusy || !workspaceProjectName.trim()}>{t('settings.workspace.create')}</button>
+                        </form>}
                         {onAddWorkspace && <form onSubmit={(event) => { void addWorkspace(event); }}>
                           <label>{t('settings.workspace.idLabel')}<input value={workspaceIdInput} disabled={workspaceBusy} onChange={(event) => setWorkspaceIdInput(event.target.value)} placeholder="project-a" autoComplete="off" /></label>
                           <label>{t('settings.workspace.friendlyLabel')}<input value={workspaceLabelInput} disabled={workspaceBusy} onChange={(event) => setWorkspaceLabelInput(event.target.value)} placeholder="Project A" autoComplete="off" /></label>

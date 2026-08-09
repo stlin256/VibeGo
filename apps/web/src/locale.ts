@@ -339,6 +339,9 @@ export type MessageKey =
   | 'settings.workspace.pathLabel'
   | 'settings.workspace.confirmLabel'
   | 'settings.workspace.add'
+  | 'settings.workspace.createLabel'
+  | 'settings.workspace.createPlaceholder'
+  | 'settings.workspace.create'
   | 'settings.workspace.remove'
   | 'settings.workspace.unpairedNote'
   | 'settings.model.title'
@@ -824,6 +827,9 @@ const EN_US: Catalog = {
   'settings.workspace.pathLabel': 'Path on daemon machine',
   'settings.workspace.confirmLabel': 'I understand this grants guarded tools access to that directory.',
   'settings.workspace.add': 'Add workspace',
+  'settings.workspace.createLabel': 'New project',
+  'settings.workspace.createPlaceholder': 'New project name',
+  'settings.workspace.create': 'Create project',
   'settings.workspace.remove': 'Remove',
   'settings.workspace.unpairedNote': 'Pair with the daemon to configure workspaces.',
   'settings.model.title': 'Model provider',
@@ -1306,6 +1312,9 @@ const ZH_CN: Catalog = {
   'settings.workspace.pathLabel': 'daemon 机器上的路径',
   'settings.workspace.confirmLabel': '我理解这会授予受防护工具访问该目录的权限。',
   'settings.workspace.add': '添加工作区',
+  'settings.workspace.createLabel': '新建项目',
+  'settings.workspace.createPlaceholder': '新项目名称',
+  'settings.workspace.create': '新建项目',
   'settings.workspace.remove': '移除',
   'settings.workspace.unpairedNote': '与 daemon 配对后即可配置工作区。',
   'settings.model.title': '模型提供方',

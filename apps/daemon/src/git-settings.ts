@@ -31,6 +31,7 @@ export interface GitSettingsManager {
 export interface GitSettingsOptions {
   readonly workspaceRegistry?: WorkspaceRegistry;
   readonly processRunner?: ProcessRunner;
+  readonly resolveRunRoot?: (config?: RunConfig) => string | undefined;
 }
 
 export interface GitProcessRunnerOptions {
@@ -46,11 +47,13 @@ export interface GitProcessRunnerOptions {
 export class InMemoryGitSettingsManager implements GitSettingsManager {
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly processRunner: ProcessRunner;
+  private readonly resolveRunRoot: ((config?: RunConfig) => string | undefined) | undefined;
   private enabled = false;
 
   constructor(options: GitSettingsOptions = {}) {
     this.workspaceRegistry = options.workspaceRegistry ?? new InMemoryWorkspaceRegistry({ defaultRoot: process.cwd() });
     this.processRunner = options.processRunner ?? new ChildProcessGitRunner();
+    this.resolveRunRoot = options.resolveRunRoot;
   }
 
   status(): GitSettingsStatus {
@@ -71,7 +74,7 @@ export class InMemoryGitSettingsManager implements GitSettingsManager {
   runtimeForRun(config?: RunConfig): ToolRuntime | undefined {
     if (!this.enabled || !config || config.taskTrust !== 'trusted-workspace') return undefined;
     if (config.sandbox.mode !== 'read-only' && config.sandbox.mode !== 'workspace-write') return undefined;
-    const workspaceRoot = this.workspaceRegistry.resolveRoot(config.workspaceId);
+    const workspaceRoot = this.resolveRunRoot?.(config) ?? this.workspaceRegistry.resolveRoot(config.workspaceId);
     if (!workspaceRoot) return undefined;
     return createGitRuntime(workspaceRoot, config.workspaceId, this.processRunner);
   }

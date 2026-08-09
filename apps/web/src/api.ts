@@ -804,6 +804,10 @@ export class ApiClient {
     return this.request<WorkspaceRegistryStatus>('/api/v1/workspaces', { method: 'POST', body: JSON.stringify({ ...input, confirmation: 'add-workspace' }) });
   }
 
+  async createWorkspace(name: string): Promise<WorkspaceRegistryStatus> {
+    return this.request<WorkspaceRegistryStatus>('/api/v1/workspaces/create', { method: 'POST', body: JSON.stringify({ name, confirmation: 'add-workspace' }) });
+  }
+
   async removeWorkspace(id: string): Promise<WorkspaceRegistryStatus> {
     return this.request<WorkspaceRegistryStatus>(`/api/v1/workspaces/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }

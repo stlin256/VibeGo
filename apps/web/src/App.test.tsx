@@ -185,6 +185,14 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\work\\project-a');
   });
 
+  it('renders the quick-create project row without leaking absolute paths', () => {
+    const html = renderToStaticMarkup(<App workspaces={{ workspaces: [{ id: 'default', label: 'vibego-workspaces', isDefault: true, canRemove: false, capabilities: { filesystem: true, externalSandbox: true } }] }} onCreateProject={() => undefined} />);
+    expect(html).toContain('New project');
+    expect(html).toContain('New project name');
+    expect(html).toContain('Create project');
+    expect(html).not.toContain('C:\\Users');
+  });
+
   it('renders safe sandbox metadata on an approval card', () => {
     const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } };
     const html = renderToStaticMarkup(<App health={health} run={{ version: 1, runId: 'run_approval', status: 'waiting-approval', config: { sandbox: { mode: 'external-sandbox', provider: 'docker', network: 'restricted' } } as never, lastEventSeq: 1, output: '', approvals: [{ approvalId: 'ap_12345678', runId: 'run_approval', turnId: 'turn', callId: 'call', toolId: 'shell.exec', toolVersion: '1.0.0', risk: 'destructive', argumentBytes: 24, createdAt: 1, expiresAt: Date.now() + 1_000, details: { sandboxProvider: 'docker', sandboxImageDigest: `ghcr.io/example@sha256:${'a'.repeat(64)}`, network: 'restricted' } }], scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'write' } }} />);

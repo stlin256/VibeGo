@@ -1,10 +1,12 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
+import { mkdirSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { parseRunConfig, type ApprovalReviewEventStore, type StoredEvent } from '@ready4vibe/contracts';
 import { ObservabilityMetricSchema, ObservabilityRangeSchema, type AuditEvent, type DeploymentReadiness, type ObservabilityMetric, type ObservabilityRange } from '@ready4vibe/contracts';
 import { AuthGate, AuthGateError, type AuthFailureCode, type AuthRequest, type TransportMode } from '@ready4vibe/auth';
 import type { CertificateReadiness, CertificateStatus } from '@ready4vibe/certificates';
-import { WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
+import { WORKSPACE_ID_PATTERN, WorkspaceRegistryError, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 import { GoalProjectionError, GoalWriteError, GoalWriteService, type GoalMutationResult } from '@ready4vibe/goal-control';
 import { buildAuditResponse, buildPricingResponse, buildRunUsage, buildUsageSummary, buildUsageTimeseries, verifyAuditChain } from '@ready4vibe/observability';
 import type { ObservabilityLedger } from '@ready4vibe/storage';
@@ -68,6 +70,7 @@ export interface DaemonServerOptions {
   gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
+  workspacesContainer?: string;
   goalEventStore?: GoalProjectionStore;
   goalWriteService?: GoalWriteService;
   goalAdmissionService?: GoalAdmissionService;
@@ -106,6 +109,7 @@ interface ResolvedDaemonServerOptions {
   gitSettings?: GitSettingsManager;
   sandboxSettings?: SandboxSettingsManager;
   workspaceRegistry?: WorkspaceRegistry;
+  workspacesContainer?: string;
   goalEventStore?: GoalProjectionStore;
   goalWriteService?: GoalWriteService;
   goalAdmissionService?: GoalAdmissionService;
@@ -177,6 +181,7 @@ export function createDaemonServer(options: DaemonServerOptions = {}): Server {
     ...(options.gitSettings ? { gitSettings: options.gitSettings } : {}),
     ...(options.sandboxSettings ? { sandboxSettings: options.sandboxSettings } : {}),
     ...(options.workspaceRegistry ? { workspaceRegistry: options.workspaceRegistry } : {}),
+    ...(options.workspacesContainer ? { workspacesContainer: options.workspacesContainer } : {}),
     ...(options.goalEventStore ? { goalEventStore: options.goalEventStore } : {}),
     ...(options.goalWriteService ? { goalWriteService: options.goalWriteService } : {}),
     ...(options.goalAdmissionService ? { goalAdmissionService: options.goalAdmissionService } : {}),
@@ -745,6 +750,49 @@ async function handleRequest(
     }
     try {
       options.workspaceRegistry.add({ id: input.id, path: input.path, ...(input.label ? { label: input.label } : {}) });
+      writeJson(response, 200, options.workspaceRegistry.status());
+    } catch (error) {
+      if (error instanceof WorkspaceRegistryError) {
+        const status = error.code === 'PERSISTENCE_FAILED'
+          ? 503
+          : error.code === 'WORKSPACE_DUPLICATE' || error.code === 'WORKSPACE_PROTECTED' ? 409 : 400;
+        writeJson(response, status, { error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
+  if (pathname === '/api/v1/workspaces/create') {
+    if (!options.workspaceRegistry || !options.workspacesContainer) {
+      writeJson(response, 503, { error: { code: 'WORKSPACES_UNAVAILABLE', message: 'Workspace registry is unavailable.' } });
+      return;
+    }
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required' } }, { Allow: 'POST' });
+      return;
+    }
+    const input = await readJson(request, options.bodyLimitBytes);
+    if (!isWorkspaceCreateInput(input)) {
+      writeJson(response, 400, { error: { code: 'INVALID_REQUEST', message: 'Project name and explicit confirmation are required.' } });
+      return;
+    }
+    const name = input.name.trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9_-]+/gu, '-').replace(/^-+|-+$/gu, '');
+    if (name.length === 0 || name.length > 64 || !WORKSPACE_ID_PATTERN.test(slug)) {
+      writeJson(response, 400, { error: { code: 'WORKSPACE_NAME_INVALID', message: 'Project name must be 1-64 characters and reduce to a valid workspace id.' } });
+      return;
+    }
+    const container = resolve(options.workspacesContainer);
+    const root = join(container, slug);
+    if (relative(container, root).startsWith('..')) {
+      writeJson(response, 400, { error: { code: 'WORKSPACE_NAME_INVALID', message: 'Project name must stay inside the workspaces container.' } });
+      return;
+    }
+    try {
+      mkdirSync(root, { recursive: true });
+      options.workspaceRegistry.add({ id: slug, path: root, label: name });
       writeJson(response, 200, options.workspaceRegistry.status());
     } catch (error) {
       if (error instanceof WorkspaceRegistryError) {
@@ -1699,6 +1747,10 @@ function isSandboxSettingsInput(value: unknown): value is SandboxSettingsInput {
   if (typeof value !== 'object' || value === null || !('provider' in value) || (value.provider !== 'docker' && value.provider !== 'podman') || !('imageDigest' in value) || typeof value.imageDigest !== 'string' || !('network' in value) || (value.network !== 'restricted' && value.network !== 'enabled') || !('enabled' in value) || typeof value.enabled !== 'boolean') return false;
   if (!('resources' in value) || typeof value.resources !== 'object' || value.resources === null || Array.isArray(value.resources)) return false;
   return Object.values(value.resources).every((entry) => typeof entry === 'number' && Number.isSafeInteger(entry) && entry > 0);
+}
+
+function isWorkspaceCreateInput(value: unknown): value is { name: string; confirmation: 'add-workspace' } {
+  return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string' && 'confirmation' in value && value.confirmation === 'add-workspace';
 }
 
 function isWorkspaceAddInput(value: unknown): value is { id: string; path: string; label?: string; confirmation: 'add-workspace' } {

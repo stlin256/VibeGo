@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1230,6 +1230,39 @@ describe('daemon health server', () => {
       const protectedDefault = await fetch(`${base}/api/v1/workspaces/default`, { method: 'DELETE' });
       expect(protectedDefault.status).toBe(409);
       expect(await protectedDefault.json()).toMatchObject({ error: { code: 'WORKSPACE_PROTECTED' } });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('creates named projects inside the workspaces container and rejects invalid or duplicate names', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-workspaces-'));
+    try {
+      const container = join(root, 'vibego-workspaces');
+      await mkdir(join(container, 'sessions'), { recursive: true });
+      const registry = new InMemoryWorkspaceRegistry({ defaultRoot: container });
+      const server = createDaemonServer({ workspaceRegistry: registry, workspacesContainer: container });
+      servers.push(server);
+      const port = await listen(server);
+      const base = `http://127.0.0.1:${port}`;
+
+      const missingConfirmation = await fetch(`${base}/api/v1/workspaces/create`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'My Project' }) });
+      expect(missingConfirmation.status).toBe(400);
+
+      const created = await fetch(`${base}/api/v1/workspaces/create`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'My Project', confirmation: 'add-workspace' }) });
+      const createdBody = await created.text();
+      expect(created.status).toBe(200);
+      expect(createdBody).not.toContain(root);
+      expect(JSON.parse(createdBody)).toMatchObject({ workspaces: expect.arrayContaining([expect.objectContaining({ id: 'my-project', label: 'My Project', canRemove: true })]) });
+      expect((await stat(join(container, 'my-project'))).isDirectory()).toBe(true);
+
+      const invalid = await fetch(`${base}/api/v1/workspaces/create`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '!!!', confirmation: 'add-workspace' }) });
+      expect(invalid.status).toBe(400);
+      expect(await invalid.json()).toMatchObject({ error: { code: 'WORKSPACE_NAME_INVALID' } });
+
+      const duplicate = await fetch(`${base}/api/v1/workspaces/create`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'my project', confirmation: 'add-workspace' }) });
+      expect(duplicate.status).toBe(409);
+      expect(await duplicate.json()).toMatchObject({ error: { code: 'WORKSPACE_DUPLICATE' } });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

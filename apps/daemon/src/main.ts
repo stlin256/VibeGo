@@ -13,6 +13,7 @@ import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-setting
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
 import { resolveDaemonTransport } from './transport-config.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
+import { createRunRootResolver } from './workspace-session.js';
 import { InMemoryGitSettingsManager } from './git-settings.js';
 import { SqliteWorkspaceRegistryPersistence } from './workspace-persistence.js';
 import { AgentMemorySettingsManager } from './agent-memory-settings.js';
@@ -82,10 +83,12 @@ try {
 }
 authGate.bindSessionPersistence(createAuthSessionPersistence(settingsStore));
 const accountManager = new DurableAccountManager({ settings: settingsStore });
+const workspacesContainer = join(process.cwd(), 'vibego-workspaces');
+mkdirSync(join(workspacesContainer, 'sessions'), { recursive: true });
 let workspaceRegistry: InMemoryWorkspaceRegistry;
 try {
   workspaceRegistry = new InMemoryWorkspaceRegistry({
-    defaultRoot: process.cwd(),
+    defaultRoot: workspacesContainer,
     persistence: new SqliteWorkspaceRegistryPersistence(settingsStore),
   });
 } catch (error) {
@@ -127,9 +130,10 @@ try {
   eventStore.close();
   throw error;
 }
-const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry, settingsStore);
-const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry });
-const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry });
+const resolveRunRoot = createRunRootResolver(workspacesContainer, workspaceRegistry);
+const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry, settingsStore, resolveRunRoot);
+const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry, resolveRunRoot });
+const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry, resolveRunRoot });
 // MCP remains explicitly disabled and has no default probe/transport. Web can
 // persist non-secret intent and request a later injected probe without causing
 // a child process or network request during daemon startup.
@@ -303,6 +307,7 @@ const server = createDaemonServer({
   gitSettings,
   sandboxSettings,
   workspaceRegistry,
+  workspacesContainer,
   observabilityLedger,
   agentMemorySettings,
   agentMemoryKnowledgeSettings,

@@ -15,5 +15,6 @@ Thumbs.db
 
 # Runtime data must never enter source control.
 .ready4vibe/
+vibego-workspaces/
 data/
 tmp/

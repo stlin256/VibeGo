@@ -41,12 +41,14 @@ export class InMemoryToolSettingsManager implements ToolSettingsManager {
   private enabled = false;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly settings: SettingsStore | undefined;
+  private readonly resolveRunRoot: ((config?: RunConfig) => string | undefined) | undefined;
 
-  constructor(workspaceRootOrRegistry: string | WorkspaceRegistry = process.cwd(), settings?: SettingsStore) {
+  constructor(workspaceRootOrRegistry: string | WorkspaceRegistry = process.cwd(), settings?: SettingsStore, resolveRunRoot?: (config?: RunConfig) => string | undefined) {
     this.workspaceRegistry = typeof workspaceRootOrRegistry === 'string'
       ? new InMemoryWorkspaceRegistry({ defaultRoot: resolve(workspaceRootOrRegistry) })
       : workspaceRootOrRegistry;
     this.settings = settings;
+    this.resolveRunRoot = resolveRunRoot;
     this.enabled = loadFilesystemEnabled(settings);
   }
 
@@ -74,7 +76,7 @@ export class InMemoryToolSettingsManager implements ToolSettingsManager {
 
   runtimeForRun(config?: RunConfig): ToolRuntime | undefined {
     if (!this.enabled) return undefined;
-    const workspaceRoot = this.workspaceRegistry.resolveRoot(config?.workspaceId ?? 'default');
+    const workspaceRoot = this.resolveRunRoot?.(config) ?? this.workspaceRegistry.resolveRoot(config?.workspaceId ?? 'default');
     return workspaceRoot ? createFilesystemRuntime(workspaceRoot, config?.workspaceId ?? 'default') : undefined;
   }
 }

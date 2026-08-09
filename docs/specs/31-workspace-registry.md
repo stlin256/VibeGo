@@ -13,8 +13,9 @@ registrations without changing the public API.
 
 ## Safety contract
 
-- The daemon always starts with one `default` workspace rooted at its captured
-  working directory. The root is never returned by an API, written to an event,
+- The daemon always starts with one `default` workspace rooted at
+  `<daemon cwd>/vibego-workspaces/` (created on boot, never the project root
+  itself). The root is never returned by an API, written to an event,
   included in SSE, logged, or stored in browser preferences.
 - Adding a workspace is an authenticated, CSRF-protected operation and requires
   an explicit `confirmation: "add-workspace"` value. The submitted path is used
@@ -43,6 +44,11 @@ Authenticated routes under `/api/v1`:
 - `POST /workspaces` accepts `{ id, path, label?, confirmation }` and returns
   the safe status list. `path` is the daemon-machine path supplied by the user;
   it is never echoed back.
+- `POST /workspaces/create` accepts `{ name, confirmation }`, derives a slug
+  from the name, creates `vibego-workspaces/<slug>/` inside the container, and
+  registers it as a workspace (label = the trimmed name). Names that do not
+  reduce to a valid workspace id return `400 WORKSPACE_NAME_INVALID`;
+  duplicates return `409 WORKSPACE_DUPLICATE`.
 - `DELETE /workspaces/:id` removes a non-default mapping and returns the safe
   status list. The default workspace returns `409 WORKSPACE_PROTECTED`.
 
@@ -73,6 +79,12 @@ the registry mutation payload are never persisted there.
 runtime factories resolve a root from the registry at run start, then construct
 their existing `PathGuard`/container mount for that root. The registry itself
 does not execute commands, read files, or grant policy permissions.
+
+Default-workspace runs that carry a `conversationId` (chats without an explicit
+project) resolve instead to `vibego-workspaces/sessions/session-<slug>` —
+created on demand, with the conversation id lowercased and stripped to
+`[a-z0-9-]` — so their filesystem/git/shell tools and `PathGuard` confinement
+apply to that session folder rather than the container root.
 
 ## Acceptance tests
 
