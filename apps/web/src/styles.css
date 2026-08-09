@@ -137,7 +137,7 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .run-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 20px 0; }
 .run-metrics div { display: grid; gap: 4px; border: 1px solid var(--vibego-border-default); border-radius: 10px; padding: 10px; }
 .run-metrics span { color: var(--vibego-text-tertiary); font-size: 11px; } .run-metrics strong { overflow-wrap: anywhere; font-size: 13px; }
-.chat-thread { display: flex; flex-direction: column; gap: 14px; margin: 12px 0; max-height: 560px; overflow: auto; }
+.chat-thread { display: flex; flex-direction: column; gap: 14px; margin: 12px 0; }
 .chat-message { display: flex; }
 .chat-message-user { justify-content: flex-end; }
 .chat-message-assistant { justify-content: flex-start; }
@@ -287,7 +287,6 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
   .connection-panel, .pairing-panel, .safety-panel { grid-column: 1; }
   .main-column { grid-column: 2; grid-row: 2 / span 3; }
   .settings-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .chat-thread { max-height: 640px; }
 }
 @media (min-width: 900px) and (max-width: 1279px) and (min-aspect-ratio: 5/4) {
   .content-grid { grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); gap: 18px; }
@@ -311,7 +310,6 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
   .model-setup form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .model-setup form .inline-actions { grid-column: 1 / -1; }
   .composer-footer, .run-header { align-items: center; }
-  .chat-thread { max-height: 520px; }
 }
 /* Tablet landscape and unfolded/tri-fold-like ratios get a smaller persistent
    rail only when the viewport is wide enough to avoid a cramped touch UI. */
@@ -523,7 +521,7 @@ body { overflow-x: hidden; }
 .topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .topbar-button { min-height: 36px; padding: 0 12px; font-size: 12px; }
 .content-grid { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 16px; align-items: start; }
-.workspace-rail { position: sticky; top: 16px; display: grid; gap: 9px; min-width: 0; width: 100%; max-width: 100%; overflow: hidden; padding: 14px 8px; background: transparent; }
+.workspace-rail { position: sticky; top: 16px; display: grid; gap: 9px; align-content: start; min-width: 0; width: 100%; max-width: 100%; max-height: calc(100vh - 32px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 14px 8px; background: transparent; }
 .workspace-rail-name { overflow-wrap: anywhere; color: var(--vibego-text-primary); font-size: 14px; }
 .workspace-rail p { margin: 0; font-size: 11px; }
 .rail-new-button, .rail-settings-button { width: 100%; min-height: 36px; padding: 0 10px; font-size: 12px; }
@@ -648,14 +646,16 @@ body { overflow-x: hidden; }
 }
 
 /* Conversation-first interaction: the timeline is the reading surface and
-   the composer is the final, always-available action. */
-.conversation-column { grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; min-height: clamp(620px, calc(100vh - 118px), 1040px); }
-.conversation-stream { display: grid; grid-template-rows: minmax(0, 1fr); min-height: clamp(360px, 58vh, 720px); overflow: hidden; }
+   the composer is the final, always-available action. The column is height-
+   bounded to the viewport so the stream scrolls independently instead of
+   pushing the composer below the fold. */
+.conversation-column { grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; height: clamp(560px, calc(100vh - 140px), 1040px); min-height: 0; }
+.conversation-stream { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .conversation-stream-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--vibego-border-default); padding-bottom: 14px; }
 .conversation-stream-header h1 { margin: 7px 0 0; font-size: clamp(20px, 2.5vw, 28px); }
 .conversation-hint { margin-top: 4px; font-size: 11px; text-align: right; }
 .conversation-stream > .empty-state { min-height: 0; height: 100%; }
-.conversation-stream > .run-panel { min-height: 0; border: 0; border-radius: 0; padding: 18px 0 0; background: transparent; box-shadow: none; overflow: auto; }
+.conversation-stream > .run-panel { flex: none; min-height: 0; border: 0; border-radius: 0; padding: 18px 0 0; background: transparent; box-shadow: none; }
 .composer-panel { position: sticky; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 2; padding: 16px 18px; border-color: var(--vibego-border-default); box-shadow: var(--vibego-shadow-elevated); }
 .composer-panel textarea { min-height: 88px; }
 
@@ -673,7 +673,7 @@ body { overflow-x: hidden; }
 }
 
 @media (max-width: 599px) {
-  .conversation-column { min-height: 0; }
+  .conversation-column { height: auto; min-height: 0; }
   .conversation-stream { min-height: 420px; }
   .conversation-stream-header { flex-direction: column; gap: 6px; }
   .conversation-hint { margin-top: 0; text-align: left; }
