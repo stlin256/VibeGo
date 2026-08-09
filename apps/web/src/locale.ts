@@ -95,7 +95,7 @@ export type MessageKey =
   | 'shell.fileAuditClose'
   | 'shell.fileAuditEmpty'
   | 'shell.fileAuditContentLabel'
-  | 'shell.cancelRun'
+  | 'shell.stopRun'
   | 'shell.timeline'
   | 'shell.queue'
   | 'shell.active'
@@ -580,7 +580,7 @@ const EN_US: Catalog = {
   'shell.fileAuditClose': 'Close file reference panel',
   'shell.fileAuditEmpty': 'No tool activity recorded for this path in the current run.',
   'shell.fileAuditContentLabel': 'Captured content',
-  'shell.cancelRun': 'Request cancel',
+  'shell.stopRun': 'Stop',
   'shell.timeline': 'Run timeline',
   'shell.queue': 'queue',
   'shell.active': 'active',
@@ -1062,7 +1062,7 @@ const ZH_CN: Catalog = {
   'shell.fileAuditClose': '关闭文件引用面板',
   'shell.fileAuditEmpty': '当前运行中没有记录到这个路径的工具活动。',
   'shell.fileAuditContentLabel': '捕获的内容',
-  'shell.cancelRun': '请求取消',
+  'shell.stopRun': '停止',
   'shell.timeline': '运行时间线',
   'shell.queue': '队列',
   'shell.active': '活跃',

@@ -208,19 +208,28 @@ describe('web console shell', () => {
       { version: 1 as const, id: 'e2', seq: 2, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:01.000Z', payload: { callId: 'call_git', bytes: 24, truncated: false, content: JSON.stringify({ exitCode: 0, stdout: `changed [workspace]`, stderr: '' }) } },
     ];
     const html = renderToStaticMarkup(<App health={health} run={{ version: 1, runId: 'run_git', status: 'executing', config: {} as never, lastEventSeq: 2, output: '', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} events={events} />);
-    expect(html).toContain('TOOL OUTPUTS');
+    expect(html).toContain('tool-step');
     expect(html).toContain('git.diff');
     expect(html).toContain('changed [workspace]');
     expect(html).not.toContain(root);
   });
 
-  it('ignores malformed tool events and caps the rendered output cards', () => {
+  it('ignores malformed tool events and escapes rendered step output', () => {
     const health = { status: 'ok' as const, service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } };
-    const events = Array.from({ length: 30 }, (_, index) => ({ version: 1 as const, id: `e${index}`, seq: index + 1, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:00.000Z', payload: index === 29 ? { callId: 'bad', content: '<img src=x onerror=alert(1)>' } : { callId: `call-${index}`, bytes: 4, content: 'safe' } }));
-    const html = renderToStaticMarkup(<App health={health} run={{ version: 1, runId: 'run_git', status: 'executing', config: {} as never, lastEventSeq: 30, output: '', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} events={events} />);
-    expect(html.match(/class="tool-output-card"/gu)?.length).toBe(24);
+    const events = [
+      { version: 1 as const, id: 'e1', seq: 1, runId: 'run_git', type: 'tool.started', at: '2026-08-03T00:00:00.000Z', payload: { callId: 'call-safe', toolId: 'git.diff' } },
+      { version: 1 as const, id: 'e2', seq: 2, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:01.000Z', payload: { callId: 'call-safe', bytes: 4, content: 'safe' } },
+      { version: 1 as const, id: 'e3', seq: 3, runId: 'run_git', type: 'tool.started', at: '2026-08-03T00:00:02.000Z', payload: { callId: 'call-xss', toolId: 'shell.exec' } },
+      { version: 1 as const, id: 'e4', seq: 4, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:03.000Z', payload: { callId: 'call-xss', bytes: 28, content: '<img src=x onerror=alert(1)>' } },
+      { version: 1 as const, id: 'e5', seq: 5, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:04.000Z', payload: { callId: 'orphan', bytes: 6, content: 'orphan-output' } },
+      { version: 1 as const, id: 'e6', seq: 6, runId: 'run_git', type: 'tool.output', at: '2026-08-03T00:00:05.000Z', payload: { content: 'no-call-id' } },
+    ];
+    const html = renderToStaticMarkup(<App health={health} run={{ version: 1, runId: 'run_git', status: 'executing', config: {} as never, lastEventSeq: 6, output: '', scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'read' } }} events={events} />);
+    expect(html.match(/class="tool-step"/gu)?.length).toBe(2);
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('orphan-output');
+    expect(html).not.toContain('no-call-id');
   });
 
   it('renders certificate metadata and safe missing-TLS guidance', () => {

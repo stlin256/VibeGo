@@ -140,21 +140,29 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .chat-thread { display: flex; flex-direction: column; gap: 14px; margin: 12px 0; }
 .chat-message { display: flex; }
 .chat-message-user { justify-content: flex-end; }
-.chat-message-assistant { justify-content: flex-start; }
+.chat-message-user { justify-content: flex-end; }
 .chat-bubble { max-width: min(78ch, 92%); padding: 12px 16px; border-radius: 14px; border: 1px solid transparent; color: var(--vibego-text-primary); white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.6; }
 .chat-message-user .chat-bubble { background: var(--vibego-bg-selected); border-color: var(--vibego-border-active); border-bottom-right-radius: 6px; }
-.chat-message-assistant .chat-bubble { background: var(--vibego-bg-sunken); border-color: var(--vibego-border-default); border-bottom-left-radius: 6px; }
 .chat-thinking { display: inline-flex; align-items: center; gap: 8px; opacity: .72; }
 .thinking-dots { display: inline-flex; gap: 4px; }
 .thinking-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--vibego-signal-cyan); animation: ui-thinking-dot 1.2s var(--vibego-ease-out) infinite; }
 .thinking-dots span:nth-child(2) { animation-delay: .15s; }
 .thinking-dots span:nth-child(3) { animation-delay: .3s; }
 @keyframes ui-thinking-dot { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
-.tool-output-list { display: grid; gap: 8px; margin-bottom: 14px; }
-.tool-output-card { border: 1px solid var(--vibego-border-default); border-radius: 10px; background: var(--vibego-bg-sunken); }
-.tool-output-card summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; padding: 10px 12px; color: var(--vibego-text-primary); font-size: 12px; }
-.tool-output-card summary span:last-child { color: var(--vibego-text-tertiary); text-align: right; }
-.tool-output-card pre { max-height: 300px; overflow: auto; margin: 0; border-top: 1px solid var(--vibego-border-default); padding: 12px; color: var(--vibego-text-secondary); white-space: pre-wrap; word-break: break-word; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
+/* Model answers render as plain text (no bubble); tool calls are separate steps. */
+.chat-text { max-width: 92ch; margin: 2px 0; color: var(--vibego-text-primary); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.tool-steps { display: flex; flex-direction: column; gap: 6px; margin: 2px 0; padding: 0; list-style: none; }
+.tool-step { border: 1px solid var(--vibego-border-default); border-radius: 10px; background: var(--vibego-bg-sunken); }
+.tool-step > details > summary { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; color: var(--vibego-text-secondary); font-size: 12px; list-style: none; }
+.tool-step > details > summary::-webkit-details-marker { display: none; }
+.tool-step-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--vibego-border-strong); }
+.tool-step[data-status="running"] .tool-step-dot { background: var(--vibego-signal-cyan); animation: ui-pulse 1.4s var(--vibego-ease-out) infinite; }
+.tool-step[data-status="success"] .tool-step-dot { background: var(--vibego-signal-lime); }
+.tool-step[data-status="failed"] .tool-step-dot { background: var(--vibego-signal-red); }
+.tool-step-name { color: var(--vibego-text-primary); font-weight: 600; }
+.tool-step-meta { margin-left: auto; color: var(--vibego-text-tertiary); font-size: 11px; text-align: right; }
+.tool-step-body { padding: 0 12px 10px; }
+.tool-step-body pre { max-height: 280px; overflow: auto; margin: 0; border-top: 1px solid var(--vibego-border-default); padding: 10px 0 2px; color: var(--vibego-text-secondary); white-space: pre-wrap; word-break: break-word; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .goal-panel { display: grid; gap: 14px; }
 .goal-panel-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
 .goal-panel-header h2 { margin-bottom: 4px; }
@@ -511,8 +519,8 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
    point is visible without relying on color alone. */
 .approval-card { animation: ui-slide-up var(--vibego-duration-normal) var(--vibego-ease-out); }
 .recovery-card { animation: ui-slide-up var(--vibego-duration-normal) var(--vibego-ease-out); }
-.tool-output-card[open] pre { animation: ui-fade-in var(--vibego-duration-fast) var(--vibego-ease-out); }
-@media (prefers-reduced-motion: reduce) { .stream-cursor, .thinking-dots span, .event-row, .approval-card, .recovery-card, .tool-output-card[open] pre { animation: none; } }
+.tool-step details[open] .tool-step-body pre { animation: ui-fade-in var(--vibego-duration-fast) var(--vibego-ease-out); }
+@media (prefers-reduced-motion: reduce) { .stream-cursor, .thinking-dots span, .event-row, .approval-card, .recovery-card, .tool-step details[open] .tool-step-body pre { animation: none; } }
 
 /* Spec 38: conversation-first shell. The existing settings form remains a
    semantic component, but it is a dismissible drawer rather than the default

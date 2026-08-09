@@ -23,7 +23,7 @@ export interface ConversationCopy {
   readonly runConsole: string;
   readonly waitingOutput: string;
   readonly runDetails: string;
-  readonly cancelRun: string;
+  readonly stopRun: string;
   readonly timeline: string;
   readonly metricQueue: string;
   readonly metricActive: string;
@@ -104,15 +104,19 @@ export interface ConversationShellProps {
 
 const QUICK_MODEL_PRESETS = ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'] as const;
 
+const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery']);
+
 /** Enter submits the composer; Shift+Enter and IME composition insert a newline. */
 export function isComposerSubmitShortcut(event: { readonly key: string; readonly shiftKey: boolean; readonly isComposing?: boolean }): boolean {
   return event.key === 'Enter' && !event.shiftKey && event.isComposing !== true;
 }
 
-function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, streaming: boolean): void {
   if (!isComposerSubmitShortcut({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing })) return;
+  // While a run is streaming the send action becomes stop; Enter stays a no-op
+  // so it cannot accidentally spawn a parallel run.
   event.preventDefault();
-  event.currentTarget.form?.requestSubmit();
+  if (!streaming) event.currentTarget.form?.requestSubmit();
 }
 
 /** Conversation-first surface; all authority remains in the App callbacks. */
@@ -120,6 +124,7 @@ export function ConversationShell({ run, events, thread = [], message, profile, 
   const [auditPath, setAuditPath] = useState<string | undefined>(undefined);
   const runId = run?.runId;
   useEffect(() => { setAuditPath(undefined); }, [runId]);
+  const streaming = run !== undefined && !TERMINAL_RUN_STATUSES.has(run.status);
   const approval = typeof profile.approval === 'string' ? profile.approval : 'on-request';
   const sandboxMode = profile.sandbox.mode;
   const workspaceWriteEnabled = capabilityProfile === undefined || capabilityProfile?.filesystemMode === 'workspace-write';
@@ -136,19 +141,21 @@ export function ConversationShell({ run, events, thread = [], message, profile, 
     <section className="conversation-column" aria-label={copy.conversationTimeline}>
       <section className="conversation-stream" aria-label={copy.conversationStream}>
         {thread.map((exchange) => <ThreadExchange key={exchange.runId} exchange={exchange} />)}
-        {run ? <RunConsole run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} onFileRef={setAuditPath} /> : thread.length === 0 ? <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div> : null}
+        {run ? <RunConsole run={run} events={events} copy={copy} onApprove={onApprove} onRetry={onRetry} onFileRef={setAuditPath} /> : thread.length === 0 ? <div className="empty-state"><h1>{copy.title}</h1><p className="muted">{copy.readyDescription}</p></div> : null}
         <FileAuditPanel path={auditPath} events={events} onClose={() => setAuditPath(undefined)} copy={{ title: copy.fileAuditTitle, close: copy.fileAuditClose, empty: copy.fileAuditEmpty, contentLabel: copy.fileAuditContentLabel }} />
       </section>
       <section className="panel composer-panel">
         <form onSubmit={onSubmit}>
-          <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder={copy.inputPlaceholder} rows={2} />
+          <Textarea ref={composerRef} aria-label={copy.inputLabel} value={message} onChange={(event) => onMessageChange(event.target.value)} onKeyDown={(event) => handleComposerKeyDown(event, streaming)} placeholder={copy.inputPlaceholder} rows={2} />
           <div className="composer-footer">
             {onProfileChange && <div className="composer-tools">
               <label className="composer-chip"><span>{copy.quickApproval}</span><select aria-label={copy.quickApproval} value={approval} onChange={(event) => onProfileChange({ approval: event.target.value as RunProfile['approval'] })}><option value="on-request">{copy.approvalOnRequest}</option><option value="untrusted">{copy.approvalUntrusted}</option><option value="never">{copy.approvalNever}</option></select></label>
               <label className="composer-chip"><span>{copy.quickSandbox}</span><select aria-label={copy.quickSandbox} value={sandboxMode} onChange={(event) => updateSandboxMode(event.target.value as RunProfile['sandbox']['mode'])}><option value="read-only">{copy.sandboxReadOnly}</option><option value="workspace-write" disabled={!workspaceWriteEnabled}>{copy.sandboxWorkspaceWrite}</option><option value="external-sandbox" disabled={!externalSandboxEnabled}>{copy.sandboxExternal}</option></select></label>
               <label className="composer-chip"><span>{copy.quickModel}</span><select aria-label={copy.quickModel} value={profile.model.name} onChange={(event) => onProfileChange({ model: { ...profile.model, name: event.target.value } })}>{modelOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
             </div>}
-            <Button type="submit">{copy.startRun}</Button>
+            {streaming
+              ? <Button type="button" variant="destructive" onClick={onCancel}>{copy.stopRun}</Button>
+              : <Button type="submit">{copy.startRun}</Button>}
           </div>
         </form>
       </section>
@@ -156,50 +163,83 @@ export function ConversationShell({ run, events, thread = [], message, profile, 
   );
 }
 
-const MAX_TOOL_OUTPUT_CARDS = 24;
-const MAX_TOOL_OUTPUT_DISPLAY_BYTES = 128 * 1024;
+const MAX_TOOL_STEP_OUTPUT_BYTES = 128 * 1024;
 
-/** A completed past exchange of the active conversation, rendered as plain bubbles. */
+/** A completed past exchange of the active conversation: user bubble, then plain model text. */
 function ThreadExchange({ exchange }: { readonly exchange: ConversationMessage }): JSX.Element {
   return (
     <div className="chat-thread chat-thread-history" data-status={exchange.status}>
       {exchange.user.length > 0 && <div className="chat-message chat-message-user"><div className="chat-bubble">{exchange.user}</div></div>}
-      {exchange.assistant.length > 0 && <div className="chat-message chat-message-assistant"><div className="chat-bubble"><Markdown text={exchange.assistant} /></div></div>}
+      {exchange.assistant.length > 0 && <div className="chat-text"><Markdown text={exchange.assistant} /></div>}
     </div>
   );
 }
 
-interface ToolOutputView {
-  readonly seq: number;
+interface ToolStep {
   readonly callId: string;
   readonly toolId: string;
-  readonly bytes: number;
+  readonly status: 'running' | 'success' | 'failed';
+  readonly code?: string | undefined;
+  readonly bytes?: number | undefined;
   readonly truncated: boolean;
-  readonly content: string;
+  readonly content?: string | undefined;
 }
 
-function ToolOutputInspector({ events }: { readonly events: readonly StoredEvent[] }): JSX.Element | null {
-  const outputs = collectToolOutputs(events);
-  if (outputs.length === 0) return null;
-  return <section className="tool-output-list" aria-label="Tool outputs"><div className="eyebrow">TOOL OUTPUTS</div>{outputs.map((output) => <details className="tool-output-card" key={`${output.seq}-${output.callId}`}><summary><span>{output.toolId}</span><span>{output.bytes} bytes{output.truncated ? ' · server truncated' : ''}{output.content.length < output.bytes ? ' · display truncated' : ''}</span></summary><pre>{output.content}</pre></details>)}</section>;
+/** Tool calls rendered as distinct, expandable steps inside the conversation flow. */
+function ToolSteps({ events }: { readonly events: readonly StoredEvent[] }): JSX.Element | null {
+  const steps = collectToolSteps(events);
+  if (steps.length === 0) return null;
+  return (
+    <ol className="tool-steps" aria-label="Tool steps">
+      {steps.map((step) => (
+        <li className="tool-step" data-status={step.status} key={step.callId}>
+          <details>
+            <summary>
+              <span className="tool-step-dot" aria-hidden="true" />
+              <span className="tool-step-name">{step.toolId}</span>
+              <span className="tool-step-meta">
+                {step.status === 'running' ? 'running…' : step.status === 'failed' ? (step.code ?? 'failed') : `${step.bytes ?? 0} B${step.truncated ? ' · truncated' : ''}`}
+              </span>
+            </summary>
+            {step.content !== undefined && <div className="tool-step-body"><pre>{step.content}</pre></div>}
+          </details>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
-function collectToolOutputs(events: readonly StoredEvent[]): ToolOutputView[] {
-  const toolIds = new Map<string, string>();
-  const outputs: ToolOutputView[] = [];
+function collectToolSteps(events: readonly StoredEvent[]): ToolStep[] {
+  const order: string[] = [];
+  const byCallId = new Map<string, { toolId: string; status: ToolStep['status']; code?: string; bytes?: number; truncated: boolean; content?: string }>();
   for (const event of events) {
     const payload = asRecord(event.payload);
     if (!payload) continue;
     const callId = typeof payload.callId === 'string' ? payload.callId : undefined;
-    const toolId = typeof payload.toolId === 'string' ? payload.toolId : undefined;
-    if ((event.type === 'tool.requested' || event.type === 'tool.started') && callId && toolId) toolIds.set(callId, toolId);
-    if (event.type !== 'tool.output' || !callId || typeof payload.content !== 'string') continue;
-    const rawBytes = payload.bytes;
-    const bytes = typeof rawBytes === 'number' && Number.isSafeInteger(rawBytes) && rawBytes >= 0 ? rawBytes : new TextEncoder().encode(payload.content).byteLength;
-    const truncated = payload.truncated === true;
-    outputs.push({ seq: event.seq, callId, toolId: toolIds.get(callId) ?? toolId ?? 'Tool output', bytes, truncated, content: truncateToolOutput(formatToolOutput(payload.content)) });
+    if (!callId) continue;
+    if ((event.type === 'tool.requested' || event.type === 'tool.started') && !byCallId.has(callId)) {
+      order.push(callId);
+      byCallId.set(callId, { toolId: typeof payload.toolId === 'string' ? payload.toolId : 'tool', status: 'running', truncated: false });
+      continue;
+    }
+    const step = byCallId.get(callId);
+    if (!step) continue;
+    if (event.type === 'tool.output' && typeof payload.content === 'string') {
+      const rawBytes = payload.bytes;
+      step.bytes = typeof rawBytes === 'number' && Number.isSafeInteger(rawBytes) && rawBytes >= 0 ? rawBytes : new TextEncoder().encode(payload.content).byteLength;
+      step.truncated = payload.truncated === true;
+      step.content = truncateToolOutput(formatToolOutput(payload.content));
+    }
+    if (event.type === 'tool.completed') {
+      step.status = payload.success === true ? 'success' : 'failed';
+      if (typeof payload.code === 'string' && payload.success !== true) step.code = payload.code;
+      if (typeof payload.toolId === 'string') step.toolId = payload.toolId;
+    }
   }
-  return outputs.slice(-MAX_TOOL_OUTPUT_CARDS);
+  return order.map((callId) => {
+    const step = byCallId.get(callId);
+    return { callId, toolId: step?.toolId ?? 'tool', status: step?.status ?? 'running', code: step?.code, bytes: step?.bytes, truncated: step?.truncated ?? false, content: step?.content };
+  });
 }
 
 function formatToolOutput(content: string): string {
@@ -221,16 +261,16 @@ function formatToolOutput(content: string): string {
 
 function truncateToolOutput(value: string): string {
   const encoded = new TextEncoder().encode(value);
-  if (encoded.byteLength <= MAX_TOOL_OUTPUT_DISPLAY_BYTES) return value;
-  return `${new TextDecoder().decode(encoded.slice(0, MAX_TOOL_OUTPUT_DISPLAY_BYTES))}\n…[display truncated]`;
+  if (encoded.byteLength <= MAX_TOOL_STEP_OUTPUT_BYTES) return value;
+  return `${new TextDecoder().decode(encoded.slice(0, MAX_TOOL_STEP_OUTPUT_BYTES))}\n…[display truncated]`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-function RunConsole({ run, events, copy, onCancel, onApprove, onRetry, onFileRef }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined; readonly onFileRef?: ((path: string) => void) | undefined }): JSX.Element {
-  return <RunConsoleContent run={run} events={events} copy={copy} onCancel={onCancel} onApprove={onApprove} onRetry={onRetry} onFileRef={onFileRef} />;
+function RunConsole({ run, events, copy, onApprove, onRetry, onFileRef }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined; readonly onFileRef?: ((path: string) => void) | undefined }): JSX.Element {
+  return <RunConsoleContent run={run} events={events} copy={copy} onApprove={onApprove} onRetry={onRetry} onFileRef={onFileRef} />;
 }
 
 function PermissionSnapshotSummary({ snapshot, copy }: { readonly snapshot: PermissionProfileRunSnapshot; readonly copy: ConversationCopy }): JSX.Element {
@@ -251,27 +291,25 @@ function formatSnapshotTimestamp(value: string): string {
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : 'not set';
 }
 
-function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry, onFileRef }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onCancel?: (() => void) | undefined; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined; readonly onFileRef?: ((path: string) => void) | undefined }): JSX.Element {
-  const streaming = !['completed', 'failed', 'cancelled', 'timed-out', 'needs-recovery'].includes(run.status);
+function RunConsoleContent({ run, events, copy, onApprove, onRetry, onFileRef }: { readonly run: RunSnapshot; readonly events: readonly StoredEvent[]; readonly copy: ConversationCopy; readonly onApprove?: ((approvalId: string, decision: 'allow' | 'deny') => void) | undefined; readonly onRetry?: (() => void) | undefined; readonly onFileRef?: ((path: string) => void) | undefined }): JSX.Element {
+  const streaming = !TERMINAL_RUN_STATUSES.has(run.status);
   const snapshotBlocked = run.permissionSnapshot !== undefined && run.permissionSnapshot.status !== 'ready';
   return (
     <section className="panel run-panel">
       <div className="run-header">
         <span className="status-chip" data-status={run.status}>{run.status}</span>
         <span className="run-id muted" title={run.runId}>{run.runId}</span>
-        {streaming && <Button variant="destructive" className="cancel-button" onClick={onCancel}>{copy.cancelRun}</Button>}
       </div>
       {snapshotBlocked && run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
       {run.status === 'needs-recovery' && <RecoveryCard copy={{ eyebrow: copy.recoveryEyebrow, title: copy.recoveryTitle, description: copy.recoveryDescription, action: copy.recoveryAction }} onRetry={onRetry} />}
       {run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} copy={{ eyebrow: copy.approvalEyebrow, meta: copy.approvalMeta, sandboxLabel: copy.approvalSandboxLabel, networkLabel: copy.approvalNetworkLabel, imageLabel: copy.approvalImageLabel, allowOnce: copy.approvalAllowOnce, allowAriaLabel: copy.approvalAllowAriaLabel, deny: copy.approvalDeny, sessionNote: copy.approvalSessionNote, reviewReviewedLabel: copy.reviewReviewedLabel, reviewAskedLabel: copy.reviewAskedLabel, reviewDeniedLabel: copy.reviewDeniedLabel, reviewUnavailableLabel: copy.reviewUnavailableLabel, reviewReviewedDescription: copy.reviewReviewedDescription, reviewAskedDescription: copy.reviewAskedDescription, reviewDeniedDescription: copy.reviewDeniedDescription, reviewUnavailableDescription: copy.reviewUnavailableDescription }} />)}
       <div className="chat-thread" aria-busy={streaming}>
         {typeof run.config.userMessage === 'string' && run.config.userMessage.length > 0 && <div className="chat-message chat-message-user"><div className="chat-bubble">{run.config.userMessage}</div></div>}
-        <div className="chat-message chat-message-assistant">
-          <div className="chat-bubble">
-            {run.output.length > 0
-              ? <><Markdown text={run.output} onFileRef={onFileRef} />{streaming && <span className="stream-cursor" aria-hidden="true" />}</>
-              : <span className="chat-thinking">{copy.waitingOutput}{streaming && <span className="thinking-dots" aria-hidden="true"><span /><span /><span /></span>}</span>}
-          </div>
+        <ToolSteps events={events} />
+        <div className="chat-text">
+          {run.output.length > 0
+            ? <><Markdown text={run.output} onFileRef={onFileRef} />{streaming && <span className="stream-cursor" aria-hidden="true" />}</>
+            : <span className="chat-thinking">{copy.waitingOutput}{streaming && <span className="thinking-dots" aria-hidden="true"><span /><span /><span /></span>}</span>}
         </div>
       </div>
       <details className="run-details">
@@ -280,7 +318,6 @@ function RunConsoleContent({ run, events, copy, onCancel, onApprove, onRetry, on
           {!snapshotBlocked && run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
           {run.approvalReviewerSnapshot && <ReviewerRunSummary snapshot={run.approvalReviewerSnapshot} copy={copy} />}
           <div className="run-metrics"><div><span>{copy.metricQueue}</span><strong>{run.scheduler.queuePosition ?? '—'}</strong></div><div><span>{copy.metricActive}</span><strong>{run.scheduler.activeRunCount}</strong></div><div><span>{copy.metricLease}</span><strong>{run.scheduler.workspaceLease ?? '—'}</strong></div><div><span>{copy.metricEvents}</span><strong>{run.lastEventSeq}</strong></div></div>
-          <ToolOutputInspector events={events} />
           <div className="event-list" aria-label={copy.timeline}>{events.map((event) => <div className="event-row" data-event-type={event.type} key={`${event.runId}-${event.seq}`}><span>{event.seq}</span><span>{timelineEventLabel(event)}</span><time>{new Date(event.at).toLocaleTimeString()}</time></div>)}</div>
         </div>
       </details>

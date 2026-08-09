@@ -20,7 +20,7 @@ const copy: ConversationCopy = {
   runConsole: 'RUN CONSOLE',
   waitingOutput: 'Waiting for model output…',
   runDetails: 'Run details',
-  cancelRun: 'Request cancel',
+  stopRun: 'Stop',
   timeline: 'Run timeline',
   metricQueue: 'queue',
   metricActive: 'active',
@@ -160,7 +160,8 @@ describe('ConversationShell', () => {
     expect(html).toContain('APPROVAL REQUIRED');
     expect(html).toContain('Allow');
     expect(html).toContain('Deny');
-    expect(html).toContain('TOOL OUTPUTS');
+    expect(html).toContain('tool-step');
+    expect(html).toContain('filesystem.write');
     expect(html).toContain('safe');
     expect(html).not.toMatch(/api[_-]?key|Authorization|C:\\Users/iu);
 
@@ -190,5 +191,38 @@ describe('ConversationShell', () => {
     expect(html).toContain('profile-1');
     expect(html).toContain('workspace-coding');
     expect(html).not.toMatch(/api[_-]?key|Authorization|sessionId|accessToken|C:\\Users\\|\/home\//iu);
+  });
+});
+
+describe('ConversationShell streaming controls', () => {
+  it('turns the send button into a stop button while a run streams and drops the separate cancel button', () => {
+    const html = renderToStaticMarkup(<ConversationShell run={runFixture('executing')} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onCancel={() => undefined} />);
+    expect(html).toContain('>Stop</span>');
+    expect(html).not.toContain('cancel-button');
+    expect(html).not.toContain('>Start run</span>');
+  });
+
+  it('restores the send button for terminal runs', () => {
+    const html = renderToStaticMarkup(<ConversationShell run={runFixture('completed')} events={[]} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} onCancel={() => undefined} />);
+    expect(html).toContain('>Start run</span>');
+    expect(html).not.toContain('>Stop</span>');
+  });
+
+  it('renders tool calls as ordered steps with status metadata outside the assistant text', () => {
+    const events = [
+      { version: 1 as const, id: 'e1', seq: 1, runId: 'run_shell', type: 'tool.started', at: '2026-08-05T00:00:00.000Z', payload: { callId: 'call_1', toolId: 'filesystem.list' } },
+      { version: 1 as const, id: 'e2', seq: 2, runId: 'run_shell', type: 'tool.output', at: '2026-08-05T00:00:01.000Z', payload: { callId: 'call_1', bytes: 12, content: JSON.stringify(['src/']) } },
+      { version: 1 as const, id: 'e3', seq: 3, runId: 'run_shell', type: 'tool.completed', at: '2026-08-05T00:00:02.000Z', payload: { callId: 'call_1', toolId: 'filesystem.list', success: true } },
+      { version: 1 as const, id: 'e4', seq: 4, runId: 'run_shell', type: 'tool.started', at: '2026-08-05T00:00:03.000Z', payload: { callId: 'call_2', toolId: 'filesystem.search' } },
+      { version: 1 as const, id: 'e5', seq: 5, runId: 'run_shell', type: 'tool.completed', at: '2026-08-05T00:00:04.000Z', payload: { callId: 'call_2', toolId: 'filesystem.search', success: false, code: 'PATH_GUARD' } },
+    ];
+    const html = renderToStaticMarkup(<ConversationShell run={runFixture('completed')} events={events} message="" profile={DEFAULT_RUN_PROFILE} composerRef={{ current: null }} copy={copy} onMessageChange={() => undefined} onSubmit={() => undefined} />);
+    expect(html.match(/class="tool-step"/gu)?.length).toBe(2);
+    expect(html.indexOf('filesystem.list')).toBeLessThan(html.indexOf('filesystem.search'));
+    expect(html).toContain('data-status="success"');
+    expect(html).toContain('data-status="failed"');
+    expect(html).toContain('PATH_GUARD');
+    expect(html).toContain('chat-text');
+    expect(html).not.toContain('chat-message-assistant');
   });
 });
