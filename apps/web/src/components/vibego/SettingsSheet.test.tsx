@@ -6,7 +6,7 @@ const copy = { eyebrow: 'SETTINGS', title: 'Run profile', description: 'Configur
 
 describe('SettingsSheet', () => {
   it('renders an open dialog shell with a bounded child slot and Button close affordance', () => {
-    const html = renderToStaticMarkup(<SettingsSheet open panelRef={{ current: null }} copy={copy} onClose={() => undefined}><div className="settings-grid"><span>Safe settings slot</span></div></SettingsSheet>);
+    const html = renderToStaticMarkup(<SettingsSheet open panelRef={{ current: null }} copy={copy} onClose={() => undefined}><div className="settings-stack"><span>Safe settings slot</span></div></SettingsSheet>);
     expect(html).toContain('id="settings-drawer"');
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');

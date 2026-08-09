@@ -337,6 +337,7 @@ export type MessageKey =
   | 'settings.workspace.idLabel'
   | 'settings.workspace.friendlyLabel'
   | 'settings.workspace.pathLabel'
+  | 'settings.workspace.pathPlaceholder'
   | 'settings.workspace.confirmLabel'
   | 'settings.workspace.add'
   | 'settings.workspace.createLabel'
@@ -825,6 +826,7 @@ const EN_US: Catalog = {
   'settings.workspace.idLabel': 'Workspace id',
   'settings.workspace.friendlyLabel': 'Friendly label',
   'settings.workspace.pathLabel': 'Path on daemon machine',
+  'settings.workspace.pathPlaceholder': 'project-a',
   'settings.workspace.confirmLabel': 'I understand this grants guarded tools access to that directory.',
   'settings.workspace.add': 'Add workspace',
   'settings.workspace.createLabel': 'New project',
@@ -1213,7 +1215,7 @@ const ZH_CN: Catalog = {
   'settings.grid.policy': '策略',
   'settings.grid.lastLatency': '最近延迟',
   'settings.toolsAvailable': '可用：{tools}',
-  'settings.permission.eyebrow': '权限档案',
+  'settings.permission.eyebrow': '运行安全',
   'settings.permission.title': '权限档案',
   'settings.permission.description': '为新运行选择由 daemon 管理的能力姿态。已有运行保留其冻结快照。',
   'settings.permission.ariaLabel': '权限档案设置',
@@ -1310,6 +1312,7 @@ const ZH_CN: Catalog = {
   'settings.workspace.idLabel': '工作区 ID',
   'settings.workspace.friendlyLabel': '显示名称',
   'settings.workspace.pathLabel': 'daemon 机器上的路径',
+  'settings.workspace.pathPlaceholder': 'project-a',
   'settings.workspace.confirmLabel': '我理解这会授予受防护工具访问该目录的权限。',
   'settings.workspace.add': '添加工作区',
   'settings.workspace.createLabel': '新建项目',

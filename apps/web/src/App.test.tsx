@@ -288,6 +288,20 @@ describe('web console shell', () => {
     expect(html).not.toMatch(/api[_-]?key=[^"& ]+|Authorization:|C:\\Users\\[A-Za-z0-9._-]+/iu);
   });
 
+  it('keeps the sheet header and tab list ahead of the scrollable settings panels', () => {
+    const html = renderToStaticMarkup(<App locale="en-US" />);
+    expect(html).toContain('role="dialog"');
+    const panelStart = html.indexOf('id="settings-drawer"');
+    const headerStart = html.indexOf('settings-drawer-header');
+    const tabListStart = html.indexOf('role="tablist"');
+    const panelsStart = html.indexOf('settings-tab-panels');
+    expect(panelStart).toBeGreaterThanOrEqual(0);
+    expect(headerStart).toBeGreaterThan(panelStart);
+    expect(tabListStart).toBeGreaterThan(headerStart);
+    expect(panelsStart).toBeGreaterThan(tabListStart);
+    expect(html).toContain('class="settings-stack"');
+  });
+
   it('renders an explicit approval card with allow and deny controls', () => {
     const html = renderToStaticMarkup(<App health={{ status: 'ok', service: 'ready4vibe-daemon', version: 'test', transport: { kind: 'http-loopback', tlsRequired: false, boundAddresses: ['127.0.0.1'] }, auth: { pairingRequired: false }, storage: { kind: 'memory', status: 'ready' }, sandbox: { availableModes: ['read-only'], externalRequiredForUntrusted: true }, approval: { supportedDecisions: ['allow', 'prompt', 'forbidden'] } }} run={{ version: 1, runId: 'run_approval', status: 'waiting-approval', config: {} as never, lastEventSeq: 4, output: '', approvals: [{ approvalId: 'ap_1', runId: 'run_approval', turnId: 'turn_1', callId: 'call_1', toolId: 'filesystem.write', toolVersion: '1.0.0', risk: 'write', argumentBytes: 12, createdAt: 1_000, expiresAt: 2_000 }], scheduler: { queuePosition: null, activeRunCount: 1, workspaceLease: 'write' } }} onApprove={() => undefined} />);
     expect(html).toContain('APPROVAL REQUIRED');

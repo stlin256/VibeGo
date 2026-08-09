@@ -57,7 +57,7 @@ export function SettingsTabs({ ariaLabel, tabs, activeTab, onTabChange, children
             onTabChange(nextTab);
             focusSettingsTab(nextTab);
           };
-          return <Button key={tab.id} variant={selected ? 'secondary' : 'ghost'} className="settings-tab" role="tab" id={settingsTabId(tab.id)} aria-selected={selected} aria-controls={settingsPanelId(tab.id)} tabIndex={selected ? 0 : -1} onClick={() => onTabChange(tab.id)} onKeyDown={handleKeyDown}>{tab.label}</Button>;
+          return <Button key={tab.id} variant="ghost" className="settings-tab" role="tab" id={settingsTabId(tab.id)} aria-selected={selected} aria-controls={settingsPanelId(tab.id)} tabIndex={selected ? 0 : -1} onClick={() => onTabChange(tab.id)} onKeyDown={handleKeyDown}>{tab.label}</Button>;
         })}
       </div>
       <div className="settings-tab-panels">{children}</div>
