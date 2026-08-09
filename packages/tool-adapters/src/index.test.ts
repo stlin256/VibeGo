@@ -15,6 +15,7 @@ import {
   FileSystemToolAdapter,
   FileSystemWriteToolAdapter,
   GitToolAdapter,
+  HostShellToolAdapter,
   ShellToolAdapter,
   ToolAdapterError,
   ToolExecutor,
@@ -22,6 +23,7 @@ import {
   McpToolExecutorRuntime,
   ToolHandlerRegistry,
   type FileSystemAdapterFileSystem,
+  type HostShellRunner,
   type ProcessRunner,
 } from './index.js';
 
@@ -189,6 +191,86 @@ describe('shell adapter', () => {
         sandbox: { mode: 'external-sandbox', network: 'restricted', provider: 'docker' },
         signal: new AbortController().signal,
       })).rejects.toMatchObject({ code: 'TOOL_EXECUTION_UNAVAILABLE' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('host shell adapter', () => {
+  const hostContext = (root: string) => ({
+    workspaceRoot: root,
+    intent: intent({ toolId: 'shell.exec', risk: 'destructive', sandboxMode: 'workspace-write' }),
+    sandbox: { mode: 'workspace-write' as const, network: 'restricted' as const },
+    signal: new AbortController().signal,
+  });
+
+  it('builds the shell argv prefix and passes the raw command string to the runner', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const runner: HostShellRunner = { run: vi.fn(async () => ({ exitCode: 0, stdout: 'ok', stderr: '', truncated: false, timedOut: false, cancelled: false })) };
+      const adapter = new HostShellToolAdapter(new PathGuard(root), runner, { shell: 'pwsh', args: ['-NoProfile', '-NonInteractive', '-Command'] });
+      const result = await adapter.execute({ command: 'Get-ChildItem | Select-Object -First 1', timeoutMs: 5_000 }, hostContext(root));
+      expect(result).toEqual({ exitCode: 0, stdout: 'ok', stderr: '', truncated: false });
+      expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({
+        workspaceRoot: root,
+        cwd: root,
+        command: ['pwsh', '-NoProfile', '-NonInteractive', '-Command', 'Get-ChildItem | Select-Object -First 1'],
+        allowShellMetacharacters: true,
+        limits: { timeoutMs: 5_000, maxOutputBytes: 1024 * 1024 },
+      }), expect.anything());
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('builds the POSIX -c prefix for bash', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const runner: HostShellRunner = { run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false, timedOut: false, cancelled: false })) };
+      const adapter = new HostShellToolAdapter(new PathGuard(root), runner, { shell: 'bash', args: ['-c'] });
+      await adapter.execute({ command: 'ls && echo done > out.txt' }, hostContext(root));
+      expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ command: ['bash', '-c', 'ls && echo done > out.txt'] }), expect.anything());
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects empty, oversized and non-string commands', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const runner: HostShellRunner = { run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false, timedOut: false, cancelled: false })) };
+      const adapter = new HostShellToolAdapter(new PathGuard(root), runner, { shell: 'bash', args: ['-c'] });
+      await expect(adapter.execute({ command: '' }, hostContext(root))).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+      await expect(adapter.execute({ command: '   ' }, hostContext(root))).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+      await expect(adapter.execute({ command: 'x'.repeat(8_001) }, hostContext(root))).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+      await expect(adapter.execute({ argv: ['ls'] }, hostContext(root))).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+      expect(runner.run).not.toHaveBeenCalled();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a cwd outside the workspace and resolves an inside cwd', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      await mkdir(join(root, 'src'));
+      const runner: HostShellRunner = { run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false, timedOut: false, cancelled: false })) };
+      const adapter = new HostShellToolAdapter(new PathGuard(root), runner, { shell: 'bash', args: ['-c'] });
+      await expect(adapter.execute({ command: 'ls', cwd: '../outside' }, hostContext(root))).rejects.toMatchObject({ code: 'PATH_GUARD' });
+      await adapter.execute({ command: 'ls', cwd: 'src' }, hostContext(root));
+      expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ cwd: join(root, 'src') }), expect.anything());
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('maps runner failures to TOOL_FAILED without leaking details', async () => {
+    const root = await temporaryWorkspace();
+    try {
+      const runner: HostShellRunner = { run: vi.fn(async () => { throw new Error('CWD_OUTSIDE_WORKSPACE secret-path'); }) };
+      const adapter = new HostShellToolAdapter(new PathGuard(root), runner, { shell: 'bash', args: ['-c'] });
+      await expect(adapter.execute({ command: 'ls' }, hostContext(root))).rejects.toMatchObject({ code: 'TOOL_FAILED' });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

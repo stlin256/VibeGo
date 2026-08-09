@@ -152,6 +152,15 @@ When an external digest-pinned sandbox is healthy, shell execution is scoped to
 that sandbox and its captured run snapshot. When it is unavailable, the UI shows
 `degraded` or `blocked`; it does not silently execute on the host.
 
+Update (2026-08-09): the `advanced-local` host-restricted shell is now wired.
+The daemon probes `pwsh`/`powershell` (Windows) or `bash`/`sh` (POSIX) at
+startup and advertises `host-restricted` in `shellModes` with
+`hostRunnerHealth: 'ready'` only when a shell is found. An acknowledged
+`advanced-local` (or custom `host-restricted`) profile then receives a
+`shell.exec` runtime that executes raw command strings through the probed
+shell inside the session workspace under `workspace-write`; every call remains
+approval-gated and there is still no fallback for untrusted content.
+
 ### 3.2 Transport is separate from capability
 
 Loopback, LAN TLS, Tailscale and SSH are transport choices, not capability

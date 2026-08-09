@@ -172,7 +172,7 @@ describe('web console shell', () => {
     const html = renderToStaticMarkup(<App sandboxSettings={{ provider: 'docker', detected: true, healthy: true, enabled: false, imageDigest: null, network: 'restricted', resources: { maxMemoryBytes: 1, maxCpuMillis: 1, maxPids: 1, timeoutMs: 1, maxOutputBytes: 1 }, capabilities: { version: 'test', networkModes: ['restricted'], maxMemoryBytes: 1, maxCpuMillis: 1 } }} onProbeSandbox={() => undefined} onSetSandboxSettings={() => undefined} />);
     expect(html).toContain('Probe runtime');
     expect(html).toContain('Enable external shell');
-    expect(html).toContain('no host shell fallback');
+    expect(html).toContain('advanced-local capability profile');
     expect(html).not.toContain('C:\\Users');
   });
 

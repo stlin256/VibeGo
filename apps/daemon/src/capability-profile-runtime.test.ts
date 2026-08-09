@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { constrainToolRuntime } from './capability-profile-runtime.js';
 
-const profile = (filesystemMode: 'off' | 'workspace-read' | 'workspace-write', shellMode: 'off' | 'external-sandbox' = 'off', mcpSkillMode: 'off' | 'configured' = 'off') => ({
+const profile = (filesystemMode: 'off' | 'workspace-read' | 'workspace-write', shellMode: 'off' | 'external-sandbox' | 'host-restricted' = 'off', mcpSkillMode: 'off' | 'configured' = 'off') => ({
   schemaVersion: 'ready4vibe_capability_profile_v1' as const,
   profileId: 'custom' as const,
   transportMode: 'loopback' as const,
@@ -55,6 +55,12 @@ describe('capability profile runtime constraint', () => {
     expect(constrained?.descriptors.map((entry) => entry.id)).toEqual(['filesystem.read', 'filesystem.write', 'shell.exec', 'docs-server/tool/search@1.0.0']);
     await constrained?.execute({ runId: 'run-1', turnId: 'turn-1', callId: 'call-1', descriptor: constrained.descriptors[0]!, input: {}, config: {} as never, signal: new AbortController().signal });
     expect(value.execute).toHaveBeenCalledOnce();
+  });
+
+  it('keeps shell.exec for the host-restricted shell mode', () => {
+    const value = runtime();
+    const constrained = constrainToolRuntime(value.runtime, profile('workspace-write', 'host-restricted'));
+    expect(constrained?.descriptors.map((entry) => entry.id)).toEqual(['filesystem.read', 'filesystem.write', 'shell.exec']);
   });
 
   it('rejects a descriptor that was not captured by the constrained snapshot', async () => {

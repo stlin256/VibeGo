@@ -591,6 +591,101 @@ export class ShellToolAdapter implements ToolHandler {
   }
 }
 
+export interface HostShellRunRequest {
+  readonly workspaceRoot: string;
+  readonly cwd?: string;
+  readonly command: readonly string[];
+  readonly allowShellMetacharacters?: boolean;
+  readonly limits?: { readonly timeoutMs?: number; readonly maxOutputBytes?: number };
+}
+
+export interface HostShellRunResult {
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly truncated: boolean;
+  readonly timedOut: boolean;
+  readonly cancelled: boolean;
+}
+
+/** Structural port satisfied by HostRestrictedProcessRunner from @ready4vibe/sandbox-runtime. */
+export interface HostShellRunner {
+  run(request: HostShellRunRequest, signal?: AbortSignal): Promise<HostShellRunResult>;
+}
+
+export interface HostShellInput {
+  command: string;
+  cwd?: string;
+  timeoutMs?: number;
+  maxOutputBytes?: number;
+}
+
+export interface HostShellToolAdapterOptions {
+  readonly shell: string;
+  readonly args: readonly string[];
+  readonly maxCommandLength?: number;
+  readonly defaults?: { timeoutMs?: number; maxOutputBytes?: number };
+  readonly ceilings?: { timeoutMs?: number; maxOutputBytes?: number };
+}
+
+/**
+ * Runs a raw host shell command string (pipes, redirects and `&&` work)
+ * through the probed platform shell. Unlike ShellToolAdapter the command is
+ * deliberately not passed through shell-metacharacter rejection; containment
+ * comes from the injected host-restricted runner (workspace-confined cwd,
+ * minimal environment, bounded limits, `shell:false` spawn).
+ */
+export class HostShellToolAdapter implements ToolHandler {
+  readonly id = 'shell.exec';
+  readonly version = '1.0.0';
+
+  constructor(
+    private readonly pathGuard: PathGuard,
+    private readonly runner: HostShellRunner,
+    private readonly options: HostShellToolAdapterOptions,
+  ) {
+    if (!options.shell || options.args.length === 0) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  }
+
+  async execute(input: unknown, context: ToolHandlerContext): Promise<unknown> {
+    if (!isRecord(input) || typeof input.command !== 'string') throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const command = input.command;
+    const maxCommandLength = this.options.maxCommandLength ?? 8_000;
+    if (command.trim().length === 0 || command.length > maxCommandLength) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    const timeoutMs = this.limit(input.timeoutMs, this.options.defaults?.timeoutMs ?? 30_000, this.options.ceilings?.timeoutMs ?? 15 * 60 * 1_000);
+    const maxOutputBytes = this.limit(input.maxOutputBytes, this.options.defaults?.maxOutputBytes ?? 1024 * 1024, this.options.ceilings?.maxOutputBytes ?? 50 * 1024 * 1024);
+    let cwd = context.workspaceRoot;
+    if (input.cwd !== undefined) {
+      if (typeof input.cwd !== 'string') throw new ToolAdapterError('TOOL_INPUT_INVALID');
+      try {
+        cwd = await this.pathGuard.resolve(input.cwd);
+      } catch {
+        throw new ToolAdapterError('PATH_GUARD');
+      }
+    }
+    try {
+      const result = await this.runner.run({
+        workspaceRoot: context.workspaceRoot,
+        cwd,
+        command: [this.options.shell, ...this.options.args, command],
+        allowShellMetacharacters: true,
+        limits: { timeoutMs, maxOutputBytes },
+      }, context.signal);
+      return { exitCode: result.exitCode ?? -1, stdout: result.stdout, stderr: result.stderr, truncated: result.truncated };
+    } catch (error) {
+      if (error instanceof ToolAdapterError) throw error;
+      throw new ToolAdapterError('TOOL_FAILED');
+    }
+  }
+
+  private limit(value: unknown, fallback: number, maximum: number): number {
+    if (!Number.isSafeInteger(fallback) || fallback <= 0 || fallback > maximum) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    if (value === undefined) return fallback;
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0 || value > maximum) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+    return value;
+  }
+}
+
 export type GitToolId = 'git.status' | 'git.diff' | 'git.log';
 
 export interface GitToolAdapterOptions {

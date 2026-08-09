@@ -1,6 +1,7 @@
 # ADR 0018: Injected host-restricted process runner
 
-- Status: accepted and implemented for 48-R2 contract slice
+- Status: accepted and implemented; wired into the daemon behind the
+  `host-restricted` capability shell mode (2026-08-09)
 - Date: 2026-08-04
 - Related: [Spec 48](../specs/48-approval-sandbox-shell-runtime.md),
   [Spec 10](../specs/10-sandbox-execution.md),
@@ -30,6 +31,19 @@ become a shell fallback for untrusted content.
 4. Do not register the runner in daemon startup, change `AgentLoop`, add a
    scheduler, or weaken `ApprovalPolicy`/`SandboxResolver`. Runtime wiring is a
    later Spec 48 phase after this contract is proven.
+
+   Update (2026-08-09): the runner is now registered by the daemon, narrowly.
+   `probeHostShell` resolves `pwsh`/`powershell` on Windows and `bash`/`sh` on
+   POSIX once at startup. When the run's capability profile selects the
+   acknowledged `host-restricted` shell mode and the run sandbox mode is
+   `workspace-write` or `danger-full-access`, the daemon registers `shell.exec`
+   through `HostShellToolAdapter`, which passes a raw command string to the
+   probed shell (`pwsh -NoProfile -NonInteractive -Command` / `bash -c`) via
+   this runner with `allowShellMetacharacters` opt-in. `ApprovalPolicy` now
+   prompts (instead of hard-forbidding) destructive intents under those two
+   sandbox modes; `read-only` stays forbidden and the external-sandbox branch
+   is unchanged. Registration remains mutually exclusive with the external
+   sandbox runtime.
 
 ## Consequences
 

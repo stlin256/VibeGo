@@ -11,6 +11,7 @@ import { FileSecretStore } from './secret-store.js';
 import { createDaemonServer } from './server.js';
 import { composeToolRuntimes, InMemoryToolSettingsManager } from './tool-settings.js';
 import { InMemorySandboxSettingsManager } from './sandbox-settings.js';
+import { InMemoryHostShellSettingsManager } from './host-shell-settings.js';
 import { resolveDaemonTransport } from './transport-config.js';
 import { InMemoryWorkspaceRegistry } from '@ready4vibe/workspaces';
 import { createRunRootResolver } from './workspace-session.js';
@@ -134,6 +135,9 @@ const resolveRunRoot = createRunRootResolver(workspacesContainer, workspaceRegis
 const toolSettings = new InMemoryToolSettingsManager(workspaceRegistry, settingsStore, resolveRunRoot);
 const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry, resolveRunRoot });
 const sandboxSettings = new InMemorySandboxSettingsManager({ workspaceRegistry, resolveRunRoot });
+// Probes pwsh/powershell (Windows) or bash/sh (POSIX) once at startup; the
+// result feeds both the host-restricted runtime gate and capability policy.
+const hostShellSettings = new InMemoryHostShellSettingsManager({ resolveRunRoot });
 // MCP remains explicitly disabled and has no default probe/transport. Web can
 // persist non-secret intent and request a later injected probe without causing
 // a child process or network request during daemon startup.
@@ -145,6 +149,7 @@ const capabilityProfileSettings = new DurableCapabilityProfileSettingsManager({
     modelSettings,
     toolSettings,
     sandboxSettings,
+    hostShellSettings,
     mcpSettings,
     workspaceRegistry,
   }),
@@ -156,6 +161,7 @@ const permissionProfileSettings = new DurablePermissionProfileSettingsManager({
     modelSettings,
     toolSettings,
     sandboxSettings,
+    hostShellSettings,
     mcpSettings,
     workspaceRegistry,
   }),
@@ -182,7 +188,8 @@ const runManager = new RunManager({
     const composed = composeToolRuntimes([
       profile && profile.filesystemMode === 'off' ? undefined : toolSettings.runtimeForRun(config),
       profile && profile.filesystemMode === 'off' ? undefined : gitSettings.runtimeForRun(config),
-      profile && profile.shellMode === 'off' ? undefined : sandboxSettings.runtimeForRun(config),
+      profile && profile.shellMode === 'off' ? undefined
+        : profile?.shellMode === 'host-restricted' ? hostShellSettings.runtimeForRun(config) : sandboxSettings.runtimeForRun(config),
       profile && profile.mcpSkillMode === 'off' ? undefined : mcpRuntimeBinding.runtimeForRun(config),
     ]);
     return constrainToolRuntime(composed, profile ?? undefined);
@@ -366,6 +373,7 @@ function createCapabilityProfilePolicy(input: {
   modelSettings: InMemoryModelSettingsManager;
   toolSettings: InMemoryToolSettingsManager;
   sandboxSettings: InMemorySandboxSettingsManager;
+  hostShellSettings: InMemoryHostShellSettingsManager;
   mcpSettings: McpSettingsManager;
   workspaceRegistry: InMemoryWorkspaceRegistry;
 }): CapabilityProfilePolicy {
@@ -381,7 +389,7 @@ function createCapabilityProfilePolicy(input: {
     transportModes: [transport],
     modelModes: model.configured ? ['off', 'fake', 'configured'] : ['off', 'fake'],
     filesystemModes: tools.filesystemEnabled ? ['off', 'workspace-read', 'workspace-write'] : ['off'],
-    shellModes: sandbox.enabled ? ['off', 'external-sandbox'] : ['off'],
+    shellModes: ['off', ...(sandbox.enabled ? ['external-sandbox' as const] : []), ...(input.hostShellSettings.health() === 'ready' ? ['host-restricted' as const] : [])],
     networkModes: ['off', 'restricted'],
     mcpSkillModes: mcp.available ? ['off', 'configured'] : ['off'],
     approvalModes: ['none', 'on-request'],
@@ -390,7 +398,7 @@ function createCapabilityProfilePolicy(input: {
     modelHealth: model.configured ? 'ready' : 'missing',
     filesystemHealth: tools.filesystemEnabled ? 'ready' : 'missing',
     externalSandboxHealth: sandbox.enabled && sandbox.healthy ? 'ready' : 'missing',
-    hostRunnerHealth: 'missing',
+    hostRunnerHealth: input.hostShellSettings.health(),
     networkHealth: 'off',
     mcpSkillHealth: mcp.available ? 'ready' : mcp.settings.enabled ? 'degraded' : 'missing',
   };

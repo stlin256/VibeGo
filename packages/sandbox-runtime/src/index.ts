@@ -3,6 +3,7 @@ import { spawn as defaultSpawn, type ChildProcess, type SpawnOptions } from 'nod
 import { ArgvGuard, ArgvGuardError } from '@ready4vibe/execution';
 
 export * from './host-process.js';
+export * from './host-shell.js';
 
 export type ContainerRuntime = 'docker' | 'podman';
 export type SandboxRuntimeName = ContainerRuntime | 'vm';

@@ -33,6 +33,12 @@ export interface HostProcessLaunchRequest {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly envAllowlist?: readonly string[];
   readonly limits?: HostProcessLimits;
+  /**
+   * Opt-in for shell-string invocations (for example `pwsh -Command <raw>`).
+   * The process is still spawned with `shell:false`; this only stops the argv
+   * guard from rejecting shell metacharacters inside the command string.
+   */
+  readonly allowShellMetacharacters?: boolean;
 }
 
 export interface HostProcessPlan {
@@ -68,6 +74,12 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 1 * 1024 * 1024;
 const MAX_TIMEOUT_MS = 15 * 60 * 1_000;
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
+export const HOST_PROCESS_LIMITS = Object.freeze({
+  defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+  maxTimeoutMs: MAX_TIMEOUT_MS,
+  defaultMaxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
+  maxOutputBytes: MAX_OUTPUT_BYTES,
+});
 const MAX_ARGS = 128;
 const MAX_ARG_BYTES = 64 * 1024;
 const MAX_ENV_KEYS = 64;
@@ -115,6 +127,7 @@ export async function buildHostProcessPlan(
     validated = new ArgvGuard({ shell: false, maxArgs: MAX_ARGS, maxArgBytes: MAX_ARG_BYTES }).validate(request.command, {
       env: request.env ?? {},
       allowedEnv: envAllowlist,
+      ...(request.allowShellMetacharacters === true ? { allowShellMetacharacters: true } : {}),
     });
   } catch (error) {
     if (error instanceof ArgvGuardError && error.code === 'ENV_NOT_ALLOWED') throw new HostRestrictedProcessError('ENV_NOT_ALLOWED');
@@ -141,8 +154,9 @@ export async function buildHostProcessPlan(
 }
 
 /**
- * Executes a previously validated host-restricted plan. The runner is not
- * registered by the daemon in this phase; callers must inject it explicitly.
+ * Executes a previously validated host-restricted plan. The daemon registers
+ * this runner only behind the `host-restricted` capability shell mode, an
+ * acknowledged profile and approval-gated destructive policy.
  */
 export class HostRestrictedProcessRunner {
   private readonly spawn: HostProcessSpawnFunction;

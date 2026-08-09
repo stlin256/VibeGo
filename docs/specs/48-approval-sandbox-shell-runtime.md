@@ -143,6 +143,21 @@ execute arbitrary user data. The runner is not registered by the daemon or
 `AgentLoop` in R2, so the existing explicit tool/sandbox gates and default-off
 behavior remain unchanged.
 
+#### Host shell wiring (2026-08-09)
+
+The daemon now registers the runner as a real host command-line tool. A
+startup probe (`probeHostShell`) resolves `pwsh` → `powershell` on Windows and
+`bash` → `sh` on POSIX. When the capability profile uses the acknowledged
+`host-restricted` shell mode and the run sandbox mode is `workspace-write` or
+`danger-full-access`, `shell.exec` is registered with a raw `command` string
+input executed via the probed shell (`pwsh -NoProfile -NonInteractive -Command`
+/ `bash -c`) inside the session workspace; approval still gates every call
+(`ApprovalPolicy` prompts destructive intents on those modes instead of
+hard-forbidding them). The external-sandbox `shell.exec` path is unchanged and
+the two registrations never coexist. The advertised capability policy reports
+`hostRunnerHealth` from the probe and offers `host-restricted` only when a
+shell was found.
+
 ### 48-R3: container/Podman smoke runner
 
 Add an opt-in integration command that uses a locally installed, digest-pinned

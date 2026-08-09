@@ -107,8 +107,13 @@ export class ApprovalPolicy {
 
   private decisionForPolicy(intent: ToolIntent, cacheKey: string): PolicyEvaluation {
     if (intent.risk === 'read') return this.result('allow', 'READ_ONLY', cacheKey);
-    if (intent.risk === 'destructive' && (intent.sandboxMode !== 'external-sandbox' || !intent.sandboxProvider)) {
-      return this.result('forbidden', 'DESTRUCTIVE_OPERATION', cacheKey);
+    if (intent.risk === 'destructive') {
+      // Host-restricted shell runs under workspace-write / danger-full-access
+      // and is approval-gated below instead of being hard-forbidden.
+      const hostRestricted = intent.sandboxMode === 'workspace-write' || intent.sandboxMode === 'danger-full-access';
+      if (!hostRestricted && (intent.sandboxMode !== 'external-sandbox' || !intent.sandboxProvider)) {
+        return this.result('forbidden', 'DESTRUCTIVE_OPERATION', cacheKey);
+      }
     }
     if (intent.approvalPolicy === 'never') return this.result('forbidden', 'APPROVAL_DISABLED', cacheKey);
     if (typeof intent.approvalPolicy === 'object' && !intent.approvalPolicy.granular.permissionRequest) {
