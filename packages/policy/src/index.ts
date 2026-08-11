@@ -22,6 +22,8 @@ export interface ToolIntent {
   approvalPolicy: ApprovalPolicyConfig;
   policyRevision: string;
   sessionId: string;
+  /** If true, session approval grants are consumed on first use so every call prompts. */
+  alwaysPrompt?: boolean;
 }
 
 export interface PolicyEvaluation {
@@ -47,6 +49,11 @@ export class SessionApprovalCache {
     if (expiresAt <= now) {
       this.entries.delete(key);
       return false;
+    }
+    // One-shot grants for alwaysPrompt tools are consumed immediately so the
+    // next call requires a fresh approval prompt.
+    if (intent.alwaysPrompt) {
+      this.entries.delete(key);
     }
     return true;
   }

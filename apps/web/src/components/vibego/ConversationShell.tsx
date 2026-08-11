@@ -38,6 +38,7 @@ export interface ConversationCopy {
   readonly approvalSandboxLabel: string;
   readonly approvalNetworkLabel: string;
   readonly approvalImageLabel: string;
+  readonly approvalCommandLabel: string;
   readonly approvalAllowOnce: string;
   readonly approvalAllowAriaLabel: string;
   readonly approvalDeny: string;
@@ -302,7 +303,7 @@ function RunConsoleContent({ run, events, copy, onApprove, onRetry, onFileRef }:
       </div>
       {snapshotBlocked && run.permissionSnapshot && <PermissionSnapshotSummary snapshot={run.permissionSnapshot} copy={copy} />}
       {run.status === 'needs-recovery' && <RecoveryCard copy={{ eyebrow: copy.recoveryEyebrow, title: copy.recoveryTitle, description: copy.recoveryDescription, action: copy.recoveryAction }} onRetry={onRetry} />}
-      {run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} copy={{ eyebrow: copy.approvalEyebrow, meta: copy.approvalMeta, sandboxLabel: copy.approvalSandboxLabel, networkLabel: copy.approvalNetworkLabel, imageLabel: copy.approvalImageLabel, allowOnce: copy.approvalAllowOnce, allowAriaLabel: copy.approvalAllowAriaLabel, deny: copy.approvalDeny, sessionNote: copy.approvalSessionNote, reviewReviewedLabel: copy.reviewReviewedLabel, reviewAskedLabel: copy.reviewAskedLabel, reviewDeniedLabel: copy.reviewDeniedLabel, reviewUnavailableLabel: copy.reviewUnavailableLabel, reviewReviewedDescription: copy.reviewReviewedDescription, reviewAskedDescription: copy.reviewAskedDescription, reviewDeniedDescription: copy.reviewDeniedDescription, reviewUnavailableDescription: copy.reviewUnavailableDescription }} />)}
+      {run.status !== 'needs-recovery' && (run.approvals ?? []).map((approval) => <ApprovalCard key={approval.approvalId} approval={approval} sandboxMode={run.config.sandbox?.mode ?? 'unknown'} onApprove={onApprove} reviewStatus={reviewStatusForApproval(approval, events)} copy={{ eyebrow: copy.approvalEyebrow, meta: copy.approvalMeta, sandboxLabel: copy.approvalSandboxLabel, networkLabel: copy.approvalNetworkLabel, imageLabel: copy.approvalImageLabel, commandLabel: copy.approvalCommandLabel, allowOnce: copy.approvalAllowOnce, allowAriaLabel: copy.approvalAllowAriaLabel, deny: copy.approvalDeny, sessionNote: copy.approvalSessionNote, reviewReviewedLabel: copy.reviewReviewedLabel, reviewAskedLabel: copy.reviewAskedLabel, reviewDeniedLabel: copy.reviewDeniedLabel, reviewUnavailableLabel: copy.reviewUnavailableLabel, reviewReviewedDescription: copy.reviewReviewedDescription, reviewAskedDescription: copy.reviewAskedDescription, reviewDeniedDescription: copy.reviewDeniedDescription, reviewUnavailableDescription: copy.reviewUnavailableDescription }} />)}
       <div className="chat-thread" aria-busy={streaming}>
         {typeof run.config.userMessage === 'string' && run.config.userMessage.length > 0 && <div className="chat-message chat-message-user"><div className="chat-bubble">{run.config.userMessage}</div></div>}
         <ToolSteps events={events} />

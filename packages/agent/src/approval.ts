@@ -6,6 +6,8 @@ export interface ApprovalDetails {
   readonly sandboxProvider?: 'docker' | 'podman' | 'vm';
   readonly sandboxImageDigest?: string;
   readonly network?: 'restricted' | 'enabled';
+  /** Human-readable preview of the command awaiting approval, redacted. */
+  readonly command?: string;
 }
 
 export interface ApprovalRequest {

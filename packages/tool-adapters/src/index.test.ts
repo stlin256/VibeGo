@@ -14,6 +14,7 @@ import {
   FileSystemSearchToolAdapter,
   FileSystemToolAdapter,
   FileSystemWriteToolAdapter,
+  formatGitApprovalCommand,
   GitToolAdapter,
   HostShellToolAdapter,
   ShellToolAdapter,
@@ -308,6 +309,47 @@ describe('read-only Git adapter', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+
+
+describe('Git write and destructive adapter', () => {
+  it('builds correct argv for add, commit, branch, push, reset and restore', async () => {
+    const calls: { argv: readonly string[] }[] = [];
+    const runner = { run: vi.fn(async (request: { argv: readonly string[] }) => { calls.push(request); return { exitCode: 0, stdout: '', stderr: '', truncated: false }; }) };
+    const context = { workspaceRoot: 'C:/workspace', signal: new AbortController().signal } as never;
+    await new GitToolAdapter('git.add', runner).execute({ paths: ['src/index.ts'] }, context);
+    await new GitToolAdapter('git.commit', runner).execute({ message: 'fix bug\nsecond line' }, context);
+    await new GitToolAdapter('git.branch', runner).execute({ action: 'create', name: 'feature-x' }, context);
+    await new GitToolAdapter('git.branch', runner).execute({ action: 'switch', name: 'main' }, context);
+    await new GitToolAdapter('git.push', runner).execute({ remote: 'origin', branch: 'main', force: true }, context);
+    await new GitToolAdapter('git.reset', runner).execute({ mode: 'hard', ref: 'HEAD~1' }, context);
+    await new GitToolAdapter('git.restore', runner).execute({ paths: ['src/index.ts'], staged: true }, context);
+    expect(calls[0]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'add', '--', 'src/index.ts']);
+    expect(calls[1]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'commit', '-m', 'fix bug\nsecond line']);
+    expect(calls[2]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'branch', '--', 'feature-x']);
+    expect(calls[3]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'switch', '--', 'main']);
+    expect(calls[4]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'push', '--force-with-lease', 'origin', 'main']);
+    expect(calls[5]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'reset', '--hard', 'HEAD~1']);
+    expect(calls[6]?.argv).toEqual(['--no-pager', '--no-optional-locks', 'restore', '--staged', '--', 'src/index.ts']);
+  });
+
+  it('rejects traversal, absolute paths, oversized commit messages and invalid branch names', async () => {
+    const runner = { run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false })) };
+    const context = { workspaceRoot: 'C:/workspace', signal: new AbortController().signal } as never;
+    await expect(new GitToolAdapter('git.add', runner).execute({ paths: ['../secret'] }, context)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    await expect(new GitToolAdapter('git.add', runner).execute({ paths: ['C:/secret'] }, context)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    await expect(new GitToolAdapter('git.commit', runner).execute({ message: '' }, context)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    await expect(new GitToolAdapter('git.branch', runner).execute({ action: 'create', name: 'bad..name' }, context)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+    await expect(new GitToolAdapter('git.push', runner).execute({ remote: 'origin', branch: 'a space' }, context)).rejects.toMatchObject({ code: 'TOOL_INPUT_INVALID' });
+  });
+
+  it('formats approval commands for destructive Git tools', () => {
+    expect(formatGitApprovalCommand('git.push', { remote: 'origin', branch: 'main', force: true })).toBe('git push --force-with-lease origin main');
+    expect(formatGitApprovalCommand('git.reset', { mode: 'hard', ref: 'HEAD~1' })).toBe('git reset --hard HEAD~1');
+    expect(formatGitApprovalCommand('git.commit', { message: 'a'.repeat(100) })).toBe(`git commit -m "${'a'.repeat(80)}…"`);
+    expect(formatGitApprovalCommand('git.status', {})).toBeUndefined();
   });
 });
 

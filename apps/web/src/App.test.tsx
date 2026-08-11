@@ -160,11 +160,11 @@ describe('web console shell', () => {
     expect(html).not.toContain('C:\\Users');
   });
 
-  it('renders the guided Git read-only tools toggle without an absolute path', () => {
+  it('renders the guided Git tools toggle without an absolute path', () => {
     const html = renderToStaticMarkup(<App gitSettings={{ enabled: false, workspaceLabel: 'workspace', availableTools: [] }} onSetGitToolsEnabled={() => undefined} />);
-    expect(html).toContain('GIT READ-ONLY TOOLS');
-    expect(html).toContain('Enable Git read-only tools');
-    expect(html).toContain('commits, checkout, reset');
+    expect(html).toContain('GIT TOOLS');
+    expect(html).toContain('Enable Git tools');
+    expect(html).toContain('push, reset and restore');
     expect(html).not.toContain('C:\\Users');
   });
 

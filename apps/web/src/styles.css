@@ -252,6 +252,10 @@ textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
 .observability-state strong { color: var(--vibego-text-primary); font-size: 13px; }
 .observability-state p { margin: 0; font-size: 11px; }
 .approval-card { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid var(--vibego-border-lime); border-radius: 12px; padding: 14px; background: var(--vibego-bg-success); }
+.approval-card[data-risk="destructive"] { border-color: var(--vibego-border-red); background: var(--vibego-bg-danger); }
+.approval-card[data-risk="write"] { border-color: var(--vibego-border-amber); background: var(--vibego-bg-warning); }
+.approval-command { flex: 1 1 100%; }
+.approval-command code { display: inline-block; padding: 4px 8px; border-radius: 6px; background: var(--vibego-bg-sunken); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; word-break: break-all; }
 .recovery-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; border: 1px solid var(--vibego-border-amber); border-radius: 12px; padding: 14px; background: var(--vibego-bg-warning); }
 .recovery-card p { margin: 5px 0 0; font-size: 12px; }
 .approval-card p { margin: 5px 0 0; font-size: 12px; }

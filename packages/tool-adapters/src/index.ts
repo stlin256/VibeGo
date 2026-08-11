@@ -686,16 +686,47 @@ export class HostShellToolAdapter implements ToolHandler {
   }
 }
 
-export type GitToolId = 'git.status' | 'git.diff' | 'git.log';
+export type GitToolId =
+  | 'git.status'
+  | 'git.diff'
+  | 'git.log'
+  | 'git.add'
+  | 'git.commit'
+  | 'git.branch'
+  | 'git.push'
+  | 'git.reset'
+  | 'git.restore';
 
 export interface GitToolAdapterOptions {
-  readonly timeoutMs?: number;
-  readonly maxOutputBytes?: number;
+  readonly timeoutMs?: number | undefined;
+  readonly maxOutputBytes?: number | undefined;
 }
 
+export interface GitStatusInput { timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitDiffInput { staged?: boolean | undefined; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitLogInput { limit?: number | undefined; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitAddInput { paths: string[]; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitCommitInput { message: string; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitBranchInput { action: 'list' | 'create' | 'switch'; name?: string | undefined; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitPushInput { remote: string; branch?: string | undefined; force?: boolean | undefined; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitResetInput { mode: 'soft' | 'mixed' | 'hard'; ref: string; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+export interface GitRestoreInput { paths: string[]; staged?: boolean | undefined; timeoutMs?: number | undefined; maxOutputBytes?: number | undefined }
+
+export type GitToolInput =
+  | GitStatusInput
+  | GitDiffInput
+  | GitLogInput
+  | GitAddInput
+  | GitCommitInput
+  | GitBranchInput
+  | GitPushInput
+  | GitResetInput
+  | GitRestoreInput;
+
 /**
- * Fixed, read-only Git commands. The adapter deliberately has no argv input;
- * callers can only select the bounded staged/log options below.
+ * Bounded Git commands for coding workflows. Read-only tools run without
+ * approval; write tools prompt for approval; destructive tools are marked
+ * alwaysPrompt so every individual call requires explicit user consent.
  */
 export class GitToolAdapter implements ToolHandler {
   readonly version = '1.0.0';
@@ -733,26 +764,72 @@ export class GitToolAdapter implements ToolHandler {
     }
   }
 
-  private parseInput(input: unknown): { staged?: boolean; limit?: number; timeoutMs?: number; maxOutputBytes?: number } {
+  private parseInput(input: unknown): GitToolInput {
     if (!isRecord(input)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
-    const allowed = this.id === 'git.status' ? new Set(['timeoutMs', 'maxOutputBytes']) : this.id === 'git.diff' ? new Set(['staged', 'timeoutMs', 'maxOutputBytes']) : new Set(['limit', 'timeoutMs', 'maxOutputBytes']);
+    const allowed = allowedKeys(this.id);
     if (Object.keys(input).some((key) => !allowed.has(key))) throw new ToolAdapterError('TOOL_INPUT_INVALID');
-    if ('staged' in input && typeof input.staged !== 'boolean') throw new ToolAdapterError('TOOL_INPUT_INVALID');
-    if ('limit' in input && (typeof input.limit !== 'number' || !Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
-    if ('timeoutMs' in input && (typeof input.timeoutMs !== 'number' || !Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
-    if ('maxOutputBytes' in input && (typeof input.maxOutputBytes !== 'number' || !Number.isSafeInteger(input.maxOutputBytes) || input.maxOutputBytes < 1)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
-    return {
-      ...('staged' in input && typeof input.staged === 'boolean' ? { staged: input.staged } : {}),
-      ...('limit' in input && typeof input.limit === 'number' ? { limit: input.limit } : {}),
-      ...('timeoutMs' in input && typeof input.timeoutMs === 'number' ? { timeoutMs: input.timeoutMs } : {}),
-      ...('maxOutputBytes' in input && typeof input.maxOutputBytes === 'number' ? { maxOutputBytes: input.maxOutputBytes } : {}),
-    };
+    const timeoutMs = 'timeoutMs' in input ? parsePositiveInteger(input.timeoutMs) : undefined;
+    const maxOutputBytes = 'maxOutputBytes' in input ? parsePositiveInteger(input.maxOutputBytes) : undefined;
+    if (this.id === 'git.status') return { timeoutMs, maxOutputBytes };
+    if (this.id === 'git.diff') {
+      const staged = 'staged' in input ? parseBoolean(input.staged) : undefined;
+      return { staged, timeoutMs, maxOutputBytes };
+    }
+    if (this.id === 'git.log') {
+      const limit = 'limit' in input ? parseBoundedInteger(input.limit, 1, 100) : undefined;
+      return { limit, timeoutMs, maxOutputBytes };
+    }
+    if (this.id === 'git.add') {
+      return { paths: parsePathList(input.paths, 50), timeoutMs, maxOutputBytes };
+    }
+    if (this.id === 'git.commit') {
+      return { message: parseCommitMessage(input.message), timeoutMs, maxOutputBytes };
+    }
+    if (this.id === 'git.branch') {
+      const action = parseEnum(input.action, ['list', 'create', 'switch']);
+      if ((action === 'create' || action === 'switch') && typeof input.name !== 'string') throw new ToolAdapterError('TOOL_INPUT_INVALID');
+      const name = typeof input.name === 'string' ? validateBranchName(input.name) : undefined;
+      return { action, name, timeoutMs, maxOutputBytes };
+    }
+    if (this.id === 'git.push') {
+      const remote = 'remote' in input && typeof input.remote === 'string' ? validateRemoteName(input.remote) : 'origin';
+      const branch = 'branch' in input && typeof input.branch === 'string' ? validateBranchName(input.branch) : undefined;
+      const force = 'force' in input ? parseBoolean(input.force) : undefined;
+      return { remote, branch, force, timeoutMs, maxOutputBytes };
+    }
+    if (this.id === 'git.reset') {
+      const mode = parseEnum(input.mode, ['soft', 'mixed', 'hard']);
+      const ref = 'ref' in input && typeof input.ref === 'string' ? validateRefName(input.ref) : 'HEAD';
+      return { mode, ref, timeoutMs, maxOutputBytes };
+    }
+    // git.restore
+    return { paths: parsePathList(input.paths, 50), staged: 'staged' in input ? parseBoolean(input.staged) : undefined, timeoutMs, maxOutputBytes };
   }
 
-  private argv(input: { staged?: boolean; limit?: number }): readonly string[] {
-    if (this.id === 'git.status') return ['--no-pager', '--no-optional-locks', 'status', '--short', '--branch', '--untracked-files=normal'];
-    if (this.id === 'git.diff') return ['--no-pager', '--no-optional-locks', 'diff', '--no-ext-diff', '--unified=3', ...(input.staged ? ['--cached'] : []), '--'];
-    return ['--no-pager', '--no-optional-locks', 'log', '--oneline', '--decorate=short', '--max-count=' + String(input.limit ?? 20), '--'];
+  private argv(input: GitToolInput): readonly string[] {
+    const prefix = ['--no-pager', '--no-optional-locks'] as const;
+    if (this.id === 'git.status') return [...prefix, 'status', '--short', '--branch', '--untracked-files=normal'];
+    if (this.id === 'git.diff') return [...prefix, 'diff', '--no-ext-diff', '--unified=3', ...((input as GitDiffInput).staged ? ['--cached'] : []), '--'];
+    if (this.id === 'git.log') return [...prefix, 'log', '--oneline', '--decorate=short', '--max-count=' + String((input as GitLogInput).limit ?? 20), '--'];
+    if (this.id === 'git.add') return [...prefix, 'add', '--', ...(input as GitAddInput).paths];
+    if (this.id === 'git.commit') return [...prefix, 'commit', '-m', (input as GitCommitInput).message];
+    if (this.id === 'git.branch') {
+      const bi = input as GitBranchInput;
+      if (bi.action === 'list') return [...prefix, 'branch', '--list', '--format=%(refname:short)'];
+      if (bi.action === 'create') return [...prefix, 'branch', '--', bi.name ?? ''];
+      return [...prefix, 'switch', '--', bi.name ?? ''];
+    }
+    if (this.id === 'git.push') {
+      const pi = input as GitPushInput;
+      return [...prefix, 'push', ...(pi.force ? ['--force-with-lease'] : []), pi.remote, ...(pi.branch ? [pi.branch] : [])];
+    }
+    if (this.id === 'git.reset') {
+      const ri = input as GitResetInput;
+      return [...prefix, 'reset', '--' + ri.mode, ri.ref];
+    }
+    // git.restore
+    const si = input as GitRestoreInput;
+    return [...prefix, 'restore', ...(si.staged ? ['--staged'] : []), '--', ...si.paths];
   }
 
   private limit(value: number | undefined, maximum: number): number {
@@ -760,6 +837,125 @@ export class GitToolAdapter implements ToolHandler {
     if (value === undefined) return maximum;
     if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) throw new ToolAdapterError('TOOL_INPUT_INVALID');
     return value;
+  }
+}
+
+function allowedKeys(id: GitToolId): Set<string> {
+  switch (id) {
+    case 'git.status': return new Set(['timeoutMs', 'maxOutputBytes']);
+    case 'git.diff': return new Set(['staged', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.log': return new Set(['limit', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.add': return new Set(['paths', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.commit': return new Set(['message', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.branch': return new Set(['action', 'name', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.push': return new Set(['remote', 'branch', 'force', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.reset': return new Set(['mode', 'ref', 'timeoutMs', 'maxOutputBytes']);
+    case 'git.restore': return new Set(['paths', 'staged', 'timeoutMs', 'maxOutputBytes']);
+    default: return new Set();
+  }
+}
+
+function parseBoolean(value: unknown): boolean {
+  if (typeof value !== 'boolean') throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+
+function parsePositiveInteger(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+
+function parseBoundedInteger(value: unknown, min: number, max: number): number {
+  const parsed = parsePositiveInteger(value);
+  if (parsed < min || parsed > max) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return parsed;
+}
+
+function parseEnum<T extends string>(value: unknown, allowed: readonly T[]): T {
+  if (typeof value !== 'string' || !allowed.includes(value as T)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value as T;
+}
+
+function parsePathList(value: unknown, max: number): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > max) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value.map((item) => validateRelativePath(String(item)));
+}
+
+const CONTROL_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\r]/u;
+function isTraversalOrAbsolute(value: string): boolean {
+  if (value.includes('..')) return true;
+  if (/^([A-Za-z]:)?[\\/]/u.test(value)) return true;
+  if (value === '.' || value === '..' || value.startsWith('../') || value.endsWith('/..')) return true;
+  return false;
+}
+
+
+function validateRelativePath(value: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 4096) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (CONTROL_CHARACTER.test(value)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (isTraversalOrAbsolute(value) || value.includes('..')) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+
+function parseCommitMessage(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 4000) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (CONTROL_CHARACTER.test(value)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+
+
+function validateBranchName(value: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 128) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (CONTROL_CHARACTER.test(value)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (/[\s\x00-\x1F\x7F]/u.test(value)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (value.startsWith('-') || value.startsWith('/') || value.startsWith('@/')) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (value.endsWith('/') || value.endsWith('.') || value.endsWith('.lock')) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (value.includes('..') || value.includes('//') || value.includes('@{')) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.@{}~^*\-/]*$/u.test(value)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+function validateRemoteName(value: string): string {
+  return validateBranchName(value); // remotes follow the same conservative rules here
+}
+
+function validateRefName(value: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 128) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  if (CONTROL_CHARACTER.test(value)) throw new ToolAdapterError('TOOL_INPUT_INVALID');
+  return value;
+}
+
+export function formatGitApprovalCommand(id: GitToolId, input: unknown): string | undefined {
+  if (!isRecord(input)) return undefined;
+  const join = (arr: unknown, max = 3): string => {
+    if (!Array.isArray(arr)) return '';
+    const strings = arr.slice(0, max).map(String);
+    const suffix = arr.length > max ? ` …(+${arr.length - max})` : '';
+    return strings.join(' ') + suffix;
+  };
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const trunc = (v: string, max = 80): string => (v.length > max ? `${v.slice(0, max)}…` : v);
+  switch (id) {
+    case 'git.add': return `git add ${join(input.paths)}`;
+    case 'git.commit': return `git commit -m "${trunc(str(input.message).replace(/\n/gu, ' '))}"`;
+    case 'git.branch': {
+      const action = str(input.action);
+      if (action === 'list') return 'git branch --list';
+      const name = str(input.name);
+      if (action === 'create') return `git branch ${name}`;
+      return `git switch ${name}`;
+    }
+    case 'git.push': {
+      const force = input.force === true ? '--force-with-lease ' : '';
+      const remote = str(input.remote) || 'origin';
+      const branch = str(input.branch);
+      return `git push ${force}${remote}${branch ? ` ${branch}` : ''}`;
+    }
+    case 'git.reset': return `git reset --${str(input.mode)} ${str(input.ref) || 'HEAD'}`;
+    case 'git.restore': {
+      const staged = input.staged === true ? '--staged ' : '';
+      return `git restore ${staged}${join(input.paths)}`;
+    }
+    default: return undefined;
   }
 }
 

@@ -35,6 +35,7 @@ const copy: ConversationCopy = {
   approvalSandboxLabel: 'sandbox',
   approvalNetworkLabel: 'network',
   approvalImageLabel: 'image',
+  approvalCommandLabel: 'Command',
   approvalAllowOnce: 'Allow once',
   approvalAllowAriaLabel: 'Allow this approval once',
   approvalDeny: 'Deny',

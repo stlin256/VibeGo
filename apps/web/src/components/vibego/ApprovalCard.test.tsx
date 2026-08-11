@@ -8,6 +8,7 @@ const copy: ApprovalCardCopy = {
   sandboxLabel: 'sandbox',
   networkLabel: 'network',
   imageLabel: 'image',
+  commandLabel: 'Command',
   allowOnce: 'Allow once',
   allowAriaLabel: 'Allow this approval once',
   deny: 'Deny',

@@ -38,7 +38,11 @@ describe('daemon Git settings', () => {
       expect(manager.runtimeForRun(config())).toBeUndefined();
 
       const enabled = manager.setGitEnabled(true);
-      expect(enabled).toMatchObject({ enabled: true, availableTools: ['git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0'] });
+      expect(enabled).toMatchObject({ enabled: true, availableTools: [
+        'git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0',
+        'git.add@1.0.0', 'git.commit@1.0.0', 'git.branch@1.0.0',
+        'git.push@1.0.0', 'git.reset@1.0.0', 'git.restore@1.0.0',
+      ] });
       const runtime = manager.runtimeForRun(config());
       expect(runtime?.descriptors.map((descriptor) => descriptor.name)).toEqual(['git.status', 'git.diff', 'git.log']);
       const status = runtime?.descriptors[0];
@@ -46,6 +50,22 @@ describe('daemon Git settings', () => {
       expect(calls).toEqual([root]);
       manager.setGitEnabled(false);
       await expect(runtime?.execute({ runId: 'run-1', turnId: 'turn-1', callId: 'call-2', descriptor: status!, input: {}, config: config(), signal: new AbortController().signal })).resolves.toBeDefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes write and destructive Git tools only in workspace-write mode', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ready4vibe-git-settings-'));
+    try {
+      const manager = new InMemoryGitSettingsManager({ workspaceRegistry: new InMemoryWorkspaceRegistry({ defaultRoot: root }), processRunner: { run: vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false })) } });
+      manager.setGitEnabled(true);
+      const readOnly = manager.runtimeForRun(config());
+      expect(readOnly?.descriptors.map((d) => d.name)).toEqual(['git.status', 'git.diff', 'git.log']);
+      const workspaceWrite = manager.runtimeForRun(config({ sandbox: { mode: 'workspace-write', writableRoots: ['.'], network: 'restricted' } }));
+      expect(workspaceWrite?.descriptors.map((d) => d.name)).toEqual([
+        'git.status', 'git.diff', 'git.log', 'git.add', 'git.commit', 'git.branch', 'git.push', 'git.reset', 'git.restore',
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

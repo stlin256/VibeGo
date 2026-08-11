@@ -1093,7 +1093,7 @@ describe('daemon health server', () => {
     }
   });
 
-  it('serves explicit Git read-only settings without exposing the workspace path', async () => {
+  it('serves explicit Git tool settings without exposing the workspace path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ready4vibe-git-settings-'));
     try {
       const gitSettings = new InMemoryGitSettingsManager({ workspaceRegistry: new InMemoryWorkspaceRegistry({ defaultRoot: root }), processRunner: { run: async () => ({ exitCode: 0, stdout: '', stderr: '', truncated: false }) } });
@@ -1114,7 +1114,11 @@ describe('daemon health server', () => {
       expect(enabled.status).toBe(200);
       const enabledBody = await enabled.text();
       expect(enabledBody).not.toContain(root);
-      expect(JSON.parse(enabledBody)).toMatchObject({ enabled: true, availableTools: ['git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0'] });
+      expect(JSON.parse(enabledBody)).toMatchObject({ enabled: true, availableTools: [
+        'git.status@1.0.0', 'git.diff@1.0.0', 'git.log@1.0.0',
+        'git.add@1.0.0', 'git.commit@1.0.0', 'git.branch@1.0.0',
+        'git.push@1.0.0', 'git.reset@1.0.0', 'git.restore@1.0.0',
+      ] });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

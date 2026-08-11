@@ -71,6 +71,18 @@ describe('ApprovalPolicy', () => {
     expect(key).toContain('workspace-1');
   });
 
+  it('consumes alwaysPrompt grants on first use so every call prompts again', () => {
+    const cache = new SessionApprovalCache();
+    const value = intent({ alwaysPrompt: true });
+    cache.grant(value, 100, 1_000);
+    expect(cache.has(value, 150)).toBe(true);
+    expect(cache.has(value, 160)).toBe(false);
+    const reusable = intent();
+    cache.grant(reusable, 100, 1_000);
+    expect(cache.has(reusable, 150)).toBe(true);
+    expect(cache.has(reusable, 160)).toBe(true);
+  });
+
   it('turns a prompt into a session allow and can revoke it', () => {
     const policy = new ApprovalPolicy(registry());
     const value = intent();

@@ -8,6 +8,12 @@ export interface ToolDescriptor {
   summary: string;
   supportedSandboxModes: readonly ToolSandboxMode[];
   inputSchema?: Record<string, unknown>;
+  /**
+   * If true, approved grants are consumed on first use: every individual
+   * tool call requires explicit user approval. Intended for destructive or
+   * otherwise irreversible operations.
+   */
+  alwaysPrompt?: boolean;
 }
 
 export interface PublicToolDescriptor {

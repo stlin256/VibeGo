@@ -4,7 +4,9 @@ import type { ToolRuntime, ToolRuntimeRequest } from '@ready4vibe/agent';
 import { ApprovalPolicy, type ToolIntent } from '@ready4vibe/policy';
 import { SandboxResolver, type SandboxResolveRequest } from '@ready4vibe/sandbox';
 import {
+  formatGitApprovalCommand,
   GitToolAdapter,
+  type GitToolId,
   ToolAdapterError,
   ToolExecutor,
   ToolExecutorRuntime,
@@ -13,7 +15,7 @@ import {
   type ProcessRunResult,
   type ProcessRunner,
 } from '@ready4vibe/tool-adapters';
-import { ToolRegistry } from '@ready4vibe/tools';
+import { ToolRegistry, type ToolDescriptor, type ToolSandboxMode } from '@ready4vibe/tools';
 import { InMemoryWorkspaceRegistry, type WorkspaceRegistry } from '@ready4vibe/workspaces';
 
 export interface GitSettingsStatus {
@@ -76,7 +78,7 @@ export class InMemoryGitSettingsManager implements GitSettingsManager {
     if (config.sandbox.mode !== 'read-only' && config.sandbox.mode !== 'workspace-write') return undefined;
     const workspaceRoot = this.resolveRunRoot?.(config) ?? this.workspaceRegistry.resolveRoot(config.workspaceId);
     if (!workspaceRoot) return undefined;
-    return createGitRuntime(workspaceRoot, config.workspaceId, this.processRunner);
+    return createGitRuntime(workspaceRoot, config.workspaceId, this.processRunner, config);
   }
 }
 
@@ -181,11 +183,13 @@ export class ChildProcessGitRunner implements ProcessRunner {
   }
 }
 
-function createGitRuntime(workspaceRoot: string, workspaceId: string, processRunner: ProcessRunner): ToolExecutorRuntime {
+function createGitRuntime(workspaceRoot: string, workspaceId: string, processRunner: ProcessRunner, config: RunConfig): ToolRuntime {
+  const mode = config.sandbox.mode;
+  const descriptors = gitDescriptors().filter((descriptor) => descriptor.supportedSandboxModes.includes(mode as ToolSandboxMode));
   const registry = new ToolRegistry();
-  for (const descriptor of gitDescriptors()) registry.register(descriptor);
+  for (const descriptor of descriptors) registry.register(descriptor);
   const handlers = new ToolHandlerRegistry();
-  for (const descriptor of gitDescriptors()) handlers.register(new GitToolAdapter(descriptor.id, processRunner));
+  for (const descriptor of descriptors) handlers.register(new GitToolAdapter(descriptor.id as GitToolId, processRunner));
   const executor = new ToolExecutor({ registry, approvalPolicy: new ApprovalPolicy(registry), sandboxResolver: new SandboxResolver(), handlers });
   return new ToolExecutorRuntime({
     registry,
@@ -194,31 +198,43 @@ function createGitRuntime(workspaceRoot: string, workspaceId: string, processRun
       if (request.config.workspaceId !== workspaceId) throw new ToolAdapterError('TOOL_INPUT_INVALID');
       return workspaceRoot;
     },
-    createIntent: (request) => createIntent(request),
+    createIntent: (request) => createIntent(request, registry),
     createSandboxRequest: (request) => createSandboxRequest(request.config),
+    approvalDetails: (request) => {
+      const command = formatGitApprovalCommand(request.descriptor.id as GitToolId, request.input);
+      return command ? { command } : undefined;
+    },
   });
 }
 
-function gitDescriptors() {
+function gitDescriptors(): readonly ToolDescriptor[] {
   return [
     { id: 'git.status' as const, version: '1.0.0', risk: 'read' as const, summary: 'Show bounded working-tree status without changing files.', supportedSandboxModes: ['read-only', 'workspace-write'] as const, inputSchema: { type: 'object', properties: { timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, additionalProperties: false } },
     { id: 'git.diff' as const, version: '1.0.0', risk: 'read' as const, summary: 'Show a bounded read-only diff for the selected workspace.', supportedSandboxModes: ['read-only', 'workspace-write'] as const, inputSchema: { type: 'object', properties: { staged: { type: 'boolean' }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, additionalProperties: false } },
     { id: 'git.log' as const, version: '1.0.0', risk: 'read' as const, summary: 'Show a bounded recent commit log without remote access.', supportedSandboxModes: ['read-only', 'workspace-write'] as const, inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100 }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, additionalProperties: false } },
+    { id: 'git.add' as const, version: '1.0.0', risk: 'write' as const, summary: 'Stage files for the next commit. Paths must be relative to the workspace.', supportedSandboxModes: ['workspace-write'] as const, inputSchema: { type: 'object', properties: { paths: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 50 }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, required: ['paths'], additionalProperties: false } },
+    { id: 'git.commit' as const, version: '1.0.0', risk: 'write' as const, summary: 'Create a git commit with the given message. Stages nothing — use git.add first. Requires user approval.', supportedSandboxModes: ['workspace-write'] as const, inputSchema: { type: 'object', properties: { message: { type: 'string', minLength: 1, maxLength: 4000 }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, required: ['message'], additionalProperties: false } },
+    { id: 'git.branch' as const, version: '1.0.0', risk: 'write' as const, summary: 'List, create, or switch branches in the workspace.', supportedSandboxModes: ['workspace-write'] as const, inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'create', 'switch'] }, name: { type: 'string' }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, required: ['action'], additionalProperties: false } },
+    { id: 'git.push' as const, version: '1.0.0', risk: 'destructive' as const, alwaysPrompt: true, summary: 'Push commits to a remote. Dangerous and shared-state: force uses --force-with-lease. Every call requires explicit user approval.', supportedSandboxModes: ['workspace-write'] as const, inputSchema: { type: 'object', properties: { remote: { type: 'string' }, branch: { type: 'string' }, force: { type: 'boolean' }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, additionalProperties: false } },
+    { id: 'git.reset' as const, version: '1.0.0', risk: 'destructive' as const, alwaysPrompt: true, summary: 'Reset HEAD/index/working tree to a ref. Every call requires explicit user approval.', supportedSandboxModes: ['workspace-write'] as const, inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['soft', 'mixed', 'hard'] }, ref: { type: 'string' }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, required: ['mode'], additionalProperties: false } },
+    { id: 'git.restore' as const, version: '1.0.0', risk: 'destructive' as const, alwaysPrompt: true, summary: 'Restore workspace paths from HEAD or the index. Can discard changes. Every call requires explicit user approval.', supportedSandboxModes: ['workspace-write'] as const, inputSchema: { type: 'object', properties: { paths: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 50 }, staged: { type: 'boolean' }, timeoutMs: { type: 'integer', minimum: 1 }, maxOutputBytes: { type: 'integer', minimum: 1 } }, required: ['paths'], additionalProperties: false } },
   ] as const;
 }
 
-function createIntent(request: ToolRuntimeRequest): ToolIntent {
+function createIntent(request: ToolRuntimeRequest, registry: ToolRegistry): ToolIntent {
   const networkAccess = 'network' in request.config.sandbox ? request.config.sandbox.network : 'restricted';
+  const fullDescriptor = registry.get(request.descriptor.id, request.descriptor.version);
   return {
     workspaceId: request.config.workspaceId,
     toolId: request.descriptor.id,
     toolVersion: request.descriptor.version,
     risk: request.descriptor.risk,
+    alwaysPrompt: fullDescriptor?.alwaysPrompt ?? false,
     taskTrust: request.config.taskTrust,
     sandboxMode: request.config.sandbox.mode,
     networkAccess,
     approvalPolicy: request.config.approval,
-    policyRevision: 'git-read-only-v1',
+    policyRevision: 'git-tools-v2',
     sessionId: request.config.createdBySessionId,
   };
 }

@@ -196,7 +196,7 @@ export interface ApprovalSummary {
   toolVersion: string;
   risk: 'read' | 'write' | 'destructive' | 'network';
   argumentBytes: number;
-  details?: { sandboxProvider?: 'docker' | 'podman' | 'vm'; sandboxImageDigest?: string; network?: 'restricted' | 'enabled' };
+  details?: { sandboxProvider?: 'docker' | 'podman' | 'vm'; sandboxImageDigest?: string; network?: 'restricted' | 'enabled'; command?: string };
   createdAt: number;
   expiresAt: number;
 }

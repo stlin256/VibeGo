@@ -16,6 +16,7 @@ export interface ApprovalCardCopy {
   readonly sandboxLabel: string;
   readonly networkLabel: string;
   readonly imageLabel: string;
+  readonly commandLabel: string;
   readonly allowOnce: string;
   readonly allowAriaLabel: string;
   readonly deny: string;
@@ -41,12 +42,13 @@ export interface ApprovalReviewPresentation {
 /** Bounded approval presentation; the parent owns the authenticated decision. */
 export function ApprovalCard({ approval, sandboxMode, onApprove, reviewStatus, copy }: ApprovalCardProps): JSX.Element {
   return (
-    <div className="approval-card">
+    <div className="approval-card" data-risk={approval.risk}>
       <div>
         <div className="eyebrow">{copy.eyebrow}</div>
         <strong>{approval.toolId}@{approval.toolVersion}</strong>
         <p className="muted">{formatApprovalMeta(copy.meta, approval)}</p>
         {approval.details && <p className="muted">{copy.sandboxLabel}: {approval.details.sandboxProvider ?? sandboxMode}{approval.details.network ? ` · ${copy.networkLabel}: ${approval.details.network}` : ''}{approval.details.sandboxImageDigest ? ` · ${copy.imageLabel}: ${approval.details.sandboxImageDigest}` : ''}</p>}
+        {approval.details?.command && <p className="muted approval-command"><code>{copy.commandLabel}: {approval.details.command}</code></p>}
         {reviewStatus && <div className="approval-review-summary" data-review-status={reviewStatus.state} role="status" aria-live="polite"><strong>{reviewLabel(copy, reviewStatus.state)}</strong><span>{reviewDescription(copy, reviewStatus.state)}{reviewStatus.reasonCode ? ` · ${reviewStatus.reasonCode}` : ''}{reviewStatus.latencyMs === undefined ? '' : ` · ${reviewStatus.latencyMs} ms`}</span></div>}
       </div>
       <div className="approval-actions">
